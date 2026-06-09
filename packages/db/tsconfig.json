@@ -1,0 +1,7 @@
+{
+  "extends": "@churchflow/config/tsconfig/base",
+  "compilerOptions": {
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@churchflow/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint/base": "./eslint/base.mjs",
+    "./tsconfig/base": "./tsconfig/base.json",
+    "./tsconfig/next": "./tsconfig/next.json",
+    "./tsconfig/nest": "./tsconfig/nest.json"
+  }
+}

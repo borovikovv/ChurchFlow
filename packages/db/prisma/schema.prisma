@@ -1,0 +1,331 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuthProvider {
+  telegram
+  webauthn
+  email
+  google
+  apple
+}
+
+enum SessionType {
+  user
+  service
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  EDITOR
+  MEMBER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum PageStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum WebsiteSectionType {
+  hero
+  about
+  schedule
+  gallery
+  contact
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  INVITE
+  LOGIN
+  LOGOUT
+  PUBLISH
+  UNPUBLISH
+}
+
+enum FeatureFlagScope {
+  GLOBAL
+  ORGANIZATION
+  USER
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String?   @unique @db.Citext
+  displayName   String?
+  avatarUrl     String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  accounts      AuthAccount[]
+  sessions      Session[]
+  memberships   OrganizationMember[]
+  invitations   OrganizationInvitation[] @relation("InvitationInviter")
+  auditLogs      AuditLog[]
+  featureFlags   FeatureFlag[]
+
+  @@map("users")
+}
+
+model AuthAccount {
+  id                String       @id @default(uuid()) @db.Uuid
+  userId            String       @map("user_id") @db.Uuid
+  provider          AuthProvider
+  providerAccountId String       @map("provider_account_id")
+  credentialId      String?      @map("credential_id")
+  publicKey         String?      @map("public_key")
+  metadata          Json         @default("{}")
+  lastUsedAt        DateTime?    @map("last_used_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  deletedAt         DateTime?    @map("deleted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@unique([provider, credentialId])
+  @@index([userId])
+  @@map("auth_accounts")
+}
+
+model Session {
+  id               String      @id @default(uuid()) @db.Uuid
+  userId           String      @map("user_id") @db.Uuid
+  type             SessionType @default(user)
+  refreshTokenHash String      @map("refresh_token_hash")
+  userAgent        String?     @map("user_agent")
+  ipAddress        String?     @map("ip_address")
+  expiresAt        DateTime    @map("expires_at")
+  revokedAt        DateTime?   @map("revoked_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([refreshTokenHash])
+  @@map("sessions")
+}
+
+model Organization {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String    @unique
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  members      OrganizationMember[]
+  invitations  OrganizationInvitation[]
+  website      OrganizationWebsite?
+  mediaAssets  MediaAsset[]
+  auditLogs    AuditLog[]
+  featureFlags FeatureFlag[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  role           OrganizationRole @default(MEMBER)
+  permissions    String[]         @default([])
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  deletedAt      DateTime?        @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([organizationId, role])
+  @@map("organization_members")
+}
+
+model OrganizationInvitation {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  email          String           @db.Citext
+  role           OrganizationRole @default(MEMBER)
+  permissions    String[]         @default([])
+  tokenHash      String           @map("token_hash")
+  status         InvitationStatus @default(PENDING)
+  invitedById    String?          @map("invited_by_id") @db.Uuid
+  expiresAt      DateTime         @map("expires_at")
+  acceptedAt     DateTime?        @map("accepted_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  deletedAt      DateTime?        @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User?        @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, email, status])
+  @@unique([tokenHash])
+  @@index([organizationId, status])
+  @@map("organization_invitations")
+}
+
+model OrganizationWebsite {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @unique @map("organization_id") @db.Uuid
+  title          String
+  description    String?
+  logoAssetId    String?   @map("logo_asset_id") @db.Uuid
+  theme          Json      @default("{}")
+  settings       Json      @default("{}")
+  publishedAt    DateTime? @map("published_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pages        WebsitePage[]
+  domains      WebsiteDomain[]
+
+  @@index([organizationId])
+  @@map("organization_websites")
+}
+
+model WebsitePage {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @map("organization_id") @db.Uuid
+  websiteId      String     @map("website_id") @db.Uuid
+  slug           String
+  title          String
+  status         PageStatus  @default(DRAFT)
+  seo            Json        @default("{}")
+  publishedAt    DateTime?   @map("published_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  deletedAt      DateTime?   @map("deleted_at")
+
+  website OrganizationWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  sections WebsiteSection[]
+
+  @@unique([websiteId, slug])
+  @@index([organizationId, status])
+  @@index([websiteId, status])
+  @@map("website_pages")
+}
+
+model WebsiteSection {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  pageId         String             @map("page_id") @db.Uuid
+  type           WebsiteSectionType
+  order          Int                @default(0)
+  content        Json               @default("{}")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  deletedAt      DateTime?          @map("deleted_at")
+
+  page WebsitePage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([pageId, order])
+  @@map("website_sections")
+}
+
+model WebsiteDomain {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  websiteId      String    @map("website_id") @db.Uuid
+  hostname       String    @unique
+  isPrimary      Boolean   @default(false) @map("is_primary")
+  verifiedAt     DateTime? @map("verified_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  website OrganizationWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([websiteId])
+  @@map("website_domains")
+}
+
+model MediaAsset {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  bucket         String
+  objectKey      String    @map("object_key")
+  filename       String
+  mimeType       String    @map("mime_type")
+  byteSize       BigInt    @map("byte_size")
+  width          Int?
+  height         Int?
+  altText        String?   @map("alt_text")
+  metadata       Json      @default("{}")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([bucket, objectKey])
+  @@index([organizationId, createdAt])
+  @@map("media_assets")
+}
+
+model AuditLog {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String?     @map("organization_id") @db.Uuid
+  actorUserId    String?     @map("actor_user_id") @db.Uuid
+  action         AuditAction
+  entityType     String      @map("entity_type")
+  entityId       String?     @map("entity_id") @db.Uuid
+  metadata       Json        @default("{}")
+  ipAddress      String?     @map("ip_address")
+  userAgent      String?     @map("user_agent")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actor        User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+}
+
+model FeatureFlag {
+  id             String           @id @default(uuid()) @db.Uuid
+  key            String
+  scope          FeatureFlagScope @default(GLOBAL)
+  organizationId String?          @map("organization_id") @db.Uuid
+  userId         String?          @map("user_id") @db.Uuid
+  enabled        Boolean          @default(false)
+  payload        Json             @default("{}")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([key, scope, organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("feature_flags")
+}

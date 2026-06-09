@@ -1,0 +1,7 @@
+{
+  "extends": "@churchflow/config/tsconfig/nest",
+  "compilerOptions": {
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"]
+}

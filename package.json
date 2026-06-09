@@ -1,0 +1,26 @@
+{
+  "name": "churchflow",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "format": "prettier --write .",
+    "db:generate": "pnpm --filter @churchflow/db db:generate",
+    "db:migrate": "pnpm --filter @churchflow/db db:migrate",
+    "db:studio": "pnpm --filter @churchflow/db db:studio"
+  },
+  "devDependencies": {
+    "@churchflow/config": "workspace:*",
+    "prettier": "^3.3.3",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}
