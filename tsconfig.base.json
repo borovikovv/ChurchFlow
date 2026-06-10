@@ -16,11 +16,10 @@
     "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
-    "baseUrl": ".",
     "paths": {
-      "@churchflow/db": ["packages/db/src/index.ts"],
-      "@churchflow/shared": ["packages/shared/src/index.ts"],
-      "@churchflow/config/*": ["packages/config/*"]
+      "@churchflow/db": ["./packages/db/src/index.ts"],
+      "@churchflow/shared": ["./packages/shared/src/index.ts"],
+      "@churchflow/config/*": ["./packages/config/*"]
     }
   }
 }

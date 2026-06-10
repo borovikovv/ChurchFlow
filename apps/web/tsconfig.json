@@ -1,7 +1,6 @@
 {
   "extends": "@churchflow/config/tsconfig/next",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }

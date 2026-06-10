@@ -4,8 +4,8 @@
     "rootDir": "src",
     "outDir": "dist",
     "paths": {
-      "@churchflow/db": ["packages/db/dist/index.d.ts"],
-      "@churchflow/shared": ["packages/shared/dist/index.d.ts"]
+      "@churchflow/db": ["../../packages/db/dist/index.d.ts"],
+      "@churchflow/shared": ["../../packages/shared/dist/index.d.ts"]
     }
   },
   "include": ["src/**/*.ts"]
