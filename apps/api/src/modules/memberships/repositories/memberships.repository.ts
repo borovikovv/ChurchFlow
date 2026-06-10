@@ -7,7 +7,7 @@ export class MembershipsRepository {
 
   async listForOrganization(organizationId: string) {
     return this.prisma.organizationMember.findMany({
-      where: { organizationId, deletedAt: null },
+      where: { organizationId, status: 'ACTIVE', removedAt: null },
       include: { user: true },
       orderBy: { createdAt: 'desc' }
     });

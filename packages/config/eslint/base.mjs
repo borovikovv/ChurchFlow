@@ -18,7 +18,8 @@ export const createBaseConfig = ({ tsconfigRootDir = process.cwd() } = {}) =>
       rules: {
         '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
         '@typescript-eslint/no-floating-promises': 'error',
-        '@typescript-eslint/no-misused-promises': 'error'
+        '@typescript-eslint/no-misused-promises': 'error',
+        '@typescript-eslint/no-extraneous-class': ['error', { allowWithDecorator: true }]
       }
     }
   );

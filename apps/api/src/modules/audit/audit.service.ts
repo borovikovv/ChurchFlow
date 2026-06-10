@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AuditAction, Prisma } from '@churchflow/db';
+import type { Prisma } from '@churchflow/db';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -9,7 +9,7 @@ export class AuditService {
   async record(input: {
     organizationId?: string;
     actorUserId?: string;
-    action: AuditAction;
+    action: string;
     entityType: string;
     entityId?: string;
     metadata?: Prisma.InputJsonObject;

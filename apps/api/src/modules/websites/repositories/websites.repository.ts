@@ -10,7 +10,7 @@ export class WebsitesRepository {
       where: {
         publishedAt: { not: null },
         deletedAt: null,
-        organization: { slug: orgSlug, deletedAt: null }
+        organization: { slug: orgSlug, status: 'ACTIVE', deletedAt: null }
       },
       include: { organization: true }
     });

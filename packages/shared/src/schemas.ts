@@ -16,19 +16,65 @@ export const jwtPayloadSchema = z.object({
 
 export const authProviderSchema = z.enum(['telegram', 'webauthn', 'email', 'google', 'apple']);
 
-export const organizationRoleSchema = z.enum(['OWNER', 'ADMIN', 'EDITOR', 'MEMBER']);
+export const platformRoleSchema = z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']);
+export const organizationRoleSchema = z.enum(['OWNER', 'ADMIN', 'MEMBER', 'VIEWER']);
+export const organizationStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'ARCHIVED', 'DELETED']);
+export const organizationMemberStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'REMOVED']);
+export const organizationRequestStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'EXPIRED']);
+
+const optionalTrimmedString = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((value) => (value === '' ? undefined : value));
 
 export const organizationSchema = z.object({
   id: uuidSchema,
   name: z.string().min(1).max(160),
   slug: slugSchema,
-  description: z.string().max(500).nullable()
+  description: z.string().max(500).nullable(),
+  status: organizationStatusSchema.default('ACTIVE')
 });
 
 export const createOrganizationSchema = z.object({
   name: z.string().min(1).max(160),
   slug: slugSchema,
   description: z.string().max(500).optional()
+});
+
+export const createOrganizationRequestSchema = z.object({
+  organizationName: z.string().trim().min(2).max(160),
+  organizationSlug: optionalTrimmedString(80).refine((value) => value === undefined || slugSchema.safeParse(value).success, {
+    message: 'Invalid organization slug'
+  }),
+  contactName: z.string().trim().min(2).max(160),
+  contactEmail: z.string().trim().email().max(255).transform((value) => value.toLowerCase()),
+  contactPhone: optionalTrimmedString(40),
+  message: optionalTrimmedString(2000)
+});
+
+export const approveOrganizationRequestSchema = z.object({
+  organizationSlug: slugSchema.optional(),
+  organizationName: z.string().trim().min(2).max(160).optional()
+});
+
+export const rejectOrganizationRequestSchema = z.object({
+  rejectionReason: z.string().trim().min(2).max(1000)
+});
+
+export const createOrganizationInvitationSchema = z.object({
+  email: z.string().trim().email().max(255).transform((value) => value.toLowerCase()),
+  role: organizationRoleSchema.default('MEMBER')
+});
+
+export const acceptInvitationSchema = z.object({
+  token: z.string().min(32).max(512)
+});
+
+export const invitationTokenQuerySchema = z.object({
+  token: z.string().min(32).max(512)
 });
 
 export const organizationWebsiteSchema = z.object({

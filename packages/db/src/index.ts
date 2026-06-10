@@ -4,8 +4,12 @@ export type {
   AuditAction,
   FeatureFlagScope,
   InvitationStatus,
+  OrganizationMemberStatus,
+  OrganizationRequestStatus,
   OrganizationRole,
+  OrganizationStatus,
   PageStatus,
+  PlatformRole,
   SessionType,
   WebsiteSectionType
 } from './generated/prisma/client';
