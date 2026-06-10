@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AuditAction } from '@churchflow/db';
+import type { AuditAction, Prisma } from '@churchflow/db';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -12,17 +12,28 @@ export class AuditService {
     action: AuditAction;
     entityType: string;
     entityId?: string;
-    metadata?: Record<string, unknown>;
+    metadata?: Prisma.InputJsonObject;
   }): Promise<void> {
+    const data: Prisma.AuditLogUncheckedCreateInput = {
+      action: input.action,
+      entityType: input.entityType,
+      metadata: input.metadata ?? {}
+    };
+
+    if (input.organizationId !== undefined) {
+      data.organizationId = input.organizationId;
+    }
+
+    if (input.actorUserId !== undefined) {
+      data.actorUserId = input.actorUserId;
+    }
+
+    if (input.entityId !== undefined) {
+      data.entityId = input.entityId;
+    }
+
     await this.prisma.auditLog.create({
-      data: {
-        organizationId: input.organizationId,
-        actorUserId: input.actorUserId,
-        action: input.action,
-        entityType: input.entityType,
-        entityId: input.entityId,
-        metadata: input.metadata ?? {}
-      }
+      data
     });
   }
 }

@@ -17,6 +17,7 @@ import { AuditModule } from './modules/audit/audit.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ['.env', '../../.env'],
       validate: (env) => apiEnvSchema.parse(env)
     }),
     ThrottlerModule.forRoot([

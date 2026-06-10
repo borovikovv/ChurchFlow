@@ -10,7 +10,9 @@ export class OrganizationsRepository {
   async create(input: z.infer<typeof createOrganizationSchema>, ownerUserId: string) {
     return this.prisma.organization.create({
       data: {
-        ...input,
+        name: input.name,
+        slug: input.slug,
+        description: input.description ?? null,
         members: {
           create: {
             userId: ownerUserId,
@@ -21,7 +23,7 @@ export class OrganizationsRepository {
         website: {
           create: {
             title: input.name,
-            description: input.description
+            description: input.description ?? null
           }
         }
       }
