@@ -1,0 +1,26 @@
+# Email
+
+ChurchFlow sends transactional email from the API only. Email provider secrets must never be exposed to the web app or any `NEXT_PUBLIC_*` variable.
+
+## Environment
+
+- `PLATFORM_ADMIN_EMAIL`: required API config. New organization request notifications are sent to this address, not to the requester.
+- `EMAIL_PROVIDER`: optional. Use `resend` for Resend delivery or `console` for safe local logging.
+- `RESEND_API_KEY`: optional unless Resend delivery is enabled. Keep this server-side only.
+- `EMAIL_FROM`: optional unless Resend delivery is enabled. Example: `ChurchFlow <noreply@example.com>`.
+
+## Delivery Behavior
+
+If Resend credentials are missing, the API uses the console provider. Console fallback does not throw; it logs only safe metadata:
+
+- event
+- recipient
+- subject
+
+It does not log raw invitation tokens, invitation links, contact phone numbers, request messages, or full email payloads.
+
+## Message Routing
+
+- Organization request admin emails go to `PLATFORM_ADMIN_EMAIL`. The requester contact email is included in the email body for review context.
+- Organization invitation emails go to the invited user email address.
+- Organization request rejection emails go to the requester contact email address.

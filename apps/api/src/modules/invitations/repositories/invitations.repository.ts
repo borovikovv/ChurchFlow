@@ -4,7 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 
 interface CreateOrRefreshPendingInput {
   organizationId: string;
-  email: string;
+  email: string | undefined;
   role: OrganizationRole;
   invitedByUserId: string;
   tokenHash: string;
@@ -17,7 +17,7 @@ export class InvitationsRepository {
 
   async findActiveOrganization(organizationId: string) {
     return this.prisma.organization.findFirst({
-      where: { id: organizationId, status: 'ACTIVE', deletedAt: null }
+      where: { id: organizationId, status: 'ACTIVE', deletedAt: null },
     });
   }
 
@@ -27,8 +27,8 @@ export class InvitationsRepository {
         organizationId,
         userId,
         status: 'ACTIVE',
-        removedAt: null
-      }
+        removedAt: null,
+      },
     });
   }
 
@@ -37,12 +37,25 @@ export class InvitationsRepository {
       where: {
         organizationId,
         status: 'ACTIVE',
-        user: { email }
-      }
+        user: { email },
+      },
     });
   }
 
   async createOrRefreshPending(input: CreateOrRefreshPendingInput) {
+    if (!input.email) {
+      return this.prisma.organizationInvitation.create({
+        data: {
+          organizationId: input.organizationId,
+          email: null,
+          role: input.role,
+          tokenHash: input.tokenHash,
+          invitedByUserId: input.invitedByUserId,
+          expiresAt: input.expiresAt,
+        },
+      });
+    }
+
     const pending = await this.prisma.organizationInvitation.findFirst({
       where: {
         organizationId: input.organizationId,
@@ -50,8 +63,8 @@ export class InvitationsRepository {
         status: 'PENDING',
         acceptedAt: null,
         revokedAt: null,
-        expiresAt: { gt: new Date() }
-      }
+        expiresAt: { gt: new Date() },
+      },
     });
 
     if (pending) {
@@ -61,8 +74,8 @@ export class InvitationsRepository {
           role: input.role,
           tokenHash: input.tokenHash,
           invitedByUserId: input.invitedByUserId,
-          expiresAt: input.expiresAt
-        }
+          expiresAt: input.expiresAt,
+        },
       });
     }
 
@@ -73,29 +86,34 @@ export class InvitationsRepository {
         role: input.role,
         tokenHash: input.tokenHash,
         invitedByUserId: input.invitedByUserId,
-        expiresAt: input.expiresAt
-      }
+        expiresAt: input.expiresAt,
+      },
     });
   }
 
   async findByTokenHash(tokenHash: string) {
     return this.prisma.organizationInvitation.findUnique({
       where: { tokenHash },
-      include: { organization: true }
+      include: { organization: true },
     });
   }
 
   async findUserForInvitation(userId: string) {
     return this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, emailVerified: true }
+      select: { id: true, email: true, emailVerified: true },
     });
   }
 
-  async accept(invitationId: string, userId: string, organizationId: string, role: OrganizationRole) {
+  async accept(
+    invitationId: string,
+    userId: string,
+    organizationId: string,
+    role: OrganizationRole,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const existingMember = await tx.organizationMember.findUnique({
-        where: { organizationId_userId: { organizationId, userId } }
+        where: { organizationId_userId: { organizationId, userId } },
       });
 
       if (existingMember && existingMember.status === 'ACTIVE') {
@@ -106,7 +124,7 @@ export class InvitationsRepository {
         organizationId,
         userId,
         role,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
       };
 
       if (existingMember) {
@@ -116,8 +134,8 @@ export class InvitationsRepository {
             role,
             status: 'ACTIVE',
             removedAt: null,
-            joinedAt: new Date()
-          }
+            joinedAt: new Date(),
+          },
         });
       } else {
         await tx.organizationMember.create({ data: memberData });
@@ -127,8 +145,8 @@ export class InvitationsRepository {
         where: { id: invitationId },
         data: {
           status: 'ACCEPTED',
-          acceptedAt: new Date()
-        }
+          acceptedAt: new Date(),
+        },
       });
 
       return { organizationId };
@@ -137,7 +155,13 @@ export class InvitationsRepository {
 
   async revoke(organizationId: string, invitationId: string) {
     const invitation = await this.prisma.organizationInvitation.findFirst({
-      where: { id: invitationId, organizationId, status: 'PENDING', acceptedAt: null, revokedAt: null }
+      where: {
+        id: invitationId,
+        organizationId,
+        status: 'PENDING',
+        acceptedAt: null,
+        revokedAt: null,
+      },
     });
     if (!invitation) {
       return null;
@@ -147,14 +171,20 @@ export class InvitationsRepository {
       where: { id: invitation.id },
       data: {
         status: 'REVOKED',
-        revokedAt: new Date()
-      }
+        revokedAt: new Date(),
+      },
     });
   }
 
   async resend(organizationId: string, invitationId: string, tokenHash: string, expiresAt: Date) {
     const invitation = await this.prisma.organizationInvitation.findFirst({
-      where: { id: invitationId, organizationId, status: 'PENDING', acceptedAt: null, revokedAt: null }
+      where: {
+        id: invitationId,
+        organizationId,
+        status: 'PENDING',
+        acceptedAt: null,
+        revokedAt: null,
+      },
     });
     if (!invitation) {
       return null;
@@ -163,7 +193,7 @@ export class InvitationsRepository {
     return this.prisma.organizationInvitation.update({
       where: { id: invitation.id },
       data: { tokenHash, expiresAt },
-      include: { organization: true }
+      include: { organization: true },
     });
   }
 
@@ -173,9 +203,9 @@ export class InvitationsRepository {
         organizationId,
         status: 'PENDING',
         acceptedAt: null,
-        revokedAt: null
+        revokedAt: null,
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 }

@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EMAIL_PROVIDER, type EmailProvider } from './email.provider';
 
 export interface OrganizationRequestAdminEmailInput {
   requestId: string;
@@ -26,39 +27,57 @@ export interface OrganizationRequestRejectedEmailInput {
 
 @Injectable()
 export class EmailService {
-  private readonly logger = new Logger(EmailService.name);
+  constructor(
+    private readonly config: ConfigService,
+    @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
+  ) {}
 
-  constructor(private readonly config: ConfigService) {}
+  buildOrganizationInvitationUrl(token: string): string {
+    return `${this.webAppUrl}/invitations/accept?token=${encodeURIComponent(token)}`;
+  }
 
-  async sendOrganizationRequestAdminEmail(input: OrganizationRequestAdminEmailInput): Promise<void> {
+  async sendOrganizationRequestAdminEmail(
+    input: OrganizationRequestAdminEmailInput,
+  ): Promise<void> {
     const adminReviewUrl = `${this.webAppUrl}/admin/organization-requests/${input.requestId}`;
-    this.logEmail('New organization request', input.contactEmail, {
+    await this.emailProvider.send({
+      to: this.platformAdminEmail,
       subject: `New organization request: ${input.organizationName}`,
-      organizationName: input.organizationName,
-      contactName: input.contactName,
-      contactEmail: input.contactEmail,
-      contactPhone: input.contactPhone,
-      message: input.message,
-      adminReviewUrl
+      text: [
+        `Organization: ${input.organizationName}`,
+        `Contact: ${input.contactName} <${input.contactEmail}>`,
+        input.contactPhone ? `Phone: ${input.contactPhone}` : null,
+        input.message ? `Message: ${input.message}` : null,
+        `Review: ${adminReviewUrl}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
     });
   }
 
   async sendOrganizationInvitationEmail(input: OrganizationInvitationEmailInput): Promise<void> {
-    const acceptUrl = `${this.webAppUrl}/invitations/accept?token=${encodeURIComponent(input.token)}`;
-    this.logEmail('Organization invitation', input.email, {
+    const acceptUrl = this.buildOrganizationInvitationUrl(input.token);
+    await this.emailProvider.send({
+      to: input.email,
       subject: `You are invited to join ${input.organizationName}`,
-      organizationName: input.organizationName,
-      role: input.role,
-      acceptUrl,
-      expiresAt: input.expiresAt.toISOString()
+      text: [
+        `You are invited to join ${input.organizationName} as ${input.role}.`,
+        `Accept invitation: ${acceptUrl}`,
+        `This invitation expires at ${input.expiresAt.toISOString()}.`,
+      ].join('\n'),
     });
   }
 
-  async sendOrganizationRequestRejectedEmail(input: OrganizationRequestRejectedEmailInput): Promise<void> {
-    this.logEmail('Organization request rejected', input.email, {
+  async sendOrganizationRequestRejectedEmail(
+    input: OrganizationRequestRejectedEmailInput,
+  ): Promise<void> {
+    await this.emailProvider.send({
+      to: input.email,
       subject: `Organization request update: ${input.organizationName}`,
-      organizationName: input.organizationName,
-      rejectionReason: input.rejectionReason
+      text: [
+        `Your organization request for ${input.organizationName} was rejected.`,
+        `Reason: ${input.rejectionReason}`,
+      ].join('\n'),
     });
   }
 
@@ -66,8 +85,7 @@ export class EmailService {
     return this.config.getOrThrow<string>('WEB_APP_URL');
   }
 
-  private logEmail(event: string, recipient: string, payload: Record<string, unknown>): void {
-    // TODO: Swap this local provider with Resend/Postmark/SMTP while preserving this service contract.
-    this.logger.log({ event, recipient, payload });
+  private get platformAdminEmail(): string {
+    return this.config.getOrThrow<string>('PLATFORM_ADMIN_EMAIL');
   }
 }

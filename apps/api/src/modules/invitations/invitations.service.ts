@@ -4,7 +4,7 @@ import {
   GoneException,
   Injectable,
   NotFoundException,
-  UnauthorizedException
+  UnauthorizedException,
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import type { OrganizationRole } from '@churchflow/db';
@@ -20,7 +20,7 @@ export class InvitationsService {
   constructor(
     private readonly invitationsRepository: InvitationsRepository,
     private readonly emailService: EmailService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
   ) {}
 
   createRawInvitationToken(): { rawToken: string; tokenHash: string } {
@@ -28,20 +28,32 @@ export class InvitationsService {
     return { rawToken, tokenHash: this.hashToken(rawToken) };
   }
 
-  async createForOrganization(organizationId: string, input: CreateOrganizationInvitationInput, actorUserId: string) {
+  async createForOrganization(
+    organizationId: string,
+    input: CreateOrganizationInvitationInput,
+    actorUserId: string,
+  ) {
     const organization = await this.invitationsRepository.findActiveOrganization(organizationId);
     if (!organization) {
       throw new NotFoundException('Active organization was not found');
     }
 
-    const actorMembership = await this.invitationsRepository.findActiveMembership(organizationId, actorUserId);
+    const actorMembership = await this.invitationsRepository.findActiveMembership(
+      organizationId,
+      actorUserId,
+    );
     if (!actorMembership || !this.canInviteRole(actorMembership.role, input.role)) {
       throw new ForbiddenException('You do not have permission to invite this role');
     }
 
-    const existingMember = await this.invitationsRepository.findMemberByEmail(organizationId, input.email);
-    if (existingMember) {
-      throw new ConflictException('User is already a member of this organization');
+    if (input.email) {
+      const existingMember = await this.invitationsRepository.findMemberByEmail(
+        organizationId,
+        input.email,
+      );
+      if (existingMember) {
+        throw new ConflictException('User is already a member of this organization');
+      }
     }
 
     const token = this.createRawInvitationToken();
@@ -52,16 +64,20 @@ export class InvitationsService {
       role: input.role,
       invitedByUserId: actorUserId,
       tokenHash: token.tokenHash,
-      expiresAt
+      expiresAt,
     });
 
-    await this.emailService.sendOrganizationInvitationEmail({
-      email: input.email,
-      organizationName: organization.name,
-      role: input.role,
-      token: token.rawToken,
-      expiresAt
-    });
+    const acceptUrl = this.emailService.buildOrganizationInvitationUrl(token.rawToken);
+
+    if (input.email) {
+      await this.emailService.sendOrganizationInvitationEmail({
+        email: input.email,
+        organizationName: organization.name,
+        role: input.role,
+        token: token.rawToken,
+        expiresAt,
+      });
+    }
 
     await this.auditService.record({
       organizationId,
@@ -69,10 +85,18 @@ export class InvitationsService {
       action: 'INVITE',
       entityType: 'OrganizationInvitation',
       entityId: invitation.id,
-      metadata: { email: input.email, role: input.role }
+      metadata: {
+        email: input.email,
+        role: input.role,
+        delivery: input.email ? 'email' : 'link',
+      },
     });
 
-    return invitation;
+    return {
+      invitation,
+      acceptUrl,
+      emailSent: Boolean(input.email),
+    };
   }
 
   async validate(rawToken: string) {
@@ -83,7 +107,10 @@ export class InvitationsService {
 
     const isExpired = invitation.expiresAt.getTime() <= Date.now();
     const isValid =
-      invitation.acceptedAt === null && invitation.revokedAt === null && invitation.status === 'PENDING' && !isExpired;
+      invitation.acceptedAt === null &&
+      invitation.revokedAt === null &&
+      invitation.status === 'PENDING' &&
+      !isExpired;
 
     return {
       valid: isValid,
@@ -92,7 +119,8 @@ export class InvitationsService {
       organizationName: invitation.organization.name,
       email: invitation.email,
       role: invitation.role,
-      requiresSignup: true
+      requiresSignup: true,
+      delivery: invitation.email ? 'email' : 'link',
     };
   }
 
@@ -102,7 +130,11 @@ export class InvitationsService {
       throw new NotFoundException('Invitation was not found');
     }
 
-    if (invitation.acceptedAt !== null || invitation.revokedAt !== null || invitation.status !== 'PENDING') {
+    if (
+      invitation.acceptedAt !== null ||
+      invitation.revokedAt !== null ||
+      invitation.status !== 'PENDING'
+    ) {
       throw new ConflictException('Invitation is no longer pending');
     }
 
@@ -111,24 +143,34 @@ export class InvitationsService {
     }
 
     const user = await this.invitationsRepository.findUserForInvitation(actorUserId);
-    if (!user?.email) {
-      throw new UnauthorizedException('Authenticated user email is required');
+    if (invitation.email) {
+      if (!user?.email) {
+        throw new UnauthorizedException('Authenticated user email is required');
+      }
+
+      if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+        throw new ForbiddenException('Authenticated user email must match invitation email');
+      }
+
+      if (user.emailVerified === null) {
+        throw new ForbiddenException('Email must be verified before accepting an invitation');
+      }
     }
 
-    if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
-      throw new ForbiddenException('Authenticated user email must match invitation email');
-    }
-
-    if (user.emailVerified === null) {
-      throw new ForbiddenException('Email must be verified before accepting an invitation');
-    }
-
-    const existingMembership = await this.invitationsRepository.findActiveMembership(invitation.organizationId, actorUserId);
+    const existingMembership = await this.invitationsRepository.findActiveMembership(
+      invitation.organizationId,
+      actorUserId,
+    );
     if (existingMembership) {
       throw new ConflictException('User is already a member of this organization');
     }
 
-    const result = await this.invitationsRepository.accept(invitation.id, actorUserId, invitation.organizationId, invitation.role);
+    const result = await this.invitationsRepository.accept(
+      invitation.id,
+      actorUserId,
+      invitation.organizationId,
+      invitation.role,
+    );
 
     await this.auditService.record({
       organizationId: invitation.organizationId,
@@ -136,12 +178,12 @@ export class InvitationsService {
       action: 'ACCEPT',
       entityType: 'OrganizationInvitation',
       entityId: invitation.id,
-      metadata: { role: invitation.role, email: invitation.email }
+      metadata: { role: invitation.role, email: invitation.email },
     });
 
     return {
       organizationId: result.organizationId,
-      redirectTo: `/dashboard/${result.organizationId}`
+      redirectTo: `/dashboard/${result.organizationId}`,
     };
   }
 
@@ -158,7 +200,7 @@ export class InvitationsService {
       action: 'REVOKE',
       entityType: 'OrganizationInvitation',
       entityId: invitation.id,
-      metadata: { email: invitation.email, role: invitation.role }
+      metadata: { email: invitation.email, role: invitation.role },
     });
 
     return invitation;
@@ -168,9 +210,18 @@ export class InvitationsService {
     await this.assertCanManageInvitations(organizationId, actorUserId);
     const token = this.createRawInvitationToken();
     const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
-    const invitation = await this.invitationsRepository.resend(organizationId, invitationId, token.tokenHash, expiresAt);
+    const invitation = await this.invitationsRepository.resend(
+      organizationId,
+      invitationId,
+      token.tokenHash,
+      expiresAt,
+    );
     if (!invitation) {
       throw new NotFoundException('Pending invitation was not found');
+    }
+
+    if (!invitation.email) {
+      throw new ConflictException('Link invitations do not have an email recipient');
     }
 
     await this.emailService.sendOrganizationInvitationEmail({
@@ -178,7 +229,7 @@ export class InvitationsService {
       organizationName: invitation.organization.name,
       role: invitation.role,
       token: token.rawToken,
-      expiresAt
+      expiresAt,
     });
 
     await this.auditService.record({
@@ -187,7 +238,7 @@ export class InvitationsService {
       action: 'RESEND',
       entityType: 'OrganizationInvitation',
       entityId: invitation.id,
-      metadata: { email: invitation.email, role: invitation.role }
+      metadata: { email: invitation.email, role: invitation.role },
     });
 
     return invitation;
@@ -209,8 +260,14 @@ export class InvitationsService {
     return false;
   }
 
-  private async assertCanManageInvitations(organizationId: string, actorUserId: string): Promise<void> {
-    const membership = await this.invitationsRepository.findActiveMembership(organizationId, actorUserId);
+  private async assertCanManageInvitations(
+    organizationId: string,
+    actorUserId: string,
+  ): Promise<void> {
+    const membership = await this.invitationsRepository.findActiveMembership(
+      organizationId,
+      actorUserId,
+    );
     if (!membership || !this.canInviteRole(membership.role, 'MEMBER')) {
       throw new ForbiddenException('You do not have permission to manage invitations');
     }

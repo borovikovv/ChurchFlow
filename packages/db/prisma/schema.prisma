@@ -204,7 +204,7 @@ model OrganizationMember {
 model OrganizationInvitation {
   id             String           @id @default(uuid()) @db.Uuid
   organizationId String           @map("organization_id") @db.Uuid
-  email          String           @db.Citext
+  email          String?          @db.Citext
   role           OrganizationRole @default(MEMBER)
   permissions    String[]         @default([])
   tokenHash      String           @map("token_hash")

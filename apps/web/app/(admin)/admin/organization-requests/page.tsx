@@ -32,6 +32,7 @@ export default async function AdminOrganizationRequestsPage({
             </Link>
           ))}
         </nav>
+        {!result.ok ? <p>{result.error.message}</p> : null}
         <div className="table">
           {requests.map((request) => (
             <Link className="row" href={`/admin/organization-requests/${request.id}` as Route} key={request.id}>

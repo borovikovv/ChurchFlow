@@ -7,6 +7,12 @@ export const providerLoginSchema = z.object({
   redirectTo: z.string().url().optional()
 });
 
-export class ProviderLoginDto {
+type ProviderLoginInput = z.infer<typeof providerLoginSchema>;
+
+export class ProviderLoginDto implements ProviderLoginInput {
   static readonly schema = providerLoginSchema;
+
+  provider!: ProviderLoginInput['provider'];
+  providerToken!: string;
+  redirectTo?: string;
 }

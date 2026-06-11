@@ -4,6 +4,6 @@ import type { CreateOrganizationInvitationInput } from '@churchflow/shared';
 export class CreateOrganizationInvitationDto implements CreateOrganizationInvitationInput {
   static readonly schema = createOrganizationInvitationSchema;
 
-  email!: string;
+  email?: string;
   role!: CreateOrganizationInvitationInput['role'];
 }

@@ -8,8 +8,9 @@ interface InvitationValidation {
   reason: string | null;
   organizationName?: string;
   organizationId?: string;
-  email?: string;
+  email?: string | null;
   role?: string;
+  delivery?: 'email' | 'link';
 }
 
 interface AcceptInvitationResult {
@@ -23,7 +24,7 @@ async function acceptInvitation(formData: FormData) {
   const result = await apiFetch<AcceptInvitationResult>('/invitations/accept', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ token })
+    body: JSON.stringify({ token }),
   });
 
   if (result.ok) {
@@ -31,10 +32,16 @@ async function acceptInvitation(formData: FormData) {
   }
 }
 
-export default async function AcceptInvitationPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
+export default async function AcceptInvitationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string }>;
+}) {
   const { token } = await searchParams;
   const result = token
-    ? await apiFetch<InvitationValidation>(`/invitations/validate?token=${encodeURIComponent(token)}`)
+    ? await apiFetch<InvitationValidation>(
+        `/invitations/validate?token=${encodeURIComponent(token)}`,
+      )
     : null;
   const invitation = result?.ok ? result.data : null;
 
@@ -49,8 +56,8 @@ export default async function AcceptInvitationPage({ searchParams }: { searchPar
             <dl className="details">
               <dt>Organization</dt>
               <dd>{invitation.organizationName}</dd>
-              <dt>Email</dt>
-              <dd>{invitation.email}</dd>
+              <dt>Invitation</dt>
+              <dd>{invitation.email ?? 'Shareable link'}</dd>
               <dt>Role</dt>
               <dd>{invitation.role}</dd>
             </dl>

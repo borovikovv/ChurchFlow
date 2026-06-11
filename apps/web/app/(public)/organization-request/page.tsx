@@ -20,9 +20,9 @@ async function submitOrganizationRequest(formData: FormData) {
 export default function OrganizationRequestPage() {
   return (
     <main className="section">
-      <div className="shell stack">
+      <div className="shell stack grid-center">
         <h1>Request organization access</h1>
-        <form className="form-grid" action={submitOrganizationRequest}>
+        <form className="form-grid min-w-200 w-200" action={submitOrganizationRequest}>
           <label>
             Organization name
             <input name="organizationName" required minLength={2} maxLength={160} />

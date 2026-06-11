@@ -11,7 +11,7 @@ export const slugSchema = z
 export const jwtPayloadSchema = z.object({
   sub: uuidSchema,
   sid: uuidSchema,
-  type: z.enum(['access', 'refresh'])
+  type: z.enum(['access', 'refresh']),
 });
 
 export const authProviderSchema = z.enum(['telegram', 'webauthn', 'email', 'google', 'apple']);
@@ -20,7 +20,12 @@ export const platformRoleSchema = z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']);
 export const organizationRoleSchema = z.enum(['OWNER', 'ADMIN', 'MEMBER', 'VIEWER']);
 export const organizationStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'ARCHIVED', 'DELETED']);
 export const organizationMemberStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'REMOVED']);
-export const organizationRequestStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'EXPIRED']);
+export const organizationRequestStatusSchema = z.enum([
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'EXPIRED',
+]);
 
 const optionalTrimmedString = (max: number) =>
   z
@@ -35,46 +40,58 @@ export const organizationSchema = z.object({
   name: z.string().min(1).max(160),
   slug: slugSchema,
   description: z.string().max(500).nullable(),
-  status: organizationStatusSchema.default('ACTIVE')
+  status: organizationStatusSchema.default('ACTIVE'),
 });
 
 export const createOrganizationSchema = z.object({
   name: z.string().min(1).max(160),
   slug: slugSchema,
-  description: z.string().max(500).optional()
+  description: z.string().max(500).optional(),
 });
 
 export const createOrganizationRequestSchema = z.object({
   organizationName: z.string().trim().min(2).max(160),
-  organizationSlug: optionalTrimmedString(80).refine((value) => value === undefined || slugSchema.safeParse(value).success, {
-    message: 'Invalid organization slug'
-  }),
+  organizationSlug: optionalTrimmedString(80).refine(
+    (value) => value === undefined || slugSchema.safeParse(value).success,
+    {
+      message: 'Invalid organization slug',
+    },
+  ),
   contactName: z.string().trim().min(2).max(160),
-  contactEmail: z.string().trim().email().max(255).transform((value) => value.toLowerCase()),
+  contactEmail: z
+    .string()
+    .trim()
+    .email()
+    .max(255)
+    .transform((value) => value.toLowerCase()),
   contactPhone: optionalTrimmedString(40),
-  message: optionalTrimmedString(2000)
+  message: optionalTrimmedString(2000),
 });
 
 export const approveOrganizationRequestSchema = z.object({
   organizationSlug: slugSchema.optional(),
-  organizationName: z.string().trim().min(2).max(160).optional()
+  organizationName: z.string().trim().min(2).max(160).optional(),
 });
 
 export const rejectOrganizationRequestSchema = z.object({
-  rejectionReason: z.string().trim().min(2).max(1000)
+  rejectionReason: z.string().trim().min(2).max(1000),
 });
 
 export const createOrganizationInvitationSchema = z.object({
-  email: z.string().trim().email().max(255).transform((value) => value.toLowerCase()),
-  role: organizationRoleSchema.default('MEMBER')
+  email: optionalTrimmedString(255)
+    .refine((value) => value === undefined || z.string().email().safeParse(value).success, {
+      message: 'Invalid email',
+    })
+    .transform((value) => value?.toLowerCase()),
+  role: organizationRoleSchema.default('MEMBER'),
 });
 
 export const acceptInvitationSchema = z.object({
-  token: z.string().min(32).max(512)
+  token: z.string().min(32).max(512),
 });
 
 export const invitationTokenQuerySchema = z.object({
-  token: z.string().min(32).max(512)
+  token: z.string().min(32).max(512),
 });
 
 export const organizationWebsiteSchema = z.object({
@@ -82,14 +99,14 @@ export const organizationWebsiteSchema = z.object({
   organizationId: uuidSchema,
   title: z.string().min(1).max(160),
   description: z.string().max(500).nullable(),
-  publishedAt: z.coerce.date().nullable()
+  publishedAt: z.coerce.date().nullable(),
 });
 
 export const updateWebsiteSettingsSchema = z.object({
   title: z.string().min(1).max(160),
   description: z.string().max(500).optional(),
   theme: z.record(z.unknown()).default({}),
-  settings: z.record(z.unknown()).default({})
+  settings: z.record(z.unknown()).default({}),
 });
 
 export const pageStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']);
@@ -100,14 +117,14 @@ export const websitePageSchema = z.object({
   websiteId: uuidSchema,
   slug: slugSchema,
   title: z.string().min(1).max(160),
-  status: pageStatusSchema
+  status: pageStatusSchema,
 });
 
 export const upsertWebsitePageSchema = z.object({
   slug: slugSchema,
   title: z.string().min(1).max(160),
   status: pageStatusSchema.default('DRAFT'),
-  seo: z.record(z.unknown()).default({})
+  seo: z.record(z.unknown()).default({}),
 });
 
 export const sectionTypeSchema = z.enum(PUBLIC_SECTION_TYPES);
@@ -118,13 +135,13 @@ export const websiteSectionSchema = z.object({
   pageId: uuidSchema,
   type: sectionTypeSchema,
   order: z.number().int().min(0),
-  content: z.record(z.unknown())
+  content: z.record(z.unknown()),
 });
 
 export const upsertWebsiteSectionSchema = z.object({
   type: sectionTypeSchema,
   order: z.number().int().min(0),
-  content: z.record(z.unknown()).default({})
+  content: z.record(z.unknown()).default({}),
 });
 
 export const mediaAssetSchema = z.object({
@@ -133,10 +150,10 @@ export const mediaAssetSchema = z.object({
   filename: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(120),
   byteSize: z.bigint().nonnegative(),
-  altText: z.string().max(300).nullable()
+  altText: z.string().max(300).nullable(),
 });
 
 export const paginationQuerySchema = z.object({
   cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(25)
+  limit: z.coerce.number().int().min(1).max(100).default(25),
 });
