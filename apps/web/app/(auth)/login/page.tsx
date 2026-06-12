@@ -33,7 +33,7 @@ export default async function LoginPage({
         {sent ? (
           <p>Check your email for a secure sign-in link.</p>
         ) : (
-          <form className="form-grid min-w-200 w-200" action={startEmailLogin}>
+          <form className="form-grid max-w-100 w-full" action={startEmailLogin}>
             <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
             <label>
               Email

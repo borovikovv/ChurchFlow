@@ -1,5 +1,6 @@
 import { revalidatePath } from 'next/cache';
 import { apiFetch } from '@/api/client';
+import { requirePlatformAdmin } from '@/auth/session';
 
 interface OrganizationDetail {
   id: string;
@@ -22,6 +23,8 @@ async function organizationAction(formData: FormData) {
 
 export default async function AdminOrganizationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  await requirePlatformAdmin(`/admin/organizations/${id}`);
+
   const result = await apiFetch<OrganizationDetail>(`/admin/organizations/${id}`);
 
   if (!result.ok) {
