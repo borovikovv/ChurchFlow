@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import { apiFetch } from '@/api/client';
+import { ADMIN_ORGANIZATION_REQUEST_STATUS_FILTERS } from '@/admin/constants';
 import { requirePlatformAdmin } from '@/auth/session';
 
 interface OrganizationRequestRow {
@@ -29,7 +30,7 @@ export default async function AdminOrganizationRequestsPage({
       <div className="shell stack justify-items-center">
         <h1>Organization requests</h1>
         <nav className="tabs" aria-label="Request filters">
-          {['PENDING', 'APPROVED', 'REJECTED'].map((item) => (
+          {ADMIN_ORGANIZATION_REQUEST_STATUS_FILTERS.map((item) => (
             <Link key={item} href={`/admin/organization-requests?status=${item}` as Route}>
               {item}
             </Link>

@@ -12,12 +12,10 @@
     "lint": "eslint .",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev && prisma generate",
-    "db:studio": "prisma studio",
-    "bootstrap:admin": "prisma generate && node scripts/bootstrap-admin.mjs"
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@prisma/client": "^7.8.0",
-    "@prisma/adapter-pg": "^7.8.0",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
