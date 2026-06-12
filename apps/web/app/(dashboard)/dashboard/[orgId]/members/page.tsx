@@ -137,7 +137,7 @@ export default async function MembersDashboardPage({
       </form>
       <section className="stack">
         <h2>Active members</h2>
-        <div className="table">
+        <div className="data-list">
           {payload.members.map((member) => (
             <div className="row" key={member.id}>
               <strong>{member.user.displayName ?? member.user.email ?? 'Member'}</strong>
@@ -149,7 +149,7 @@ export default async function MembersDashboardPage({
       </section>
       <section className="stack">
         <h2>Pending invitations</h2>
-        <div className="table">
+        <div className="data-list">
           {payload.pendingInvitations.map((invitation) => (
             <form className="row" action={invitationAction} key={invitation.id}>
               <input type="hidden" name="organizationId" value={orgId} />

@@ -24,8 +24,21 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 5. Install dependencies with `pnpm install`.
 6. Generate Prisma Client with `pnpm db:generate`.
 7. Create database migrations with `pnpm db:migrate`.
-8. Apply `packages/db/sql/001_rls_foundation.sql` after Prisma has created the tables.
-9. Run the workspace with `pnpm dev`.
+8. Bootstrap the first platform admin with `PLATFORM_ADMIN_EMAIL=admin@example.com pnpm bootstrap:admin`.
+9. Apply `packages/db/sql/001_rls_foundation.sql` after Prisma has created the tables.
+10. Run the workspace with `pnpm dev`.
+
+## Auth Flow
+
+- Users sign in with email magic links from `/login`.
+- `POST /v1/auth/email/start` stores a single-use hashed login token and sends the link.
+- `/login/verify?token=...` verifies the token, creates or updates the `User`, `AuthAccount`, and `Session`, then sets httpOnly auth cookies.
+- Protected API routes read the access token from `Authorization: Bearer ...` or the `churchflow_access` cookie.
+- `POST /v1/auth/refresh` mints a fresh access token from the httpOnly refresh cookie.
+- Platform admins are regular users with `platformRole` set to `ADMIN` or `SUPER_ADMIN`.
+- Organization owners are represented by `OrganizationMember` rows with role `OWNER`.
+
+See `docs/current-workflow.md` for the full business and technical workflow.
 
 ## Scripts
 
@@ -36,6 +49,7 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 - `pnpm db:generate` generates Prisma Client.
 - `pnpm db:migrate` runs Prisma migrations.
 - `pnpm db:studio` opens Prisma Studio.
+- `pnpm bootstrap:admin` creates or updates the first `SUPER_ADMIN` user from `ADMIN_EMAIL` or `PLATFORM_ADMIN_EMAIL`.
 
 ## Security Notes
 

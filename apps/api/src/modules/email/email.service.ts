@@ -25,6 +25,12 @@ export interface OrganizationRequestRejectedEmailInput {
   rejectionReason: string;
 }
 
+export interface LoginMagicLinkEmailInput {
+  email: string;
+  url: string;
+  expiresAt: Date;
+}
+
 @Injectable()
 export class EmailService {
   constructor(
@@ -77,6 +83,18 @@ export class EmailService {
       text: [
         `Your organization request for ${input.organizationName} was rejected.`,
         `Reason: ${input.rejectionReason}`,
+      ].join('\n'),
+    });
+  }
+
+  async sendLoginMagicLinkEmail(input: LoginMagicLinkEmailInput): Promise<void> {
+    await this.emailProvider.send({
+      to: input.email,
+      subject: 'Sign in to ChurchFlow',
+      text: [
+        'Use this link to sign in to ChurchFlow.',
+        `Sign in: ${input.url}`,
+        `This link expires at ${input.expiresAt.toISOString()}.`,
       ].join('\n'),
     });
   }

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { redirect } from 'next/navigation';
 import { apiFetch } from '@/api/client';
+import { hasServerSession } from '@/auth/session';
 
 interface InvitationValidation {
   valid: boolean;
@@ -44,6 +45,7 @@ export default async function AcceptInvitationPage({
       )
     : null;
   const invitation = result?.ok ? result.data : null;
+  const isSignedIn = await hasServerSession();
 
   return (
     <main className="section">
@@ -61,13 +63,21 @@ export default async function AcceptInvitationPage({
               <dt>Role</dt>
               <dd>{invitation.role}</dd>
             </dl>
-            <form action={acceptInvitation}>
-              <input type="hidden" name="token" value={token} />
-              <button className="button" type="submit">
-                Accept invitation
-              </button>
-            </form>
-            <Link href="/login">Sign in or create an account</Link>
+            {isSignedIn ? (
+              <form action={acceptInvitation}>
+                <input type="hidden" name="token" value={token} />
+                <button className="button" type="submit">
+                  Accept invitation
+                </button>
+              </form>
+            ) : (
+              <Link
+                className="button"
+                href={`/login?redirectTo=${encodeURIComponent(`/invitations/accept?token=${token}`)}`}
+              >
+                Sign in or create an account
+              </Link>
+            )}
           </>
         )}
       </div>

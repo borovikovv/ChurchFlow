@@ -8,6 +8,8 @@ import type {
   organizationSchema,
   organizationWebsiteSchema,
   rejectOrganizationRequestSchema,
+  startEmailLoginSchema,
+  verifyEmailLoginSchema,
   websitePageSchema,
   websiteSectionSchema
 } from './schemas.js';
@@ -23,6 +25,8 @@ export type ApproveOrganizationRequestInput = z.infer<typeof approveOrganization
 export type RejectOrganizationRequestInput = z.infer<typeof rejectOrganizationRequestSchema>;
 export type CreateOrganizationInvitationInput = z.infer<typeof createOrganizationInvitationSchema>;
 export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
+export type StartEmailLoginInput = z.infer<typeof startEmailLoginSchema>;
+export type VerifyEmailLoginInput = z.infer<typeof verifyEmailLoginSchema>;
 
 export type ApiResult<T> =
   | {

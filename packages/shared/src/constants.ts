@@ -1,6 +1,6 @@
 export const AUTH_COOKIE_NAMES = {
-  access: '__Host-churchflow_access',
-  refresh: '__Host-churchflow_refresh'
+  access: 'churchflow_access',
+  refresh: 'churchflow_refresh'
 } as const;
 
 export const ORG_PERMISSIONS = {

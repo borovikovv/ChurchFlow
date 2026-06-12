@@ -27,7 +27,7 @@ export default async function AdminOrganizationsPage({ searchParams }: { searchP
             </Link>
           ))}
         </nav>
-        <div className="table">
+        <div className="data-list">
           {organizations.map((organization) => (
             <Link className="row" href={`/admin/organizations/${organization.id}` as Route} key={organization.id}>
               <strong>{organization.name}</strong>

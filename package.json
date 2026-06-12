@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "db:generate": "pnpm --filter @churchflow/db db:generate",
     "db:migrate": "pnpm --filter @churchflow/db db:migrate",
-    "db:studio": "pnpm --filter @churchflow/db db:studio"
+    "db:studio": "pnpm --filter @churchflow/db db:studio",
+    "bootstrap:admin": "pnpm --filter @churchflow/db bootstrap:admin"
   },
   "devDependencies": {
     "@churchflow/config": "workspace:*",
