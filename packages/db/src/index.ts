@@ -1,4 +1,4 @@
-export { PrismaClient, Prisma } from './generated/prisma/client';
+export { PrismaClient, Prisma } from '@prisma/client';
 export type {
   AuthProvider,
   AuditAction,
@@ -12,4 +12,4 @@ export type {
   PlatformRole,
   SessionType,
   WebsiteSectionType
-} from './generated/prisma/client';
+} from '@prisma/client';
