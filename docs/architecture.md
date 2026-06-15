@@ -12,7 +12,7 @@ ChurchFlow is a multi-tenant SaaS monorepo with separate deployable apps and sha
 
 ## Tenancy
 
-Tenant-owned resources include `organization_id` and are indexed for organization-scoped queries. The API should set database request context for the authenticated user before tenant queries so PostgreSQL RLS policies are the final authorization layer.
+Tenant-owned resources include `organization_id` and are indexed for organization-scoped queries. The current runtime enforcement is explicit Nest guards and service checks against database membership state. PostgreSQL RLS helper functions and policies exist as a foundation, but Prisma request-scoped RLS context is not wired yet.
 
 ## Backend Layers
 

@@ -2,12 +2,12 @@
 
 ## Status
 
-Accepted
+Accepted as target architecture; partially implemented at runtime
 
 ## Decision
 
-PostgreSQL RLS is the final tenant authorization layer. API checks may improve ergonomics and error messages, but database policies must protect tenant-owned data.
+PostgreSQL RLS is the target final tenant authorization layer. API checks improve ergonomics and currently provide the active runtime authorization enforcement until Prisma request-scoped RLS context is implemented.
 
 ## Consequences
 
-JWTs carry identity and session references, not organization authorization truth. The API must bind authenticated user context to database transactions before tenant queries.
+JWTs carry identity and session references, not organization authorization truth. The API must not trust JWTs for organization roles or permissions. Today, API guards and services check database membership state before tenant queries; the API must bind authenticated user context to database transactions before relying on RLS as the final layer.

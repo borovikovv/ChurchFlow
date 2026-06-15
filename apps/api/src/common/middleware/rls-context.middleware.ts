@@ -5,7 +5,8 @@ import type { AuthenticatedRequest } from '../guards/jwt-auth.guard';
 @Injectable()
 export class RlsContextMiddleware implements NestMiddleware {
   use(request: AuthenticatedRequest, _response: Response, next: NextFunction): void {
-    // TODO: Bind request.auth.sub to SET LOCAL app.current_user_id inside DB transactions.
+    // JWT guards populate request.auth after middleware has already run. Organization access is
+    // enforced by guards until Prisma queries are wrapped in request-scoped RLS transactions.
     void request;
     next();
   }

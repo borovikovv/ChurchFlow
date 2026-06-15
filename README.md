@@ -7,7 +7,7 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 - Frontend: Next.js App Router, React, TypeScript
 - Backend: Nest.js, TypeScript
 - Database: PostgreSQL with Prisma
-- Authorization: PostgreSQL RLS-first design
+- Authorization: API guards/service checks today, with PostgreSQL RLS foundation prepared
 - Auth foundation: provider-based auth prepared for passkeys/WebAuthn, Telegram, magic links, Google, and Apple
 - Storage: S3-compatible abstraction for Cloudflare R2 or AWS S3
 - Monorepo: pnpm workspace and Turborepo
@@ -24,8 +24,9 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 5. Install dependencies with `pnpm install`.
 6. Generate Prisma Client with `pnpm db:generate`.
 7. Create database migrations with `pnpm db:migrate`.
-8. Apply `packages/db/sql/001_rls_foundation.sql` after Prisma has created the tables.
-9. Run the workspace with `pnpm dev`.
+8. Apply `packages/db/sql/001_rls_foundation.sql` after Prisma has created the tables if you are testing the RLS foundation.
+9. Bootstrap the first platform admin with `DATABASE_URL="postgresql://..." pnpm admin:promote admin@example.com SUPER_ADMIN`.
+10. Run the workspace with `pnpm dev`.
 
 ## Auth Flow
 
@@ -37,7 +38,7 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 - Platform admins are regular users with `platformRole` set to `ADMIN` or `SUPER_ADMIN`.
 - Organization owners are represented by `OrganizationMember` rows with role `OWNER`.
 
-See `docs/current-workflow.md` for the full business and technical workflow.
+See `docs/organization-approval-flow.md`, `docs/platform-admin.md`, and `docs/invitations.md` for the full business and technical workflow.
 
 ## Scripts
 
@@ -45,6 +46,7 @@ See `docs/current-workflow.md` for the full business and technical workflow.
 - `pnpm build` builds all apps and packages.
 - `pnpm lint` runs lint tasks.
 - `pnpm typecheck` runs strict TypeScript checks.
+- `pnpm admin:promote <email> [ADMIN|SUPER_ADMIN]` promotes a platform admin through an operational CLI command.
 - `pnpm db:generate` generates Prisma Client.
 - `pnpm db:migrate` runs Prisma migrations.
 - `pnpm db:studio` opens Prisma Studio.
@@ -52,7 +54,7 @@ See `docs/current-workflow.md` for the full business and technical workflow.
 ## Security Notes
 
 - Browser auth is prepared for httpOnly cookies. Do not add localStorage token storage.
-- JWT payloads contain identity and session ids only; organization permissions must be checked through DB/RLS.
+- JWT payloads contain identity and session ids only; organization permissions must be checked through database membership state. Runtime RLS context is not wired yet.
 - Refresh tokens must be stored only as hashes.
 - S3/R2 credentials must stay server-side.
 - Private CRM/member data must not be joined into public website queries.

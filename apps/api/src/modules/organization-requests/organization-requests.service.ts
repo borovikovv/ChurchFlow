@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@churchflow/db';
 import type {
   ApproveOrganizationRequestInput,
   CreateOrganizationRequestInput,
@@ -66,9 +67,14 @@ export class OrganizationRequestsService {
 
     const organizationName = input.organizationName ?? request.organizationName;
     const organizationSlug = input.organizationSlug ?? request.organizationSlug ?? slugify(organizationName);
+    const existingOrganization = await this.organizationRequestsRepository.findOrganizationBySlug(organizationSlug);
+    if (existingOrganization) {
+      throw new ConflictException('Organization slug is already in use');
+    }
+
     const invitation = this.invitationsService.createRawInvitationToken();
 
-    const result = await this.organizationRequestsRepository.approve({
+    const result = await this.approveRequestTransaction({
       id,
       organizationName,
       organizationSlug,
@@ -97,6 +103,28 @@ export class OrganizationRequestsService {
     });
 
     return result;
+  }
+
+  private async approveRequestTransaction(input: {
+    id: string;
+    organizationName: string;
+    organizationSlug: string;
+    actorUserId: string;
+    invitationTokenHash: string;
+  }) {
+    try {
+      return await this.organizationRequestsRepository.approve(input);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'ORGANIZATION_REQUEST_NOT_PENDING') {
+        throw new ConflictException('Only pending organization requests can be approved');
+      }
+
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Organization slug or invitation token is already in use');
+      }
+
+      throw error;
+    }
   }
 
   async reject(id: string, input: RejectOrganizationRequestInput, actorUserId: string) {

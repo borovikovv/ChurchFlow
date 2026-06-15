@@ -2,6 +2,8 @@ import { cookies } from 'next/headers';
 import type { ApiResult } from '@churchflow/shared';
 import { serverEnv } from '@/env/server';
 
+type ApiError = Extract<ApiResult<unknown>, { ok: false }>['error'];
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit & { useInternalUrl?: boolean } = {}
@@ -33,9 +35,34 @@ export async function apiFetch<T>(
   }
 
   if (!response.ok) {
+    let error: ApiError | undefined;
+    try {
+      const body = (await response.json()) as unknown;
+      if (
+        typeof body === 'object' &&
+        body !== null &&
+        'ok' in body &&
+        body.ok === false &&
+        'error' in body &&
+        typeof body.error === 'object' &&
+        body.error !== null &&
+        'code' in body.error &&
+        'message' in body.error &&
+        typeof body.error.code === 'string' &&
+        typeof body.error.message === 'string'
+      ) {
+        error = {
+          code: body.error.code,
+          message: body.error.message
+        };
+      }
+    } catch {
+      error = undefined;
+    }
+
     return {
       ok: false,
-      error: {
+      error: error ?? {
         code: `HTTP_${response.status}`,
         message: 'Request failed'
       }

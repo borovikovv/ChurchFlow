@@ -14,7 +14,6 @@ export class PlatformAdminGuard implements CanActivate {
       throw new UnauthorizedException('Missing authenticated user');
     }
 
-    // TODO: Replace this DB lookup with trusted platform-role claims once JWT verification is wired.
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { platformRole: true, deletedAt: true }

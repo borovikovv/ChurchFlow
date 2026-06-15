@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { StructuredLoggingInterceptor } from './common/interceptors/structured-logging.interceptor';
 import { ZodValidationPipe } from './common/pipes/zod-validation.pipe';
 
 async function bootstrap(): Promise<void> {
@@ -17,6 +18,7 @@ async function bootstrap(): Promise<void> {
     credentials: true
   });
   app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalInterceptors(new StructuredLoggingInterceptor());
   app.useGlobalPipes(new ZodValidationPipe());
   app.setGlobalPrefix('v1');
 

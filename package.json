@@ -13,6 +13,7 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "format": "prettier --write .",
+    "admin:promote": "pnpm --filter @churchflow/api admin:promote",
     "db:generate": "pnpm --filter @churchflow/db db:generate",
     "db:migrate": "pnpm --filter @churchflow/db db:migrate",
     "db:studio": "pnpm --filter @churchflow/db db:studio"

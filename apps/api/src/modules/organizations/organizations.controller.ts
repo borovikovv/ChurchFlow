@@ -55,6 +55,7 @@ export class OrganizationsController {
   }
 
   @Post('organizations')
+  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
   async create(@Body() body: CreateOrganizationDto, @Req() request: AuthenticatedRequest) {
     const auth = request.auth;
     if (!auth) {

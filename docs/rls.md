@@ -1,10 +1,10 @@
 # RLS
 
-ChurchFlow uses a PostgreSQL RLS-first authorization model.
+ChurchFlow has a PostgreSQL RLS foundation. The current runtime authorization layer is explicit API guards and service checks against database membership state; request-scoped Prisma RLS context is not wired yet.
 
 ## Request Context
 
-The API should bind identity during database transactions:
+The target RLS runtime model is to bind identity during database transactions:
 
 ```sql
 set local app.current_user_id = '<authenticated-user-id>';
@@ -25,7 +25,10 @@ Helper functions:
 - Private CRM/member data is never exposed through public website policies.
 
 See `packages/db/sql/001_rls_foundation.sql` for the starting policy script.
-# Organization Approval And Invitation RLS Notes
+
+Until request-scoped RLS context is implemented, tenant API endpoints must continue to enforce active organization and active membership in guards/services.
+
+## Organization Approval And Invitation RLS Notes
 
 Platform admin and organization admin are separate authorization domains. Platform admins are represented by `users.platform_role`; organization admins are represented by `organization_members.role` inside a tenant.
 

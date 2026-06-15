@@ -18,4 +18,4 @@ Platform admin privileges use `User.platformRole`, separate from `OrganizationMe
 
 - Public users cannot directly create tenant records.
 - Approval, rejection, invitation, acceptance, revoke, resend, and lifecycle operations are auditable.
-- The current auth guard still has a TODO for real JWT/cookie verification; authorization code is structured so that integration can replace placeholder auth without changing business flows.
+- Authenticated organization endpoints verify JWT access cookies and active sessions before checking organization membership or platform-admin state in the database.

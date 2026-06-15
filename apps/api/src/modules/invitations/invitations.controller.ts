@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { invitationTokenQuerySchema } from '@churchflow/shared';
 import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
@@ -11,6 +12,7 @@ export class InvitationsController {
 
   @Post('organizations/:organizationId/invitations')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async create(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateOrganizationInvitationDto,
@@ -20,12 +22,14 @@ export class InvitationsController {
   }
 
   @Get('invitations/validate')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   async validate(@Query('token') token: string) {
     return this.invitationsService.validate(invitationTokenQuerySchema.parse({ token }).token);
   }
 
   @Post('invitations/accept')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async accept(@Body() body: AcceptInvitationDto, @Req() request: AuthenticatedRequest) {
     return this.invitationsService.accept(body.token, this.getActorUserId(request));
   }
@@ -42,6 +46,7 @@ export class InvitationsController {
 
   @Post('organizations/:organizationId/invitations/:id/resend')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async resend(
     @Param('organizationId') organizationId: string,
     @Param('id') id: string,

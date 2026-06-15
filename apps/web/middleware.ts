@@ -7,7 +7,7 @@ export function middleware(request: NextRequest): NextResponse {
 
   if (isDashboard && !hasAccessCookie) {
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('returnTo', request.nextUrl.pathname);
+    loginUrl.searchParams.set('redirectTo', request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
 

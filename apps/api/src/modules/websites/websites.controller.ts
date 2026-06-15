@@ -1,5 +1,10 @@
 import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { ORG_PERMISSIONS } from '@churchflow/shared';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import {
+  OrganizationAccessGuard,
+  RequireOrganizationPermission,
+} from '../../common/guards/organization-access.guard';
 import { WebsitesService } from './websites.service';
 
 @Controller()
@@ -12,7 +17,8 @@ export class WebsitesController {
   }
 
   @Get('organizations/:organizationId/website')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async dashboardWebsite(@Param('organizationId') organizationId: string) {
     return this.websitesService.findByOrganizationId(organizationId);
   }

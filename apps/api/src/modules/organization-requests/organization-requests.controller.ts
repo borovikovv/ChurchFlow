@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { OrganizationRequestStatus } from '@churchflow/db';
 import { organizationRequestStatusSchema } from '@churchflow/shared';
 import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
@@ -13,6 +14,7 @@ export class OrganizationRequestsController {
   constructor(private readonly organizationRequestsService: OrganizationRequestsService) {}
 
   @Post('organization-requests')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async create(@Body() body: CreateOrganizationRequestDto) {
     return this.organizationRequestsService.create(body);
   }

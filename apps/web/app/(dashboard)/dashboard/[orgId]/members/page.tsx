@@ -78,6 +78,16 @@ async function invitationAction(formData: FormData) {
   revalidatePath(`/dashboard/${organizationId}/members`);
 }
 
+async function removeMember(formData: FormData) {
+  'use server';
+  const organizationId = String(formData.get('organizationId'));
+  const membershipId = String(formData.get('membershipId'));
+  await apiFetch(`/organizations/${organizationId}/memberships/${membershipId}/remove`, {
+    method: 'POST',
+  });
+  revalidatePath(`/dashboard/${organizationId}/members`);
+}
+
 export default async function MembersDashboardPage({
   params,
   searchParams,
@@ -139,11 +149,18 @@ export default async function MembersDashboardPage({
         <h2>Active members</h2>
         <div className="data-list">
           {payload.members.map((member) => (
-            <div className="row" key={member.id}>
+            <form className="row" action={removeMember} key={member.id}>
+              <input type="hidden" name="organizationId" value={orgId} />
+              <input type="hidden" name="membershipId" value={member.id} />
               <strong>{member.user.displayName ?? member.user.email ?? 'Member'}</strong>
               <span>{member.user.email ?? 'No email'}</span>
               <span>{member.role}</span>
-            </div>
+              <span className="actions inline">
+                <button className="button danger" type="submit">
+                  Remove
+                </button>
+              </span>
+            </form>
           ))}
         </div>
       </section>

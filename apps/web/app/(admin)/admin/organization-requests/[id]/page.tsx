@@ -1,4 +1,7 @@
+import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import type { Route } from 'next';
 import { apiFetch } from '@/api/client';
 import { requirePlatformAdmin } from '@/auth/session';
 
@@ -12,12 +15,23 @@ interface OrganizationRequestDetail {
   message: string | null;
   status: string;
   rejectionReason: string | null;
+  createdOrganization?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+}
+
+interface ApproveOrganizationRequestResult {
+  organization: {
+    id: string;
+  };
 }
 
 async function approveRequest(formData: FormData) {
   'use server';
   const id = String(formData.get('id'));
-  await apiFetch(`/admin/organization-requests/${id}/approve`, {
+  const result = await apiFetch<ApproveOrganizationRequestResult>(`/admin/organization-requests/${id}/approve`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -26,21 +40,42 @@ async function approveRequest(formData: FormData) {
     })
   });
   revalidatePath(`/admin/organization-requests/${id}`);
+
+  if (!result.ok) {
+    redirect(`/admin/organization-requests/${id}?error=${encodeURIComponent(result.error.message)}` as Route);
+  }
+
+  redirect(
+    `/admin/organization-requests/${id}?approved=1&createdOrganizationId=${encodeURIComponent(result.data.organization.id)}` as Route
+  );
 }
 
 async function rejectRequest(formData: FormData) {
   'use server';
   const id = String(formData.get('id'));
-  await apiFetch(`/admin/organization-requests/${id}/reject`, {
+  const result = await apiFetch(`/admin/organization-requests/${id}/reject`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ rejectionReason: formData.get('rejectionReason') })
   });
   revalidatePath(`/admin/organization-requests/${id}`);
+
+  if (!result.ok) {
+    redirect(`/admin/organization-requests/${id}?error=${encodeURIComponent(result.error.message)}` as Route);
+  }
+
+  redirect(`/admin/organization-requests/${id}?rejected=1` as Route);
 }
 
-export default async function AdminOrganizationRequestPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AdminOrganizationRequestPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ approved?: string; rejected?: string; error?: string; createdOrganizationId?: string }>;
+}) {
   const { id } = await params;
+  const { approved, rejected, error, createdOrganizationId } = await searchParams;
   await requirePlatformAdmin(`/admin/organization-requests/${id}`);
 
   const result = await apiFetch<OrganizationRequestDetail>(`/admin/organization-requests/${id}`);
@@ -55,6 +90,17 @@ export default async function AdminOrganizationRequestPage({ params }: { params:
     <main className="section">
       <div className="shell stack">
         <h1>{request.organizationName}</h1>
+        {error ? <p className="text-red-600">{error}</p> : null}
+        {approved && (createdOrganizationId || request.createdOrganization?.id) ? (
+          <p>
+            Request approved.
+            {' '}
+            <Link href={`/admin/organizations/${createdOrganizationId ?? request.createdOrganization?.id}` as Route}>
+              View organization
+            </Link>
+          </p>
+        ) : null}
+        {rejected ? <p>Request rejected.</p> : null}
         <dl className="details">
           <dt>Status</dt>
           <dd>{request.status}</dd>
