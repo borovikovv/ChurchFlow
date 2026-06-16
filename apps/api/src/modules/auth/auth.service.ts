@@ -66,6 +66,11 @@ export class AuthService {
   }
 
   async startEmailLogin(input: StartEmailLoginCommand): Promise<StartEmailLoginResult> {
+    const user = await this.authRepository.findUserByEmail(input.email);
+    if (!user) {
+      throw new UnauthorizedException('No account found for that email address');
+    }
+
     const rawToken = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + MAGIC_LINK_TTL_MS);
 
@@ -109,14 +114,14 @@ export class AuthService {
       expiresAt: refreshTokenExpiresAt,
     });
 
-    await this.authRepository.consumeEmailLoginToken({ id: loginToken.id, userId: user.id });
-
     const accessTokenExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
     const accessToken = this.signJwt({
       sub: user.id,
       sid: session.id,
       type: 'access',
     }, ACCESS_TOKEN_TTL_SECONDS);
+
+    await this.authRepository.consumeEmailLoginToken({ id: loginToken.id, userId: user.id });
 
     return {
       user: {

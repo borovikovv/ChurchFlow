@@ -11,13 +11,14 @@ ChurchFlow sends transactional email from the API only. Email provider secrets m
 
 ## Delivery Behavior
 
-If Resend credentials are missing, the API uses the console provider. Console fallback does not throw; it logs only safe metadata:
+If Resend credentials are missing, the API uses the console provider. Console fallback does not throw; it logs the local-development email payload:
 
 - event
 - recipient
 - subject
+- text body, including local magic links and invitation links
 
-It does not log raw invitation tokens, invitation links, contact phone numbers, request messages, or full email payloads.
+Do not use the console provider in shared or production environments. Set `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, and `EMAIL_FROM` when real delivery is required. If `EMAIL_PROVIDER=resend` is set without both Resend settings, API startup fails instead of silently falling back to console.
 
 ## Message Routing
 

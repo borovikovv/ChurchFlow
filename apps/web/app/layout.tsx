@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import { isPlatformAdmin } from '@/auth/session';
+import { Suspense } from 'react';
+import { hasServerSession, isPlatformAdmin } from '@/auth/session';
+import { ToastProvider } from '@/components/toast-provider';
+import 'react-toastify/dist/ReactToastify.css';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -10,7 +13,10 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const showAdminLink = await isPlatformAdmin();
+  const [showAdminLink, showProfileLink] = await Promise.all([
+    isPlatformAdmin(),
+    hasServerSession(),
+  ]);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -23,11 +29,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <nav className="site-nav" aria-label="Main">
               <Link href="/organization-request">Request access</Link>
               {showAdminLink ? <Link href="/admin/organization-requests">Admin</Link> : null}
+              {showProfileLink ? <Link href="/profile">Profile</Link> : null}
               <Link href="/login">Sign in</Link>
             </nav>
           </div>
         </header>
         {children}
+        <Suspense>
+          <ToastProvider />
+        </Suspense>
       </body>
     </html>
   );

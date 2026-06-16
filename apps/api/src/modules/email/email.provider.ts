@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export const EMAIL_PROVIDER = Symbol('EMAIL_PROVIDER');
@@ -23,6 +23,7 @@ export class ConsoleEmailProvider implements EmailProvider {
       event: 'Email would have been sent',
       recipient: input.to,
       subject: input.subject,
+      text: input.text,
     });
     return Promise.resolve();
   }
@@ -52,6 +53,7 @@ export class ResendEmailProvider implements EmailProvider {
 
     if (!response.ok) {
       const body = await response.text();
+      const providerMessage = this.parseProviderMessage(body);
       this.logger.error({
         event: 'Email delivery failed',
         recipient: input.to,
@@ -59,8 +61,26 @@ export class ResendEmailProvider implements EmailProvider {
         status: response.status,
         body,
       });
-      throw new Error('Email delivery failed');
+      throw new BadGatewayException(`Email delivery failed: ${providerMessage}`);
     }
+  }
+
+  private parseProviderMessage(body: string): string {
+    try {
+      const parsed = JSON.parse(body) as unknown;
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        'message' in parsed &&
+        typeof parsed.message === 'string'
+      ) {
+        return parsed.message;
+      }
+    } catch {
+      // Fall through to the generic body handling below.
+    }
+
+    return body.trim() || 'Email provider rejected the message';
   }
 
   private get resendApiKey(): string {
@@ -77,8 +97,16 @@ export function createEmailProvider(config: ConfigService): EmailProvider {
   const resendApiKey = config.get<string>('RESEND_API_KEY');
   const emailFrom = config.get<string>('EMAIL_FROM');
 
+  if (configuredProvider === 'console') {
+    return new ConsoleEmailProvider();
+  }
+
   if (configuredProvider === 'resend' && resendApiKey && emailFrom) {
     return new ResendEmailProvider(config);
+  }
+
+  if (configuredProvider === 'resend') {
+    throw new Error('RESEND_API_KEY and EMAIL_FROM are required when EMAIL_PROVIDER=resend');
   }
 
   if (!configuredProvider && resendApiKey && emailFrom) {

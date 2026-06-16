@@ -9,7 +9,8 @@
     "start": "node dist/main.js",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "admin:promote": "node scripts/promote-platform-admin.mjs"
+    "admin:promote": "node scripts/promote-platform-admin.mjs",
+    "jwt:env": "node scripts/generate-jwt-env.mjs"
   },
   "dependencies": {
     "@churchflow/db": "workspace:*",

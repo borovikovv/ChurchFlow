@@ -26,6 +26,13 @@ export class AuthRepository {
     return this.prisma.emailLoginToken.findUnique({ where: { tokenHash } });
   }
 
+  async findUserByEmail(email: string) {
+    return this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+  }
+
   async consumeEmailLoginToken(input: { id: string; userId: string }) {
     return this.prisma.emailLoginToken.update({
       where: { id: input.id },

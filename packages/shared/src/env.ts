@@ -12,14 +12,22 @@ const optionalEmailProviderSchema = z.preprocess(
   z.enum(['resend', 'console']).optional(),
 );
 
+const pemKeySchema = (label: string, keyType: 'PUBLIC' | 'PRIVATE') =>
+  z
+    .string()
+    .min(1)
+    .refine((value) => value.replace(/\\n/g, '\n').includes(`-----BEGIN ${keyType} KEY-----`), {
+      message: `${label} must be a PEM ${keyType.toLowerCase()} key`,
+    });
+
 export const apiEnvSchema = z.object({
   NODE_ENV: nodeEnvSchema,
   PORT: z.coerce.number().int().positive().default(4000),
   DATABASE_URL: z.string().url(),
-  JWT_ACCESS_PUBLIC_KEY: z.string().min(1),
-  JWT_ACCESS_PRIVATE_KEY: z.string().min(1),
-  JWT_REFRESH_PUBLIC_KEY: z.string().min(1),
-  JWT_REFRESH_PRIVATE_KEY: z.string().min(1),
+  JWT_ACCESS_PUBLIC_KEY: pemKeySchema('JWT_ACCESS_PUBLIC_KEY', 'PUBLIC'),
+  JWT_ACCESS_PRIVATE_KEY: pemKeySchema('JWT_ACCESS_PRIVATE_KEY', 'PRIVATE'),
+  JWT_REFRESH_PUBLIC_KEY: pemKeySchema('JWT_REFRESH_PUBLIC_KEY', 'PUBLIC'),
+  JWT_REFRESH_PRIVATE_KEY: pemKeySchema('JWT_REFRESH_PRIVATE_KEY', 'PRIVATE'),
   COOKIE_DOMAIN: z.string().optional(),
   WEB_APP_URL: z.string().url(),
   PLATFORM_ADMIN_EMAIL: z.string().email(),

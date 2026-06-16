@@ -52,7 +52,7 @@ async function main() {
       );
     } else {
       await client.query(
-        'insert into users (id, email, platform_role) values ($1, $2, $3)',
+        'insert into users (id, email, platform_role, created_at, updated_at) values ($1, $2, $3, now(), now())',
         [userId, email, role],
       );
     }
