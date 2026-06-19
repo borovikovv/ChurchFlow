@@ -86,7 +86,7 @@ export class AuthService {
     private readonly authRepository: AuthRepository,
   ) {}
 
-  async beginProviderLogin(input: z.infer<typeof providerLoginSchema>): Promise<{ provider: string }> {
+  beginProviderLogin(input: z.infer<typeof providerLoginSchema>): { provider: string } {
     // TODO: Verify provider assertions for provider flows that do not have dedicated endpoints yet.
     return { provider: input.provider };
   }
@@ -362,24 +362,30 @@ export class AuthService {
   }
 
   private parseJwksResponse(value: unknown): JwksResponse | undefined {
-    if (
-      this.isRecord(value) &&
-      Array.isArray(value['keys']) &&
-      value['keys'].every((key) => this.isRecord(key) && typeof key['kty'] === 'string')
-    ) {
-      return {
-        keys: value['keys'].map((key) => ({
-          kty: String(key['kty']),
-          ...(typeof key['kid'] === 'string' ? { kid: key['kid'] } : {}),
-          ...(typeof key['alg'] === 'string' ? { alg: key['alg'] } : {}),
-          ...(typeof key['use'] === 'string' ? { use: key['use'] } : {}),
-          ...(typeof key['n'] === 'string' ? { n: key['n'] } : {}),
-          ...(typeof key['e'] === 'string' ? { e: key['e'] } : {}),
-        })),
-      };
+    if (this.isRecord(value) && Array.isArray(value['keys'])) {
+      const keys = value['keys'].map((key) => this.parseJwk(key));
+
+      if (keys.every((key): key is Jwk => key !== undefined)) {
+        return { keys };
+      }
     }
 
     return undefined;
+  }
+
+  private parseJwk(value: unknown): Jwk | undefined {
+    if (!this.isRecord(value) || typeof value['kty'] !== 'string') {
+      return undefined;
+    }
+
+    return {
+      kty: value['kty'],
+      ...(typeof value['kid'] === 'string' ? { kid: value['kid'] } : {}),
+      ...(typeof value['alg'] === 'string' ? { alg: value['alg'] } : {}),
+      ...(typeof value['use'] === 'string' ? { use: value['use'] } : {}),
+      ...(typeof value['n'] === 'string' ? { n: value['n'] } : {}),
+      ...(typeof value['e'] === 'string' ? { e: value['e'] } : {}),
+    };
   }
 
   private parseBase64UrlJson(value: string): unknown {

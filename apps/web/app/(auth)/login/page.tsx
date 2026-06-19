@@ -15,7 +15,6 @@ export default async function LoginPage({
     <main className="section">
       <div className="shell stack auth-panel">
         <h1>Sign in</h1>
-        <p>Use one of the configured third-party sign-in methods for ChurchFlow.</p>
         {error ? <p className="form-error">{error}</p> : null}
         <div className="auth-provider-list" aria-label="Sign-in providers">
           {providers.map((provider) => (

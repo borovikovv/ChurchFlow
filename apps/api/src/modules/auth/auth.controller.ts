@@ -59,7 +59,7 @@ interface ProviderLoginRequest {
 }
 
 interface AuthControllerService {
-  beginProviderLogin(input: ProviderLoginRequest): Promise<{ provider: string }>;
+  beginProviderLogin(input: ProviderLoginRequest): { provider: string };
   beginTelegramLogin(input: { redirectTo?: string }): BeginTelegramLoginResult;
   completeTelegramLogin(input: {
     code: string;
@@ -104,7 +104,7 @@ export class AuthController {
 
   @Post('provider')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  async providerLogin(@Body() body: ProviderLoginDto): Promise<{ provider: string }> {
+  providerLogin(@Body() body: ProviderLoginDto): { provider: string } {
     const parsed = providerLoginSchema.parse(body);
     const input: ProviderLoginRequest = {
       provider: parsed.provider,
