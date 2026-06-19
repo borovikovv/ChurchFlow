@@ -1,10 +1,7 @@
 import { startProviderLogin } from './actions';
 
 const providers = [
-  { id: 'google', label: 'Continue with Google', mark: 'G' },
-  { id: 'apple', label: 'Continue with Apple', mark: 'A' },
   { id: 'telegram', label: 'Continue with Telegram', mark: 'T' },
-  { id: 'webauthn', label: 'Continue with passkey', mark: 'P' },
 ] as const;
 
 export default async function LoginPage({

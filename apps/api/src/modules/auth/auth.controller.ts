@@ -53,7 +53,7 @@ interface CompleteTelegramLoginResult {
 }
 
 interface ProviderLoginRequest {
-  provider: 'telegram' | 'webauthn' | 'google' | 'apple';
+  provider: 'telegram';
   providerToken: string;
   redirectTo?: string;
 }
@@ -272,11 +272,12 @@ export class AuthController {
 
   private get cookieOptions(): CookieOptions {
     const domain = this.config.get<string>('COOKIE_DOMAIN');
+    const isHttpsApp = this.webAppUrl.startsWith('https://');
 
     return {
       httpOnly: true,
       sameSite: 'lax' as const,
-      secure: this.config.get<string>('NODE_ENV') === 'production',
+      secure: isHttpsApp || this.config.get<string>('NODE_ENV') === 'production',
       path: '/',
       ...(domain ? { domain } : {}),
     };

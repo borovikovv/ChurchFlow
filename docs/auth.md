@@ -7,9 +7,6 @@ Authentication is provider-based and intentionally avoids insecure login shortcu
 `auth_accounts` supports:
 
 - Telegram
-- WebAuthn/passkeys
-- Google
-- Apple
 
 Each provider adapter must verify provider assertions server-side before linking an account.
 

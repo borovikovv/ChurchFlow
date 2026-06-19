@@ -87,7 +87,7 @@ export class AuthService {
   ) {}
 
   async beginProviderLogin(input: z.infer<typeof providerLoginSchema>): Promise<{ provider: string }> {
-    // TODO: Verify provider assertions for Telegram, WebAuthn/passkeys, Google, or Apple.
+    // TODO: Verify provider assertions for provider flows that do not have dedicated endpoints yet.
     return { provider: input.provider };
   }
 
@@ -475,4 +475,5 @@ export class AuthService {
   private get telegramRedirectUri(): string {
     return this.config.getOrThrow<string>('TELEGRAM_REDIRECT_URI');
   }
+
 }

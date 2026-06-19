@@ -14,7 +14,7 @@ export const jwtPayloadSchema = z.object({
   type: z.enum(['access', 'refresh']),
 });
 
-export const authProviderSchema = z.enum(['telegram', 'webauthn', 'google', 'apple']);
+export const authProviderSchema = z.enum(['telegram']);
 
 export const platformRoleSchema = z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']);
 export const organizationRoleSchema = z.enum(['OWNER', 'ADMIN', 'MEMBER', 'VIEWER']);

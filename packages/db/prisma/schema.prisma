@@ -8,9 +8,6 @@ datasource db {
 
 enum AuthProvider {
   telegram
-  webauthn
-  google
-  apple
 }
 
 enum SessionType {

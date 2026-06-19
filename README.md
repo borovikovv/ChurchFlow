@@ -8,7 +8,7 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 - Backend: Nest.js, TypeScript
 - Database: PostgreSQL with Prisma
 - Authorization: API guards/service checks today, with PostgreSQL RLS foundation prepared
-- Auth foundation: provider-based auth prepared for passkeys/WebAuthn, Telegram, Google, and Apple
+- Auth foundation: provider-based auth for Telegram
 - Storage: S3-compatible abstraction for Cloudflare R2 or AWS S3
 - Monorepo: pnpm workspace and Turborepo
 
@@ -33,7 +33,7 @@ For local Telegram Web Login testing, use the HTTPS proxy in `docs/local-https.m
 ## Auth Flow
 
 - Users sign in through configured third-party providers from `/login`.
-- `POST /v1/auth/provider` is the provider assertion entry point for Telegram, WebAuthn/passkeys, Google, and Apple.
+- `POST /v1/auth/provider` is retained for generic provider assertions, but active browser auth uses Telegram.
 - Telegram OIDC is available through `GET /v1/auth/telegram/start` and `GET /v1/auth/telegram/callback`.
 - Protected API routes read the access token from `Authorization: Bearer ...` or the `churchflow_access` cookie.
 - `POST /v1/auth/refresh` mints a fresh access token from the httpOnly refresh cookie.

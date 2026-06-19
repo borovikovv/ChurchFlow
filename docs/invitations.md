@@ -36,6 +36,6 @@ JWT claims must not replace organization membership checks. Frontend checks are 
 
 ## Remaining Integration Boundaries
 
-- OAuth/WebAuthn provider assertions still require provider-specific verification before those providers can be enabled.
+- OAuth provider assertions still require provider-specific verification before those providers can be enabled.
 - S3/R2 signed upload and read URLs still require real storage credentials and provider SDK wiring.
 - Runtime PostgreSQL RLS context is not wired into Prisma requests yet; API guards and service checks are the active enforcement layer.
