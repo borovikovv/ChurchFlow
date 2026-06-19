@@ -16,7 +16,7 @@ If Resend credentials are missing, the API uses the console provider. Console fa
 - event
 - recipient
 - subject
-- text body, including local magic links and invitation links
+- text body, including local invitation links
 
 Do not use the console provider in shared or production environments. Set `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, and `EMAIL_FROM` when real delivery is required. If `EMAIL_PROVIDER=resend` is set without both Resend settings, API startup fails instead of silently falling back to console.
 

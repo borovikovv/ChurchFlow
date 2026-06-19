@@ -1,15 +1,17 @@
-import { BadRequestException, GoneException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash, randomBytes, sign, verify } from 'node:crypto';
+import { createHash, createPublicKey, randomBytes, sign, verify, type JsonWebKey } from 'node:crypto';
 import { z } from 'zod';
 import { jwtPayloadSchema } from '@churchflow/shared';
-import { EmailService } from '../email/email.service';
 import { AuthRepository } from './auth.repository';
 import type { providerLoginSchema } from './dto/provider-login.dto';
 
-const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
+const TELEGRAM_ISSUER = 'https://oauth.telegram.org';
+const TELEGRAM_AUTHORIZATION_URL = 'https://oauth.telegram.org/auth';
+const TELEGRAM_TOKEN_URL = 'https://oauth.telegram.org/token';
+const TELEGRAM_JWKS_URL = 'https://oauth.telegram.org/.well-known/jwks.json';
 
 export interface AuthUserResult {
   id: string;
@@ -18,7 +20,20 @@ export interface AuthUserResult {
   platformRole: string;
 }
 
-export interface VerifyEmailLoginResult {
+export interface RefreshAccessTokenResult {
+  accessToken: string;
+  accessTokenExpiresAt: Date;
+  user: AuthUserResult;
+}
+
+export interface BeginTelegramLoginResult {
+  authorizationUrl: string;
+  state: string;
+  codeVerifier: string;
+  redirectTo?: string;
+}
+
+export interface CompleteTelegramLoginResult {
   user: AuthUserResult;
   accessToken: string;
   refreshToken: string;
@@ -27,29 +42,41 @@ export interface VerifyEmailLoginResult {
   redirectTo: string;
 }
 
-export interface RefreshAccessTokenResult {
-  accessToken: string;
-  accessTokenExpiresAt: Date;
-  user: AuthUserResult;
-}
-
-export interface StartEmailLoginResult {
-  ok: true;
-}
-
 interface AuthJwtPayload {
   sub: string;
   sid: string;
   type: 'access' | 'refresh';
 }
 
-interface StartEmailLoginCommand {
-  email: string;
-  redirectTo?: string;
+interface TelegramIdTokenClaims {
+  iss: string;
+  aud: string;
+  sub: string;
+  exp: number;
+  iat: number;
+  name?: string;
+  preferred_username?: string;
+  picture?: string;
 }
 
-interface VerifyEmailLoginCommand {
-  token: string;
+interface TelegramTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  id_token: string;
+}
+
+interface Jwk {
+  kty: string;
+  kid?: string;
+  alg?: string;
+  use?: string;
+  n?: string;
+  e?: string;
+}
+
+interface JwksResponse {
+  keys: Jwk[];
 }
 
 @Injectable()
@@ -57,71 +84,57 @@ export class AuthService {
   constructor(
     private readonly config: ConfigService,
     private readonly authRepository: AuthRepository,
-    private readonly emailService: EmailService,
   ) {}
 
   async beginProviderLogin(input: z.infer<typeof providerLoginSchema>): Promise<{ provider: string }> {
-    // TODO: Verify provider assertions for Telegram, WebAuthn, email magic links, Google, or Apple.
+    // TODO: Verify provider assertions for Telegram, WebAuthn/passkeys, Google, or Apple.
     return { provider: input.provider };
   }
 
-  async startEmailLogin(input: StartEmailLoginCommand): Promise<StartEmailLoginResult> {
-    const user = await this.authRepository.findUserByEmail(input.email);
-    if (!user) {
-      throw new UnauthorizedException('No account found for that email address');
-    }
-
-    const rawToken = randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + MAGIC_LINK_TTL_MS);
-
+  beginTelegramLogin(input: { redirectTo?: string }): BeginTelegramLoginResult {
+    const state = randomBytes(32).toString('base64url');
+    const codeVerifier = randomBytes(64).toString('base64url');
+    const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
     const redirectTo = this.normalizeRedirectTo(input.redirectTo);
-    await this.authRepository.createEmailLoginToken({
-      email: input.email,
-      tokenHash: this.hashToken(rawToken),
-      expiresAt,
+    const authorizationUrl = new URL(TELEGRAM_AUTHORIZATION_URL);
+
+    authorizationUrl.searchParams.set('client_id', this.telegramClientId);
+    authorizationUrl.searchParams.set('redirect_uri', this.telegramRedirectUri);
+    authorizationUrl.searchParams.set('response_type', 'code');
+    authorizationUrl.searchParams.set('scope', 'openid profile');
+    authorizationUrl.searchParams.set('state', state);
+    authorizationUrl.searchParams.set('code_challenge', codeChallenge);
+    authorizationUrl.searchParams.set('code_challenge_method', 'S256');
+
+    return {
+      authorizationUrl: authorizationUrl.toString(),
+      state,
+      codeVerifier,
       ...(redirectTo ? { redirectTo } : {}),
-    });
-
-    const url = `${this.webAppUrl}/login/verify?token=${encodeURIComponent(rawToken)}`;
-    await this.emailService.sendLoginMagicLinkEmail({ email: input.email, url, expiresAt });
-
-    return { ok: true };
+    };
   }
 
-  async verifyEmailLogin(input: VerifyEmailLoginCommand): Promise<VerifyEmailLoginResult> {
-    const loginToken = await this.authRepository.findEmailLoginToken(this.hashToken(input.token));
-    if (!loginToken) {
-      throw new UnauthorizedException('Invalid login link');
+  async completeTelegramLogin(input: {
+    code: string;
+    state: string;
+    expectedState: string;
+    codeVerifier: string;
+    redirectTo?: string;
+  }): Promise<CompleteTelegramLoginResult> {
+    if (input.state !== input.expectedState) {
+      throw new BadRequestException('Invalid Telegram login state');
     }
 
-    if (loginToken.usedAt !== null) {
-      throw new BadRequestException('Login link has already been used');
-    }
-
-    if (loginToken.expiresAt.getTime() <= Date.now()) {
-      throw new GoneException('Login link has expired');
-    }
-
-    const user = await this.authRepository.findOrCreateEmailUser({ email: loginToken.email });
-    await this.authRepository.upsertEmailAuthAccount(user.id, loginToken.email);
-
-    const refreshToken = randomBytes(48).toString('base64url');
-    const refreshTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000);
-    const session = await this.authRepository.createSession({
-      userId: user.id,
-      type: 'user',
-      refreshTokenHash: this.hashToken(refreshToken),
-      expiresAt: refreshTokenExpiresAt,
+    const tokenResponse = await this.exchangeTelegramCode(input.code, input.codeVerifier);
+    const claims = await this.verifyTelegramIdToken(tokenResponse.id_token);
+    const user = await this.authRepository.findOrCreateTelegramUser({
+      providerAccountId: claims.sub,
+      ...(claims.name ? { displayName: claims.name } : {}),
+      ...(claims.preferred_username ? { username: claims.preferred_username } : {}),
+      ...(claims.picture ? { avatarUrl: claims.picture } : {}),
     });
 
-    const accessTokenExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
-    const accessToken = this.signJwt({
-      sub: user.id,
-      sid: session.id,
-      type: 'access',
-    }, ACCESS_TOKEN_TTL_SECONDS);
-
-    await this.authRepository.consumeEmailLoginToken({ id: loginToken.id, userId: user.id });
+    const session = await this.createUserSession(user.id);
 
     return {
       user: {
@@ -130,11 +143,8 @@ export class AuthService {
         displayName: user.displayName,
         platformRole: user.platformRole,
       },
-      accessToken,
-      refreshToken,
-      accessTokenExpiresAt,
-      refreshTokenExpiresAt,
-      redirectTo: loginToken.redirectTo ?? '/',
+      ...session,
+      redirectTo: this.normalizeRedirectTo(input.redirectTo) ?? '/',
     };
   }
 
@@ -185,6 +195,203 @@ export class AuthService {
   async logout(sessionId: string): Promise<{ ok: true }> {
     await this.authRepository.revokeSession(sessionId);
     return { ok: true };
+  }
+
+  private async createUserSession(userId: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    accessTokenExpiresAt: Date;
+    refreshTokenExpiresAt: Date;
+  }> {
+    const refreshToken = randomBytes(48).toString('base64url');
+    const refreshTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000);
+    const session = await this.authRepository.createSession({
+      userId,
+      type: 'user',
+      refreshTokenHash: this.hashToken(refreshToken),
+      expiresAt: refreshTokenExpiresAt,
+    });
+
+    const accessTokenExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
+    const accessToken = this.signJwt({
+      sub: userId,
+      sid: session.id,
+      type: 'access',
+    }, ACCESS_TOKEN_TTL_SECONDS);
+
+    return {
+      accessToken,
+      refreshToken,
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
+    };
+  }
+
+  private async exchangeTelegramCode(code: string, codeVerifier: string): Promise<TelegramTokenResponse> {
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: this.telegramRedirectUri,
+      client_id: this.telegramClientId,
+      code_verifier: codeVerifier,
+    });
+    const credentials = Buffer.from(`${this.telegramClientId}:${this.telegramClientSecret}`).toString('base64');
+    const response = await fetch(TELEGRAM_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        authorization: `Basic ${credentials}`,
+        'content-type': 'application/x-www-form-urlencoded',
+        accept: 'application/json',
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      throw new BadGatewayException('Telegram token exchange failed');
+    }
+
+    const parsed = this.parseTelegramTokenResponse(await response.json());
+    if (!parsed) {
+      throw new BadGatewayException('Telegram token response was invalid');
+    }
+
+    return parsed;
+  }
+
+  private async verifyTelegramIdToken(idToken: string): Promise<TelegramIdTokenClaims> {
+    const [encodedHeader, encodedPayload, encodedSignature] = idToken.split('.');
+    if (!encodedHeader || !encodedPayload || !encodedSignature) {
+      throw new UnauthorizedException('Invalid Telegram ID token');
+    }
+
+    const header = this.parseBase64UrlJson(encodedHeader);
+    const claims = this.parseTelegramIdTokenClaims(this.parseBase64UrlJson(encodedPayload));
+    if (!claims) {
+      throw new UnauthorizedException('Invalid Telegram ID token claims');
+    }
+
+    if (!this.isRecord(header) || header['alg'] !== 'RS256') {
+      throw new UnauthorizedException('Invalid Telegram ID token algorithm');
+    }
+
+    const jwk = await this.findTelegramJwk(typeof header['kid'] === 'string' ? header['kid'] : undefined);
+    const publicKey = createPublicKey({ key: jwk, format: 'jwk' });
+    const isValid = verify(
+      'RSA-SHA256',
+      Buffer.from(`${encodedHeader}.${encodedPayload}`),
+      publicKey,
+      Buffer.from(encodedSignature, 'base64url'),
+    );
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid Telegram ID token signature');
+    }
+
+    if (
+      claims.iss !== TELEGRAM_ISSUER ||
+      claims.aud !== this.telegramClientId ||
+      claims.exp <= Math.floor(Date.now() / 1000)
+    ) {
+      throw new UnauthorizedException('Invalid Telegram ID token claims');
+    }
+
+    return claims;
+  }
+
+  private async findTelegramJwk(kid?: string): Promise<JsonWebKey> {
+    const response = await fetch(TELEGRAM_JWKS_URL, { headers: { accept: 'application/json' } });
+    if (!response.ok) {
+      throw new BadGatewayException('Unable to fetch Telegram signing keys');
+    }
+
+    const body = this.parseJwksResponse(await response.json());
+    if (!body) {
+      throw new BadGatewayException('Telegram signing keys response was invalid');
+    }
+
+    const jwk = body.keys.find((key) => key.kty === 'RSA' && (!kid || key.kid === kid));
+    if (!jwk) {
+      throw new UnauthorizedException('Telegram signing key was not found');
+    }
+
+    return jwk as JsonWebKey;
+  }
+
+  private parseTelegramTokenResponse(value: unknown): TelegramTokenResponse | undefined {
+    if (
+      this.isRecord(value) &&
+      typeof value['access_token'] === 'string' &&
+      typeof value['token_type'] === 'string' &&
+      typeof value['expires_in'] === 'number' &&
+      typeof value['id_token'] === 'string'
+    ) {
+      return {
+        access_token: value['access_token'],
+        token_type: value['token_type'],
+        expires_in: value['expires_in'],
+        id_token: value['id_token'],
+      };
+    }
+
+    return undefined;
+  }
+
+  private parseTelegramIdTokenClaims(value: unknown): TelegramIdTokenClaims | undefined {
+    if (
+      this.isRecord(value) &&
+      value['iss'] === TELEGRAM_ISSUER &&
+      typeof value['aud'] === 'string' &&
+      typeof value['sub'] === 'string' &&
+      typeof value['exp'] === 'number' &&
+      typeof value['iat'] === 'number'
+    ) {
+      return {
+        iss: value['iss'],
+        aud: value['aud'],
+        sub: value['sub'],
+        exp: value['exp'],
+        iat: value['iat'],
+        ...(typeof value['name'] === 'string' ? { name: value['name'] } : {}),
+        ...(typeof value['preferred_username'] === 'string'
+          ? { preferred_username: value['preferred_username'] }
+          : {}),
+        ...(typeof value['picture'] === 'string' ? { picture: value['picture'] } : {}),
+      };
+    }
+
+    return undefined;
+  }
+
+  private parseJwksResponse(value: unknown): JwksResponse | undefined {
+    if (
+      this.isRecord(value) &&
+      Array.isArray(value['keys']) &&
+      value['keys'].every((key) => this.isRecord(key) && typeof key['kty'] === 'string')
+    ) {
+      return {
+        keys: value['keys'].map((key) => ({
+          kty: String(key['kty']),
+          ...(typeof key['kid'] === 'string' ? { kid: key['kid'] } : {}),
+          ...(typeof key['alg'] === 'string' ? { alg: key['alg'] } : {}),
+          ...(typeof key['use'] === 'string' ? { use: key['use'] } : {}),
+          ...(typeof key['n'] === 'string' ? { n: key['n'] } : {}),
+          ...(typeof key['e'] === 'string' ? { e: key['e'] } : {}),
+        })),
+      };
+    }
+
+    return undefined;
+  }
+
+  private parseBase64UrlJson(value: string): unknown {
+    try {
+      return JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown;
+    } catch {
+      throw new UnauthorizedException('Invalid Telegram ID token');
+    }
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
   }
 
   private signJwt(payload: AuthJwtPayload, expiresInSeconds: number): string {
@@ -257,7 +464,15 @@ export class AuthService {
     return this.normalizePem(this.config.getOrThrow<string>('JWT_ACCESS_PUBLIC_KEY'));
   }
 
-  private get webAppUrl(): string {
-    return this.config.getOrThrow<string>('WEB_APP_URL');
+  private get telegramClientId(): string {
+    return this.config.getOrThrow<string>('TELEGRAM_CLIENT_ID');
+  }
+
+  private get telegramClientSecret(): string {
+    return this.config.getOrThrow<string>('TELEGRAM_CLIENT_SECRET');
+  }
+
+  private get telegramRedirectUri(): string {
+    return this.config.getOrThrow<string>('TELEGRAM_REDIRECT_URI');
   }
 }

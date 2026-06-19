@@ -6,65 +6,58 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class AuthRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createEmailLoginToken(input: {
-    email: string;
-    tokenHash: string;
-    redirectTo?: string;
-    expiresAt: Date;
+  async findOrCreateTelegramUser(input: {
+    providerAccountId: string;
+    displayName?: string;
+    username?: string;
+    avatarUrl?: string;
   }) {
-    return this.prisma.emailLoginToken.create({
-      data: {
-        email: input.email,
-        tokenHash: input.tokenHash,
-        expiresAt: input.expiresAt,
-        ...(input.redirectTo ? { redirectTo: input.redirectTo } : {}),
+    const existingAccount = await this.prisma.authAccount.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: 'telegram',
+          providerAccountId: input.providerAccountId,
+        },
       },
+      include: { user: true },
     });
-  }
 
-  async findEmailLoginToken(tokenHash: string) {
-    return this.prisma.emailLoginToken.findUnique({ where: { tokenHash } });
-  }
+    if (existingAccount) {
+      await this.prisma.authAccount.update({
+        where: { id: existingAccount.id },
+        data: {
+          lastUsedAt: new Date(),
+          deletedAt: null,
+          metadata: {
+            username: input.username ?? null,
+          },
+        },
+      });
 
-  async findUserByEmail(email: string) {
-    return this.prisma.user.findUnique({
-      where: { email },
-      select: { id: true },
-    });
-  }
+      return existingAccount.user;
+    }
 
-  async consumeEmailLoginToken(input: { id: string; userId: string }) {
-    return this.prisma.emailLoginToken.update({
-      where: { id: input.id },
-      data: { usedAt: new Date(), userId: input.userId },
-    });
-  }
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          ...(input.displayName ? { displayName: input.displayName } : {}),
+          ...(input.avatarUrl ? { avatarUrl: input.avatarUrl } : {}),
+        },
+      });
 
-  async findOrCreateEmailUser(input: { email: string; displayName?: string }) {
-    return this.prisma.user.upsert({
-      where: { email: input.email },
-      update: {
-        emailVerified: new Date(),
-        ...(input.displayName ? { displayName: input.displayName } : {}),
-      },
-      create: {
-        email: input.email,
-        emailVerified: new Date(),
-        ...(input.displayName ? { displayName: input.displayName } : {}),
-      },
-    });
-  }
+      await tx.authAccount.create({
+        data: {
+          userId: user.id,
+          provider: 'telegram',
+          providerAccountId: input.providerAccountId,
+          lastUsedAt: new Date(),
+          metadata: {
+            username: input.username ?? null,
+          },
+        },
+      });
 
-  async upsertEmailAuthAccount(userId: string, email: string) {
-    return this.prisma.authAccount.upsert({
-      where: { provider_providerAccountId: { provider: 'email', providerAccountId: email } },
-      update: { userId, lastUsedAt: new Date(), deletedAt: null },
-      create: {
-        userId,
-        provider: 'email',
-        providerAccountId: email,
-        lastUsedAt: new Date(),
-      },
+      return user;
     });
   }
 

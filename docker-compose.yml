@@ -27,6 +27,23 @@ services:
     volumes:
       - minio-data:/data
 
+  caddy:
+    image: caddy:2.8-alpine
+    depends_on:
+      - postgres
+      - minio
+    ports:
+      - "80:80"
+      - "443:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./dev/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
 volumes:
   postgres-data:
   minio-data:
+  caddy-data:
+  caddy-config:

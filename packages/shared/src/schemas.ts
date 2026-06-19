@@ -14,21 +14,7 @@ export const jwtPayloadSchema = z.object({
   type: z.enum(['access', 'refresh']),
 });
 
-export const authProviderSchema = z.enum(['telegram', 'webauthn', 'email', 'google', 'apple']);
-
-export const startEmailLoginSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .email()
-    .max(255)
-    .transform((value) => value.toLowerCase()),
-  redirectTo: z.string().min(1).max(500).optional(),
-});
-
-export const verifyEmailLoginSchema = z.object({
-  token: z.string().min(32).max(512),
-});
+export const authProviderSchema = z.enum(['telegram', 'webauthn', 'google', 'apple']);
 
 export const platformRoleSchema = z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']);
 export const organizationRoleSchema = z.enum(['OWNER', 'ADMIN', 'MEMBER', 'VIEWER']);

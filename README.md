@@ -8,7 +8,7 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 - Backend: Nest.js, TypeScript
 - Database: PostgreSQL with Prisma
 - Authorization: API guards/service checks today, with PostgreSQL RLS foundation prepared
-- Auth foundation: provider-based auth prepared for passkeys/WebAuthn, Telegram, magic links, Google, and Apple
+- Auth foundation: provider-based auth prepared for passkeys/WebAuthn, Telegram, Google, and Apple
 - Storage: S3-compatible abstraction for Cloudflare R2 or AWS S3
 - Monorepo: pnpm workspace and Turborepo
 
@@ -28,11 +28,13 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 9. Bootstrap the first platform admin with `DATABASE_URL="postgresql://..." pnpm admin:promote admin@example.com SUPER_ADMIN`.
 10. Run the workspace with `pnpm dev`.
 
+For local Telegram Web Login testing, use the HTTPS proxy in `docs/local-https.md` instead of `localhost`.
+
 ## Auth Flow
 
-- Users sign in with email magic links from `/login`.
-- `POST /v1/auth/email/start` stores a single-use hashed login token and sends the link.
-- `/login/verify?token=...` verifies the token, creates or updates the `User`, `AuthAccount`, and `Session`, then sets httpOnly auth cookies.
+- Users sign in through configured third-party providers from `/login`.
+- `POST /v1/auth/provider` is the provider assertion entry point for Telegram, WebAuthn/passkeys, Google, and Apple.
+- Telegram OIDC is available through `GET /v1/auth/telegram/start` and `GET /v1/auth/telegram/callback`.
 - Protected API routes read the access token from `Authorization: Bearer ...` or the `churchflow_access` cookie.
 - `POST /v1/auth/refresh` mints a fresh access token from the httpOnly refresh cookie.
 - Platform admins are regular users with `platformRole` set to `ADMIN` or `SUPER_ADMIN`.

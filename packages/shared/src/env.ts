@@ -31,6 +31,12 @@ export const apiEnvSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   WEB_APP_URL: z.string().url(),
   PLATFORM_ADMIN_EMAIL: z.string().email(),
+  TELEGRAM_CLIENT_ID: optionalNonEmptyString,
+  TELEGRAM_CLIENT_SECRET: optionalNonEmptyString,
+  TELEGRAM_REDIRECT_URI: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().url().optional(),
+  ),
   EMAIL_PROVIDER: optionalEmailProviderSchema,
   EMAIL_FROM: optionalNonEmptyString,
   RESEND_API_KEY: optionalNonEmptyString,

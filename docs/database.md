@@ -1,6 +1,6 @@
 # Database
 
-The Prisma schema models users, provider accounts, email login tokens, sessions, organizations, organization requests, organization members and invitations, organization websites, pages, sections, domains, media assets, audit logs, and feature flags.
+The Prisma schema models users, provider accounts, sessions, organizations, organization requests, organization members and invitations, organization websites, pages, sections, domains, media assets, audit logs, and feature flags.
 
 ## Conventions
 

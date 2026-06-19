@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
   Inject,
   InternalServerErrorException,
   Post,
+  Query,
   Req,
   Res,
   UnauthorizedException,
@@ -15,9 +17,11 @@ import type { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { ProviderLoginDto, providerLoginSchema } from './dto/provider-login.dto';
-import { StartEmailLoginDto } from './dto/start-email-login.dto';
-import { VerifyEmailLoginDto } from './dto/verify-email-login.dto';
 import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+
+const TELEGRAM_STATE_COOKIE = 'churchflow_telegram_state';
+const TELEGRAM_VERIFIER_COOKIE = 'churchflow_telegram_verifier';
+const TELEGRAM_REDIRECT_COOKIE = 'churchflow_telegram_redirect';
 
 interface AuthUserResult {
   id: string;
@@ -26,7 +30,20 @@ interface AuthUserResult {
   platformRole: string;
 }
 
-interface VerifyEmailLoginResult {
+interface RefreshAccessTokenResult {
+  accessToken: string;
+  accessTokenExpiresAt: Date;
+  user: AuthUserResult;
+}
+
+interface BeginTelegramLoginResult {
+  authorizationUrl: string;
+  state: string;
+  codeVerifier: string;
+  redirectTo?: string;
+}
+
+interface CompleteTelegramLoginResult {
   user: AuthUserResult;
   accessToken: string;
   refreshToken: string;
@@ -35,38 +52,22 @@ interface VerifyEmailLoginResult {
   redirectTo: string;
 }
 
-interface RefreshAccessTokenResult {
-  accessToken: string;
-  accessTokenExpiresAt: Date;
-  user: AuthUserResult;
-}
-
-interface StartEmailLoginResult {
-  ok: true;
-}
-
-interface StartEmailLoginRequest {
-  email: string;
-  redirectTo?: string;
-}
-
 interface ProviderLoginRequest {
-  provider: 'telegram' | 'webauthn' | 'email' | 'google' | 'apple';
+  provider: 'telegram' | 'webauthn' | 'google' | 'apple';
   providerToken: string;
   redirectTo?: string;
 }
 
-interface AuthCookieInput {
-  accessToken: string;
-  refreshToken: string;
-  accessTokenExpiresAt: Date;
-  refreshTokenExpiresAt: Date;
-}
-
 interface AuthControllerService {
   beginProviderLogin(input: ProviderLoginRequest): Promise<{ provider: string }>;
-  startEmailLogin(input: StartEmailLoginRequest): Promise<StartEmailLoginResult>;
-  verifyEmailLogin(input: VerifyEmailLoginDto): Promise<VerifyEmailLoginResult>;
+  beginTelegramLogin(input: { redirectTo?: string }): BeginTelegramLoginResult;
+  completeTelegramLogin(input: {
+    code: string;
+    state: string;
+    expectedState: string;
+    codeVerifier: string;
+    redirectTo?: string;
+  }): Promise<CompleteTelegramLoginResult>;
   refreshAccessToken(refreshToken: string): Promise<RefreshAccessTokenResult>;
   logout(sessionId: string): Promise<{ ok: true }>;
 }
@@ -114,33 +115,67 @@ export class AuthController {
     return this.authService.beginProviderLogin(input);
   }
 
-  @Post('email/start')
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async startEmailLogin(@Body() body: StartEmailLoginDto): Promise<StartEmailLoginResult> {
-    const input: StartEmailLoginRequest = {
-      email: body.email,
-      ...(body.redirectTo ? { redirectTo: body.redirectTo } : {}),
-    };
-    const result: StartEmailLoginResult = await this.authService.startEmailLogin(input);
-
-    return result;
-  }
-
-  @Post('email/verify')
+  @Get('telegram/start')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  async verifyEmailLogin(
-    @Body() body: VerifyEmailLoginDto,
-    @Res({ passthrough: true }) response: Response,
-  ): Promise<VerifyEmailLoginResult> {
-    const result: VerifyEmailLoginResult = await this.authService.verifyEmailLogin(body);
-    this.setAuthCookies(response, {
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
-      accessTokenExpiresAt: result.accessTokenExpiresAt,
-      refreshTokenExpiresAt: result.refreshTokenExpiresAt,
+  startTelegramLogin(
+    @Query('redirectTo') redirectTo: string | undefined,
+    @Res() response: Response,
+  ): void {
+    const result = this.authService.beginTelegramLogin({
+      ...(redirectTo ? { redirectTo } : {}),
     });
 
-    return result;
+    response.cookie(TELEGRAM_STATE_COOKIE, result.state, this.telegramCookieOptions);
+    response.cookie(TELEGRAM_VERIFIER_COOKIE, result.codeVerifier, this.telegramCookieOptions);
+    if (result.redirectTo) {
+      response.cookie(TELEGRAM_REDIRECT_COOKIE, result.redirectTo, this.telegramCookieOptions);
+    } else {
+      response.clearCookie(TELEGRAM_REDIRECT_COOKIE, this.telegramCookieOptions);
+    }
+
+    response.redirect(result.authorizationUrl);
+  }
+
+  @Get('telegram/callback')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async completeTelegramLogin(
+    @Query('code') code: string | undefined,
+    @Query('state') state: string | undefined,
+    @Query('error') error: string | undefined,
+    @Req() request: Request,
+    @Res() response: Response,
+  ): Promise<void> {
+    const cookies = this.parseCookies(request.headers.cookie);
+    const expectedState = cookies[TELEGRAM_STATE_COOKIE];
+    const codeVerifier = cookies[TELEGRAM_VERIFIER_COOKIE];
+    const redirectTo = cookies[TELEGRAM_REDIRECT_COOKIE];
+
+    this.clearTelegramCookies(response);
+
+    if (error || !code || !state || !expectedState || !codeVerifier) {
+      response.redirect(this.loginUrl(error ?? 'Telegram login was not completed'));
+      return;
+    }
+
+    try {
+      const result = await this.authService.completeTelegramLogin({
+        code,
+        state,
+        expectedState,
+        codeVerifier,
+        ...(redirectTo ? { redirectTo } : {}),
+      });
+      this.setAuthCookies(response, {
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        accessTokenExpiresAt: result.accessTokenExpiresAt,
+        refreshTokenExpiresAt: result.refreshTokenExpiresAt,
+      });
+      response.redirect(new URL(result.redirectTo, this.webAppUrl).toString());
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Telegram login failed';
+      response.redirect(this.loginUrl(message));
+    }
   }
 
   @Post('refresh')
@@ -182,7 +217,12 @@ export class AuthController {
 
   private setAuthCookies(
     response: Response,
-    input: AuthCookieInput,
+    input: {
+      accessToken: string;
+      refreshToken: string;
+      accessTokenExpiresAt: Date;
+      refreshTokenExpiresAt: Date;
+    },
   ): void {
     response.cookie(AUTH_COOKIE_NAMES.access, input.accessToken, {
       ...this.cookieOptions,
@@ -197,6 +237,19 @@ export class AuthController {
   private clearAuthCookies(response: Response): void {
     response.clearCookie(AUTH_COOKIE_NAMES.access, this.cookieOptions);
     response.clearCookie(AUTH_COOKIE_NAMES.refresh, this.cookieOptions);
+  }
+
+  private clearTelegramCookies(response: Response): void {
+    response.clearCookie(TELEGRAM_STATE_COOKIE, this.telegramCookieOptions);
+    response.clearCookie(TELEGRAM_VERIFIER_COOKIE, this.telegramCookieOptions);
+    response.clearCookie(TELEGRAM_REDIRECT_COOKIE, this.telegramCookieOptions);
+  }
+
+  private loginUrl(error: string): string {
+    const url = new URL('/login', this.webAppUrl);
+    url.searchParams.set('error', error);
+
+    return url.toString();
   }
 
   private parseCookies(cookieHeader?: string): Record<string, string> {
@@ -227,5 +280,16 @@ export class AuthController {
       path: '/',
       ...(domain ? { domain } : {}),
     };
+  }
+
+  private get telegramCookieOptions(): CookieOptions {
+    return {
+      ...this.cookieOptions,
+      maxAge: 10 * 60 * 1000,
+    };
+  }
+
+  private get webAppUrl(): string {
+    return this.config.getOrThrow<string>('WEB_APP_URL');
   }
 }

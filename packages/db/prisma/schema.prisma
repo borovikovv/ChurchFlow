@@ -9,7 +9,6 @@ datasource db {
 enum AuthProvider {
   telegram
   webauthn
-  email
   google
   apple
 }
@@ -103,7 +102,6 @@ model User {
 
   accounts      AuthAccount[]
   sessions      Session[]
-  emailLoginTokens EmailLoginToken[]
   memberships   OrganizationMember[]
   invitations   OrganizationInvitation[] @relation("InvitationInviter")
   reviewedOrganizationRequests OrganizationRequest[] @relation("OrganizationRequestReviewer")
@@ -111,24 +109,6 @@ model User {
   featureFlags   FeatureFlag[]
 
   @@map("users")
-}
-
-model EmailLoginToken {
-  id          String    @id @default(uuid()) @db.Uuid
-  email       String    @db.Citext
-  tokenHash   String    @unique @map("token_hash")
-  redirectTo  String?   @map("redirect_to")
-  expiresAt   DateTime  @map("expires_at")
-  usedAt      DateTime? @map("used_at")
-  userId      String?   @map("user_id") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at")
-
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  @@index([email])
-  @@index([expiresAt])
-  @@index([usedAt])
-  @@map("email_login_tokens")
 }
 
 model AuthAccount {

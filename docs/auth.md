@@ -8,11 +8,29 @@ Authentication is provider-based and intentionally avoids insecure login shortcu
 
 - Telegram
 - WebAuthn/passkeys
-- Email magic links
 - Google
 - Apple
 
 Each provider adapter must verify provider assertions server-side before linking an account.
+
+## Telegram
+
+Telegram login uses Telegram OpenID Connect Authorization Code Flow with PKCE.
+
+API endpoints:
+
+- `GET /v1/auth/telegram/start`: creates `state` and PKCE verifier cookies, then redirects to Telegram.
+- `GET /v1/auth/telegram/callback`: exchanges the authorization code, validates the Telegram ID token with JWKS, creates or links the `telegram` auth account, creates a session, sets httpOnly auth cookies, then redirects back to the web app.
+
+Required API environment:
+
+```env
+TELEGRAM_CLIENT_ID=
+TELEGRAM_CLIENT_SECRET=
+TELEGRAM_REDIRECT_URI=https://churchflow.test/v1/auth/telegram/callback
+```
+
+Register the exact `TELEGRAM_REDIRECT_URI` and the web origin in BotFather under Bot Settings > Web Login. For local setup, see `docs/local-https.md`.
 
 ## Sessions
 

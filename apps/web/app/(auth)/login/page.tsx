@@ -1,59 +1,37 @@
-import { redirect } from 'next/navigation';
-import type { Route } from 'next';
-import { apiFetch } from '@/api/client';
+import { startProviderLogin } from './actions';
 
-async function startEmailLogin(formData: FormData) {
-  'use server';
-
-  const email = String(formData.get('email') ?? '');
-  const redirectTo = String(formData.get('redirectTo') ?? '');
-
-  const result = await apiFetch('/auth/email/start', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      email,
-      ...(redirectTo ? { redirectTo } : {}),
-    }),
-  });
-
-  if (!result.ok) {
-    const params = new URLSearchParams({ error: result.error.message });
-    if (redirectTo) {
-      params.set('redirectTo', redirectTo);
-    }
-
-    redirect(`/login?${params.toString()}` as Route);
-  }
-
-  redirect(`/login?sent=1${redirectTo ? `&redirectTo=${encodeURIComponent(redirectTo)}` : ''}`);
-}
+const providers = [
+  { id: 'google', label: 'Continue with Google', mark: 'G' },
+  { id: 'apple', label: 'Continue with Apple', mark: 'A' },
+  { id: 'telegram', label: 'Continue with Telegram', mark: 'T' },
+  { id: 'webauthn', label: 'Continue with passkey', mark: 'P' },
+] as const;
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirectTo?: string; sent?: string; error?: string }>;
+  searchParams: Promise<{ redirectTo?: string; error?: string }>;
 }) {
-  const { redirectTo, sent } = await searchParams;
+  const { redirectTo, error } = await searchParams;
 
   return (
     <main className="section">
-      <div className="shell stack grid-center">
+      <div className="shell stack auth-panel">
         <h1>Sign in</h1>
-        {sent ? (
-          <p>Check your email for a secure sign-in link.</p>
-        ) : (
-          <form className="form-grid max-w-100 w-full" action={startEmailLogin}>
-            <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
-            <label>
-              Email
-              <input name="email" type="email" required maxLength={255} />
-            </label>
-            <button className="button" type="submit">
-              Continue with email
-            </button>
-          </form>
-        )}
+        <p>Use one of the configured third-party sign-in methods for ChurchFlow.</p>
+        {error ? <p className="form-error">{error}</p> : null}
+        <div className="auth-provider-list" aria-label="Sign-in providers">
+          {providers.map((provider) => (
+            <form key={provider.id} action={startProviderLogin}>
+              <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
+              <input type="hidden" name="provider" value={provider.id} />
+              <button className="auth-provider-button" type="submit">
+                <span className="auth-provider-mark">{provider.mark}</span>
+                {provider.label}
+              </button>
+            </form>
+          ))}
+        </div>
       </div>
     </main>
   );

@@ -28,7 +28,7 @@ The command:
 - updates only `User.platformRole`
 - records an `audit_logs` entry with action `PROMOTE_PLATFORM_ADMIN`
 
-This does not create a login shortcut. The promoted admin still signs in through the normal email magic-link flow.
+This does not create a login shortcut. The promoted admin still signs in through a configured third-party provider account.
 
 ## Organization Lifecycle
 
