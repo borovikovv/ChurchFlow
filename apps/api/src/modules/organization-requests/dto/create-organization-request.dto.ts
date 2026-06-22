@@ -7,7 +7,7 @@ export class CreateOrganizationRequestDto implements CreateOrganizationRequestIn
   organizationName!: string;
   organizationSlug?: string;
   contactName!: string;
-  contactEmail!: string;
+  contactEmail?: string;
   contactPhone?: string;
   message?: string;
 }

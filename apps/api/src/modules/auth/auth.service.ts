@@ -1,6 +1,19 @@
-import { BadGatewayException, BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash, createPublicKey, randomBytes, sign, verify, type JsonWebKey } from 'node:crypto';
+import {
+  createHash,
+  createPublicKey,
+  randomBytes,
+  sign,
+  verify,
+  type JsonWebKey,
+} from 'node:crypto';
 import { z } from 'zod';
 import { jwtPayloadSchema } from '@churchflow/shared';
 import { AuthRepository } from './auth.repository';
@@ -79,11 +92,66 @@ interface JwksResponse {
   keys: Jwk[];
 }
 
+interface AuthRepositoryUser {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  platformRole: string;
+}
+
+interface TelegramLoginAccountState {
+  accountId: string;
+  user: AuthRepositoryUser;
+  isActive: boolean;
+  hasActiveMembership: boolean;
+  isPlatformAdmin: boolean;
+}
+
+interface SessionWithUser {
+  id: string;
+  userId: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+  user: AuthRepositoryUser & {
+    deletedAt: Date | null;
+  };
+}
+
+interface CreateSessionInput {
+  userId: string;
+  type: 'user' | 'service';
+  refreshTokenHash: string;
+  expiresAt: Date;
+}
+
+interface CreatedSession {
+  id: string;
+}
+
+interface AuthRepositoryPort {
+  hasPendingTelegramInvitation(providerAccountId: string): Promise<boolean>;
+  hasValidClaimableInvitationTokenHash(tokenHash: string): Promise<boolean>;
+  findTelegramLoginAccountState(
+    providerAccountId: string,
+  ): Promise<TelegramLoginAccountState | null>;
+  createTelegramUserForInvitation(input: {
+    providerAccountId: string;
+    displayName?: string;
+    username?: string;
+    avatarUrl?: string;
+  }): Promise<AuthRepositoryUser>;
+  touchTelegramAccount(accountId: string, username?: string): Promise<AuthRepositoryUser>;
+  createSession(input: CreateSessionInput): Promise<CreatedSession>;
+  findSession(sessionId: string): Promise<SessionWithUser | null>;
+  findSessionByRefreshTokenHash(refreshTokenHash: string): Promise<SessionWithUser | null>;
+  revokeSession(sessionId: string): Promise<unknown>;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly config: ConfigService,
-    private readonly authRepository: AuthRepository,
+    @Inject(AuthRepository) private readonly authRepository: AuthRepositoryPort,
   ) {}
 
   beginProviderLogin(input: z.infer<typeof providerLoginSchema>): { provider: string } {
@@ -127,24 +195,108 @@ export class AuthService {
 
     const tokenResponse = await this.exchangeTelegramCode(input.code, input.codeVerifier);
     const claims = await this.verifyTelegramIdToken(tokenResponse.id_token);
-    const user = await this.authRepository.findOrCreateTelegramUser({
-      providerAccountId: claims.sub,
-      ...(claims.name ? { displayName: claims.name } : {}),
-      ...(claims.preferred_username ? { username: claims.preferred_username } : {}),
-      ...(claims.picture ? { avatarUrl: claims.picture } : {}),
-    });
+    const redirectTo = this.normalizeRedirectTo(input.redirectTo);
+    const { user, defaultRedirectTo } = await this.resolveTelegramLoginUser(claims, redirectTo);
 
     const session = await this.createUserSession(user.id);
 
     return {
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        platformRole: user.platformRole,
-      },
+      user,
       ...session,
-      redirectTo: this.normalizeRedirectTo(input.redirectTo) ?? '/',
+      redirectTo: redirectTo ?? defaultRedirectTo,
+    };
+  }
+
+  private async resolveTelegramLoginUser(
+    claims: TelegramIdTokenClaims,
+    redirectTo?: string,
+  ): Promise<{
+    user: AuthUserResult;
+    defaultRedirectTo: string;
+  }> {
+    const hasPendingInvitation = await this.authRepository.hasPendingTelegramInvitation(claims.sub);
+    const hasClaimableInvitationRedirect =
+      await this.hasValidClaimableInvitationRedirect(redirectTo);
+    const accountState = await this.authRepository.findTelegramLoginAccountState(claims.sub);
+
+    if (!accountState) {
+      if (!hasPendingInvitation && !hasClaimableInvitationRedirect) {
+        throw new UnauthorizedException('Account is not invited to ChurchFlow');
+      }
+
+      const createdUser = await this.authRepository.createTelegramUserForInvitation({
+        providerAccountId: claims.sub,
+        ...(claims.name ? { displayName: claims.name } : {}),
+        ...(claims.preferred_username ? { username: claims.preferred_username } : {}),
+        ...(claims.picture ? { avatarUrl: claims.picture } : {}),
+      });
+
+      return {
+        user: this.toAuthUserResult(createdUser),
+        defaultRedirectTo: hasPendingInvitation ? '/invitations/pending' : (redirectTo ?? '/'),
+      };
+    }
+
+    if (!accountState.isActive) {
+      throw new UnauthorizedException('Telegram account is not active');
+    }
+
+    if (
+      !accountState.hasActiveMembership &&
+      !accountState.isPlatformAdmin &&
+      !hasPendingInvitation &&
+      !hasClaimableInvitationRedirect
+    ) {
+      throw new UnauthorizedException('Account is not associated with an organization');
+    }
+
+    const touchedUser = await this.authRepository.touchTelegramAccount(
+      accountState.accountId,
+      claims.preferred_username,
+    );
+
+    return {
+      user: this.toAuthUserResult(touchedUser),
+      defaultRedirectTo:
+        !accountState.hasActiveMembership && !accountState.isPlatformAdmin && hasPendingInvitation
+          ? '/invitations/pending'
+          : !accountState.hasActiveMembership &&
+              !accountState.isPlatformAdmin &&
+              hasClaimableInvitationRedirect
+            ? (redirectTo ?? '/')
+          : '/',
+    };
+  }
+
+  private hasValidClaimableInvitationRedirect(redirectTo?: string): Promise<boolean> {
+    const token = this.extractInvitationTokenFromRedirect(redirectTo);
+    if (!token) {
+      return Promise.resolve(false);
+    }
+
+    return this.authRepository.hasValidClaimableInvitationTokenHash(this.hashToken(token));
+  }
+
+  private extractInvitationTokenFromRedirect(redirectTo?: string): string | null {
+    if (!redirectTo?.startsWith('/invitations/accept')) {
+      return null;
+    }
+
+    const url = new URL(redirectTo, 'https://churchflow.local');
+    return url.searchParams.get('token');
+  }
+
+  private toAuthUserResult(user: {
+    id: string;
+    email: string | null;
+    displayName: string | null;
+    platformRole: string;
+  }): AuthUserResult {
+    return {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      platformRole: user.platformRole,
     };
   }
 
@@ -158,6 +310,7 @@ export class AuthService {
     if (
       !session ||
       session.userId !== payload.sub ||
+      session.user.deletedAt !== null ||
       session.revokedAt !== null ||
       session.expiresAt.getTime() <= Date.now()
     ) {
@@ -168,17 +321,27 @@ export class AuthService {
   }
 
   async refreshAccessToken(refreshToken: string): Promise<RefreshAccessTokenResult> {
-    const session = await this.authRepository.findSessionByRefreshTokenHash(this.hashToken(refreshToken));
-    if (!session || session.revokedAt !== null || session.expiresAt.getTime() <= Date.now()) {
+    const session = await this.authRepository.findSessionByRefreshTokenHash(
+      this.hashToken(refreshToken),
+    );
+    if (
+      !session ||
+      session.user.deletedAt !== null ||
+      session.revokedAt !== null ||
+      session.expiresAt.getTime() <= Date.now()
+    ) {
       throw new UnauthorizedException('Refresh session is no longer active');
     }
 
     const accessTokenExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
-    const accessToken = this.signJwt({
-      sub: session.userId,
-      sid: session.id,
-      type: 'access',
-    }, ACCESS_TOKEN_TTL_SECONDS);
+    const accessToken = this.signJwt(
+      {
+        sub: session.userId,
+        sid: session.id,
+        type: 'access',
+      },
+      ACCESS_TOKEN_TTL_SECONDS,
+    );
 
     return {
       accessToken,
@@ -213,11 +376,14 @@ export class AuthService {
     });
 
     const accessTokenExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
-    const accessToken = this.signJwt({
-      sub: userId,
-      sid: session.id,
-      type: 'access',
-    }, ACCESS_TOKEN_TTL_SECONDS);
+    const accessToken = this.signJwt(
+      {
+        sub: userId,
+        sid: session.id,
+        type: 'access',
+      },
+      ACCESS_TOKEN_TTL_SECONDS,
+    );
 
     return {
       accessToken,
@@ -227,7 +393,10 @@ export class AuthService {
     };
   }
 
-  private async exchangeTelegramCode(code: string, codeVerifier: string): Promise<TelegramTokenResponse> {
+  private async exchangeTelegramCode(
+    code: string,
+    codeVerifier: string,
+  ): Promise<TelegramTokenResponse> {
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -235,7 +404,9 @@ export class AuthService {
       client_id: this.telegramClientId,
       code_verifier: codeVerifier,
     });
-    const credentials = Buffer.from(`${this.telegramClientId}:${this.telegramClientSecret}`).toString('base64');
+    const credentials = Buffer.from(
+      `${this.telegramClientId}:${this.telegramClientSecret}`,
+    ).toString('base64');
     const response = await fetch(TELEGRAM_TOKEN_URL, {
       method: 'POST',
       headers: {
@@ -274,7 +445,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid Telegram ID token algorithm');
     }
 
-    const jwk = await this.findTelegramJwk(typeof header['kid'] === 'string' ? header['kid'] : undefined);
+    const jwk = await this.findTelegramJwk(
+      typeof header['kid'] === 'string' ? header['kid'] : undefined,
+    );
     const publicKey = createPublicKey({ key: jwk, format: 'jwk' });
     const isValid = verify(
       'RSA-SHA256',
@@ -481,5 +654,4 @@ export class AuthService {
   private get telegramRedirectUri(): string {
     return this.config.getOrThrow<string>('TELEGRAM_REDIRECT_URI');
   }
-
 }

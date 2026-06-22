@@ -14,6 +14,10 @@ interface OrganizationMember {
 
 interface PendingInvitation {
   id: string;
+  mode: string;
+  targetProvider: string;
+  targetProviderAccountId: string | null;
+  targetDisplay: string | null;
   email: string | null;
   role: string;
   expiresAt: string;
@@ -30,21 +34,7 @@ interface CreateInvitationResult {
   emailSent: boolean;
 }
 
-async function inviteMember(formData: FormData) {
-  'use server';
-  const organizationId = String(formData.get('organizationId'));
-  await apiFetch(`/organizations/${organizationId}/invitations`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      email: formData.get('email'),
-      role: formData.get('role'),
-    }),
-  });
-  revalidatePath(`/dashboard/${organizationId}/members`);
-}
-
-async function generateInvitationLink(formData: FormData) {
+async function createClaimableInvitation(formData: FormData) {
   'use server';
   const organizationId = String(formData.get('organizationId'));
   const result = await apiFetch<CreateInvitationResult>(
@@ -53,11 +43,39 @@ async function generateInvitationLink(formData: FormData) {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
+        mode: 'claimable_link',
+        email: formData.get('notificationEmail'),
         role: formData.get('role'),
       }),
     },
   );
+  revalidatePath(`/dashboard/${organizationId}/members`);
 
+  if (result.ok) {
+    redirect(
+      `/dashboard/${organizationId}/members?invitationLink=${encodeURIComponent(result.data.acceptUrl)}` as Route,
+    );
+  }
+}
+
+async function createTargetedInvitation(formData: FormData) {
+  'use server';
+  const organizationId = String(formData.get('organizationId'));
+  const result = await apiFetch<CreateInvitationResult>(
+    `/organizations/${organizationId}/invitations`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'targeted_telegram',
+        targetProvider: 'telegram',
+        targetProviderAccountId: formData.get('telegramId'),
+        targetDisplay: formData.get('telegramUsername'),
+        email: formData.get('notificationEmail'),
+        role: formData.get('role'),
+      }),
+    },
+  );
   revalidatePath(`/dashboard/${organizationId}/members`);
 
   if (result.ok) {
@@ -111,38 +129,46 @@ export default async function MembersDashboardPage({
           </label>
         </section>
       ) : null}
-      <form className="form-grid compact" action={inviteMember}>
+      <form className="form-grid compact" action={createClaimableInvitation}>
         <input type="hidden" name="organizationId" value={orgId} />
         <label>
-          Email
-          <input name="email" type="email" required />
+          Notification email
+          <input name="notificationEmail" type="email" maxLength={255} />
         </label>
         <label>
           Role
           <select name="role" defaultValue="MEMBER">
             <option value="MEMBER">Member</option>
             <option value="VIEWER">Viewer</option>
+          </select>
+        </label>
+        <button className="button" type="submit">
+          Generate claimable link
+        </button>
+      </form>
+      <form className="form-grid compact" action={createTargetedInvitation}>
+        <input type="hidden" name="organizationId" value={orgId} />
+        <label>
+          Known Telegram provider account id
+          <input name="telegramId" required maxLength={128} />
+        </label>
+        <label>
+          Telegram username or display
+          <input name="telegramUsername" maxLength={255} placeholder="@username" />
+        </label>
+        <label>
+          Notification email
+          <input name="notificationEmail" type="email" maxLength={255} />
+        </label>
+        <label>
+          Role
+          <select name="role" defaultValue="ADMIN">
             <option value="ADMIN">Admin</option>
             <option value="OWNER">Owner</option>
           </select>
         </label>
         <button className="button" type="submit">
-          Invite
-        </button>
-      </form>
-      <form className="form-grid compact" action={generateInvitationLink}>
-        <input type="hidden" name="organizationId" value={orgId} />
-        <label>
-          Link role
-          <select name="role" defaultValue="MEMBER">
-            <option value="MEMBER">Member</option>
-            <option value="VIEWER">Viewer</option>
-            <option value="ADMIN">Admin</option>
-            <option value="OWNER">Owner</option>
-          </select>
-        </label>
-        <button className="button secondary" type="submit">
-          Generate invitation link
+          Create targeted invite
         </button>
       </form>
       <section className="stack">
@@ -171,7 +197,12 @@ export default async function MembersDashboardPage({
             <form className="row" action={invitationAction} key={invitation.id}>
               <input type="hidden" name="organizationId" value={orgId} />
               <input type="hidden" name="invitationId" value={invitation.id} />
-              <strong>{invitation.email ?? 'Shareable link'}</strong>
+              <strong>
+                {invitation.targetDisplay ??
+                  invitation.targetProviderAccountId ??
+                  'Claimable link'}
+              </strong>
+              <span>{invitation.mode}</span>
               <span>{invitation.role}</span>
               <span>{new Date(invitation.expiresAt).toLocaleDateString()}</span>
               <span className="actions inline">

@@ -6,7 +6,9 @@ export interface OrganizationRequestAdminEmailInput {
   requestId: string;
   organizationName: string;
   contactName: string;
-  contactEmail: string;
+  contactEmail?: string | null;
+  contactTelegramId: string;
+  contactTelegramUsername?: string | null;
   contactPhone?: string | null;
   message?: string | null;
 }
@@ -45,7 +47,11 @@ export class EmailService {
       subject: `New organization request: ${input.organizationName}`,
       text: [
         `Organization: ${input.organizationName}`,
-        `Contact: ${input.contactName} <${input.contactEmail}>`,
+        `Contact: ${input.contactName}${input.contactEmail ? ` <${input.contactEmail}>` : ''}`,
+        `Telegram ID: ${input.contactTelegramId}`,
+        ...(input.contactTelegramUsername
+          ? [`Telegram username: ${input.contactTelegramUsername}`]
+          : []),
         input.contactPhone ? `Phone: ${input.contactPhone}` : null,
         input.message ? `Message: ${input.message}` : null,
         `Review: ${adminReviewUrl}`,

@@ -35,10 +35,12 @@ For local Telegram Web Login testing, use the HTTPS proxy in `docs/local-https.m
 - Users sign in through configured third-party providers from `/login`.
 - `POST /v1/auth/provider` is retained for generic provider assertions, but active browser auth uses Telegram.
 - Telegram OIDC is available through `GET /v1/auth/telegram/start` and `GET /v1/auth/telegram/callback`.
+- Telegram users are admitted only when they match an active membership, an existing platform-admin account, a valid pending targeted invitation, or a valid claimable invitation acceptance link.
 - Protected API routes read the access token from `Authorization: Bearer ...` or the `churchflow_access` cookie.
 - `POST /v1/auth/refresh` mints a fresh access token from the httpOnly refresh cookie.
 - Platform admins are regular users with `platformRole` set to `ADMIN` or `SUPER_ADMIN`.
 - Organization owners are represented by `OrganizationMember` rows with role `OWNER`.
+- Invitations separate identity binding from delivery. Targeted Telegram invitations use Telegram OIDC `sub`; claimable links are first claimed by an authenticated Telegram user. Email is notification/contact data, not the acceptance identity.
 
 See `docs/organization-approval-flow.md`, `docs/platform-admin.md`, and `docs/invitations.md` for the full business and technical workflow.
 

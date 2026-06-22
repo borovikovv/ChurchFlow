@@ -28,7 +28,7 @@ The command:
 - updates only `User.platformRole`
 - records an `audit_logs` entry with action `PROMOTE_PLATFORM_ADMIN`
 
-This does not create a login shortcut. The promoted admin still signs in through a configured third-party provider account.
+This does not create a login shortcut. The promoted admin still signs in through a configured third-party provider account. With Telegram auth, that means the admin must have a linked Telegram auth account; the system must not infer platform admin identity from a Telegram username or from an unverified login attempt.
 
 ## Organization Lifecycle
 
@@ -36,6 +36,7 @@ Platform admins can:
 
 - list organizations
 - view organization details
+- approve authenticated Telegram organization requests, creating the organization, website, and owner membership transactionally
 - create organizations directly through the protected admin API when needed
 - archive
 - suspend

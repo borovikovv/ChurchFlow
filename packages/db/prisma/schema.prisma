@@ -10,6 +10,19 @@ enum AuthProvider {
   telegram
 }
 
+enum InvitationTargetProvider {
+  telegram
+  email
+  phone
+  google
+  apple
+}
+
+enum InvitationMode {
+  targeted_telegram
+  claimable_link
+}
+
 enum SessionType {
   user
   service
@@ -87,23 +100,25 @@ enum FeatureFlagScope {
 }
 
 model User {
-  id            String    @id @default(uuid()) @db.Uuid
-  email         String?   @unique @db.Citext
+  id            String       @id @default(uuid()) @db.Uuid
+  email         String?      @unique @db.Citext
   displayName   String?
   avatarUrl     String?
   emailVerified DateTime?
   platformRole  PlatformRole @default(USER) @map("platform_role")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  deletedAt     DateTime?    @map("deleted_at")
 
-  accounts      AuthAccount[]
-  sessions      Session[]
-  memberships   OrganizationMember[]
-  invitations   OrganizationInvitation[] @relation("InvitationInviter")
-  reviewedOrganizationRequests OrganizationRequest[] @relation("OrganizationRequestReviewer")
-  auditLogs      AuditLog[]
-  featureFlags   FeatureFlag[]
+  accounts                      AuthAccount[]
+  sessions                      Session[]
+  memberships                   OrganizationMember[]
+  invitations                   OrganizationInvitation[] @relation("InvitationInviter")
+  reviewedOrganizationRequests  OrganizationRequest[]    @relation("OrganizationRequestReviewer")
+  requestedOrganizationRequests OrganizationRequest[]    @relation("OrganizationRequestRequester")
+  claimedInvitations            OrganizationInvitation[] @relation("InvitationClaimer")
+  auditLogs                     AuditLog[]
+  featureFlags                  FeatureFlag[]
 
   @@map("users")
 }
@@ -149,16 +164,16 @@ model Session {
 }
 
 model Organization {
-  id          String    @id @default(uuid()) @db.Uuid
+  id          String             @id @default(uuid()) @db.Uuid
   name        String
-  slug        String    @unique
+  slug        String             @unique
   description String?
   status      OrganizationStatus @default(ACTIVE)
-  archivedAt  DateTime? @map("archived_at")
-  suspendedAt DateTime? @map("suspended_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  archivedAt  DateTime?          @map("archived_at")
+  suspendedAt DateTime?          @map("suspended_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  deletedAt   DateTime?          @map("deleted_at")
 
   members      OrganizationMember[]
   invitations  OrganizationInvitation[]
@@ -197,56 +212,71 @@ model OrganizationMember {
 }
 
 model OrganizationInvitation {
-  id             String           @id @default(uuid()) @db.Uuid
-  organizationId String           @map("organization_id") @db.Uuid
-  email          String?          @db.Citext
-  role           OrganizationRole @default(MEMBER)
-  permissions    String[]         @default([])
-  tokenHash      String           @map("token_hash")
-  status         InvitationStatus @default(PENDING)
-  invitedByUserId String?         @map("invited_by_id") @db.Uuid
-  expiresAt      DateTime         @map("expires_at")
-  acceptedAt     DateTime?        @map("accepted_at")
-  revokedAt      DateTime?        @map("revoked_at")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
-  deletedAt      DateTime?        @map("deleted_at")
+  id                      String                    @id @default(uuid()) @db.Uuid
+  organizationId          String                    @map("organization_id") @db.Uuid
+  mode                    InvitationMode            @default(targeted_telegram)
+  targetProvider          InvitationTargetProvider? @map("target_provider")
+  targetProviderAccountId String?                   @map("target_provider_account_id")
+  targetDisplay           String?                   @map("target_display")
+  email                   String?                   @db.Citext
+  role                    OrganizationRole          @default(MEMBER)
+  permissions             String[]                  @default([])
+  tokenHash               String                    @map("token_hash")
+  status                  InvitationStatus          @default(PENDING)
+  invitedByUserId         String?                   @map("invited_by_id") @db.Uuid
+  claimedByUserId         String?                   @map("claimed_by_user_id") @db.Uuid
+  claimedAt               DateTime?                 @map("claimed_at")
+  expiresAt               DateTime                  @map("expires_at")
+  acceptedAt              DateTime?                 @map("accepted_at")
+  revokedAt               DateTime?                 @map("revoked_at")
+  createdAt               DateTime                  @default(now()) @map("created_at")
+  updatedAt               DateTime                  @updatedAt @map("updated_at")
+  deletedAt               DateTime?                 @map("deleted_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   invitedBy    User?        @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+  claimedBy    User?        @relation("InvitationClaimer", fields: [claimedByUserId], references: [id], onDelete: SetNull)
 
-  @@unique([organizationId, email, status])
+  @@unique([organizationId, targetProvider, targetProviderAccountId, status], map: "org_inv_target_status_key")
   @@unique([tokenHash])
   @@index([organizationId])
   @@index([email])
+  @@index([targetProvider, targetProviderAccountId], map: "org_inv_target_lookup_idx")
+  @@index([mode, status, expiresAt])
+  @@index([claimedByUserId])
   @@index([expiresAt])
   @@index([organizationId, status])
-  @@index([organizationId, email, status, expiresAt])
+  @@index([organizationId, targetProvider, targetProviderAccountId, status, expiresAt], map: "org_inv_target_status_exp_idx")
   @@map("organization_invitations")
 }
 
 model OrganizationRequest {
-  id                    String                    @id @default(uuid()) @db.Uuid
-  organizationName      String                    @map("organization_name")
-  organizationSlug      String?                   @map("organization_slug")
-  contactName           String                    @map("contact_name")
-  contactEmail          String                    @map("contact_email") @db.Citext
-  contactPhone          String?                   @map("contact_phone")
-  message               String?
-  status                OrganizationRequestStatus @default(PENDING)
-  approvedAt            DateTime?                 @map("approved_at")
-  rejectedAt            DateTime?                 @map("rejected_at")
-  reviewedByUserId      String?                   @map("reviewed_by_user_id") @db.Uuid
-  createdOrganizationId String?                   @map("created_organization_id") @db.Uuid
-  rejectionReason       String?                   @map("rejection_reason")
-  createdAt             DateTime                  @default(now()) @map("created_at")
-  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  id                      String                    @id @default(uuid()) @db.Uuid
+  organizationName        String                    @map("organization_name")
+  organizationSlug        String?                   @map("organization_slug")
+  contactName             String                    @map("contact_name")
+  contactEmail            String?                   @map("contact_email") @db.Citext
+  contactTelegramId       String?                   @map("contact_telegram_id")
+  contactTelegramUsername String?                   @map("contact_telegram_username")
+  contactPhone            String?                   @map("contact_phone")
+  message                 String?
+  status                  OrganizationRequestStatus @default(PENDING)
+  approvedAt              DateTime?                 @map("approved_at")
+  rejectedAt              DateTime?                 @map("rejected_at")
+  reviewedByUserId        String?                   @map("reviewed_by_user_id") @db.Uuid
+  requestedByUserId       String?                   @map("requested_by_user_id") @db.Uuid
+  createdOrganizationId   String?                   @map("created_organization_id") @db.Uuid
+  rejectionReason         String?                   @map("rejection_reason")
+  createdAt               DateTime                  @default(now()) @map("created_at")
+  updatedAt               DateTime                  @updatedAt @map("updated_at")
 
   reviewedBy          User?         @relation("OrganizationRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  requestedBy         User?         @relation("OrganizationRequestRequester", fields: [requestedByUserId], references: [id], onDelete: SetNull)
   createdOrganization Organization? @relation(fields: [createdOrganizationId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([contactEmail])
+  @@index([requestedByUserId])
   @@index([createdAt])
   @@map("organization_requests")
 }
@@ -264,7 +294,7 @@ model OrganizationWebsite {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   pages        WebsitePage[]
   domains      WebsiteDomain[]
 
@@ -278,14 +308,14 @@ model WebsitePage {
   websiteId      String     @map("website_id") @db.Uuid
   slug           String
   title          String
-  status         PageStatus  @default(DRAFT)
-  seo            Json        @default("{}")
-  publishedAt    DateTime?   @map("published_at")
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
-  deletedAt      DateTime?   @map("deleted_at")
+  status         PageStatus @default(DRAFT)
+  seo            Json       @default("{}")
+  publishedAt    DateTime?  @map("published_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+  deletedAt      DateTime?  @map("deleted_at")
 
-  website OrganizationWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  website  OrganizationWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
   sections WebsiteSection[]
 
   @@unique([websiteId, slug])
@@ -354,16 +384,16 @@ model MediaAsset {
 }
 
 model AuditLog {
-  id             String      @id @default(uuid()) @db.Uuid
-  organizationId String?     @map("organization_id") @db.Uuid
-  actorUserId    String?     @map("actor_user_id") @db.Uuid
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
   action         String
-  entityType     String      @map("entity_type")
-  entityId       String?     @map("entity_id") @db.Uuid
-  metadata       Json        @default("{}")
-  ipAddress      String?     @map("ip_address")
-  userAgent      String?     @map("user_agent")
-  createdAt      DateTime    @default(now()) @map("created_at")
+  entityType     String   @map("entity_type")
+  entityId       String?  @map("entity_id") @db.Uuid
+  metadata       Json     @default("{}")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   actor        User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)

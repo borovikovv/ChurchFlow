@@ -1,13 +1,12 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@churchflow/db';
 import type {
   ApproveOrganizationRequestInput,
   CreateOrganizationRequestInput,
-  RejectOrganizationRequestInput
+  RejectOrganizationRequestInput,
 } from '@churchflow/shared';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
-import { InvitationsService } from '../invitations/invitations.service';
 import { OrganizationRequestsRepository } from './repositories/organization-requests.repository';
 
 function slugify(value: string): string {
@@ -19,24 +18,113 @@ function slugify(value: string): string {
     .slice(0, 80);
 }
 
+export interface CreatedOrganizationRequest {
+  id: string;
+  organizationName: string;
+  contactName: string;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  message: string | null;
+  requestedBy: {
+    accounts: Array<{
+      providerAccountId: string;
+    }>;
+  } | null;
+}
+
+export interface OrganizationRequestForApproval {
+  status: string;
+  organizationName: string;
+  organizationSlug: string | null;
+  requestedByUserId: string | null;
+}
+
+export interface OrganizationRequestListItem {
+  id: string;
+  organizationName: string;
+  contactName: string;
+  contactEmail: string | null;
+  contactTelegramId: string;
+  contactTelegramUsername: string | null;
+  status: string;
+  createdAt: Date;
+}
+
+export interface OrganizationRequestDetail extends OrganizationRequestListItem {
+  organizationSlug: string | null;
+  contactPhone: string | null;
+  message: string | null;
+  rejectionReason: string | null;
+  requestedByUserId: string | null;
+  createdOrganization: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+}
+
+export interface RejectedOrganizationRequest {
+  organizationName: string;
+  contactEmail: string | null;
+}
+
+export interface ApprovedOrganizationRequest {
+  organization: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  membership: {
+    id: string;
+  };
+}
+
+interface OrganizationRequestsRepositoryPort {
+  create(
+    input: CreateOrganizationRequestInput,
+    requestedByUserId: string,
+  ): Promise<CreatedOrganizationRequest>;
+  list(status?: string): Promise<OrganizationRequestListItem[]>;
+  findById(id: string): Promise<OrganizationRequestDetail | null>;
+  findOrganizationBySlug(slug: string): Promise<{ id: string } | null>;
+  approve(input: {
+    id: string;
+    organizationName: string;
+    organizationSlug: string;
+    actorUserId: string;
+  }): Promise<ApprovedOrganizationRequest>;
+  reject(
+    id: string,
+    rejectionReason: string,
+    actorUserId: string,
+  ): Promise<RejectedOrganizationRequest | null>;
+}
+
 @Injectable()
 export class OrganizationRequestsService {
   constructor(
-    private readonly organizationRequestsRepository: OrganizationRequestsRepository,
-    private readonly invitationsService: InvitationsService,
+    @Inject(OrganizationRequestsRepository)
+    private readonly organizationRequestsRepository: OrganizationRequestsRepositoryPort,
     private readonly emailService: EmailService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
   ) {}
 
-  async create(input: CreateOrganizationRequestInput) {
-    const request = await this.organizationRequestsRepository.create(input);
+  async create(input: CreateOrganizationRequestInput, requestedByUserId: string) {
+    const request = await this.organizationRequestsRepository.create(input, requestedByUserId);
+    const requestedTelegramAccountId: string =
+      request.requestedBy === null
+        ? 'linked Telegram account'
+        : (request.requestedBy.accounts[0]?.providerAccountId ?? 'linked Telegram account');
+
     await this.emailService.sendOrganizationRequestAdminEmail({
       requestId: request.id,
       organizationName: request.organizationName,
       contactName: request.contactName,
       contactEmail: request.contactEmail,
+      contactTelegramId: requestedTelegramAccountId,
+      contactTelegramUsername: null,
       contactPhone: request.contactPhone,
-      message: request.message
+      message: request.message,
     });
 
     return request;
@@ -66,40 +154,34 @@ export class OrganizationRequestsService {
     }
 
     const organizationName = input.organizationName ?? request.organizationName;
-    const organizationSlug = input.organizationSlug ?? request.organizationSlug ?? slugify(organizationName);
-    const existingOrganization = await this.organizationRequestsRepository.findOrganizationBySlug(organizationSlug);
+    const organizationSlug =
+      input.organizationSlug ?? request.organizationSlug ?? slugify(organizationName);
+    const existingOrganization =
+      await this.organizationRequestsRepository.findOrganizationBySlug(organizationSlug);
     if (existingOrganization) {
       throw new ConflictException('Organization slug is already in use');
     }
 
-    const invitation = this.invitationsService.createRawInvitationToken();
-
-    const result = await this.approveRequestTransaction({
+    const result: ApprovedOrganizationRequest = await this.approveRequestTransaction({
       id,
       organizationName,
       organizationSlug,
       actorUserId,
-      invitationTokenHash: invitation.tokenHash
     });
-
-    await this.emailService.sendOrganizationInvitationEmail({
-      email: request.contactEmail,
-      organizationName: result.organization.name,
-      role: 'OWNER',
-      token: invitation.rawToken,
-      expiresAt: result.invitation.expiresAt
-    });
+    const createdOrganizationId: string = result.organization.id;
+    const ownerMembershipId: string = result.membership.id;
 
     await this.auditService.record({
-      organizationId: result.organization.id,
+      organizationId: createdOrganizationId,
       actorUserId,
       action: 'APPROVE',
       entityType: 'OrganizationRequest',
       entityId: id,
       metadata: {
-        createdOrganizationId: result.organization.id,
-        invitationId: result.invitation.id
-      }
+        createdOrganizationId,
+        ownerMembershipId,
+        requestedByUserId: request.requestedByUserId,
+      },
     });
 
     return result;
@@ -110,13 +192,20 @@ export class OrganizationRequestsService {
     organizationName: string;
     organizationSlug: string;
     actorUserId: string;
-    invitationTokenHash: string;
-  }) {
+  }): Promise<ApprovedOrganizationRequest> {
     try {
       return await this.organizationRequestsRepository.approve(input);
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'ORGANIZATION_REQUEST_NOT_PENDING') {
         throw new ConflictException('Only pending organization requests can be approved');
+      }
+
+      if (error instanceof Error && error.message === 'ORGANIZATION_REQUEST_MISSING_REQUESTER') {
+        throw new ConflictException('Organization request is missing authenticated requester');
+      }
+
+      if (error instanceof Error && error.message === 'ORGANIZATION_REQUEST_REQUESTER_INACTIVE') {
+        throw new ConflictException('Organization request requester is no longer active');
       }
 
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -128,23 +217,29 @@ export class OrganizationRequestsService {
   }
 
   async reject(id: string, input: RejectOrganizationRequestInput, actorUserId: string) {
-    const request = await this.organizationRequestsRepository.reject(id, input.rejectionReason, actorUserId);
+    const request = await this.organizationRequestsRepository.reject(
+      id,
+      input.rejectionReason,
+      actorUserId,
+    );
     if (!request) {
       throw new NotFoundException('Pending organization request was not found');
     }
 
-    await this.emailService.sendOrganizationRequestRejectedEmail({
-      email: request.contactEmail,
-      organizationName: request.organizationName,
-      rejectionReason: input.rejectionReason
-    });
+    if (request.contactEmail) {
+      await this.emailService.sendOrganizationRequestRejectedEmail({
+        email: request.contactEmail,
+        organizationName: request.organizationName,
+        rejectionReason: input.rejectionReason,
+      });
+    }
 
     await this.auditService.record({
       actorUserId,
       action: 'REJECT',
       entityType: 'OrganizationRequest',
       entityId: id,
-      metadata: { rejectionReason: input.rejectionReason }
+      metadata: { rejectionReason: input.rejectionReason },
     });
 
     return request;

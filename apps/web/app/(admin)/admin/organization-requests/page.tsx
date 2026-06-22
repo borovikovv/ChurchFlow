@@ -9,12 +9,14 @@ interface OrganizationRequestRow {
   organizationName: string;
   contactName: string;
   contactEmail: string;
+  contactTelegramId: string;
+  contactTelegramUsername: string | null;
   status: string;
   createdAt: string;
 }
 
 export default async function AdminOrganizationRequestsPage({
-  searchParams
+  searchParams,
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
@@ -46,7 +48,7 @@ export default async function AdminOrganizationRequestsPage({
             >
               <strong>{request.organizationName}</strong>
               <span>{request.contactName}</span>
-              <span>{request.contactEmail}</span>
+              <span>{request.contactTelegramUsername ?? request.contactTelegramId}</span>
               <span>{request.status}</span>
             </Link>
           ))}

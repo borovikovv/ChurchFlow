@@ -1,18 +1,24 @@
 # Invitations
 
-Organization invitations are tenant-scoped and token-based. Raw tokens are never stored in the database.
+Organization invitations are tenant-scoped, provider-aware, and token-based. Raw tokens are never stored in the database.
+
+The active authentication provider is Telegram. Targeted invitations store `targetProvider = telegram` and `targetProviderAccountId = <Telegram OIDC sub>`. Telegram usernames may be stored only as display metadata; they are not security identifiers. Email may be used as a notification/contact channel, but invitation acceptance is not bound to email.
+
+For the MVP, normal member onboarding should use claimable links. The inviter generates a link for `MEMBER` or `VIEWER` and sends it manually, usually through Telegram. The first authenticated Telegram user who opens and accepts the link claims it; acceptance binds the invitation to that Telegram account and creates/reactivates membership.
 
 ## Security Rules
 
 - Generate a cryptographically random token.
 - Store `sha256(token)` as `OrganizationInvitation.tokenHash`.
-- Email the raw token link through `EmailService`.
+- Email the raw token link through `EmailService` only when a notification email is provided.
+- Keep delivery channels separate from identity binding. Email delivery does not prove invitation ownership.
 - Require authentication to accept.
-- Require authenticated user email to match invitation email.
-- Require `emailVerified` before accepting.
+- For `targeted_telegram`, require the authenticated Telegram account to match the invitation target provider and provider account id.
+- For `claimable_link`, allow only `MEMBER` and `VIEWER`; bind the invitation to the first authenticated Telegram account that accepts it.
 - Prevent duplicate active members.
-- Refresh an active pending invite instead of creating duplicates.
+- Refresh an active pending targeted invite for the same organization, target provider, target provider account id, and status instead of creating duplicates.
 - Link invitations are single-use, expiring, revocable, and audited.
+- Users with pending invitations must accept before seeing organization dashboard content.
 - Organization owners can remove members through a soft-remove operation.
 - Removing the last active owner is blocked.
 - Owners cannot remove their own membership through the owner removal endpoint.
@@ -31,6 +37,7 @@ Organization invitations are tenant-scoped and token-based. Raw tokens are never
 - `OWNER` may invite `OWNER`, `ADMIN`, `MEMBER`, or `VIEWER`.
 - `ADMIN` may invite `MEMBER` or `VIEWER`.
 - `MEMBER` and `VIEWER` may not invite.
+- Claimable links must not grant `OWNER` or `ADMIN`.
 
 JWT claims must not replace organization membership checks. Frontend checks are advisory only; the API must continue to enforce roles and permissions from database membership state.
 

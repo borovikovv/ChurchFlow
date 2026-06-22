@@ -15,6 +15,14 @@ export const jwtPayloadSchema = z.object({
 });
 
 export const authProviderSchema = z.enum(['telegram']);
+export const invitationTargetProviderSchema = z.enum([
+  'telegram',
+  'email',
+  'phone',
+  'google',
+  'apple',
+]);
+export const invitationModeSchema = z.enum(['targeted_telegram', 'claimable_link']);
 
 export const platformRoleSchema = z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']);
 export const organizationRoleSchema = z.enum(['OWNER', 'ADMIN', 'MEMBER', 'VIEWER']);
@@ -58,12 +66,11 @@ export const createOrganizationRequestSchema = z.object({
     },
   ),
   contactName: z.string().trim().min(2).max(160),
-  contactEmail: z
-    .string()
-    .trim()
-    .email()
-    .max(255)
-    .transform((value) => value.toLowerCase()),
+  contactEmail: optionalTrimmedString(255)
+    .refine((value) => value === undefined || z.string().email().safeParse(value).success, {
+      message: 'Invalid email',
+    })
+    .transform((value) => value?.toLowerCase()),
   contactPhone: optionalTrimmedString(40),
   message: optionalTrimmedString(2000),
 });
@@ -77,14 +84,56 @@ export const rejectOrganizationRequestSchema = z.object({
   rejectionReason: z.string().trim().min(2).max(1000),
 });
 
-export const createOrganizationInvitationSchema = z.object({
-  email: optionalTrimmedString(255)
-    .refine((value) => value === undefined || z.string().email().safeParse(value).success, {
-      message: 'Invalid email',
-    })
-    .transform((value) => value?.toLowerCase()),
-  role: organizationRoleSchema.default('MEMBER'),
-});
+export const createOrganizationInvitationSchema = z
+  .object({
+    mode: invitationModeSchema.default('claimable_link'),
+    targetProvider: invitationTargetProviderSchema.optional(),
+    targetProviderAccountId: optionalTrimmedString(255),
+    targetDisplay: optionalTrimmedString(255),
+    email: optionalTrimmedString(255)
+      .refine((value) => value === undefined || z.string().email().safeParse(value).success, {
+        message: 'Invalid email',
+      })
+      .transform((value) => value?.toLowerCase()),
+    role: organizationRoleSchema.default('MEMBER'),
+  })
+  .superRefine((value, ctx) => {
+    if (value.mode === 'targeted_telegram') {
+      if (value.targetProvider !== 'telegram') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['targetProvider'],
+          message: 'Targeted invitations must use Telegram identity',
+        });
+      }
+
+      if (!value.targetProviderAccountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['targetProviderAccountId'],
+          message: 'Targeted invitations require Telegram provider account id',
+        });
+      }
+    }
+
+    if (value.mode === 'claimable_link') {
+      if (value.role === 'OWNER' || value.role === 'ADMIN') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['role'],
+          message: 'Claimable links are allowed only for MEMBER and VIEWER roles',
+        });
+      }
+
+      if (value.targetProvider || value.targetProviderAccountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['targetProviderAccountId'],
+          message: 'Claimable links must not be pre-bound to a provider account',
+        });
+      }
+    }
+  });
 
 export const acceptInvitationSchema = z.object({
   token: z.string().min(32).max(512),

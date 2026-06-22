@@ -25,11 +25,15 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const payload = this.verifyAccessToken(token);
-    const session = await this.prisma.session.findUnique({ where: { id: payload.sid } });
+    const session = await this.prisma.session.findUnique({
+      where: { id: payload.sid },
+      include: { user: true },
+    });
 
     if (
       !session ||
       session.userId !== payload.sub ||
+      session.user.deletedAt !== null ||
       session.revokedAt !== null ||
       session.expiresAt.getTime() <= Date.now()
     ) {
@@ -55,10 +59,13 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     return Object.fromEntries(
-      cookieHeader.split(';').map((cookie) => {
-        const [name, ...value] = cookie.trim().split('=');
-        return [name, decodeURIComponent(value.join('='))];
-      }).filter(([name]) => Boolean(name)),
+      cookieHeader
+        .split(';')
+        .map((cookie) => {
+          const [name, ...value] = cookie.trim().split('=');
+          return [name, decodeURIComponent(value.join('='))];
+        })
+        .filter(([name]) => Boolean(name)),
     );
   }
 
@@ -86,7 +93,8 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const payload = jwtPayloadSchema.safeParse(decoded);
-    const exp = typeof decoded === 'object' && decoded !== null && 'exp' in decoded ? decoded.exp : undefined;
+    const exp =
+      typeof decoded === 'object' && decoded !== null && 'exp' in decoded ? decoded.exp : undefined;
 
     if (!payload.success || payload.data.type !== 'access' || typeof exp !== 'number') {
       throw new UnauthorizedException('Invalid access token');

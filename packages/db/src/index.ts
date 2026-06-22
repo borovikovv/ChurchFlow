@@ -3,6 +3,8 @@ export type {
   AuthProvider,
   AuditAction,
   FeatureFlagScope,
+  InvitationMode,
+  InvitationTargetProvider,
   InvitationStatus,
   OrganizationMemberStatus,
   OrganizationRequestStatus,
@@ -11,5 +13,5 @@ export type {
   PageStatus,
   PlatformRole,
   SessionType,
-  WebsiteSectionType
+  WebsiteSectionType,
 } from '@prisma/client';

@@ -17,7 +17,9 @@ Telegram login uses Telegram OpenID Connect Authorization Code Flow with PKCE.
 API endpoints:
 
 - `GET /v1/auth/telegram/start`: creates `state` and PKCE verifier cookies, then redirects to Telegram.
-- `GET /v1/auth/telegram/callback`: exchanges the authorization code, validates the Telegram ID token with JWKS, creates or links the `telegram` auth account, creates a session, sets httpOnly auth cookies, then redirects back to the web app.
+- `GET /v1/auth/telegram/callback`: exchanges the authorization code, validates the Telegram ID token with JWKS, and creates a session only when the Telegram account is already linked to an active platform admin, already linked to a user with active organization membership, matches a valid pending targeted invitation, or is returning to a valid claimable invitation acceptance link.
+
+Unknown Telegram accounts are not auto-provisioned into regular app access. If the Telegram `sub` matches a pending targeted invitation, or the login was started from a valid claimable invitation link, the API may create/link the local user and redirect to the invitation acceptance experience. Organization dashboard content remains unavailable until the invitation is accepted and an active `OrganizationMember` row exists.
 
 Required API environment:
 
@@ -42,3 +44,5 @@ Access JWT payloads contain only:
 Refresh tokens are opaque random strings stored in the refresh cookie and hashed in the `sessions` table. They are not JWTs in the current implementation.
 
 Roles and permissions must not be treated as JWT truth. Organization permissions are checked through database membership state in API guards/services. RLS policies exist as a database foundation, but request-scoped RLS context is not wired yet.
+
+Platform admins may sign in without organization membership only when their Telegram auth account is already linked to an active `User` whose `platformRole` is `ADMIN` or `SUPER_ADMIN`.

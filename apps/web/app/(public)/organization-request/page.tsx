@@ -1,4 +1,5 @@
 import { apiFetch } from '@/api/client';
+import { requireServerSession } from '@/auth/session';
 
 async function submitOrganizationRequest(formData: FormData) {
   'use server';
@@ -12,12 +13,14 @@ async function submitOrganizationRequest(formData: FormData) {
       contactName: formData.get('contactName'),
       contactEmail: formData.get('contactEmail'),
       contactPhone: formData.get('contactPhone'),
-      message: formData.get('message')
-    })
+      message: formData.get('message'),
+    }),
   });
 }
 
-export default function OrganizationRequestPage() {
+export default async function OrganizationRequestPage() {
+  await requireServerSession('/organization-request');
+
   return (
     <main className="section">
       <div className="shell stack grid-center">
@@ -37,7 +40,7 @@ export default function OrganizationRequestPage() {
           </label>
           <label>
             Contact email
-            <input name="contactEmail" required type="email" maxLength={255} />
+            <input name="contactEmail" type="email" maxLength={255} />
           </label>
           <label>
             Contact phone

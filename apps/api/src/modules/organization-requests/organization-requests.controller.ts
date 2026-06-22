@@ -14,9 +14,10 @@ export class OrganizationRequestsController {
   constructor(private readonly organizationRequestsService: OrganizationRequestsService) {}
 
   @Post('organization-requests')
+  @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async create(@Body() body: CreateOrganizationRequestDto) {
-    return this.organizationRequestsService.create(body);
+  async create(@Body() body: CreateOrganizationRequestDto, @Req() request: AuthenticatedRequest) {
+    return this.organizationRequestsService.create(body, this.getActorUserId(request));
   }
 
   @Get('admin/organization-requests')

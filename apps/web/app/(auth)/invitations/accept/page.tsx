@@ -9,7 +9,10 @@ interface InvitationValidation {
   reason: string | null;
   organizationName?: string;
   organizationId?: string;
-  email?: string | null;
+  mode?: string;
+  targetProvider?: string | null;
+  targetProviderAccountId?: string | null;
+  targetDisplay?: string | null;
   role?: string;
   delivery?: 'email' | 'link';
 }
@@ -55,11 +58,22 @@ export default async function AcceptInvitationPage({
           <p>This invitation is invalid or no longer available.</p>
         ) : (
           <>
+            <p>
+              You must accept this invitation before organization dashboard content is available.
+            </p>
             <dl className="details">
               <dt>Organization</dt>
               <dd>{invitation.organizationName}</dd>
-              <dt>Invitation</dt>
-              <dd>{invitation.email ?? 'Shareable link'}</dd>
+              <dt>Invitation type</dt>
+              <dd>{invitation.mode === 'claimable_link' ? 'Claimable Telegram link' : 'Targeted Telegram invite'}</dd>
+              {invitation.mode === 'targeted_telegram' ? (
+                <>
+                  <dt>Invited account</dt>
+                  <dd>{invitation.targetDisplay ?? invitation.targetProviderAccountId}</dd>
+                  <dt>Provider</dt>
+                  <dd>{invitation.targetProvider}</dd>
+                </>
+              ) : null}
               <dt>Role</dt>
               <dd>{invitation.role}</dd>
             </dl>

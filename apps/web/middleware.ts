@@ -39,11 +39,16 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*', '/profile']
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/profile', '/invitations/pending'],
 };
 
-async function refreshAccessToken(request: NextRequest): Promise<RefreshAccessTokenResult | undefined> {
-  const baseUrl = process.env['API_INTERNAL_URL'] ?? process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/v1';
+async function refreshAccessToken(
+  request: NextRequest,
+): Promise<RefreshAccessTokenResult | undefined> {
+  const baseUrl =
+    process.env['API_INTERNAL_URL'] ??
+    process.env['NEXT_PUBLIC_API_URL'] ??
+    'http://localhost:4000/v1';
   const cookie = request.headers.get('cookie');
 
   try {

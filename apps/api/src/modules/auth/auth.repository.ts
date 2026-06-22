@@ -1,47 +1,169 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@churchflow/db';
+import type { PlatformRole, Prisma } from '@churchflow/db';
 import { PrismaService } from '../../prisma/prisma.service';
+
+export interface AuthRepositoryUser {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  platformRole: PlatformRole;
+}
+
+export interface AuthRepositoryUserWithDeletedAt extends AuthRepositoryUser {
+  deletedAt: Date | null;
+}
+
+export interface TelegramLoginAccountState {
+  accountId: string;
+  user: AuthRepositoryUser;
+  isActive: boolean;
+  hasActiveMembership: boolean;
+  isPlatformAdmin: boolean;
+}
+
+export interface SessionWithUser {
+  id: string;
+  userId: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+  user: AuthRepositoryUserWithDeletedAt;
+}
+
+export interface CreatedSession {
+  id: string;
+}
 
 @Injectable()
 export class AuthRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findOrCreateTelegramUser(input: {
+  async findTelegramLoginAccountState(
+    providerAccountId: string,
+  ): Promise<TelegramLoginAccountState | null> {
+    const account = await this.prisma.authAccount.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: 'telegram',
+          providerAccountId,
+        },
+      },
+      select: {
+        id: true,
+        deletedAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            platformRole: true,
+            deletedAt: true,
+            memberships: {
+              where: {
+                status: 'ACTIVE',
+                removedAt: null,
+                organization: { status: 'ACTIVE', deletedAt: null },
+              },
+              select: { id: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!account) {
+      return null;
+    }
+
+    return {
+      accountId: account.id,
+      user: {
+        id: account.user.id,
+        email: account.user.email,
+        displayName: account.user.displayName,
+        platformRole: account.user.platformRole,
+      },
+      isActive: account.deletedAt === null && account.user.deletedAt === null,
+      hasActiveMembership: account.user.memberships.length > 0,
+      isPlatformAdmin:
+        account.user.platformRole === 'ADMIN' || account.user.platformRole === 'SUPER_ADMIN',
+    };
+  }
+
+  async hasPendingTelegramInvitation(providerAccountId: string): Promise<boolean> {
+    const invitation = await this.prisma.organizationInvitation.findFirst({
+      where: {
+        targetProvider: 'telegram',
+        targetProviderAccountId: providerAccountId,
+        status: 'PENDING',
+        acceptedAt: null,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { id: true },
+    });
+
+    return invitation !== null;
+  }
+
+  async hasValidClaimableInvitationTokenHash(tokenHash: string): Promise<boolean> {
+    const invitation = await this.prisma.organizationInvitation.findFirst({
+      where: {
+        tokenHash,
+        mode: 'claimable_link',
+        status: 'PENDING',
+        acceptedAt: null,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { id: true },
+    });
+
+    return invitation !== null;
+  }
+
+  async touchTelegramAccount(accountId: string, username?: string): Promise<AuthRepositoryUser> {
+    const account = await this.prisma.authAccount.update({
+      where: { id: accountId },
+      data: {
+        lastUsedAt: new Date(),
+        metadata: {
+          username: username ?? null,
+        },
+      },
+      select: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            platformRole: true,
+          },
+        },
+      },
+    });
+
+    return account.user;
+  }
+
+  async createTelegramUserForInvitation(input: {
     providerAccountId: string;
     displayName?: string;
     username?: string;
     avatarUrl?: string;
-  }) {
-    const existingAccount = await this.prisma.authAccount.findUnique({
-      where: {
-        provider_providerAccountId: {
-          provider: 'telegram',
-          providerAccountId: input.providerAccountId,
-        },
-      },
-      include: { user: true },
-    });
-
-    if (existingAccount) {
-      await this.prisma.authAccount.update({
-        where: { id: existingAccount.id },
-        data: {
-          lastUsedAt: new Date(),
-          deletedAt: null,
-          metadata: {
-            username: input.username ?? null,
-          },
-        },
-      });
-
-      return existingAccount.user;
-    }
-
+  }): Promise<AuthRepositoryUser> {
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           ...(input.displayName ? { displayName: input.displayName } : {}),
           ...(input.avatarUrl ? { avatarUrl: input.avatarUrl } : {}),
+        },
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          platformRole: true,
         },
       });
 
@@ -61,18 +183,54 @@ export class AuthRepository {
     });
   }
 
-  async createSession(input: Prisma.SessionUncheckedCreateInput) {
-    return this.prisma.session.create({ data: input });
+  async createSession(input: Prisma.SessionUncheckedCreateInput): Promise<CreatedSession> {
+    const session = await this.prisma.session.create({
+      data: input,
+      select: { id: true },
+    });
+
+    return { id: session.id };
   }
 
-  async findSession(sessionId: string) {
-    return this.prisma.session.findUnique({ where: { id: sessionId } });
+  async findSession(sessionId: string): Promise<SessionWithUser | null> {
+    return this.prisma.session.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        userId: true,
+        expiresAt: true,
+        revokedAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            platformRole: true,
+            deletedAt: true,
+          },
+        },
+      },
+    });
   }
 
-  async findSessionByRefreshTokenHash(refreshTokenHash: string) {
+  async findSessionByRefreshTokenHash(refreshTokenHash: string): Promise<SessionWithUser | null> {
     return this.prisma.session.findFirst({
       where: { refreshTokenHash },
-      include: { user: true },
+      select: {
+        id: true,
+        userId: true,
+        expiresAt: true,
+        revokedAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            platformRole: true,
+            deletedAt: true,
+          },
+        },
+      },
     });
   }
 

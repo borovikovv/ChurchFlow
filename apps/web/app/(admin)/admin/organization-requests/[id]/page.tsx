@@ -11,6 +11,8 @@ interface OrganizationRequestDetail {
   organizationSlug: string | null;
   contactName: string;
   contactEmail: string;
+  contactTelegramId: string;
+  contactTelegramUsername: string | null;
   contactPhone: string | null;
   message: string | null;
   status: string;
@@ -31,22 +33,27 @@ interface ApproveOrganizationRequestResult {
 async function approveRequest(formData: FormData) {
   'use server';
   const id = String(formData.get('id'));
-  const result = await apiFetch<ApproveOrganizationRequestResult>(`/admin/organization-requests/${id}/approve`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      organizationName: formData.get('organizationName') || undefined,
-      organizationSlug: formData.get('organizationSlug') || undefined
-    })
-  });
+  const result = await apiFetch<ApproveOrganizationRequestResult>(
+    `/admin/organization-requests/${id}/approve`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        organizationName: formData.get('organizationName') || undefined,
+        organizationSlug: formData.get('organizationSlug') || undefined,
+      }),
+    },
+  );
   revalidatePath(`/admin/organization-requests/${id}`);
 
   if (!result.ok) {
-    redirect(`/admin/organization-requests/${id}?error=${encodeURIComponent(result.error.message)}` as Route);
+    redirect(
+      `/admin/organization-requests/${id}?error=${encodeURIComponent(result.error.message)}` as Route,
+    );
   }
 
   redirect(
-    `/admin/organization-requests/${id}?approved=1&createdOrganizationId=${encodeURIComponent(result.data.organization.id)}` as Route
+    `/admin/organization-requests/${id}?approved=1&createdOrganizationId=${encodeURIComponent(result.data.organization.id)}` as Route,
   );
 }
 
@@ -56,12 +63,14 @@ async function rejectRequest(formData: FormData) {
   const result = await apiFetch(`/admin/organization-requests/${id}/reject`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ rejectionReason: formData.get('rejectionReason') })
+    body: JSON.stringify({ rejectionReason: formData.get('rejectionReason') }),
   });
   revalidatePath(`/admin/organization-requests/${id}`);
 
   if (!result.ok) {
-    redirect(`/admin/organization-requests/${id}?error=${encodeURIComponent(result.error.message)}` as Route);
+    redirect(
+      `/admin/organization-requests/${id}?error=${encodeURIComponent(result.error.message)}` as Route,
+    );
   }
 
   redirect(`/admin/organization-requests/${id}?rejected=1` as Route);
@@ -69,10 +78,15 @@ async function rejectRequest(formData: FormData) {
 
 export default async function AdminOrganizationRequestPage({
   params,
-  searchParams
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ approved?: string; rejected?: string; error?: string; createdOrganizationId?: string }>;
+  searchParams: Promise<{
+    approved?: string;
+    rejected?: string;
+    error?: string;
+    createdOrganizationId?: string;
+  }>;
 }) {
   const { id } = await params;
   const { approved, rejected, error, createdOrganizationId } = await searchParams;
@@ -93,9 +107,12 @@ export default async function AdminOrganizationRequestPage({
         {error ? <p className="text-red-600">{error}</p> : null}
         {approved && (createdOrganizationId || request.createdOrganization?.id) ? (
           <p>
-            Request approved.
-            {' '}
-            <Link href={`/admin/organizations/${createdOrganizationId ?? request.createdOrganization?.id}` as Route}>
+            Request approved.{' '}
+            <Link
+              href={
+                `/admin/organizations/${createdOrganizationId ?? request.createdOrganization?.id}` as Route
+              }
+            >
               View organization
             </Link>
           </p>
@@ -108,6 +125,8 @@ export default async function AdminOrganizationRequestPage({
           <dd>
             {request.contactName} · {request.contactEmail}
           </dd>
+          <dt>Telegram</dt>
+          <dd>{request.contactTelegramUsername ?? request.contactTelegramId}</dd>
           <dt>Phone</dt>
           <dd>{request.contactPhone ?? 'Not provided'}</dd>
           <dt>Message</dt>
@@ -131,7 +150,12 @@ export default async function AdminOrganizationRequestPage({
           <input type="hidden" name="id" value={request.id} />
           <label>
             Rejection reason
-            <textarea name="rejectionReason" required rows={4} defaultValue={request.rejectionReason ?? ''} />
+            <textarea
+              name="rejectionReason"
+              required
+              rows={4}
+              defaultValue={request.rejectionReason ?? ''}
+            />
           </label>
           <button className="button secondary" type="submit">
             Reject

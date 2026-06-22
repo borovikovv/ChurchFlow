@@ -34,9 +34,31 @@ export class OrganizationAccessGuard implements CanActivate {
     }
 
     const rawOrganizationId = request.params['organizationId'];
-    const organizationId = Array.isArray(rawOrganizationId) ? rawOrganizationId[0] : rawOrganizationId;
+    const organizationId = Array.isArray(rawOrganizationId)
+      ? rawOrganizationId[0]
+      : rawOrganizationId;
     if (!organizationId) {
       throw new BadRequestException('Missing organization id');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { platformRole: true, deletedAt: true },
+    });
+    if (!user || user.deletedAt !== null) {
+      throw new UnauthorizedException('Authenticated user was not found');
+    }
+
+    if (user.platformRole === 'ADMIN' || user.platformRole === 'SUPER_ADMIN') {
+      const organization = await this.prisma.organization.findFirst({
+        where: { id: organizationId, status: 'ACTIVE', deletedAt: null },
+        select: { id: true },
+      });
+      if (!organization) {
+        throw new ForbiddenException('Organization access is required');
+      }
+
+      return true;
     }
 
     const membership = await this.prisma.organizationMember.findFirst({

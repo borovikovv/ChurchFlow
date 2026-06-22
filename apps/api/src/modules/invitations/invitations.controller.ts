@@ -16,9 +16,13 @@ export class InvitationsController {
   async create(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateOrganizationInvitationDto,
-    @Req() request: AuthenticatedRequest
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.invitationsService.createForOrganization(organizationId, body, this.getActorUserId(request));
+    return this.invitationsService.createForOrganization(
+      organizationId,
+      body,
+      this.getActorUserId(request),
+    );
   }
 
   @Get('invitations/validate')
@@ -34,12 +38,25 @@ export class InvitationsController {
     return this.invitationsService.accept(body.token, this.getActorUserId(request));
   }
 
+  @Get('invitations/pending')
+  @UseGuards(JwtAuthGuard)
+  async pending(@Req() request: AuthenticatedRequest) {
+    return this.invitationsService.listPendingForAuthenticatedUser(this.getActorUserId(request));
+  }
+
+  @Post('invitations/:id/accept')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async acceptPending(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.invitationsService.acceptPending(id, this.getActorUserId(request));
+  }
+
   @Post('organizations/:organizationId/invitations/:id/revoke')
   @UseGuards(JwtAuthGuard)
   async revoke(
     @Param('organizationId') organizationId: string,
     @Param('id') id: string,
-    @Req() request: AuthenticatedRequest
+    @Req() request: AuthenticatedRequest,
   ) {
     return this.invitationsService.revoke(organizationId, id, this.getActorUserId(request));
   }
@@ -50,7 +67,7 @@ export class InvitationsController {
   async resend(
     @Param('organizationId') organizationId: string,
     @Param('id') id: string,
-    @Req() request: AuthenticatedRequest
+    @Req() request: AuthenticatedRequest,
   ) {
     return this.invitationsService.resend(organizationId, id, this.getActorUserId(request));
   }
