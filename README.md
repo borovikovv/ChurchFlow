@@ -15,9 +15,9 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 ## Setup
 
 1. Install Node.js 20+ and pnpm 9+.
-2. Copy environment files:
+2. Copy the three separate environment files:
    - `cp apps/api/.env.example apps/api/.env`
-   - `cp apps/web/.env.example apps/web/.env`
+   - `cp apps/web/.env.example apps/web/.env.local`
    - `cp packages/db/.env.example packages/db/.env`
 3. Fill secrets with real values. Do not use placeholder JWT keys or storage credentials outside local development.
 4. Start local services with `docker compose up -d`.
@@ -25,7 +25,7 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 6. Generate Prisma Client with `pnpm db:generate`.
 7. Create database migrations with `pnpm db:migrate`.
 8. Apply `packages/db/sql/001_rls_foundation.sql` after Prisma has created the tables if you are testing the RLS foundation.
-9. Bootstrap the first platform admin with `DATABASE_URL="postgresql://..." pnpm admin:promote admin@example.com SUPER_ADMIN`.
+9. Apply migrations, then bootstrap the first platform admin with `DATABASE_URL="postgresql://..." WEB_APP_URL="https://..." pnpm admin:bootstrap` and open the generated one-time Telegram URL.
 10. Run the workspace with `pnpm dev`.
 
 For local Telegram Web Login testing, use the HTTPS proxy in `docs/local-https.md` instead of `localhost`.
@@ -42,7 +42,7 @@ For local Telegram Web Login testing, use the HTTPS proxy in `docs/local-https.m
 - Organization owners are represented by `OrganizationMember` rows with role `OWNER`.
 - Invitations separate identity binding from delivery. Targeted Telegram invitations use Telegram OIDC `sub`; claimable links are first claimed by an authenticated Telegram user. Email is notification/contact data, not the acceptance identity.
 
-See `docs/organization-approval-flow.md`, `docs/platform-admin.md`, and `docs/invitations.md` for the full business and technical workflow.
+See `docs/environment.md`, `docs/organization-approval-flow.md`, `docs/platform-admin.md`, and `docs/invitations.md` for the full business and technical workflow.
 
 ## Scripts
 
@@ -50,7 +50,7 @@ See `docs/organization-approval-flow.md`, `docs/platform-admin.md`, and `docs/in
 - `pnpm build` builds all apps and packages.
 - `pnpm lint` runs lint tasks.
 - `pnpm typecheck` runs strict TypeScript checks.
-- `pnpm admin:promote <email> [ADMIN|SUPER_ADMIN]` promotes a platform admin through an operational CLI command.
+- `pnpm admin:bootstrap` creates a short-lived one-time Telegram bootstrap for the first `SUPER_ADMIN`.
 - `pnpm db:generate` generates Prisma Client.
 - `pnpm db:migrate` runs Prisma migrations.
 - `pnpm db:studio` opens Prisma Studio.

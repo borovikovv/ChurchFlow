@@ -1,24 +1,31 @@
 import type { NextConfig } from 'next';
+import { webEnvSchema } from '@churchflow/shared';
+
+const env = webEnvSchema.parse({
+  NODE_ENV: process.env['NODE_ENV'],
+  NEXT_PUBLIC_WEB_URL: process.env['NEXT_PUBLIC_WEB_URL'],
+  NEXT_PUBLIC_API_URL: process.env['NEXT_PUBLIC_API_URL'],
+  API_INTERNAL_URL: process.env['API_INTERNAL_URL'],
+});
+const webHost = new URL(env.NEXT_PUBLIC_WEB_URL).host;
 
 const nextConfig: NextConfig = {
   typedRoutes: true,
   reactStrictMode: true,
-  allowedDevOrigins: ['churchflow.test'],
+  allowedDevOrigins: [webHost],
   async rewrites() {
-    const apiBaseUrl = process.env['API_INTERNAL_URL'] ?? 'http://localhost:4000/v1';
-
     return [
       {
         source: '/v1/:path*',
-        destination: `${apiBaseUrl}/:path*`
-      }
+        destination: `${env.API_INTERNAL_URL}/:path*`,
+      },
     ];
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000', 'churchflow.test']
-    }
-  }
+      allowedOrigins: [webHost],
+    },
+  },
 };
 
 export default nextConfig;

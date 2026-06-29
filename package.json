@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20.11.0",
+    "node": ">=20.12.0",
     "pnpm": ">=9.0.0"
   },
   "scripts": {
@@ -13,7 +13,7 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "format": "prettier --write .",
-    "admin:promote": "pnpm --filter @churchflow/api admin:promote",
+    "admin:bootstrap": "pnpm --filter @churchflow/api admin:bootstrap",
     "db:generate": "pnpm --filter @churchflow/db db:generate",
     "db:migrate": "pnpm --filter @churchflow/db db:migrate",
     "db:studio": "pnpm --filter @churchflow/db db:studio"

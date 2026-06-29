@@ -28,7 +28,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             </Link>
             <nav className="site-nav" aria-label="Main">
               <Link href="/organization-request">Request access</Link>
-              {showAdminLink ? <Link href="/admin/organization-requests">Admin</Link> : null}
+              {showAdminLink ? <Link href="/admin/organizations">Organizations</Link> : null}
               {showProfileLink ? <Link href="/profile">Profile</Link> : null}
               <Link href="/login">Sign in</Link>
             </nav>

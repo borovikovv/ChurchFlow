@@ -131,6 +131,7 @@ interface CreatedSession {
 interface AuthRepositoryPort {
   hasPendingTelegramInvitation(providerAccountId: string): Promise<boolean>;
   hasValidClaimableInvitationTokenHash(tokenHash: string): Promise<boolean>;
+  hasValidPlatformAdminBootstrapTokenHash(tokenHash: string): Promise<boolean>;
   findTelegramLoginAccountState(
     providerAccountId: string,
   ): Promise<TelegramLoginAccountState | null>;
@@ -217,10 +218,16 @@ export class AuthService {
     const hasPendingInvitation = await this.authRepository.hasPendingTelegramInvitation(claims.sub);
     const hasClaimableInvitationRedirect =
       await this.hasValidClaimableInvitationRedirect(redirectTo);
+    const hasPlatformAdminBootstrapRedirect =
+      await this.hasValidPlatformAdminBootstrapRedirect(redirectTo);
     const accountState = await this.authRepository.findTelegramLoginAccountState(claims.sub);
 
     if (!accountState) {
-      if (!hasPendingInvitation && !hasClaimableInvitationRedirect) {
+      if (
+        !hasPendingInvitation &&
+        !hasClaimableInvitationRedirect &&
+        !hasPlatformAdminBootstrapRedirect
+      ) {
         throw new UnauthorizedException('Account is not invited to ChurchFlow');
       }
 
@@ -245,7 +252,8 @@ export class AuthService {
       !accountState.hasActiveMembership &&
       !accountState.isPlatformAdmin &&
       !hasPendingInvitation &&
-      !hasClaimableInvitationRedirect
+      !hasClaimableInvitationRedirect &&
+      !hasPlatformAdminBootstrapRedirect
     ) {
       throw new UnauthorizedException('Account is not associated with an organization');
     }
@@ -258,11 +266,12 @@ export class AuthService {
     return {
       user: this.toAuthUserResult(touchedUser),
       defaultRedirectTo:
-        !accountState.hasActiveMembership && !accountState.isPlatformAdmin && hasPendingInvitation
+        accountState.isPlatformAdmin
+          ? '/admin/organizations'
+          : !accountState.hasActiveMembership && hasPendingInvitation
           ? '/invitations/pending'
           : !accountState.hasActiveMembership &&
-              !accountState.isPlatformAdmin &&
-              hasClaimableInvitationRedirect
+              (hasClaimableInvitationRedirect || hasPlatformAdminBootstrapRedirect)
             ? (redirectTo ?? '/')
           : '/',
     };
@@ -277,13 +286,30 @@ export class AuthService {
     return this.authRepository.hasValidClaimableInvitationTokenHash(this.hashToken(token));
   }
 
+  private hasValidPlatformAdminBootstrapRedirect(redirectTo?: string): Promise<boolean> {
+    const token = this.extractTokenFromRedirect(redirectTo, '/platform-admin/bootstrap');
+    if (!token) {
+      return Promise.resolve(false);
+    }
+
+    return this.authRepository.hasValidPlatformAdminBootstrapTokenHash(this.hashToken(token));
+  }
+
   private extractInvitationTokenFromRedirect(redirectTo?: string): string | null {
-    if (!redirectTo?.startsWith('/invitations/accept')) {
+    return this.extractTokenFromRedirect(redirectTo, '/invitations/accept');
+  }
+
+  private extractTokenFromRedirect(redirectTo: string | undefined, path: string): string | null {
+    if (!redirectTo) {
       return null;
     }
 
-    const url = new URL(redirectTo, 'https://churchflow.local');
-    return url.searchParams.get('token');
+    const queryIndex = redirectTo.indexOf('?');
+    if (queryIndex < 0 || redirectTo.slice(0, queryIndex) !== path) {
+      return null;
+    }
+
+    return new URLSearchParams(redirectTo.slice(queryIndex + 1)).get('token');
   }
 
   private toAuthUserResult(user: {

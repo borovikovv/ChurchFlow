@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { resolve } from 'node:path';
 import { apiEnvSchema } from '@churchflow/shared';
 import { PrismaModule } from './prisma/prisma.module';
 import { EmailModule } from './modules/email/email.module';
@@ -15,12 +16,14 @@ import { PagesModule } from './modules/pages/pages.module';
 import { MediaModule } from './modules/media/media.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { PlatformAdminBootstrapModule } from './modules/platform-admin-bootstrap/platform-admin-bootstrap.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env', '../../.env'],
+      envFilePath: resolve(__dirname, '../.env'),
+      ignoreEnvFile: process.env['NODE_ENV'] === 'production',
       validate: (env) => apiEnvSchema.parse(env),
     }),
     ThrottlerModule.forRoot([
@@ -32,6 +35,7 @@ import { AuditModule } from './modules/audit/audit.module';
     PrismaModule,
     EmailModule,
     AuditModule,
+    PlatformAdminBootstrapModule,
     AuthModule,
     UsersModule,
     InvitationsModule,

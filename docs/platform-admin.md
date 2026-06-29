@@ -12,23 +12,26 @@ The API enforces platform admin access with `PlatformAdminGuard`, which currentl
 
 ## Bootstrap
 
-The first platform admin is promoted through an operational CLI command, not through a public HTTP endpoint:
+The first platform super administrator is created through a protected operational CLI plus verified Telegram OIDC:
 
 ```sh
-DATABASE_URL="postgresql://..." pnpm admin:promote admin@example.com SUPER_ADMIN
+DATABASE_URL="postgresql://..." \
+WEB_APP_URL="https://app.example.com" \
+pnpm admin:bootstrap
 ```
-
-The role argument is optional and defaults to `SUPER_ADMIN`; allowed values are `ADMIN` and `SUPER_ADMIN`.
 
 The command:
 
-- normalizes the email address
-- creates the user if it does not exist
-- refuses to promote a soft-deleted user
-- updates only `User.platformRole`
-- records an `audit_logs` entry with action `PROMOTE_PLATFORM_ADMIN`
+- refuses to run if an active `SUPER_ADMIN` already exists
+- refuses to create a second unexpired bootstrap
+- generates a cryptographically random single-use token
+- stores only `sha256(token)` with a short expiry
+- records bootstrap creation in `audit_logs`
+- prints a one-time Web URL
 
-This does not create a login shortcut. The promoted admin still signs in through a configured third-party provider account. With Telegram auth, that means the admin must have a linked Telegram auth account; the system must not infer platform admin identity from a Telegram username or from an unverified login attempt.
+The operator opens the URL and completes Telegram OIDC. The callback may create a restricted session only because the bootstrap token is valid. Consuming the token verifies that the user has an active linked Telegram account, atomically marks the token consumed, sets `User.platformRole = SUPER_ADMIN`, and records `PROMOTE_PLATFORM_ADMIN` in the audit log.
+
+After bootstrap, platform admins sign in normally and are redirected to `/admin/organizations`. The CLI cannot be used to create more admins. Future admin promotion should be an authenticated `SUPER_ADMIN` operation with re-authentication and audit history.
 
 ## Organization Lifecycle
 

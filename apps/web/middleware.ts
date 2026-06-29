@@ -48,7 +48,10 @@ async function refreshAccessToken(
   const baseUrl =
     process.env['API_INTERNAL_URL'] ??
     process.env['NEXT_PUBLIC_API_URL'] ??
-    'http://localhost:4000/v1';
+    (process.env['NODE_ENV'] === 'production' ? undefined : 'http://localhost:4000/v1');
+  if (!baseUrl) {
+    return undefined;
+  }
   const cookie = request.headers.get('cookie');
 
   try {

@@ -123,6 +123,25 @@ export class AuthRepository {
     return invitation !== null;
   }
 
+  async hasValidPlatformAdminBootstrapTokenHash(tokenHash: string): Promise<boolean> {
+    const [bootstrap, existingAdmin] = await Promise.all([
+      this.prisma.platformAdminBootstrapToken.findFirst({
+        where: {
+          tokenHash,
+          consumedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true },
+      }),
+      this.prisma.user.findFirst({
+        where: { platformRole: 'SUPER_ADMIN', deletedAt: null },
+        select: { id: true },
+      }),
+    ]);
+
+    return bootstrap !== null && existingAdmin === null;
+  }
+
   async touchTelegramAccount(accountId: string, username?: string): Promise<AuthRepositoryUser> {
     const account = await this.prisma.authAccount.update({
       where: { id: accountId },
