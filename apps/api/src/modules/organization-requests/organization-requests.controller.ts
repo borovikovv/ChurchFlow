@@ -20,6 +20,12 @@ export class OrganizationRequestsController {
     return this.organizationRequestsService.create(body, this.getActorUserId(request));
   }
 
+  @Get('organization-requests/mine')
+  @UseGuards(JwtAuthGuard)
+  async mine(@Req() request: AuthenticatedRequest) {
+    return this.organizationRequestsService.listMine(this.getActorUserId(request));
+  }
+
   @Get('admin/organization-requests')
   @UseGuards(JwtAuthGuard, PlatformAdminGuard)
   async list(@Query('status') status?: string) {
@@ -40,7 +46,7 @@ export class OrganizationRequestsController {
   async approve(
     @Param('id') id: string,
     @Body() body: ApproveOrganizationRequestDto,
-    @Req() request: AuthenticatedRequest
+    @Req() request: AuthenticatedRequest,
   ) {
     return this.organizationRequestsService.approve(id, body, this.getActorUserId(request));
   }
@@ -50,7 +56,7 @@ export class OrganizationRequestsController {
   async reject(
     @Param('id') id: string,
     @Body() body: RejectOrganizationRequestDto,
-    @Req() request: AuthenticatedRequest
+    @Req() request: AuthenticatedRequest,
   ) {
     return this.organizationRequestsService.reject(id, body, this.getActorUserId(request));
   }

@@ -12,6 +12,7 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "test": "pnpm build && node --test apps/api/test/*.test.cjs",
     "format": "prettier --write .",
     "admin:bootstrap": "pnpm --filter @churchflow/api admin:bootstrap",
     "db:generate": "pnpm --filter @churchflow/db db:generate",

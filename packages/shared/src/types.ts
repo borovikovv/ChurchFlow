@@ -8,8 +8,9 @@ import type {
   organizationSchema,
   organizationWebsiteSchema,
   rejectOrganizationRequestSchema,
+  updateOrganizationMemberRoleSchema,
   websitePageSchema,
-  websiteSectionSchema
+  websiteSectionSchema,
 } from './schemas.js';
 
 export type UUID = string;
@@ -23,6 +24,7 @@ export type ApproveOrganizationRequestInput = z.infer<typeof approveOrganization
 export type RejectOrganizationRequestInput = z.infer<typeof rejectOrganizationRequestSchema>;
 export type CreateOrganizationInvitationInput = z.infer<typeof createOrganizationInvitationSchema>;
 export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
+export type UpdateOrganizationMemberRoleInput = z.infer<typeof updateOrganizationMemberRoleSchema>;
 
 export type ApiResult<T> =
   | {

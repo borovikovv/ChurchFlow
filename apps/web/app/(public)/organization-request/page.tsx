@@ -1,10 +1,19 @@
 import { apiFetch } from '@/api/client';
 import { requireServerSession } from '@/auth/session';
+import { redirect } from 'next/navigation';
+import type { Route } from 'next';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { PhoneInputField } from '@/components/ui/phone-input-field';
+
+interface OrganizationRequestSummary {
+  status: string;
+}
 
 async function submitOrganizationRequest(formData: FormData) {
   'use server';
 
-  await apiFetch('/organization-requests', {
+  const result = await apiFetch('/organization-requests', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -16,16 +25,35 @@ async function submitOrganizationRequest(formData: FormData) {
       message: formData.get('message'),
     }),
   });
+
+  if (!result.ok) {
+    redirect(`/organization-request?error=${encodeURIComponent(result.error.message)}` as Route);
+  }
+
+  redirect('/organization-request/status' as Route);
 }
 
-export default async function OrganizationRequestPage() {
+export default async function OrganizationRequestPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   await requireServerSession('/organization-request');
+  const { error } = await searchParams;
+  const requests = await apiFetch<OrganizationRequestSummary[]>('/organization-requests/mine');
+  if (requests.ok && requests.data.some((request) => request.status === 'PENDING')) {
+    redirect('/organization-request/status' as Route);
+  }
 
   return (
-    <main className="section">
-      <div className="shell stack grid-center">
-        <h1>Request organization access</h1>
-        <form className="form-grid max-w-130 w-full" action={submitOrganizationRequest}>
+    <main className="page-content stack">
+      <PageHeader
+        title="Request an organization"
+        description="Tell us about your organization. A platform administrator will review the request."
+      />
+      <div className="content-narrow stack">
+        {error ? <p className="form-error">{error}</p> : null}
+        <form className="form-grid" action={submitOrganizationRequest}>
           <label>
             Organization name
             <input name="organizationName" required minLength={2} maxLength={160} />
@@ -44,15 +72,13 @@ export default async function OrganizationRequestPage() {
           </label>
           <label>
             Contact phone
-            <input name="contactPhone" maxLength={40} />
+            <PhoneInputField name="contactPhone" />
           </label>
           <label>
             Message
             <textarea name="message" maxLength={2000} rows={5} />
           </label>
-          <button className="button" type="submit">
-            Submit request
-          </button>
+          <Button type="submit">Submit request</Button>
         </form>
       </div>
     </main>

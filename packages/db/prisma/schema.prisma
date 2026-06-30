@@ -253,7 +253,6 @@ model OrganizationInvitation {
   invitedBy    User?        @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: SetNull)
   claimedBy    User?        @relation("InvitationClaimer", fields: [claimedByUserId], references: [id], onDelete: SetNull)
 
-  @@unique([organizationId, targetProvider, targetProviderAccountId, status], map: "org_inv_target_status_key")
   @@unique([tokenHash])
   @@index([organizationId])
   @@index([email])

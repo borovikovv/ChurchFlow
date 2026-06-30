@@ -107,6 +107,23 @@ export class OrganizationRequestsRepository {
     };
   }
 
+  async findPendingByRequester(requestedByUserId: string) {
+    return this.prisma.organizationRequest.findFirst({
+      where: { requestedByUserId, status: 'PENDING' },
+      select: { id: true },
+    });
+  }
+
+  async listForRequester(requestedByUserId: string): Promise<OrganizationRequestDetail[]> {
+    const requests = await this.prisma.organizationRequest.findMany({
+      where: { requestedByUserId },
+      orderBy: { createdAt: 'desc' },
+      include: this.organizationRequestInclude(),
+    });
+
+    return requests.map((request) => this.toDetail(request));
+  }
+
   async list(status?: string): Promise<OrganizationRequestListItem[]> {
     const requests = await this.prisma.organizationRequest.findMany({
       ...(status ? { where: { status: status as OrganizationRequestStatus } } : {}),
@@ -127,21 +144,7 @@ export class OrganizationRequestsRepository {
       return null;
     }
 
-    return {
-      ...this.toListItem(request),
-      organizationSlug: request.organizationSlug,
-      contactPhone: request.contactPhone,
-      message: request.message,
-      rejectionReason: request.rejectionReason,
-      requestedByUserId: request.requestedByUserId,
-      createdOrganization: request.createdOrganization
-        ? {
-            id: request.createdOrganization.id,
-            name: request.createdOrganization.name,
-            slug: request.createdOrganization.slug,
-          }
-        : null,
-    };
+    return this.toDetail(request);
   }
 
   async findOrganizationBySlug(slug: string) {
@@ -225,6 +228,21 @@ export class OrganizationRequestsRepository {
         },
       });
 
+      await tx.auditLog.create({
+        data: {
+          organizationId: organization.id,
+          actorUserId: input.actorUserId,
+          action: 'APPROVE',
+          entityType: 'OrganizationRequest',
+          entityId: request.id,
+          metadata: {
+            createdOrganizationId: organization.id,
+            ownerMembershipId: membership.id,
+            requestedByUserId: request.requestedByUserId,
+          },
+        },
+      });
+
       return {
         organization: {
           id: organization.id,
@@ -280,6 +298,34 @@ export class OrganizationRequestsRepository {
         },
       },
     } satisfies Prisma.OrganizationRequestInclude;
+  }
+
+  private toDetail(request: {
+    id: string;
+    organizationName: string;
+    organizationSlug: string | null;
+    contactName: string;
+    contactEmail: string | null;
+    contactTelegramId: string | null;
+    contactTelegramUsername: string | null;
+    contactPhone: string | null;
+    message: string | null;
+    status: OrganizationRequestStatus;
+    rejectionReason: string | null;
+    requestedByUserId: string | null;
+    createdAt: Date;
+    requestedBy: { accounts: Array<{ providerAccountId: string }> } | null;
+    createdOrganization: { id: string; name: string; slug: string } | null;
+  }): OrganizationRequestDetail {
+    return {
+      ...this.toListItem(request),
+      organizationSlug: request.organizationSlug,
+      contactPhone: request.contactPhone,
+      message: request.message,
+      rejectionReason: request.rejectionReason,
+      requestedByUserId: request.requestedByUserId,
+      createdOrganization: request.createdOrganization,
+    };
   }
 
   private toListItem(request: {

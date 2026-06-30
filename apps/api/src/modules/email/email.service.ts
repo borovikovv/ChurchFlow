@@ -27,6 +27,12 @@ export interface OrganizationRequestRejectedEmailInput {
   rejectionReason: string;
 }
 
+export interface OrganizationRequestApprovedEmailInput {
+  email: string;
+  organizationName: string;
+  organizationId: string;
+}
+
 @Injectable()
 export class EmailService {
   constructor(
@@ -83,6 +89,21 @@ export class EmailService {
       text: [
         `Your organization request for ${input.organizationName} was rejected.`,
         `Reason: ${input.rejectionReason}`,
+      ].join('\n'),
+    });
+  }
+
+  async sendOrganizationRequestApprovedEmail(
+    input: OrganizationRequestApprovedEmailInput,
+  ): Promise<void> {
+    const dashboardUrl = `${this.webAppUrl}/dashboard/${input.organizationId}`;
+    await this.emailProvider.send({
+      to: input.email,
+      subject: `Your ChurchFlow organization is ready: ${input.organizationName}`,
+      text: [
+        `Your organization ${input.organizationName} has been approved.`,
+        'You are its owner.',
+        `Open dashboard: ${dashboardUrl}`,
       ].join('\n'),
     });
   }

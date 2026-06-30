@@ -4,7 +4,7 @@ Organization invitations are tenant-scoped, provider-aware, and token-based. Raw
 
 The active authentication provider is Telegram. Targeted invitations store `targetProvider = telegram` and `targetProviderAccountId = <Telegram OIDC sub>`. Telegram usernames may be stored only as display metadata; they are not security identifiers. Email may be used as a notification/contact channel, but invitation acceptance is not bound to email.
 
-For the MVP, normal member onboarding should use claimable links. The inviter generates a link for `MEMBER` or `VIEWER` and sends it manually, usually through Telegram. The first authenticated Telegram user who opens and accepts the link claims it; acceptance binds the invitation to that Telegram account and creates/reactivates membership.
+For the MVP, normal member onboarding uses claimable links. The inviter generates a link for `MEMBER` or `VIEWER` and sends it manually, usually through Telegram. The first authenticated Telegram user who opens and accepts the link claims it; acceptance binds the invitation to that Telegram account and creates/reactivates membership. Owners can then promote an active member to `ADMIN` or `OWNER`, so normal onboarding never requires the inviter to know a Telegram OIDC `sub`.
 
 ## Security Rules
 
@@ -17,6 +17,7 @@ For the MVP, normal member onboarding should use claimable links. The inviter ge
 - For `claimable_link`, allow only `MEMBER` and `VIEWER`; bind the invitation to the first authenticated Telegram account that accepts it.
 - Prevent duplicate active members.
 - Refresh an active pending targeted invite for the same organization, target provider, target provider account id, and status instead of creating duplicates.
+- Refresh an expired, unaccepted targeted invite in place. A partial unique index applies only to pending provider-bound invitations, so accepted and revoked history remains append-only.
 - Link invitations are single-use, expiring, revocable, and audited.
 - Users with pending invitations must accept before seeing organization dashboard content.
 - Organization owners can remove members through a soft-remove operation.
@@ -31,6 +32,7 @@ For the MVP, normal member onboarding should use claimable links. The inviter ge
 - `POST /v1/organizations/:organizationId/invitations/:id/revoke`
 - `POST /v1/organizations/:organizationId/invitations/:id/resend`
 - `POST /v1/organizations/:organizationId/memberships/:membershipId/remove`
+- `PATCH /v1/organizations/:organizationId/memberships/:membershipId/role`
 
 ## Role Escalation
 
@@ -38,6 +40,7 @@ For the MVP, normal member onboarding should use claimable links. The inviter ge
 - `ADMIN` may invite `MEMBER` or `VIEWER`.
 - `MEMBER` and `VIEWER` may not invite.
 - Claimable links must not grant `OWNER` or `ADMIN`.
+- Only an active `OWNER` can change membership roles. Downgrading or removing the last active owner is blocked transactionally.
 
 JWT claims must not replace organization membership checks. Frontend checks are advisory only; the API must continue to enforce roles and permissions from database membership state.
 

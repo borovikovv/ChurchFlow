@@ -18,6 +18,8 @@ export interface TelegramLoginAccountState {
   user: AuthRepositoryUser;
   isActive: boolean;
   hasActiveMembership: boolean;
+  hasOrganizationRequest: boolean;
+  hasPendingOrganizationRequest: boolean;
   isPlatformAdmin: boolean;
 }
 
@@ -65,6 +67,9 @@ export class AuthRepository {
               },
               select: { id: true },
             },
+            requestedOrganizationRequests: {
+              select: { status: true },
+            },
           },
         },
       },
@@ -84,6 +89,10 @@ export class AuthRepository {
       },
       isActive: account.deletedAt === null && account.user.deletedAt === null,
       hasActiveMembership: account.user.memberships.length > 0,
+      hasOrganizationRequest: account.user.requestedOrganizationRequests.length > 0,
+      hasPendingOrganizationRequest: account.user.requestedOrganizationRequests.some(
+        (request) => request.status === 'PENDING',
+      ),
       isPlatformAdmin:
         account.user.platformRole === 'ADMIN' || account.user.platformRole === 'SUPER_ADMIN',
     };
@@ -166,7 +175,7 @@ export class AuthRepository {
     return account.user;
   }
 
-  async createTelegramUserForInvitation(input: {
+  async createTelegramUserForAdmission(input: {
     providerAccountId: string;
     displayName?: string;
     username?: string;

@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
 import { apiFetch } from '@/api/client';
+import { Tabs } from '@/components/ui/tabs';
 
 export default async function DashboardLayout({
   children,
@@ -19,12 +19,14 @@ export default async function DashboardLayout({
 
   return (
     <div className="dashboard">
-      <nav className="stack" aria-label="Organization dashboard">
-        <strong>ChurchFlow</strong>
-        <Link href={`/dashboard/${orgId}`}>Overview</Link>
-        <Link href={`/dashboard/${orgId}/website`}>Website</Link>
-        <Link href={`/dashboard/${orgId}/members`}>Members</Link>
-      </nav>
+      <Tabs
+        label="Organization dashboard"
+        items={[
+          { label: 'Overview', href: `/dashboard/${orgId}` },
+          { label: 'Website', href: `/dashboard/${orgId}/website` },
+          { label: 'Members', href: `/dashboard/${orgId}/members` },
+        ]}
+      />
       <main>{children}</main>
     </div>
   );

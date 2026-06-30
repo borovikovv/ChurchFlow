@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
 import { getCurrentUser, requireServerSession } from '@/auth/session';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 export default async function ProfilePage() {
   await requireServerSession('/profile');
@@ -11,9 +13,9 @@ export default async function ProfilePage() {
   }
 
   return (
-    <main className="section">
-      <div className="shell stack">
-        <h1>Profile</h1>
+    <main className="page-content stack">
+      <PageHeader title="Profile" description="Your identity and platform access in ChurchFlow." />
+      <div className="stack">
         <dl className="details">
           <dt>User ID</dt>
           <dd>{user.id}</dd>
@@ -22,7 +24,9 @@ export default async function ProfilePage() {
           <dt>Name</dt>
           <dd>{user.displayName ?? 'Not set'}</dd>
           <dt>Platform role</dt>
-          <dd>{user.platformRole}</dd>
+          <dd>
+            <StatusBadge status={user.platformRole} />
+          </dd>
         </dl>
       </div>
     </main>

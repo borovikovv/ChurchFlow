@@ -1,6 +1,6 @@
 # Organization Approval Flow
 
-ChurchFlow does not create organizations directly from anonymous public submissions. Organization requests are created by authenticated Telegram users, stored as `OrganizationRequest` records with `PENDING` status, and reviewed by platform admins.
+ChurchFlow does not create organizations directly from anonymous public submissions. A new Telegram user may create a restricted account only when login starts from `/organization-request` or `/organization-request/status`. The restricted account can submit and inspect its own requests, but has no tenant access until approval creates a membership.
 
 The canonical production path is organization request approval. Direct `POST /v1/organizations` is protected by `JwtAuthGuard` and `PlatformAdminGuard`; normal authenticated users cannot create active organizations or make themselves owners.
 
@@ -18,8 +18,11 @@ The canonical production path is organization request approval. Direct `POST /v1
    - creates an active `OrganizationMember` row for `requestedByUserId` with role `OWNER`
    - marks the request `APPROVED`
 5. Rejection marks the request `REJECTED`, stores the reason, records audit history, and emails the contact only when contact email exists.
+6. The requester follows progress at `/organization-request/status`; approval also sends a best-effort email when contact email exists.
 
 The requester does not type a Telegram OIDC `sub`. Telegram identity is captured by login and stored as `requestedByUserId`. Contact email/phone remain optional communication fields, not identity binding.
+
+Only one `PENDING` request is allowed per requester. This is enforced in the service and by a partial unique database index. Completed requests do not prevent the user from requesting another organization.
 
 ## Admin Endpoints
 
@@ -27,5 +30,9 @@ The requester does not type a Telegram OIDC `sub`. Telegram identity is captured
 - `GET /v1/admin/organization-requests/:id`
 - `POST /v1/admin/organization-requests/:id/approve`
 - `POST /v1/admin/organization-requests/:id/reject`
+
+Authenticated requester endpoint:
+
+- `GET /v1/organization-requests/mine`
 
 Only users with `platformRole` `ADMIN` or `SUPER_ADMIN` may approve or reject.

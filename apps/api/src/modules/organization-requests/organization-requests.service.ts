@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@churchflow/db';
 import type {
   ApproveOrganizationRequestInput,
@@ -84,6 +84,8 @@ interface OrganizationRequestsRepositoryPort {
     input: CreateOrganizationRequestInput,
     requestedByUserId: string,
   ): Promise<CreatedOrganizationRequest>;
+  findPendingByRequester(requestedByUserId: string): Promise<{ id: string } | null>;
+  listForRequester(requestedByUserId: string): Promise<OrganizationRequestDetail[]>;
   list(status?: string): Promise<OrganizationRequestListItem[]>;
   findById(id: string): Promise<OrganizationRequestDetail | null>;
   findOrganizationBySlug(slug: string): Promise<{ id: string } | null>;
@@ -102,6 +104,8 @@ interface OrganizationRequestsRepositoryPort {
 
 @Injectable()
 export class OrganizationRequestsService {
+  private readonly logger = new Logger(OrganizationRequestsService.name);
+
   constructor(
     @Inject(OrganizationRequestsRepository)
     private readonly organizationRequestsRepository: OrganizationRequestsRepositoryPort,
@@ -110,24 +114,52 @@ export class OrganizationRequestsService {
   ) {}
 
   async create(input: CreateOrganizationRequestInput, requestedByUserId: string) {
-    const request = await this.organizationRequestsRepository.create(input, requestedByUserId);
+    const pending =
+      await this.organizationRequestsRepository.findPendingByRequester(requestedByUserId);
+    if (pending) {
+      throw new ConflictException('You already have a pending organization request');
+    }
+
+    let request: CreatedOrganizationRequest;
+    try {
+      request = await this.organizationRequestsRepository.create(input, requestedByUserId);
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('You already have a pending organization request');
+      }
+      throw error;
+    }
     const requestedTelegramAccountId: string =
       request.requestedBy === null
         ? 'linked Telegram account'
         : (request.requestedBy.accounts[0]?.providerAccountId ?? 'linked Telegram account');
 
-    await this.emailService.sendOrganizationRequestAdminEmail({
-      requestId: request.id,
-      organizationName: request.organizationName,
-      contactName: request.contactName,
-      contactEmail: request.contactEmail,
-      contactTelegramId: requestedTelegramAccountId,
-      contactTelegramUsername: null,
-      contactPhone: request.contactPhone,
-      message: request.message,
+    const notificationSent = await this.trySendEmail(() =>
+      this.emailService.sendOrganizationRequestAdminEmail({
+        requestId: request.id,
+        organizationName: request.organizationName,
+        contactName: request.contactName,
+        contactEmail: request.contactEmail,
+        contactTelegramId: requestedTelegramAccountId,
+        contactTelegramUsername: null,
+        contactPhone: request.contactPhone,
+        message: request.message,
+      }),
+    );
+
+    await this.auditService.record({
+      actorUserId: requestedByUserId,
+      action: 'CREATE',
+      entityType: 'OrganizationRequest',
+      entityId: request.id,
+      metadata: { notificationSent },
     });
 
-    return request;
+    return { ...request, notificationSent };
+  }
+
+  async listMine(requestedByUserId: string) {
+    return this.organizationRequestsRepository.listForRequester(requestedByUserId);
   }
 
   async list(status?: string) {
@@ -168,23 +200,18 @@ export class OrganizationRequestsService {
       organizationSlug,
       actorUserId,
     });
-    const createdOrganizationId: string = result.organization.id;
-    const ownerMembershipId: string = result.membership.id;
+    const contactEmail = request.contactEmail;
+    const notificationSent = contactEmail
+      ? await this.trySendEmail(() =>
+          this.emailService.sendOrganizationRequestApprovedEmail({
+            email: contactEmail,
+            organizationName: result.organization.name,
+            organizationId: result.organization.id,
+          }),
+        )
+      : false;
 
-    await this.auditService.record({
-      organizationId: createdOrganizationId,
-      actorUserId,
-      action: 'APPROVE',
-      entityType: 'OrganizationRequest',
-      entityId: id,
-      metadata: {
-        createdOrganizationId,
-        ownerMembershipId,
-        requestedByUserId: request.requestedByUserId,
-      },
-    });
-
-    return result;
+    return { ...result, notificationSent };
   }
 
   private async approveRequestTransaction(input: {
@@ -227,11 +254,14 @@ export class OrganizationRequestsService {
     }
 
     if (request.contactEmail) {
-      await this.emailService.sendOrganizationRequestRejectedEmail({
-        email: request.contactEmail,
-        organizationName: request.organizationName,
-        rejectionReason: input.rejectionReason,
-      });
+      const contactEmail = request.contactEmail;
+      await this.trySendEmail(() =>
+        this.emailService.sendOrganizationRequestRejectedEmail({
+          email: contactEmail,
+          organizationName: request.organizationName,
+          rejectionReason: input.rejectionReason,
+        }),
+      );
     }
 
     await this.auditService.record({
@@ -243,5 +273,18 @@ export class OrganizationRequestsService {
     });
 
     return request;
+  }
+
+  private async trySendEmail(send: () => Promise<void>): Promise<boolean> {
+    try {
+      await send();
+      return true;
+    } catch (error: unknown) {
+      this.logger.error(
+        'Transactional email delivery failed after the business operation was committed',
+        error instanceof Error ? error.stack : undefined,
+      );
+      return false;
+    }
   }
 }

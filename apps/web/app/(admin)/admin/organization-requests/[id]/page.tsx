@@ -4,13 +4,17 @@ import { redirect } from 'next/navigation';
 import type { Route } from 'next';
 import { apiFetch } from '@/api/client';
 import { requirePlatformAdmin } from '@/auth/session';
+import { Button, ButtonLink } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
 
 interface OrganizationRequestDetail {
   id: string;
   organizationName: string;
   organizationSlug: string | null;
   contactName: string;
-  contactEmail: string;
+  contactEmail: string | null;
   contactTelegramId: string;
   contactTelegramUsername: string | null;
   contactPhone: string | null;
@@ -95,15 +99,23 @@ export default async function AdminOrganizationRequestPage({
   const result = await apiFetch<OrganizationRequestDetail>(`/admin/organization-requests/${id}`);
 
   if (!result.ok) {
-    return <main className="section shell">Request not found.</main>;
+    return <main className="page-content form-error">{result.error.message}</main>;
   }
 
   const request = result.data;
 
   return (
-    <main className="section">
-      <div className="shell stack">
-        <h1>{request.organizationName}</h1>
+    <main className="page-content stack">
+      <PageHeader
+        title={request.organizationName}
+        description="Review requester identity and decide whether to create this tenant."
+        actions={
+          <ButtonLink href="/admin/organizations?view=requests" variant="secondary">
+            Back to requests
+          </ButtonLink>
+        }
+      />
+      <div className="stack">
         {error ? <p className="text-red-600">{error}</p> : null}
         {approved && (createdOrganizationId || request.createdOrganization?.id) ? (
           <p>
@@ -120,10 +132,12 @@ export default async function AdminOrganizationRequestPage({
         {rejected ? <p>Request rejected.</p> : null}
         <dl className="details">
           <dt>Status</dt>
-          <dd>{request.status}</dd>
+          <dd>
+            <StatusBadge status={request.status} />
+          </dd>
           <dt>Contact</dt>
           <dd>
-            {request.contactName} · {request.contactEmail}
+            {request.contactName} · {request.contactEmail ?? 'No email'}
           </dd>
           <dt>Telegram</dt>
           <dd>{request.contactTelegramUsername ?? request.contactTelegramId}</dd>
@@ -132,35 +146,41 @@ export default async function AdminOrganizationRequestPage({
           <dt>Message</dt>
           <dd>{request.message ?? 'No message'}</dd>
         </dl>
-        <form className="form-grid" action={approveRequest}>
-          <input type="hidden" name="id" value={request.id} />
-          <label>
-            Organization name
-            <input name="organizationName" defaultValue={request.organizationName} />
-          </label>
-          <label>
-            Slug
-            <input name="organizationSlug" defaultValue={request.organizationSlug ?? ''} />
-          </label>
-          <button className="button" type="submit">
-            Approve
-          </button>
-        </form>
-        <form className="form-grid" action={rejectRequest}>
-          <input type="hidden" name="id" value={request.id} />
-          <label>
-            Rejection reason
-            <textarea
-              name="rejectionReason"
-              required
-              rows={4}
-              defaultValue={request.rejectionReason ?? ''}
-            />
-          </label>
-          <button className="button secondary" type="submit">
-            Reject
-          </button>
-        </form>
+        {request.status === 'PENDING' ? (
+          <div className="review-actions-grid">
+            <form className="form-grid" action={approveRequest}>
+              <input type="hidden" name="id" value={request.id} />
+              <label>
+                Organization name
+                <input name="organizationName" defaultValue={request.organizationName} />
+              </label>
+              <label>
+                Slug
+                <input name="organizationSlug" defaultValue={request.organizationSlug ?? ''} />
+              </label>
+              <Button type="submit">Approve</Button>
+            </form>
+            <form className="form-grid" action={rejectRequest}>
+              <input type="hidden" name="id" value={request.id} />
+              <label>
+                Rejection reason
+                <textarea
+                  name="rejectionReason"
+                  required
+                  rows={4}
+                  defaultValue={request.rejectionReason ?? ''}
+                />
+              </label>
+              <ConfirmSubmitButton
+                confirmLabel="Reject request"
+                confirmVariant="danger"
+                description={`Reject the request for ${request.organizationName}. The requester will see the reason you entered.`}
+                title="Reject organization request?"
+                triggerLabel="Reject"
+              />
+            </form>
+          </div>
+        ) : null}
       </div>
     </main>
   );

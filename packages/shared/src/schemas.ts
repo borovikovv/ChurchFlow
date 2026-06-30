@@ -28,6 +28,9 @@ export const platformRoleSchema = z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']);
 export const organizationRoleSchema = z.enum(['OWNER', 'ADMIN', 'MEMBER', 'VIEWER']);
 export const organizationStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'ARCHIVED', 'DELETED']);
 export const organizationMemberStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'REMOVED']);
+export const updateOrganizationMemberRoleSchema = z.object({
+  role: organizationRoleSchema,
+});
 export const organizationRequestStatusSchema = z.enum([
   'PENDING',
   'APPROVED',

@@ -4,11 +4,12 @@ import {
   ForbiddenException,
   GoneException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
-import type { InvitationTargetProvider, OrganizationRole } from '@churchflow/db';
+import { Prisma, type InvitationTargetProvider, type OrganizationRole } from '@churchflow/db';
 import type { CreateOrganizationInvitationInput } from '@churchflow/shared';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
@@ -39,6 +40,8 @@ type PendingInvitationForUser = InvitationForAcceptance;
 
 @Injectable()
 export class InvitationsService {
+  private readonly logger = new Logger(InvitationsService.name);
+
   constructor(
     private readonly invitationsRepository: InvitationsRepository,
     private readonly emailService: EmailService,
@@ -89,7 +92,7 @@ export class InvitationsService {
 
     const token = this.createRawInvitationToken();
     const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
-    const invitation = await this.invitationsRepository.createOrRefreshPending({
+    const invitationInput = {
       organizationId,
       mode: input.mode,
       targetProvider: input.targetProvider,
@@ -100,19 +103,37 @@ export class InvitationsService {
       invitedByUserId: actorUserId,
       tokenHash: token.tokenHash,
       expiresAt,
-    });
+    };
+    let invitation: Awaited<ReturnType<InvitationsRepository['createOrRefreshPending']>>;
+    try {
+      invitation = await this.invitationsRepository.createOrRefreshPending(invitationInput);
+    } catch (error: unknown) {
+      if (
+        input.mode !== 'targeted_telegram' ||
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== 'P2002'
+      ) {
+        throw error;
+      }
+
+      // A concurrent targeted invite won the partial-unique-index race. Refresh that row.
+      invitation = await this.invitationsRepository.createOrRefreshPending(invitationInput);
+    }
 
     const acceptUrl = this.emailService.buildOrganizationInvitationUrl(token.rawToken);
 
-    if (input.email) {
-      await this.emailService.sendOrganizationInvitationEmail({
-        email: input.email,
-        organizationName: organization.name,
-        role: input.role,
-        token: token.rawToken,
-        expiresAt,
-      });
-    }
+    const notificationEmail = input.email;
+    const emailSent = notificationEmail
+      ? await this.trySendEmail(() =>
+          this.emailService.sendOrganizationInvitationEmail({
+            email: notificationEmail,
+            organizationName: organization.name,
+            role: input.role,
+            token: token.rawToken,
+            expiresAt,
+          }),
+        )
+      : false;
 
     await this.auditService.record({
       organizationId,
@@ -134,7 +155,7 @@ export class InvitationsService {
     return {
       invitation,
       acceptUrl,
-      emailSent: Boolean(input.email),
+      emailSent,
     };
   }
 
@@ -156,11 +177,7 @@ export class InvitationsService {
       reason: isValid ? null : isExpired ? 'EXPIRED' : 'UNAVAILABLE',
       organizationId: invitation.organizationId,
       organizationName: invitation.organization.name,
-      email: invitation.email,
       mode: invitation.mode,
-      targetProvider: invitation.targetProvider,
-      targetProviderAccountId: invitation.targetProviderAccountId,
-      targetDisplay: invitation.targetDisplay,
       role: invitation.role,
       requiresSignup: true,
       delivery: invitation.email ? 'email' : 'link',
@@ -269,6 +286,7 @@ export class InvitationsService {
         userId: actorUserId,
         organizationId: invitation.organizationId,
         role: invitation.role,
+        acceptedProviderAccountId: telegramAccount.providerAccountId,
         ...(invitation.mode === 'claimable_link'
           ? {
               claim: {
@@ -285,26 +303,6 @@ export class InvitationsService {
 
       throw error;
     }
-
-    const acceptedTargetProviderAccountId: string =
-      invitation.mode === 'claimable_link'
-        ? telegramAccount.providerAccountId
-        : this.requireTargetProviderAccountId(invitation.targetProviderAccountId);
-
-    await this.auditService.record({
-      organizationId: invitation.organizationId,
-      actorUserId,
-      action: 'ACCEPT',
-      entityType: 'OrganizationInvitation',
-      entityId: invitation.id,
-      metadata: {
-        role: invitation.role,
-        email: invitation.email,
-        mode: invitation.mode,
-        targetProvider: invitation.targetProvider,
-        targetProviderAccountId: acceptedTargetProviderAccountId,
-      },
-    });
 
     return {
       organizationId: result.organizationId,
@@ -338,6 +336,18 @@ export class InvitationsService {
 
   async resend(organizationId: string, invitationId: string, actorUserId: string) {
     await this.assertCanManageInvitations(organizationId, actorUserId);
+    const current = await this.invitationsRepository.findManageableById(
+      organizationId,
+      invitationId,
+    );
+    if (!current) {
+      throw new NotFoundException('Pending invitation was not found');
+    }
+    if (!current.email) {
+      throw new ConflictException('Link invitations do not have an email recipient');
+    }
+    const notificationEmail = current.email;
+
     const token = this.createRawInvitationToken();
     const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
     const invitation = await this.invitationsRepository.resend(
@@ -350,17 +360,15 @@ export class InvitationsService {
       throw new NotFoundException('Pending invitation was not found');
     }
 
-    if (!invitation.email) {
-      throw new ConflictException('Link invitations do not have an email recipient');
-    }
-
-    await this.emailService.sendOrganizationInvitationEmail({
-      email: invitation.email,
-      organizationName: invitation.organization.name,
-      role: invitation.role,
-      token: token.rawToken,
-      expiresAt,
-    });
+    const emailSent = await this.trySendEmail(() =>
+      this.emailService.sendOrganizationInvitationEmail({
+        email: notificationEmail,
+        organizationName: invitation.organization.name,
+        role: invitation.role,
+        token: token.rawToken,
+        expiresAt,
+      }),
+    );
 
     await this.auditService.record({
       organizationId,
@@ -376,19 +384,28 @@ export class InvitationsService {
       },
     });
 
-    return invitation;
+    return {
+      invitation,
+      acceptUrl: this.emailService.buildOrganizationInvitationUrl(token.rawToken),
+      emailSent,
+    };
   }
 
   private hashToken(rawToken: string): string {
     return createHash('sha256').update(rawToken).digest('hex');
   }
 
-  private requireTargetProviderAccountId(value: string | null): string {
-    if (!value) {
-      throw new ForbiddenException('Invitation target provider account is missing');
+  private async trySendEmail(send: () => Promise<void>): Promise<boolean> {
+    try {
+      await send();
+      return true;
+    } catch (error: unknown) {
+      this.logger.error(
+        'Invitation email delivery failed after the invitation was persisted',
+        error instanceof Error ? error.stack : undefined,
+      );
+      return false;
     }
-
-    return value;
   }
 
   private canInviteRole(actorRole: OrganizationRole, invitedRole: OrganizationRole): boolean {

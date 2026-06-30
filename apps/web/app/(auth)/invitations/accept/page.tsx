@@ -10,9 +10,6 @@ interface InvitationValidation {
   organizationName?: string;
   organizationId?: string;
   mode?: string;
-  targetProvider?: string | null;
-  targetProviderAccountId?: string | null;
-  targetDisplay?: string | null;
   role?: string;
   delivery?: 'email' | 'link';
 }
@@ -65,15 +62,11 @@ export default async function AcceptInvitationPage({
               <dt>Organization</dt>
               <dd>{invitation.organizationName}</dd>
               <dt>Invitation type</dt>
-              <dd>{invitation.mode === 'claimable_link' ? 'Claimable Telegram link' : 'Targeted Telegram invite'}</dd>
-              {invitation.mode === 'targeted_telegram' ? (
-                <>
-                  <dt>Invited account</dt>
-                  <dd>{invitation.targetDisplay ?? invitation.targetProviderAccountId}</dd>
-                  <dt>Provider</dt>
-                  <dd>{invitation.targetProvider}</dd>
-                </>
-              ) : null}
+              <dd>
+                {invitation.mode === 'claimable_link'
+                  ? 'Claimable Telegram link'
+                  : 'Targeted Telegram invite'}
+              </dd>
               <dt>Role</dt>
               <dd>{invitation.role}</dd>
             </dl>

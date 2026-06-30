@@ -104,6 +104,8 @@ interface TelegramLoginAccountState {
   user: AuthRepositoryUser;
   isActive: boolean;
   hasActiveMembership: boolean;
+  hasOrganizationRequest: boolean;
+  hasPendingOrganizationRequest: boolean;
   isPlatformAdmin: boolean;
 }
 
@@ -135,7 +137,7 @@ interface AuthRepositoryPort {
   findTelegramLoginAccountState(
     providerAccountId: string,
   ): Promise<TelegramLoginAccountState | null>;
-  createTelegramUserForInvitation(input: {
+  createTelegramUserForAdmission(input: {
     providerAccountId: string;
     displayName?: string;
     username?: string;
@@ -220,18 +222,20 @@ export class AuthService {
       await this.hasValidClaimableInvitationRedirect(redirectTo);
     const hasPlatformAdminBootstrapRedirect =
       await this.hasValidPlatformAdminBootstrapRedirect(redirectTo);
+    const hasOrganizationOnboardingRedirect = this.isOrganizationOnboardingRedirect(redirectTo);
     const accountState = await this.authRepository.findTelegramLoginAccountState(claims.sub);
 
     if (!accountState) {
       if (
         !hasPendingInvitation &&
         !hasClaimableInvitationRedirect &&
-        !hasPlatformAdminBootstrapRedirect
+        !hasPlatformAdminBootstrapRedirect &&
+        !hasOrganizationOnboardingRedirect
       ) {
         throw new UnauthorizedException('Account is not invited to ChurchFlow');
       }
 
-      const createdUser = await this.authRepository.createTelegramUserForInvitation({
+      const createdUser = await this.authRepository.createTelegramUserForAdmission({
         providerAccountId: claims.sub,
         ...(claims.name ? { displayName: claims.name } : {}),
         ...(claims.preferred_username ? { username: claims.preferred_username } : {}),
@@ -240,7 +244,11 @@ export class AuthService {
 
       return {
         user: this.toAuthUserResult(createdUser),
-        defaultRedirectTo: hasPendingInvitation ? '/invitations/pending' : (redirectTo ?? '/'),
+        defaultRedirectTo: hasPendingInvitation
+          ? '/invitations/pending'
+          : hasOrganizationOnboardingRedirect
+            ? (redirectTo ?? '/organization-request')
+            : (redirectTo ?? '/'),
       };
     }
 
@@ -251,9 +259,11 @@ export class AuthService {
     if (
       !accountState.hasActiveMembership &&
       !accountState.isPlatformAdmin &&
+      !accountState.hasOrganizationRequest &&
       !hasPendingInvitation &&
       !hasClaimableInvitationRedirect &&
-      !hasPlatformAdminBootstrapRedirect
+      !hasPlatformAdminBootstrapRedirect &&
+      !hasOrganizationOnboardingRedirect
     ) {
       throw new UnauthorizedException('Account is not associated with an organization');
     }
@@ -265,15 +275,16 @@ export class AuthService {
 
     return {
       user: this.toAuthUserResult(touchedUser),
-      defaultRedirectTo:
-        accountState.isPlatformAdmin
-          ? '/admin/organizations'
+      defaultRedirectTo: accountState.isPlatformAdmin
+        ? '/admin/organizations'
+          : !accountState.hasActiveMembership && accountState.hasOrganizationRequest
+            ? '/organization-request/status'
           : !accountState.hasActiveMembership && hasPendingInvitation
-          ? '/invitations/pending'
-          : !accountState.hasActiveMembership &&
-              (hasClaimableInvitationRedirect || hasPlatformAdminBootstrapRedirect)
-            ? (redirectTo ?? '/')
-          : '/',
+            ? '/invitations/pending'
+            : !accountState.hasActiveMembership &&
+                (hasClaimableInvitationRedirect || hasPlatformAdminBootstrapRedirect)
+              ? (redirectTo ?? '/')
+              : '/',
     };
   }
 
@@ -297,6 +308,18 @@ export class AuthService {
 
   private extractInvitationTokenFromRedirect(redirectTo?: string): string | null {
     return this.extractTokenFromRedirect(redirectTo, '/invitations/accept');
+  }
+
+  private isOrganizationOnboardingRedirect(redirectTo?: string): boolean {
+    if (!redirectTo) {
+      return false;
+    }
+
+    const url = new URL(redirectTo, 'https://churchflow.local');
+    return (
+      url.origin === 'https://churchflow.local' &&
+      (url.pathname === '/organization-request' || url.pathname === '/organization-request/status')
+    );
   }
 
   private extractTokenFromRedirect(redirectTo: string | undefined, path: string): string | null {

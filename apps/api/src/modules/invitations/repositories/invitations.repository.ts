@@ -120,7 +120,6 @@ export class InvitationsRepository {
         status: 'PENDING',
         acceptedAt: null,
         revokedAt: null,
-        expiresAt: { gt: new Date() },
       },
     });
 
@@ -171,6 +170,7 @@ export class InvitationsRepository {
         status: 'PENDING',
         acceptedAt: null,
         revokedAt: null,
+        expiresAt: { gt: new Date() },
       },
       select: this.invitationWithOrganizationSelect(),
     });
@@ -258,6 +258,7 @@ export class InvitationsRepository {
         status: 'PENDING',
         acceptedAt: null,
         revokedAt: null,
+        expiresAt: { gt: new Date() },
         organization: { status: 'ACTIVE', deletedAt: null },
       },
       select: this.invitationWithOrganizationSelect(),
@@ -272,6 +273,7 @@ export class InvitationsRepository {
     userId: string;
     organizationId: string;
     role: OrganizationRole;
+    acceptedProviderAccountId: string;
     claim?: {
       targetProvider: InvitationTargetProvider;
       targetProviderAccountId: string;
@@ -318,6 +320,8 @@ export class InvitationsRepository {
           status: 'PENDING',
           acceptedAt: null,
           revokedAt: null,
+          expiresAt: { gt: new Date() },
+          organization: { status: 'ACTIVE', deletedAt: null },
           ...(input.claim
             ? {
                 OR: [
@@ -347,6 +351,21 @@ export class InvitationsRepository {
       if (invitationUpdate.count !== 1) {
         throw new Error('INVITATION_NOT_PENDING');
       }
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.userId,
+          action: 'ACCEPT',
+          entityType: 'OrganizationInvitation',
+          entityId: input.invitationId,
+          metadata: {
+            role: input.role,
+            targetProvider: input.claim?.targetProvider ?? 'telegram',
+            targetProviderAccountId: input.acceptedProviderAccountId,
+          },
+        },
+      });
 
       return { organizationId: input.organizationId };
     });
@@ -396,6 +415,19 @@ export class InvitationsRepository {
     });
   }
 
+  async findManageableById(organizationId: string, invitationId: string) {
+    return this.prisma.organizationInvitation.findFirst({
+      where: {
+        id: invitationId,
+        organizationId,
+        status: 'PENDING',
+        acceptedAt: null,
+        revokedAt: null,
+      },
+      include: { organization: true },
+    });
+  }
+
   async listPendingForOrganization(organizationId: string) {
     return this.prisma.organizationInvitation.findMany({
       where: {
@@ -403,6 +435,7 @@ export class InvitationsRepository {
         status: 'PENDING',
         acceptedAt: null,
         revokedAt: null,
+        expiresAt: { gt: new Date() },
       },
       orderBy: { createdAt: 'desc' },
     });
