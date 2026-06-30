@@ -20,9 +20,11 @@ export default async function HomePage() {
         <p>
           Organization administration, member care, and public websites in one tenant-safe platform.
         </p>
-        <Link className="button" href={showAdminOrganizations ? '/admin/organizations' : '/login'}>
-          {showAdminOrganizations ? 'View organizations' : 'Sign in'}
-        </Link>
+        {showAdminOrganizations ? (
+          <Link className="button" href={'/admin/organizations'}>
+            View organizations
+          </Link>
+        ) : null}
       </div>
     </main>
   );
