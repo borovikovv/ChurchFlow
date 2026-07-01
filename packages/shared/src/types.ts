@@ -42,6 +42,38 @@ export type OrganizationMembersAccessFilter = z.infer<
 >;
 export type ListOrganizationMembersQuery = z.infer<typeof listOrganizationMembersQuerySchema>;
 
+export interface OrganizationRequestStatusItem {
+  id: string;
+  organizationName: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+  rejectionReason: string | null;
+  createdAt: string;
+  createdOrganization: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+}
+
+export interface ResubmitOrganizationRequestResult {
+  request: OrganizationRequestStatusItem;
+  notificationSent: boolean;
+}
+
+export interface DeleteOrganizationRequestResult {
+  deletedRequestId: string;
+}
+
+export interface MembershipClaimMutationResult {
+  claim: {
+    id: string;
+    status: string;
+  };
+  claimUrl: string;
+  expiresAt: string;
+  emailSent: boolean;
+}
+
 export type ApiResult<T> =
   | {
       ok: true;

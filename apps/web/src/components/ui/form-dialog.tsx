@@ -10,7 +10,7 @@ export function FormDialog({
   title,
   children,
 }: {
-  triggerLabel: string;
+  triggerLabel: ReactNode;
   triggerVariant?: ButtonVariant;
   triggerClassName?: string;
   title: string;
@@ -32,6 +32,10 @@ export function FormDialog({
       <dialog
         aria-labelledby={titleId}
         className="fixed inset-0 m-auto max-h-[calc(100dvh-32px)] w-[min(480px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)] backdrop:backdrop-blur-[1px]"
+        onClose={(event) => {
+          const parentMenu = event.currentTarget.closest('details');
+          if (parentMenu) parentMenu.open = false;
+        }}
         onClick={(event) => {
           if (event.target === event.currentTarget) event.currentTarget.close();
         }}

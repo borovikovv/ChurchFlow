@@ -241,24 +241,6 @@ async function updateProfile(formData: FormData) {
   );
 }
 
-async function generateClaim(formData: FormData) {
-  'use server';
-  const organizationId = String(formData.get('organizationId'));
-  const membershipId = String(formData.get('membershipId'));
-  const result = await apiFetch<ClaimMutationResult>(
-    `/organizations/${organizationId}/memberships/${membershipId}/claim`,
-    { method: 'POST' },
-  );
-  revalidatePath(`/dashboard/${organizationId}/members`);
-  if (!result.ok) redirect(membersUrl(organizationId, { error: result.error.message }));
-  redirect(
-    membersUrl(organizationId, {
-      claimLink: result.data.claimUrl,
-      message: result.data.emailSent ? 'Access link created and emailed.' : 'Access link created.',
-    }),
-  );
-}
-
 async function claimAction(formData: FormData) {
   'use server';
   const organizationId = String(formData.get('organizationId'));
@@ -471,7 +453,6 @@ export default async function MembersDashboardPage({
                 updateProfile={updateProfile}
                 updateRole={updateMemberRole}
                 removeMember={removeMember}
-                generateClaim={generateClaim}
                 claimAction={claimAction}
               />
             </article>

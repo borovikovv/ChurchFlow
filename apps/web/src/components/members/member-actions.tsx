@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
 import { PhoneInputField } from '@/components/ui/phone-input-field';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { GiveMemberAccessDialog } from './give-member-access-dialog';
 
 type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 type FormAction = (formData: FormData) => void | Promise<void>;
@@ -251,7 +252,6 @@ export function MemberActions({
   updateProfile,
   updateRole,
   removeMember,
-  generateClaim,
   claimAction,
 }: {
   member: EditableMember;
@@ -262,7 +262,6 @@ export function MemberActions({
   updateProfile: FormAction;
   updateRole: RoleUpdateAction;
   removeMember: FormAction;
-  generateClaim: FormAction;
   claimAction: FormAction;
 }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
@@ -302,14 +301,13 @@ export function MemberActions({
           <ChangeRoleDialog member={member} organizationId={organizationId} action={updateRole} />
         ) : null}
         {canManage && member.accountState === 'UNCLAIMED' ? (
-          <form className="contents" action={generateClaim}>
-            <input type="hidden" name="organizationId" value={organizationId} />
-            <input type="hidden" name="membershipId" value={member.id} />
-            <button className={actionItemClassName} type="submit">
-              <MenuIcon><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16" /></MenuIcon>
-              Give app access
-            </button>
-          </form>
+          <GiveMemberAccessDialog
+            memberEmail={member.profile.email}
+            memberName={member.profile.displayName}
+            membershipId={member.id}
+            organizationId={organizationId}
+            triggerClassName={actionItemClassName}
+          />
         ) : null}
         {canManage && member.activeClaim ? (
           <form className="contents" action={claimAction}>

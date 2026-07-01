@@ -60,6 +60,10 @@ export interface OrganizationRequestDetail extends OrganizationRequestListItem {
   } | null;
 }
 
+export interface ResubmittedOrganizationRequest extends CreatedOrganizationRequest {
+  createdAt: Date;
+}
+
 @Injectable()
 export class OrganizationRequestsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -141,6 +145,135 @@ export class OrganizationRequestsRepository {
         where: { requestedByUserId, status: 'PENDING' },
         select: { id: true },
       });
+    });
+  }
+
+  async resubmitExpired(
+    id: string,
+    requestedByUserId: string,
+    staleBefore: Date,
+  ): Promise<ResubmittedOrganizationRequest> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.expireStalePending(tx, staleBefore, { requestedByUserId });
+
+      const previousRequest = await tx.organizationRequest.findUnique({
+        where: { id },
+        include: {
+          requestedBy: {
+            include: {
+              accounts: {
+                where: { provider: 'telegram', deletedAt: null },
+                select: { providerAccountId: true },
+                take: 1,
+              },
+            },
+          },
+        },
+      });
+
+      if (!previousRequest || previousRequest.requestedByUserId !== requestedByUserId) {
+        throw new Error('ORGANIZATION_REQUEST_NOT_FOUND');
+      }
+      if (previousRequest.status !== 'EXPIRED' || previousRequest.createdOrganizationId) {
+        throw new Error('ORGANIZATION_REQUEST_NOT_RESUBMITTABLE');
+      }
+      if (!previousRequest.requestedBy || previousRequest.requestedBy.accounts.length === 0) {
+        throw new Error('ORGANIZATION_REQUEST_REQUESTER_INACTIVE');
+      }
+
+      const pending = await tx.organizationRequest.findFirst({
+        where: { requestedByUserId, status: 'PENDING' },
+        select: { id: true },
+      });
+      if (pending) {
+        throw new Error('ORGANIZATION_REQUEST_PENDING_EXISTS');
+      }
+
+      const request = await tx.organizationRequest.create({
+        data: {
+          organizationName: previousRequest.organizationName,
+          organizationSlug: previousRequest.organizationSlug,
+          contactName: previousRequest.contactName,
+          contactEmail: previousRequest.contactEmail,
+          contactTelegramId: previousRequest.contactTelegramId,
+          contactTelegramUsername: previousRequest.contactTelegramUsername,
+          contactPhone: previousRequest.contactPhone,
+          message: previousRequest.message,
+          requestedByUserId,
+        },
+        include: {
+          requestedBy: {
+            include: {
+              accounts: {
+                where: { provider: 'telegram', deletedAt: null },
+                select: { providerAccountId: true },
+                take: 1,
+              },
+            },
+          },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: requestedByUserId,
+          action: 'CREATE',
+          entityType: 'OrganizationRequest',
+          entityId: request.id,
+          metadata: {
+            source: 'organization_request_resubmission',
+            previousRequestId: previousRequest.id,
+          },
+        },
+      });
+
+      return {
+        id: request.id,
+        organizationName: request.organizationName,
+        contactName: request.contactName,
+        contactEmail: request.contactEmail,
+        contactPhone: request.contactPhone,
+        message: request.message,
+        createdAt: request.createdAt,
+        requestedBy: request.requestedBy
+          ? {
+              accounts: request.requestedBy.accounts.map((account) => ({
+                providerAccountId: account.providerAccountId,
+              })),
+            }
+          : null,
+      };
+    });
+  }
+
+  async deleteFromHistory(id: string, requestedByUserId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const request = await tx.organizationRequest.findUnique({ where: { id } });
+
+      if (!request || request.requestedByUserId !== requestedByUserId) {
+        throw new Error('ORGANIZATION_REQUEST_NOT_FOUND');
+      }
+      if (
+        !['EXPIRED', 'REJECTED'].includes(request.status) ||
+        request.createdOrganizationId !== null
+      ) {
+        throw new Error('ORGANIZATION_REQUEST_NOT_DELETABLE');
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: requestedByUserId,
+          action: 'DELETE',
+          entityType: 'OrganizationRequest',
+          entityId: request.id,
+          metadata: {
+            status: request.status,
+            organizationName: request.organizationName,
+          },
+        },
+      });
+
+      await tx.organizationRequest.delete({ where: { id: request.id } });
     });
   }
 

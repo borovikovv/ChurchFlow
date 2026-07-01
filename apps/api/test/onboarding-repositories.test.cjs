@@ -224,6 +224,169 @@ test('audit failure aborts request creation transaction', async () => {
   assert.equal(state.requests.length, 0);
 });
 
+test('expired request resubmission preserves history and creates a pending request with audit', async () => {
+  const createdAt = new Date('2026-07-01T20:00:00.000Z');
+  const previousRequest = {
+    id: 'expired-request',
+    organizationName: 'Grace Church',
+    organizationSlug: 'grace-church',
+    contactName: 'Requester',
+    contactEmail: 'requester@example.com',
+    contactTelegramId: null,
+    contactTelegramUsername: null,
+    contactPhone: null,
+    message: 'Please review again',
+    requestedByUserId: 'user-1',
+    createdOrganizationId: null,
+    status: 'EXPIRED',
+    requestedBy: { accounts: [{ providerAccountId: 'telegram-sub' }] },
+  };
+  const captured = { created: null, audit: null, deleted: false };
+  const prisma = {
+    $transaction: async (callback) =>
+      callback({
+        organizationRequest: {
+          updateMany: async () => ({ count: 0 }),
+          findUnique: async () => previousRequest,
+          findFirst: async () => null,
+          create: async ({ data }) => {
+            captured.created = data;
+            return {
+              id: 'resubmitted-request',
+              ...data,
+              createdAt,
+              requestedBy: previousRequest.requestedBy,
+            };
+          },
+          delete: async () => {
+            captured.deleted = true;
+          },
+        },
+        auditLog: {
+          create: async ({ data }) => {
+            captured.audit = data;
+          },
+        },
+      }),
+  };
+  const repository = new OrganizationRequestsRepository(prisma);
+
+  const result = await repository.resubmitExpired(
+    previousRequest.id,
+    'user-1',
+    new Date('2026-07-01T00:00:00.000Z'),
+  );
+
+  assert.equal(result.id, 'resubmitted-request');
+  assert.equal(captured.created.requestedByUserId, 'user-1');
+  assert.equal(captured.audit.action, 'CREATE');
+  assert.equal(captured.audit.metadata.previousRequestId, previousRequest.id);
+  assert.equal(captured.deleted, false);
+});
+
+test('only the original requester can resubmit or delete an organization request', async () => {
+  const repository = new OrganizationRequestsRepository({
+    $transaction: async (callback) =>
+      callback({
+        organizationRequest: {
+          updateMany: async () => ({ count: 0 }),
+          findUnique: async () => ({
+            id: 'request-1',
+            requestedByUserId: 'original-owner',
+            status: 'EXPIRED',
+            createdOrganizationId: null,
+          }),
+        },
+      }),
+  });
+
+  await assert.rejects(
+    repository.resubmitExpired('request-1', 'different-user', new Date()),
+    /ORGANIZATION_REQUEST_NOT_FOUND/,
+  );
+  await assert.rejects(
+    repository.deleteFromHistory('request-1', 'different-user'),
+    /ORGANIZATION_REQUEST_NOT_FOUND/,
+  );
+});
+
+test('resubmission fails when the requester already has a pending request', async () => {
+  const previousRequest = {
+    id: 'expired-request',
+    requestedByUserId: 'user-1',
+    status: 'EXPIRED',
+    createdOrganizationId: null,
+    requestedBy: { accounts: [{ providerAccountId: 'telegram-sub' }] },
+  };
+  const repository = new OrganizationRequestsRepository({
+    $transaction: async (callback) =>
+      callback({
+        organizationRequest: {
+          updateMany: async () => ({ count: 0 }),
+          findUnique: async () => previousRequest,
+          findFirst: async () => ({ id: 'pending-request' }),
+        },
+      }),
+  });
+
+  await assert.rejects(
+    repository.resubmitExpired(previousRequest.id, 'user-1', new Date()),
+    /ORGANIZATION_REQUEST_PENDING_EXISTS/,
+  );
+});
+
+test('pending and approved organization requests cannot be deleted from history', async () => {
+  for (const status of ['PENDING', 'APPROVED']) {
+    const repository = new OrganizationRequestsRepository({
+      $transaction: async (callback) =>
+        callback({
+          organizationRequest: {
+            findUnique: async () => ({
+              id: `${status.toLowerCase()}-request`,
+              requestedByUserId: 'user-1',
+              status,
+              createdOrganizationId: status === 'APPROVED' ? 'organization-1' : null,
+            }),
+          },
+        }),
+    });
+
+    await assert.rejects(
+      repository.deleteFromHistory(`${status.toLowerCase()}-request`, 'user-1'),
+      /ORGANIZATION_REQUEST_NOT_DELETABLE/,
+    );
+  }
+});
+
+test('deleting an expired request writes audit before hard deletion', async () => {
+  const calls = [];
+  const repository = new OrganizationRequestsRepository({
+    $transaction: async (callback) =>
+      callback({
+        organizationRequest: {
+          findUnique: async () => ({
+            id: 'expired-request',
+            organizationName: 'Grace Church',
+            requestedByUserId: 'user-1',
+            status: 'EXPIRED',
+            createdOrganizationId: null,
+          }),
+          delete: async ({ where }) => calls.push(['delete', where]),
+        },
+        auditLog: {
+          create: async ({ data }) => calls.push(['audit', data]),
+        },
+      }),
+  });
+
+  await repository.deleteFromHistory('expired-request', 'user-1');
+
+  assert.equal(calls[0][0], 'audit');
+  assert.equal(calls[0][1].action, 'DELETE');
+  assert.equal(calls[1][0], 'delete');
+  assert.equal(calls[1][1].id, 'expired-request');
+});
+
 test('direct admin creation builds the full aggregate and audit entry', async () => {
   const captured = {};
   const prisma = {

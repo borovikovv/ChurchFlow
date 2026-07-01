@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { OrganizationRequestStatus } from '@churchflow/db';
 import { organizationRequestStatusSchema } from '@churchflow/shared';
@@ -24,6 +24,19 @@ export class OrganizationRequestsController {
   @UseGuards(JwtAuthGuard)
   async mine(@Req() request: AuthenticatedRequest) {
     return this.organizationRequestsService.listMine(this.getActorUserId(request));
+  }
+
+  @Post('organization-requests/:id/resubmit')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async resubmit(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.organizationRequestsService.resubmit(id, this.getActorUserId(request));
+  }
+
+  @Delete('organization-requests/:id')
+  @UseGuards(JwtAuthGuard)
+  async deleteFromHistory(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.organizationRequestsService.deleteFromHistory(id, this.getActorUserId(request));
   }
 
   @Get('admin/organization-requests')

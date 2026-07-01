@@ -277,6 +277,37 @@ test('email failure does not fail a committed organization request', async () =>
   assert.equal(result.notificationSent, false);
 });
 
+test('expired request resubmission returns a new pending request and sends admin notification', async () => {
+  let notification;
+  const service = new OrganizationRequestsService(
+    {
+      resubmitExpired: async () => ({
+        id: 'resubmitted-request',
+        organizationName: 'Grace Church',
+        contactName: 'Requester',
+        contactEmail: 'requester@example.com',
+        contactPhone: null,
+        message: 'Please review again',
+        createdAt: new Date('2026-07-01T20:00:00.000Z'),
+        requestedBy: { accounts: [{ providerAccountId: 'telegram-user-1' }] },
+      }),
+    },
+    {
+      sendOrganizationRequestAdminEmail: async (input) => {
+        notification = input;
+      },
+    },
+  );
+
+  const result = await service.resubmit('expired-request', 'requester');
+
+  assert.equal(result.request.id, 'resubmitted-request');
+  assert.equal(result.request.status, 'PENDING');
+  assert.equal(result.request.createdAt, '2026-07-01T20:00:00.000Z');
+  assert.equal(result.notificationSent, true);
+  assert.equal(notification.requestId, 'resubmitted-request');
+});
+
 test('claimable invitation cannot grant an elevated role', async () => {
   const service = new InvitationsService(
     {

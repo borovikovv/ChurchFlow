@@ -11,6 +11,7 @@ import type {
   ApproveOrganizationRequestInput,
   CreateOrganizationRequestInput,
   RejectOrganizationRequestInput,
+  ResubmitOrganizationRequestResult,
 } from '@churchflow/shared';
 import { slugSchema } from '@churchflow/shared';
 import { EmailService } from '../email/email.service';
@@ -167,6 +168,12 @@ interface OrganizationRequestsRepositoryPort {
     actorUserId: string,
     staleBefore: Date,
   ): Promise<RejectedOrganizationRequest | null>;
+  resubmitExpired(
+    id: string,
+    requestedByUserId: string,
+    staleBefore: Date,
+  ): Promise<CreatedOrganizationRequest & { createdAt: Date }>;
+  deleteFromHistory(id: string, requestedByUserId: string): Promise<void>;
 }
 
 @Injectable()
@@ -205,23 +212,7 @@ export class OrganizationRequestsService {
       }
       throw error;
     }
-    const requestedTelegramAccountId: string =
-      request.requestedBy === null
-        ? 'linked Telegram account'
-        : (request.requestedBy.accounts[0]?.providerAccountId ?? 'linked Telegram account');
-
-    const notificationSent = await this.trySendEmail(() =>
-      this.emailService.sendOrganizationRequestAdminEmail({
-        requestId: request.id,
-        organizationName: request.organizationName,
-        contactName: request.contactName,
-        contactEmail: request.contactEmail,
-        contactTelegramId: requestedTelegramAccountId,
-        contactTelegramUsername: null,
-        contactPhone: request.contactPhone,
-        message: request.message,
-      }),
-    );
+    const notificationSent = await this.sendAdminNotification(request);
 
     return { ...request, notificationSent };
   }
@@ -231,6 +222,69 @@ export class OrganizationRequestsService {
       requestedByUserId,
       this.organizationRequestStaleBefore(),
     );
+  }
+
+  async resubmit(
+    id: string,
+    requestedByUserId: string,
+  ): Promise<ResubmitOrganizationRequestResult> {
+    let request: CreatedOrganizationRequest & { createdAt: Date };
+    try {
+      request = await this.organizationRequestsRepository.resubmitExpired(
+        id,
+        requestedByUserId,
+        this.organizationRequestStaleBefore(),
+      );
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'ORGANIZATION_REQUEST_NOT_FOUND') {
+        throw new NotFoundException('Organization request was not found');
+      }
+      if (error instanceof Error && error.message === 'ORGANIZATION_REQUEST_NOT_RESUBMITTABLE') {
+        throw new ConflictException('Only expired organization requests can be submitted again');
+      }
+      if (error instanceof Error && error.message === 'ORGANIZATION_REQUEST_PENDING_EXISTS') {
+        throw new ConflictException('You already have a pending organization request');
+      }
+      if (error instanceof Error && error.message === 'ORGANIZATION_REQUEST_REQUESTER_INACTIVE') {
+        throw new UnauthorizedException('Organization request requester is no longer active');
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('You already have a pending organization request');
+      }
+      throw error;
+    }
+
+    const notificationSent = await this.sendAdminNotification(request);
+
+    return {
+      request: {
+        id: request.id,
+        organizationName: request.organizationName,
+        status: 'PENDING',
+        rejectionReason: null,
+        createdAt: request.createdAt.toISOString(),
+        createdOrganization: null,
+      },
+      notificationSent,
+    };
+  }
+
+  async deleteFromHistory(id: string, requestedByUserId: string) {
+    try {
+      await this.organizationRequestsRepository.deleteFromHistory(id, requestedByUserId);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'ORGANIZATION_REQUEST_NOT_FOUND') {
+        throw new NotFoundException('Organization request was not found');
+      }
+      if (error instanceof Error && error.message === 'ORGANIZATION_REQUEST_NOT_DELETABLE') {
+        throw new ConflictException(
+          'Only expired or rejected organization requests can be deleted',
+        );
+      }
+      throw error;
+    }
+
+    return { deletedRequestId: id };
   }
 
   async list(status?: string) {
@@ -350,6 +404,24 @@ export class OrganizationRequestsService {
 
   private organizationRequestStaleBefore(): Date {
     return new Date(Date.now() - ORGANIZATION_REQUEST_TTL_MS);
+  }
+
+  private async sendAdminNotification(request: CreatedOrganizationRequest): Promise<boolean> {
+    const requestedTelegramAccountId =
+      request.requestedBy?.accounts[0]?.providerAccountId ?? 'linked Telegram account';
+
+    return this.trySendEmail(() =>
+      this.emailService.sendOrganizationRequestAdminEmail({
+        requestId: request.id,
+        organizationName: request.organizationName,
+        contactName: request.contactName,
+        contactEmail: request.contactEmail,
+        contactTelegramId: requestedTelegramAccountId,
+        contactTelegramUsername: null,
+        contactPhone: request.contactPhone,
+        message: request.message,
+      }),
+    );
   }
 
   private async trySendEmail(send: () => Promise<void>): Promise<boolean> {
