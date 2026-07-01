@@ -6,6 +6,8 @@ export type {
   InvitationMode,
   InvitationTargetProvider,
   InvitationStatus,
+  MembershipClaimStatus,
+  MembershipSource,
   OrganizationMemberStatus,
   OrganizationRequestStatus,
   OrganizationRole,

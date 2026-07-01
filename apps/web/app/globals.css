@@ -766,54 +766,18 @@
     margin: 0;
   }
 
-  .confirmation-dialog {
-    position: fixed;
-    inset: 0;
-    width: min(480px, calc(100% - 32px));
-    max-width: none;
-    max-height: calc(100dvh - 32px);
-    margin: auto;
-    padding: 0;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--surface);
-    color: var(--foreground);
-    box-shadow: 0 16px 48px rgba(31, 35, 40, 0.2);
+  .member-card {
+    padding: 16px;
+    border-bottom: 1px solid var(--line-muted);
   }
 
-  .confirmation-dialog::backdrop {
-    background: rgba(31, 35, 40, 0.45);
-    backdrop-filter: blur(1px);
+  .member-card:last-child {
+    border-bottom: 0;
   }
 
-  .confirmation-dialog-content {
-    display: grid;
-    gap: 24px;
-    padding: 24px;
-  }
-
-  .confirmation-dialog-copy {
-    display: grid;
-    gap: 8px;
-  }
-
-  .confirmation-dialog-copy h2,
-  .confirmation-dialog-copy p {
-    margin: 0;
-  }
-
-  .confirmation-dialog-copy h2 {
-    font-size: 20px;
-  }
-
-  .confirmation-dialog-copy p {
-    color: var(--muted);
-  }
-
-  .confirmation-dialog-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+  details > summary {
+    cursor: pointer;
+    font-weight: 600;
   }
 
   .dashboard {
@@ -898,9 +862,5 @@
       grid-template-columns: 1fr;
     }
 
-    .confirmation-dialog-actions {
-      align-items: stretch;
-      flex-direction: column-reverse;
-    }
   }
 }

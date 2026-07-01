@@ -3,12 +3,17 @@ import type {
   acceptInvitationSchema,
   approveOrganizationRequestSchema,
   createOrganizationInvitationSchema,
+  createManualOrganizationMemberSchema,
   createOrganizationRequestSchema,
   jwtPayloadSchema,
   organizationSchema,
   organizationWebsiteSchema,
   rejectOrganizationRequestSchema,
   updateOrganizationMemberRoleSchema,
+  updateOrganizationMemberProfileSchema,
+  membershipClaimTokenSchema,
+  listOrganizationMembersQuerySchema,
+  organizationMembersAccessFilterSchema,
   websitePageSchema,
   websiteSectionSchema,
 } from './schemas.js';
@@ -25,6 +30,17 @@ export type RejectOrganizationRequestInput = z.infer<typeof rejectOrganizationRe
 export type CreateOrganizationInvitationInput = z.infer<typeof createOrganizationInvitationSchema>;
 export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
 export type UpdateOrganizationMemberRoleInput = z.infer<typeof updateOrganizationMemberRoleSchema>;
+export type CreateManualOrganizationMemberInput = z.infer<
+  typeof createManualOrganizationMemberSchema
+>;
+export type UpdateOrganizationMemberProfileInput = z.infer<
+  typeof updateOrganizationMemberProfileSchema
+>;
+export type MembershipClaimTokenInput = z.infer<typeof membershipClaimTokenSchema>;
+export type OrganizationMembersAccessFilter = z.infer<
+  typeof organizationMembersAccessFilterSchema
+>;
+export type ListOrganizationMembersQuery = z.infer<typeof listOrganizationMembersQuerySchema>;
 
 export type ApiResult<T> =
   | {

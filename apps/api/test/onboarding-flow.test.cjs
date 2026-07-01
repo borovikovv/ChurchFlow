@@ -1,8 +1,10 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const { generateKeyPairSync, sign } = require('node:crypto');
 const { AuthService } = require('../dist/modules/auth/auth.service.js');
 const {
   OrganizationRequestsService,
+  generateOrganizationSlug,
 } = require('../dist/modules/organization-requests/organization-requests.service.js');
 const { InvitationsService } = require('../dist/modules/invitations/invitations.service.js');
 const { MembershipsService } = require('../dist/modules/memberships/memberships.service.js');
@@ -13,6 +15,7 @@ const telegramClaims = {
   sub: 'telegram-user-1',
   exp: Math.floor(Date.now() / 1000) + 300,
   iat: Math.floor(Date.now() / 1000),
+  nonce: 'telegram-nonce',
   name: 'New User',
 };
 
@@ -21,6 +24,7 @@ function createAuthRepository(overrides = {}) {
     hasPendingTelegramInvitation: async () => false,
     hasValidClaimableInvitationTokenHash: async () => false,
     hasValidPlatformAdminBootstrapTokenHash: async () => false,
+    hasValidMembershipClaimTokenHash: async () => false,
     findTelegramLoginAccountState: async () => null,
     createTelegramUserForAdmission: async () => ({
       id: 'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
@@ -38,7 +42,16 @@ function createAuthRepository(overrides = {}) {
 function createAuthService(repository) {
   return new AuthService(
     {
-      getOrThrow() {
+      getOrThrow(key) {
+        if (key === 'WEB_APP_URL') {
+          return 'https://churchflow.test';
+        }
+        if (key === 'TELEGRAM_CLIENT_ID') {
+          return 'churchflow';
+        }
+        if (key === 'TELEGRAM_REDIRECT_URI') {
+          return 'https://api.churchflow.test/v1/auth/telegram/callback';
+        }
         throw new Error('Config should not be read in admission tests');
       },
     },
@@ -49,10 +62,7 @@ function createAuthService(repository) {
 test('unknown Telegram user is admitted from the organization request route', async () => {
   const service = createAuthService(createAuthRepository());
 
-  const result = await service.resolveTelegramLoginUser(
-    telegramClaims,
-    '/organization-request',
-  );
+  const result = await service.resolveTelegramLoginUser(telegramClaims, '/organization-request');
 
   assert.equal(result.defaultRedirectTo, '/organization-request');
   assert.equal(result.user.platformRole, 'USER');
@@ -65,6 +75,95 @@ test('unknown Telegram user is rejected by ordinary login', async () => {
     service.resolveTelegramLoginUser(telegramClaims),
     /Account is not invited to ChurchFlow/,
   );
+});
+
+test('unknown Telegram user is admitted only with a valid membership claim token', async () => {
+  const service = createAuthService(
+    createAuthRepository({ hasValidMembershipClaimTokenHash: async () => true }),
+  );
+  const result = await service.resolveTelegramLoginUser(
+    telegramClaims,
+    '/member-claims/accept?token=valid-membership-claim-token',
+  );
+  assert.equal(
+    result.defaultRedirectTo,
+    '/member-claims/accept?token=valid-membership-claim-token',
+  );
+});
+
+test('redirect normalization accepts only canonical same-origin URLs', () => {
+  const service = createAuthService(createAuthRepository());
+
+  assert.equal(service.normalizeRedirectTo('/organization-request'), '/organization-request');
+  assert.equal(
+    service.normalizeRedirectTo('/organization-request/status?from=login#request'),
+    '/organization-request/status?from=login#request',
+  );
+  assert.equal(
+    service.normalizeRedirectTo('/invitations/accept?token=valid-token'),
+    '/invitations/accept?token=valid-token',
+  );
+  assert.equal(service.normalizeRedirectTo('https://churchflow.test/profile'), '/profile');
+  assert.equal(service.normalizeRedirectTo('//evil.example'), undefined);
+  assert.equal(service.normalizeRedirectTo('/\\evil.example'), undefined);
+  assert.equal(service.normalizeRedirectTo('https://evil.example/path'), undefined);
+  assert.equal(service.normalizeRedirectTo('/%5c%5cevil.example'), undefined);
+  assert.equal(service.normalizeRedirectTo('/%2f%2fevil.example'), undefined);
+});
+
+test('Telegram authorization starts with state, PKCE and nonce', () => {
+  const service = createAuthService(createAuthRepository());
+  const result = service.beginTelegramLogin({ redirectTo: '/organization-request' });
+  const authorizationUrl = new URL(result.authorizationUrl);
+
+  assert.equal(authorizationUrl.searchParams.get('state'), result.state);
+  assert.equal(authorizationUrl.searchParams.get('nonce'), result.nonce);
+  assert.equal(authorizationUrl.searchParams.get('code_challenge_method'), 'S256');
+  assert.equal(result.redirectTo, '/organization-request');
+});
+
+test('Telegram ID token requires matching nonce and reasonable issued-at time', async () => {
+  const service = createAuthService(createAuthRepository());
+  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  service.findTelegramJwk = async () => publicKey.export({ format: 'jwk' });
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const makeToken = (claims) => {
+    const header = encode({ alg: 'RS256', typ: 'JWT', kid: 'test-key' });
+    const payload = encode(claims);
+    const signature = sign('RSA-SHA256', Buffer.from(`${header}.${payload}`), privateKey);
+    return `${header}.${payload}.${signature.toString('base64url')}`;
+  };
+  const now = Math.floor(Date.now() / 1000);
+  const validClaims = {
+    ...telegramClaims,
+    exp: now + 300,
+    iat: now,
+    nonce: 'expected-nonce',
+  };
+
+  const result = await service.verifyTelegramIdToken(makeToken(validClaims), 'expected-nonce');
+  assert.equal(result.sub, telegramClaims.sub);
+  await assert.rejects(
+    service.verifyTelegramIdToken(makeToken(validClaims), 'different-nonce'),
+    /Invalid Telegram ID token claims/,
+  );
+  await assert.rejects(
+    service.verifyTelegramIdToken(
+      makeToken({ ...validClaims, iat: now + 10 * 60 }),
+      'expected-nonce',
+    ),
+    /Invalid Telegram ID token claims/,
+  );
+});
+
+test('organization slug generation supports Ukrainian names and safe fallback', () => {
+  assert.equal(
+    generateOrganizationSlug('Вінницька Біблійна Церква', 'request-id'),
+    'vinnytska-bibliina-tserkva',
+  );
+  assert.equal(generateOrganizationSlug('Церква Надії', 'request-id'), 'tserkva-nadii');
+  assert.equal(generateOrganizationSlug('!!!', 'abc-123'), 'organization-abc123');
+  assert.ok(generateOrganizationSlug('Церква '.repeat(30), 'request-id').length <= 80);
 });
 
 test('returning requester without membership is redirected to request status', async () => {
@@ -83,6 +182,7 @@ test('returning requester without membership is redirected to request status', a
         hasActiveMembership: false,
         hasOrganizationRequest: true,
         hasPendingOrganizationRequest: true,
+        hasMembershipClaim: false,
         isPlatformAdmin: false,
       }),
       touchTelegramAccount: async () => user,
@@ -97,7 +197,7 @@ test('returning requester without membership is redirected to request status', a
 test('a requester cannot create a second pending organization request', async () => {
   const service = new OrganizationRequestsService(
     {
-      findPendingByRequester: async () => ({ id: 'pending-request' }),
+      expireStaleAndFindPending: async () => ({ id: 'pending-request' }),
     },
     {},
     {},
@@ -112,10 +212,41 @@ test('a requester cannot create a second pending organization request', async ()
   );
 });
 
+test('an expired pending request no longer blocks a new request', async () => {
+  let receivedStaleBefore;
+  const service = new OrganizationRequestsService(
+    {
+      expireStaleAndFindPending: async (_userId, staleBefore) => {
+        receivedStaleBefore = staleBefore;
+        return null;
+      },
+      create: async () => ({
+        id: 'new-request',
+        organizationName: 'Grace Church',
+        contactName: 'Requester',
+        contactEmail: null,
+        contactPhone: null,
+        message: null,
+        requestedBy: { accounts: [{ providerAccountId: 'telegram-user-1' }] },
+      }),
+    },
+    { sendOrganizationRequestAdminEmail: async () => undefined },
+  );
+
+  const result = await service.create(
+    { organizationName: 'Grace Church', contactName: 'Requester' },
+    'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
+  );
+
+  assert.equal(result.id, 'new-request');
+  assert.ok(receivedStaleBefore instanceof Date);
+  assert.ok(receivedStaleBefore.getTime() <= Date.now() - 29 * 24 * 60 * 60 * 1000);
+});
+
 test('email failure does not fail a committed organization request', async () => {
   const service = new OrganizationRequestsService(
     {
-      findPendingByRequester: async () => null,
+      expireStaleAndFindPending: async () => null,
       create: async () => ({
         id: 'f22eb5f1-866b-4b93-955b-25c2b5c41ac1',
         organizationName: 'Grace Church',

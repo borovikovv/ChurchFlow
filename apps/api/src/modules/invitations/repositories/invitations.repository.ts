@@ -298,6 +298,8 @@ export class InvitationsRepository {
         userId: input.userId,
         role: input.role,
         status: 'ACTIVE',
+        source: 'INVITATION',
+        claimedAt: new Date(),
       };
 
       if (existingMember) {
@@ -308,10 +310,23 @@ export class InvitationsRepository {
             status: 'ACTIVE',
             removedAt: null,
             joinedAt: new Date(),
+            source: 'INVITATION',
+            claimedAt: new Date(),
           },
         });
       } else {
-        await tx.organizationMember.create({ data: memberData });
+        const user = await tx.user.findUnique({
+          where: { id: input.userId },
+          select: { displayName: true, email: true },
+        });
+        const createdMember = await tx.organizationMember.create({ data: memberData });
+        await tx.organizationMemberProfile.create({
+          data: {
+            membershipId: createdMember.id,
+            displayName: user?.displayName ?? user?.email ?? 'Member',
+            email: user?.email ?? null,
+          },
+        });
       }
 
       const invitationUpdate = await tx.organizationInvitation.updateMany({

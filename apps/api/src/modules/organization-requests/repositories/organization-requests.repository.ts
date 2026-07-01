@@ -8,6 +8,7 @@ interface ApproveOrganizationRequestInput {
   organizationName: string;
   organizationSlug: string;
   actorUserId: string;
+  staleBefore: Date;
 }
 
 export interface CreatedOrganizationRequest {
@@ -66,55 +67,88 @@ export class OrganizationRequestsRepository {
   async create(
     input: CreateOrganizationRequestInput,
     requestedByUserId: string,
+    staleBefore: Date,
   ): Promise<CreatedOrganizationRequest> {
-    const request = await this.prisma.organizationRequest.create({
-      data: {
-        organizationName: input.organizationName,
-        organizationSlug: input.organizationSlug ?? null,
-        contactName: input.contactName,
-        contactEmail: input.contactEmail ?? null,
-        requestedByUserId,
-        contactPhone: input.contactPhone ?? null,
-        message: input.message ?? null,
-      },
-      include: {
-        requestedBy: {
-          include: {
-            accounts: {
-              where: { provider: 'telegram', deletedAt: null },
-              select: { providerAccountId: true },
-              take: 1,
+    return this.prisma.$transaction(async (tx) => {
+      const requester = await tx.user.findFirst({
+        where: {
+          id: requestedByUserId,
+          deletedAt: null,
+          accounts: { some: { provider: 'telegram', deletedAt: null } },
+        },
+        select: { id: true },
+      });
+      if (!requester) {
+        throw new Error('ORGANIZATION_REQUEST_REQUESTER_INACTIVE');
+      }
+
+      await this.expireStalePending(tx, staleBefore, { requestedByUserId });
+      const request = await tx.organizationRequest.create({
+        data: {
+          organizationName: input.organizationName,
+          organizationSlug: input.organizationSlug ?? null,
+          contactName: input.contactName,
+          contactEmail: input.contactEmail ?? null,
+          requestedByUserId,
+          contactPhone: input.contactPhone ?? null,
+          message: input.message ?? null,
+        },
+        include: {
+          requestedBy: {
+            include: {
+              accounts: {
+                where: { provider: 'telegram', deletedAt: null },
+                select: { providerAccountId: true },
+                take: 1,
+              },
             },
           },
         },
-      },
-    });
+      });
 
-    return {
-      id: request.id,
-      organizationName: request.organizationName,
-      contactName: request.contactName,
-      contactEmail: request.contactEmail,
-      contactPhone: request.contactPhone,
-      message: request.message,
-      requestedBy: request.requestedBy
-        ? {
-            accounts: request.requestedBy.accounts.map((account) => ({
-              providerAccountId: account.providerAccountId,
-            })),
-          }
-        : null,
-    };
+      await tx.auditLog.create({
+        data: {
+          actorUserId: requestedByUserId,
+          action: 'CREATE',
+          entityType: 'OrganizationRequest',
+          entityId: request.id,
+          metadata: { source: 'organization_onboarding' },
+        },
+      });
+
+      return {
+        id: request.id,
+        organizationName: request.organizationName,
+        contactName: request.contactName,
+        contactEmail: request.contactEmail,
+        contactPhone: request.contactPhone,
+        message: request.message,
+        requestedBy: request.requestedBy
+          ? {
+              accounts: request.requestedBy.accounts.map((account) => ({
+                providerAccountId: account.providerAccountId,
+              })),
+            }
+          : null,
+      };
+    });
   }
 
-  async findPendingByRequester(requestedByUserId: string) {
-    return this.prisma.organizationRequest.findFirst({
-      where: { requestedByUserId, status: 'PENDING' },
-      select: { id: true },
+  async expireStaleAndFindPending(requestedByUserId: string, staleBefore: Date) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.expireStalePending(tx, staleBefore, { requestedByUserId });
+      return tx.organizationRequest.findFirst({
+        where: { requestedByUserId, status: 'PENDING' },
+        select: { id: true },
+      });
     });
   }
 
-  async listForRequester(requestedByUserId: string): Promise<OrganizationRequestDetail[]> {
+  async listForRequester(
+    requestedByUserId: string,
+    staleBefore: Date,
+  ): Promise<OrganizationRequestDetail[]> {
+    await this.expireStalePending(this.prisma, staleBefore, { requestedByUserId });
     const requests = await this.prisma.organizationRequest.findMany({
       where: { requestedByUserId },
       orderBy: { createdAt: 'desc' },
@@ -124,7 +158,11 @@ export class OrganizationRequestsRepository {
     return requests.map((request) => this.toDetail(request));
   }
 
-  async list(status?: string): Promise<OrganizationRequestListItem[]> {
+  async list(
+    status: string | undefined,
+    staleBefore: Date,
+  ): Promise<OrganizationRequestListItem[]> {
+    await this.expireStalePending(this.prisma, staleBefore);
     const requests = await this.prisma.organizationRequest.findMany({
       ...(status ? { where: { status: status as OrganizationRequestStatus } } : {}),
       orderBy: { createdAt: 'desc' },
@@ -134,7 +172,8 @@ export class OrganizationRequestsRepository {
     return requests.map((request) => this.toListItem(request));
   }
 
-  async findById(id: string): Promise<OrganizationRequestDetail | null> {
+  async findById(id: string, staleBefore: Date): Promise<OrganizationRequestDetail | null> {
+    await this.expireStalePending(this.prisma, staleBefore, { id });
     const request = await this.prisma.organizationRequest.findUnique({
       where: { id },
       include: this.organizationRequestInclude(),
@@ -156,6 +195,7 @@ export class OrganizationRequestsRepository {
 
   async approve(input: ApproveOrganizationRequestInput): Promise<ApprovedOrganizationRequest> {
     const result = await this.prisma.$transaction(async (tx) => {
+      await this.expireStalePending(tx, input.staleBefore, { id: input.id });
       const claimed = await tx.organizationRequest.updateMany({
         where: { id: input.id, status: 'PENDING' },
         data: {
@@ -175,7 +215,11 @@ export class OrganizationRequestsRepository {
         throw new Error('ORGANIZATION_REQUEST_MISSING_REQUESTER');
       }
       const requester = await tx.user.findFirst({
-        where: { id: request.requestedByUserId, deletedAt: null },
+        where: {
+          id: request.requestedByUserId,
+          deletedAt: null,
+          accounts: { some: { provider: 'telegram', deletedAt: null } },
+        },
         select: { id: true },
       });
       if (!requester) {
@@ -203,6 +247,16 @@ export class OrganizationRequestsRepository {
           userId: request.requestedByUserId,
           role: 'OWNER',
           status: 'ACTIVE',
+          source: 'ORGANIZATION_APPROVAL',
+          claimedAt: new Date(),
+          createdByUserId: input.actorUserId,
+          profile: {
+            create: {
+              displayName: request.contactName,
+              email: request.contactEmail,
+              phone: request.contactPhone,
+            },
+          },
         },
       });
 
@@ -262,21 +316,56 @@ export class OrganizationRequestsRepository {
     id: string,
     rejectionReason: string,
     actorUserId: string,
+    staleBefore: Date,
   ): Promise<OrganizationRequestDetail | null> {
-    const rejected = await this.prisma.organizationRequest.updateMany({
-      where: { id, status: 'PENDING' },
-      data: {
-        status: 'REJECTED',
-        rejectedAt: new Date(),
-        reviewedByUserId: actorUserId,
-        rejectionReason,
-      },
-    });
-    if (rejected.count !== 1) {
-      return null;
-    }
+    return this.prisma.$transaction(async (tx) => {
+      await this.expireStalePending(tx, staleBefore, { id });
+      const rejected = await tx.organizationRequest.updateMany({
+        where: { id, status: 'PENDING' },
+        data: {
+          status: 'REJECTED',
+          rejectedAt: new Date(),
+          reviewedByUserId: actorUserId,
+          rejectionReason,
+        },
+      });
+      if (rejected.count !== 1) {
+        return null;
+      }
 
-    return this.findById(id);
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'REJECT',
+          entityType: 'OrganizationRequest',
+          entityId: id,
+          metadata: { rejectionReason },
+        },
+      });
+
+      const request = await tx.organizationRequest.findUnique({
+        where: { id },
+        include: this.organizationRequestInclude(),
+      });
+
+      return request ? this.toDetail(request) : null;
+    });
+  }
+
+  private async expireStalePending(
+    client: Pick<PrismaService, 'organizationRequest'>,
+    staleBefore: Date,
+    scope: { requestedByUserId?: string; id?: string } = {},
+  ): Promise<void> {
+    await client.organizationRequest.updateMany({
+      where: {
+        status: 'PENDING',
+        createdAt: { lte: staleBefore },
+        ...(scope.requestedByUserId ? { requestedByUserId: scope.requestedByUserId } : {}),
+        ...(scope.id ? { id: scope.id } : {}),
+      },
+      data: { status: 'EXPIRED' },
+    });
   }
 
   private organizationRequestInclude() {

@@ -54,6 +54,22 @@ enum OrganizationMemberStatus {
   REMOVED
 }
 
+enum MembershipSource {
+  EXISTING
+  MANUAL
+  INVITATION
+  ORGANIZATION_APPROVAL
+}
+
+enum MembershipClaimStatus {
+  PENDING
+  REQUESTED
+  APPROVED
+  REJECTED
+  REVOKED
+  EXPIRED
+}
+
 enum OrganizationRequestStatus {
   PENDING
   APPROVED
@@ -113,6 +129,10 @@ model User {
   accounts                        AuthAccount[]
   sessions                        Session[]
   memberships                     OrganizationMember[]
+  createdMemberships              OrganizationMember[]          @relation("MembershipCreator")
+  requestedMembershipClaims       MembershipClaim[]             @relation("MembershipClaimRequester")
+  reviewedMembershipClaims        MembershipClaim[]             @relation("MembershipClaimReviewer")
+  createdMembershipClaims         MembershipClaim[]             @relation("MembershipClaimCreator")
   invitations                     OrganizationInvitation[]      @relation("InvitationInviter")
   reviewedOrganizationRequests    OrganizationRequest[]         @relation("OrganizationRequestReviewer")
   requestedOrganizationRequests   OrganizationRequest[]         @relation("OrganizationRequestRequester")
@@ -205,26 +225,80 @@ model Organization {
 }
 
 model OrganizationMember {
-  id             String                   @id @default(uuid()) @db.Uuid
-  organizationId String                   @map("organization_id") @db.Uuid
-  userId         String                   @map("user_id") @db.Uuid
-  role           OrganizationRole         @default(MEMBER)
-  status         OrganizationMemberStatus @default(ACTIVE)
-  permissions    String[]                 @default([])
-  joinedAt       DateTime                 @default(now()) @map("joined_at")
-  removedAt      DateTime?                @map("removed_at")
-  createdAt      DateTime                 @default(now()) @map("created_at")
-  updatedAt      DateTime                 @updatedAt @map("updated_at")
+  id              String                   @id @default(uuid()) @db.Uuid
+  organizationId  String                   @map("organization_id") @db.Uuid
+  userId          String?                  @map("user_id") @db.Uuid
+  role            OrganizationRole         @default(MEMBER)
+  status          OrganizationMemberStatus @default(ACTIVE)
+  source          MembershipSource         @default(EXISTING)
+  createdByUserId String?                  @map("created_by_user_id") @db.Uuid
+  claimedAt       DateTime?                @map("claimed_at")
+  permissions     String[]                 @default([])
+  joinedAt        DateTime                 @default(now()) @map("joined_at")
+  removedAt       DateTime?                @map("removed_at")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdBy    User?                      @relation("MembershipCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  profile      OrganizationMemberProfile?
+  claims       MembershipClaim[]
 
   @@unique([organizationId, userId])
   @@index([organizationId])
   @@index([userId])
   @@index([organizationId, role])
   @@index([organizationId, status])
+  @@index([createdByUserId])
+  @@index([organizationId, source])
   @@map("organization_members")
+}
+
+model OrganizationMemberProfile {
+  id           String   @id @default(uuid()) @db.Uuid
+  membershipId String   @unique @map("membership_id") @db.Uuid
+  displayName  String   @map("display_name")
+  email        String?  @db.Citext
+  phone        String?
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  membership OrganizationMember @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([phone])
+  @@map("organization_member_profiles")
+}
+
+model MembershipClaim {
+  id                String                @id @default(uuid()) @db.Uuid
+  membershipId      String                @map("membership_id") @db.Uuid
+  tokenHash         String                @unique @map("token_hash")
+  status            MembershipClaimStatus @default(PENDING)
+  expiresAt         DateTime              @map("expires_at")
+  requestedAt       DateTime?             @map("requested_at")
+  approvedAt        DateTime?             @map("approved_at")
+  rejectedAt        DateTime?             @map("rejected_at")
+  revokedAt         DateTime?             @map("revoked_at")
+  requestedByUserId String?               @map("requested_by_user_id") @db.Uuid
+  reviewedByUserId  String?               @map("reviewed_by_user_id") @db.Uuid
+  provider          AuthProvider?
+  providerAccountId String?               @map("provider_account_id")
+  createdByUserId   String?               @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  membership  OrganizationMember @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  requestedBy User?              @relation("MembershipClaimRequester", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  reviewedBy  User?              @relation("MembershipClaimReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  createdBy   User?              @relation("MembershipClaimCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([membershipId, status])
+  @@index([requestedByUserId])
+  @@index([expiresAt])
+  @@map("membership_claims")
 }
 
 model OrganizationInvitation {

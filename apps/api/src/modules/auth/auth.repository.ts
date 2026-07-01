@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { PlatformRole, Prisma } from '@churchflow/db';
+import { Prisma, type PlatformRole } from '@churchflow/db';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface AuthRepositoryUser {
@@ -20,6 +20,7 @@ export interface TelegramLoginAccountState {
   hasActiveMembership: boolean;
   hasOrganizationRequest: boolean;
   hasPendingOrganizationRequest: boolean;
+  hasMembershipClaim: boolean;
   isPlatformAdmin: boolean;
 }
 
@@ -70,6 +71,11 @@ export class AuthRepository {
             requestedOrganizationRequests: {
               select: { status: true },
             },
+            requestedMembershipClaims: {
+              where: { status: { in: ['REQUESTED', 'APPROVED', 'REJECTED'] } },
+              select: { id: true },
+              take: 1,
+            },
           },
         },
       },
@@ -93,6 +99,7 @@ export class AuthRepository {
       hasPendingOrganizationRequest: account.user.requestedOrganizationRequests.some(
         (request) => request.status === 'PENDING',
       ),
+      hasMembershipClaim: account.user.requestedMembershipClaims.length > 0,
       isPlatformAdmin:
         account.user.platformRole === 'ADMIN' || account.user.platformRole === 'SUPER_ADMIN',
     };
@@ -151,6 +158,25 @@ export class AuthRepository {
     return bootstrap !== null && existingAdmin === null;
   }
 
+  async hasValidMembershipClaimTokenHash(tokenHash: string): Promise<boolean> {
+    const claim = await this.prisma.membershipClaim.findFirst({
+      where: {
+        tokenHash,
+        status: 'PENDING',
+        expiresAt: { gt: new Date() },
+        membership: {
+          userId: null,
+          status: 'ACTIVE',
+          removedAt: null,
+          role: { in: ['MEMBER', 'VIEWER'] },
+          organization: { status: 'ACTIVE', deletedAt: null },
+        },
+      },
+      select: { id: true },
+    });
+    return claim !== null;
+  }
+
   async touchTelegramAccount(accountId: string, username?: string): Promise<AuthRepositoryUser> {
     const account = await this.prisma.authAccount.update({
       where: { id: accountId },
@@ -181,34 +207,47 @@ export class AuthRepository {
     username?: string;
     avatarUrl?: string;
   }): Promise<AuthRepositoryUser> {
-    return this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          ...(input.displayName ? { displayName: input.displayName } : {}),
-          ...(input.avatarUrl ? { avatarUrl: input.avatarUrl } : {}),
-        },
-        select: {
-          id: true,
-          email: true,
-          displayName: true,
-          platformRole: true,
-        },
-      });
-
-      await tx.authAccount.create({
-        data: {
-          userId: user.id,
-          provider: 'telegram',
-          providerAccountId: input.providerAccountId,
-          lastUsedAt: new Date(),
-          metadata: {
-            username: input.username ?? null,
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            ...(input.displayName ? { displayName: input.displayName } : {}),
+            ...(input.avatarUrl ? { avatarUrl: input.avatarUrl } : {}),
           },
-        },
-      });
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            platformRole: true,
+          },
+        });
 
-      return user;
-    });
+        await tx.authAccount.create({
+          data: {
+            userId: user.id,
+            provider: 'telegram',
+            providerAccountId: input.providerAccountId,
+            lastUsedAt: new Date(),
+            metadata: {
+              username: input.username ?? null,
+            },
+          },
+        });
+
+        return user;
+      });
+    } catch (error: unknown) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+        throw error;
+      }
+
+      const existing = await this.findTelegramLoginAccountState(input.providerAccountId);
+      if (!existing || !existing.isActive) {
+        throw new Error('TELEGRAM_ACCOUNT_INACTIVE');
+      }
+
+      return existing.user;
+    }
   }
 
   async createSession(input: Prisma.SessionUncheckedCreateInput): Promise<CreatedSession> {

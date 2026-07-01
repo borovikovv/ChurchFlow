@@ -21,6 +21,7 @@ import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt
 
 const TELEGRAM_STATE_COOKIE = 'churchflow_telegram_state';
 const TELEGRAM_VERIFIER_COOKIE = 'churchflow_telegram_verifier';
+const TELEGRAM_NONCE_COOKIE = 'churchflow_telegram_nonce';
 const TELEGRAM_REDIRECT_COOKIE = 'churchflow_telegram_redirect';
 
 interface AuthUserResult {
@@ -40,6 +41,7 @@ interface BeginTelegramLoginResult {
   authorizationUrl: string;
   state: string;
   codeVerifier: string;
+  nonce: string;
   redirectTo?: string;
 }
 
@@ -66,6 +68,7 @@ interface AuthControllerService {
     state: string;
     expectedState: string;
     codeVerifier: string;
+    expectedNonce: string;
     redirectTo?: string;
   }): Promise<CompleteTelegramLoginResult>;
   refreshAccessToken(refreshToken: string): Promise<RefreshAccessTokenResult>;
@@ -127,6 +130,7 @@ export class AuthController {
 
     response.cookie(TELEGRAM_STATE_COOKIE, result.state, this.telegramCookieOptions);
     response.cookie(TELEGRAM_VERIFIER_COOKIE, result.codeVerifier, this.telegramCookieOptions);
+    response.cookie(TELEGRAM_NONCE_COOKIE, result.nonce, this.telegramCookieOptions);
     if (result.redirectTo) {
       response.cookie(TELEGRAM_REDIRECT_COOKIE, result.redirectTo, this.telegramCookieOptions);
     } else {
@@ -148,11 +152,12 @@ export class AuthController {
     const cookies = this.parseCookies(request.headers.cookie);
     const expectedState = cookies[TELEGRAM_STATE_COOKIE];
     const codeVerifier = cookies[TELEGRAM_VERIFIER_COOKIE];
+    const expectedNonce = cookies[TELEGRAM_NONCE_COOKIE];
     const redirectTo = cookies[TELEGRAM_REDIRECT_COOKIE];
 
     this.clearTelegramCookies(response);
 
-    if (error || !code || !state || !expectedState || !codeVerifier) {
+    if (error || !code || !state || !expectedState || !codeVerifier || !expectedNonce) {
       response.redirect(this.loginUrl(error ?? 'Telegram login was not completed'));
       return;
     }
@@ -163,6 +168,7 @@ export class AuthController {
         state,
         expectedState,
         codeVerifier,
+        expectedNonce,
         ...(redirectTo ? { redirectTo } : {}),
       });
       this.setAuthCookies(response, {
@@ -242,6 +248,7 @@ export class AuthController {
   private clearTelegramCookies(response: Response): void {
     response.clearCookie(TELEGRAM_STATE_COOKIE, this.telegramCookieOptions);
     response.clearCookie(TELEGRAM_VERIFIER_COOKIE, this.telegramCookieOptions);
+    response.clearCookie(TELEGRAM_NONCE_COOKIE, this.telegramCookieOptions);
     response.clearCookie(TELEGRAM_REDIRECT_COOKIE, this.telegramCookieOptions);
   }
 

@@ -9,27 +9,65 @@ export class OrganizationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(input: z.infer<typeof createOrganizationSchema>, ownerUserId: string) {
-    return this.prisma.organization.create({
-      data: {
-        name: input.name,
-        slug: input.slug,
-        description: input.description ?? null,
-        status: 'ACTIVE',
-        members: {
-          create: {
-            userId: ownerUserId,
-            role: 'OWNER',
-            status: 'ACTIVE',
-            permissions: ['members.manage', 'website.manage', 'media.manage', 'billing.manage']
-          }
+    return this.prisma.$transaction(async (tx) => {
+      const owner = await tx.user.findFirst({
+        where: {
+          id: ownerUserId,
+          deletedAt: null,
+          accounts: { some: { provider: 'telegram', deletedAt: null } },
         },
-        website: {
-          create: {
-            title: input.name,
-            description: input.description ?? null
-          }
-        }
+        select: { id: true, displayName: true, email: true },
+      });
+      if (!owner) {
+        throw new Error('ORGANIZATION_OWNER_INACTIVE');
       }
+
+      const organization = await tx.organization.create({
+        data: {
+          name: input.name,
+          slug: input.slug,
+          description: input.description ?? null,
+          status: 'ACTIVE',
+          members: {
+            create: {
+              userId: ownerUserId,
+              role: 'OWNER',
+              status: 'ACTIVE',
+              source: 'EXISTING',
+              createdByUserId: ownerUserId,
+              claimedAt: new Date(),
+              profile: {
+                create: {
+                  displayName: owner.displayName ?? owner.email ?? 'Owner',
+                  email: owner.email,
+                },
+              },
+            },
+          },
+          website: {
+            create: {
+              title: input.name,
+              description: input.description ?? null,
+            },
+          },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: organization.id,
+          actorUserId: ownerUserId,
+          action: 'CREATE',
+          entityType: 'Organization',
+          entityId: organization.id,
+          metadata: {
+            source: 'platform_admin_direct_creation',
+            ownerUserId,
+          },
+        },
+      });
+
+      return organization;
     });
   }
 
@@ -38,9 +76,19 @@ export class OrganizationsRepository {
       ...(status ? { where: { status: status as OrganizationStatus } } : {}),
       include: {
         website: true,
-        _count: { select: { members: true, invitations: true } }
+        _count: {
+          select: {
+            members: {
+              where: {
+                status: { in: ['ACTIVE', 'SUSPENDED'] },
+                removedAt: null,
+              },
+            },
+            invitations: true,
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -50,8 +98,8 @@ export class OrganizationsRepository {
       include: {
         website: true,
         members: { include: { user: true }, orderBy: { createdAt: 'desc' } },
-        invitations: { orderBy: { createdAt: 'desc' } }
-      }
+        invitations: { orderBy: { createdAt: 'desc' } },
+      },
     });
   }
 
@@ -61,12 +109,12 @@ export class OrganizationsRepository {
       ARCHIVE: { status: 'ARCHIVED', archivedAt: now },
       SUSPEND: { status: 'SUSPENDED', suspendedAt: now },
       RESTORE: { status: 'ACTIVE', archivedAt: null, suspendedAt: null, deletedAt: null },
-      DELETE: { status: 'DELETED', deletedAt: now }
+      DELETE: { status: 'DELETED', deletedAt: now },
     };
 
     return this.prisma.organization.update({
       where: { id },
-      data: dataByAction[action]
+      data: dataByAction[action],
     });
   }
 }

@@ -8,6 +8,6 @@ import { MembershipsService } from './memberships.service';
 @Module({
   imports: [InvitationsModule],
   controllers: [MembershipsController],
-  providers: [OrganizationAccessGuard, MembershipsService, MembershipsRepository]
+  providers: [OrganizationAccessGuard, MembershipsService, MembershipsRepository],
 })
 export class MembershipsModule {}

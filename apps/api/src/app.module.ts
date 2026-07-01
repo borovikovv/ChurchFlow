@@ -17,6 +17,7 @@ import { MediaModule } from './modules/media/media.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { PlatformAdminBootstrapModule } from './modules/platform-admin-bootstrap/platform-admin-bootstrap.module';
+import { MembershipClaimsModule } from './modules/membership-claims/membership-claims.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { PlatformAdminBootstrapModule } from './modules/platform-admin-bootstrap
     OrganizationRequestsModule,
     OrganizationsModule,
     MembershipsModule,
+    MembershipClaimsModule,
     WebsitesModule,
     PagesModule,
     MediaModule,

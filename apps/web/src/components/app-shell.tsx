@@ -24,7 +24,9 @@ export function AppShell({
           {isPlatformAdmin ? (
             <SidebarNavLink href="/admin/organizations">Organizations</SidebarNavLink>
           ) : null}
-          <SidebarNavLink href="/organization-request/status">My requests</SidebarNavLink>
+          <SidebarNavLink href="/organization-request/status" activePrefixes={['/dashboard']}>
+            My requests
+          </SidebarNavLink>
           <SidebarNavLink href="/profile">Profile</SidebarNavLink>
         </nav>
 

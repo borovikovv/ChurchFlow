@@ -33,6 +33,13 @@ export interface OrganizationRequestApprovedEmailInput {
   organizationId: string;
 }
 
+export interface MembershipClaimEmailInput {
+  email: string;
+  organizationName: string;
+  token: string;
+  expiresAt: Date;
+}
+
 @Injectable()
 export class EmailService {
   constructor(
@@ -42,6 +49,22 @@ export class EmailService {
 
   buildOrganizationInvitationUrl(token: string): string {
     return `${this.webAppUrl}/invitations/accept?token=${encodeURIComponent(token)}`;
+  }
+
+  buildMembershipClaimUrl(token: string): string {
+    return `${this.webAppUrl}/member-claims/accept?token=${encodeURIComponent(token)}`;
+  }
+
+  async sendMembershipClaimEmail(input: MembershipClaimEmailInput): Promise<void> {
+    await this.emailProvider.send({
+      to: input.email,
+      subject: `Connect your ChurchFlow access for ${input.organizationName}`,
+      text: [
+        `An organization administrator prepared ChurchFlow access for ${input.organizationName}.`,
+        `Request access: ${this.buildMembershipClaimUrl(input.token)}`,
+        `This link expires at ${input.expiresAt.toISOString()}.`,
+      ].join('\n'),
+    });
   }
 
   async sendOrganizationRequestAdminEmail(

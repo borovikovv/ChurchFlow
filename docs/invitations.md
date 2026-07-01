@@ -6,6 +6,11 @@ The active authentication provider is Telegram. Targeted invitations store `targ
 
 For the MVP, normal member onboarding uses claimable links. The inviter generates a link for `MEMBER` or `VIEWER` and sends it manually, usually through Telegram. The first authenticated Telegram user who opens and accepts the link claims it; acceptance binds the invitation to that Telegram account and creates/reactivates membership. Owners can then promote an active member to `ADMIN` or `OWNER`, so normal onboarding never requires the inviter to know a Telegram OIDC `sub`.
 
+Invitations are for people who do not yet have an organization membership. A manually
+created registry member already has an `OrganizationMember`, so app access uses the
+separate, approval-based `MembershipClaim` flow documented in
+[`manual-members.md`](./manual-members.md). These two token types are not interchangeable.
+
 ## Security Rules
 
 - Generate a cryptographically random token.

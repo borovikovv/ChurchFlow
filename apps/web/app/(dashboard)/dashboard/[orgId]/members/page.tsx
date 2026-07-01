@@ -3,17 +3,52 @@ import type { Route } from 'next';
 import { redirect } from 'next/navigation';
 import { apiFetch } from '@/api/client';
 import { CopyField } from '@/components/copy-field';
-import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
+import {
+  InviteAppUserForm,
+  type InlineInvitationState,
+} from '@/components/members/invite-app-user-form';
+import {
+  MemberActions,
+  MemberRoleStatus,
+  type RoleUpdateState,
+} from '@/components/members/member-actions';
+import { FormDialog } from '@/components/ui/form-dialog';
+import { PhoneInputField } from '@/components/ui/phone-input-field';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Tabs } from '@/components/ui/tabs';
+import {
+  organizationMembersAccessFilterSchema,
+  type OrganizationMembersAccessFilter,
+} from '@churchflow/shared';
 
 type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
+type AccountState =
+  | 'UNCLAIMED'
+  | 'CLAIM_PENDING'
+  | 'CLAIM_REQUESTED'
+  | 'CLAIMED'
+  | 'ACCOUNT_DISABLED';
 
 interface OrganizationMember {
   id: string;
   role: OrganizationRole;
-  user: {
+  status: string;
+  source: string;
+  accountState: AccountState;
+  claimedAt: string | null;
+  profile: {
+    displayName: string;
     email: string | null;
-    displayName: string | null;
+    phone: string | null;
+    notes: string | null;
   };
+  user: { id: string; email: string | null; displayName: string | null } | null;
+  activeClaim: {
+    id: string;
+    status: 'PENDING' | 'REQUESTED';
+    expiresAt: string;
+    requestedBy: { id: string; displayName: string | null; avatarUrl: string | null } | null;
+  } | null;
 }
 
 interface PendingInvitation {
@@ -38,14 +73,45 @@ interface InvitationMutationResult {
   emailSent: boolean;
 }
 
+interface ClaimMutationResult {
+  claim: { id: string };
+  claimUrl: string;
+  emailSent: boolean;
+}
+
+interface CreatedManualMember {
+  id: string;
+}
+
 function membersUrl(organizationId: string, params?: Record<string, string>): Route {
   const query = params ? `?${new URLSearchParams(params).toString()}` : '';
   return `/dashboard/${organizationId}/members${query}` as Route;
 }
 
-async function createClaimableInvitation(formData: FormData) {
+async function manageInlineInvitation(
+  previousState: InlineInvitationState,
+  formData: FormData,
+): Promise<InlineInvitationState> {
   'use server';
   const organizationId = String(formData.get('organizationId'));
+
+  if (formData.get('intent') === 'revoke') {
+    const invitationId = String(formData.get('invitationId') || previousState.invitationId);
+    const result = await apiFetch<PendingInvitation>(
+      `/organizations/${organizationId}/invitations/${invitationId}/revoke`,
+      { method: 'POST' },
+    );
+
+    return result.ok
+      ? {
+          invitationId: null,
+          inviteUrl: null,
+          message: 'Invitation revoked.',
+          error: null,
+        }
+      : { ...previousState, error: result.error.message };
+  }
+
   const result = await apiFetch<InvitationMutationResult>(
     `/organizations/${organizationId}/invitations`,
     {
@@ -53,23 +119,20 @@ async function createClaimableInvitation(formData: FormData) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         mode: 'claimable_link',
-        email: formData.get('notificationEmail'),
+        email: formData.get('notificationEmail') || undefined,
         role: formData.get('role'),
       }),
     },
   );
-  revalidatePath(`/dashboard/${organizationId}/members`);
 
-  if (!result.ok) {
-    redirect(membersUrl(organizationId, { error: result.error.message }));
-  }
-
-  redirect(
-    membersUrl(organizationId, {
-      invitationLink: result.data.acceptUrl,
-      message: result.data.emailSent ? 'Invitation created and emailed.' : 'Invitation created.',
-    }),
-  );
+  return result.ok
+    ? {
+        invitationId: result.data.invitation.id,
+        inviteUrl: result.data.acceptUrl,
+        message: result.data.emailSent ? 'Invitation created and emailed.' : 'Invitation created.',
+        error: null,
+      }
+    : { ...previousState, error: result.error.message };
 }
 
 async function invitationAction(formData: FormData) {
@@ -82,62 +145,174 @@ async function invitationAction(formData: FormData) {
     { method: 'POST' },
   );
   revalidatePath(`/dashboard/${organizationId}/members`);
+  if (!result.ok) redirect(membersUrl(organizationId, { error: result.error.message }));
+  if ('acceptUrl' in result.data) {
+    redirect(
+      membersUrl(organizationId, {
+        claimLink: result.data.acceptUrl,
+        message: 'Invitation refreshed.',
+      }),
+    );
+  }
+  redirect(membersUrl(organizationId, { message: 'Invitation revoked.' }));
+}
 
+async function mutateAndRedirect(
+  organizationId: string,
+  path: string,
+  init: RequestInit,
+  successMessage: string,
+) {
+  const result = await apiFetch(path, init);
+  revalidatePath(`/dashboard/${organizationId}/members`);
+  redirect(
+    membersUrl(
+      organizationId,
+      result.ok ? { message: successMessage } : { error: result.error.message },
+    ),
+  );
+}
+
+async function createManualMember(formData: FormData) {
+  'use server';
+  const organizationId = String(formData.get('organizationId'));
+  const result = await apiFetch<CreatedManualMember>(
+    `/organizations/${organizationId}/memberships/manual`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: formData.get('displayName'),
+        email: formData.get('email') || null,
+        phone: formData.get('phone') || null,
+        notes: formData.get('notes') || null,
+        role: formData.get('role'),
+      }),
+    },
+  );
+  revalidatePath(`/dashboard/${organizationId}/members`);
   if (!result.ok) {
     redirect(membersUrl(organizationId, { error: result.error.message }));
   }
 
-  const data = result.data;
-  if ('acceptUrl' in data) {
+  if (formData.get('prepareAccess') === 'on') {
+    const claim = await apiFetch<ClaimMutationResult>(
+      `/organizations/${organizationId}/memberships/${result.data.id}/claim`,
+      { method: 'POST' },
+    );
+    if (!claim.ok) {
+      redirect(
+        membersUrl(organizationId, {
+          error: `Member was created, but access could not be prepared: ${claim.error.message}`,
+        }),
+      );
+    }
     redirect(
       membersUrl(organizationId, {
-        invitationLink: data.acceptUrl,
-        message: data.emailSent ? 'Invitation refreshed and emailed.' : 'Invitation refreshed.',
+        claimLink: claim.data.claimUrl,
+        message: claim.data.emailSent
+          ? 'Member added; access link created and emailed.'
+          : 'Member added; access link created.',
       }),
     );
   }
 
-  redirect(membersUrl(organizationId, { message: 'Invitation revoked.' }));
+  redirect(membersUrl(organizationId, { message: 'Manual member added.' }));
+}
+
+async function updateProfile(formData: FormData) {
+  'use server';
+  const organizationId = String(formData.get('organizationId'));
+  const membershipId = String(formData.get('membershipId'));
+  await mutateAndRedirect(
+    organizationId,
+    `/organizations/${organizationId}/memberships/${membershipId}/profile`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: formData.get('displayName'),
+        email: formData.get('email') || null,
+        phone: formData.get('phone') || null,
+        notes: formData.get('notes') || null,
+      }),
+    },
+    'Member profile updated.',
+  );
+}
+
+async function generateClaim(formData: FormData) {
+  'use server';
+  const organizationId = String(formData.get('organizationId'));
+  const membershipId = String(formData.get('membershipId'));
+  const result = await apiFetch<ClaimMutationResult>(
+    `/organizations/${organizationId}/memberships/${membershipId}/claim`,
+    { method: 'POST' },
+  );
+  revalidatePath(`/dashboard/${organizationId}/members`);
+  if (!result.ok) redirect(membersUrl(organizationId, { error: result.error.message }));
+  redirect(
+    membersUrl(organizationId, {
+      claimLink: result.data.claimUrl,
+      message: result.data.emailSent ? 'Access link created and emailed.' : 'Access link created.',
+    }),
+  );
+}
+
+async function claimAction(formData: FormData) {
+  'use server';
+  const organizationId = String(formData.get('organizationId'));
+  const claimId = String(formData.get('claimId'));
+  const action = String(formData.get('action'));
+  const result = await apiFetch<ClaimMutationResult | { status: string }>(
+    `/organizations/${organizationId}/membership-claims/${claimId}/${action}`,
+    { method: 'POST' },
+  );
+  revalidatePath(`/dashboard/${organizationId}/members`);
+  if (!result.ok) redirect(membersUrl(organizationId, { error: result.error.message }));
+  if ('claimUrl' in result.data) {
+    redirect(
+      membersUrl(organizationId, {
+        claimLink: result.data.claimUrl,
+        message: 'Access link refreshed.',
+      }),
+    );
+  }
+  redirect(membersUrl(organizationId, { message: `Claim ${action} completed.` }));
 }
 
 async function removeMember(formData: FormData) {
   'use server';
   const organizationId = String(formData.get('organizationId'));
   const membershipId = String(formData.get('membershipId'));
-  const result = await apiFetch(
+  await mutateAndRedirect(
+    organizationId,
     `/organizations/${organizationId}/memberships/${membershipId}/remove`,
     { method: 'POST' },
-  );
-  revalidatePath(`/dashboard/${organizationId}/members`);
-
-  redirect(
-    membersUrl(
-      organizationId,
-      result.ok ? { message: 'Member removed.' } : { error: result.error.message },
-    ),
+    'Member removed.',
   );
 }
 
-async function updateMemberRole(formData: FormData) {
+async function updateMemberRole(
+  previousState: RoleUpdateState,
+  formData: FormData,
+): Promise<RoleUpdateState> {
   'use server';
   const organizationId = String(formData.get('organizationId'));
   const membershipId = String(formData.get('membershipId'));
+  const role = String(formData.get('role')) as RoleUpdateState['role'];
   const result = await apiFetch(
     `/organizations/${organizationId}/memberships/${membershipId}/role`,
     {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ role: formData.get('role') }),
+      body: JSON.stringify({ role }),
     },
   );
-  revalidatePath(`/dashboard/${organizationId}/members`);
 
-  redirect(
-    membersUrl(
-      organizationId,
-      result.ok ? { message: 'Member role updated.' } : { error: result.error.message },
-    ),
-  );
+  return result.ok
+    ? { role, updated: true, version: previousState.version + 1, error: null }
+    : { ...previousState, updated: false, error: result.error.message };
 }
 
 export default async function MembersDashboardPage({
@@ -145,15 +320,21 @@ export default async function MembersDashboardPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ invitationLink?: string; message?: string; error?: string }>;
+  searchParams: Promise<{ claimLink?: string; message?: string; error?: string; access?: string }>;
 }) {
   const { orgId } = await params;
-  const { invitationLink, message, error } = await searchParams;
-  const result = await apiFetch<MembersPayload>(`/organizations/${orgId}/memberships`);
+  const { claimLink, message, error, access = 'all' } = await searchParams;
+  const parsedAccess = organizationMembersAccessFilterSchema.safeParse(access);
+  const memberAccess: OrganizationMembersAccessFilter = parsedAccess.success
+    ? parsedAccess.data
+    : 'all';
+  const result = await apiFetch<MembersPayload>(
+    `/organizations/${orgId}/memberships?${new URLSearchParams({ access: memberAccess })}`,
+  );
   const payload: MembersPayload = result.ok
     ? result.data
     : { actorRole: null, actorMembershipId: null, members: [], pendingInvitations: [] };
-  const canInvite = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
+  const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
   const isOwner = payload.actorRole === 'OWNER';
 
   return (
@@ -163,114 +344,143 @@ export default async function MembersDashboardPage({
       {!result.ok ? <p className="form-error">{result.error.message}</p> : null}
       {error ? <p className="form-error">{error}</p> : null}
       {message ? <p>{message}</p> : null}
-      {invitationLink ? (
-        <section className="form-grid">
-          <label>Invitation link</label>
-          <CopyField value={invitationLink} />
-        </section>
-      ) : null}
+      {claimLink ? <CopyField value={claimLink} /> : null}
 
-      {canInvite ? (
-        <form className="form-grid compact" action={createClaimableInvitation}>
-          <input type="hidden" name="organizationId" value={orgId} />
-          <label>
-            Notification email
-            <input name="notificationEmail" type="email" maxLength={255} />
-          </label>
-          <label>
-            Initial role
-            <select name="role" defaultValue="MEMBER">
-              <option value="MEMBER">Member</option>
-              <option value="VIEWER">Viewer</option>
-            </select>
-          </label>
-          <button className="button" type="submit">
-            Generate invitation link
-          </button>
-        </form>
-      ) : null}
+      <div className="flex flex-col items-stretch gap-4 border-b border-[var(--line)] md:flex-row md:items-end md:justify-between [&_.ui-tabs]:flex-1 [&_.ui-tabs]:border-b-0">
+        <Tabs
+          label="Member access filters"
+          items={[
+            { label: 'All', href: membersUrl(orgId), active: memberAccess === 'all' },
+            {
+              label: 'Telegram connected',
+              href: membersUrl(orgId, { access: 'connected' }),
+              active: memberAccess === 'connected',
+            },
+            {
+              label: 'No app access',
+              href: membersUrl(orgId, { access: 'offline' }),
+              active: memberAccess === 'offline',
+            },
+            {
+              label: 'Access requested',
+              href: membersUrl(orgId, { access: 'requested' }),
+              active: memberAccess === 'requested',
+            },
+            {
+              label: 'Suspended',
+              href: membersUrl(orgId, { access: 'suspended' }),
+              active: memberAccess === 'suspended',
+            },
+          ]}
+        />
+        {canManage ? (
+          <div className="flex shrink-0 justify-end gap-2 pb-2">
+            <FormDialog triggerLabel="Invite app user" title="Invite an app user">
+              <p className="-mt-4 mb-0">
+                Send an email invitation or generate a link you can share yourself.
+              </p>
+              <InviteAppUserForm organizationId={orgId} action={manageInlineInvitation} />
+            </FormDialog>
+            <FormDialog
+              triggerLabel="Add new member"
+              triggerVariant="primary"
+              title="Add member manually"
+            >
+              <form className="grid gap-4" action={createManualMember}>
+                <input type="hidden" name="organizationId" value={orgId} />
+                <label>
+                  Name
+                  <input name="displayName" required maxLength={160} />
+                </label>
+                <label>
+                  Email
+                  <input name="email" type="email" maxLength={255} />
+                </label>
+                <label>
+                  Phone
+                  <PhoneInputField name="phone" />
+                </label>
+                <label>
+                  Role
+                  <select name="role" defaultValue="MEMBER">
+                    <option value="MEMBER">Member</option>
+                    <option value="VIEWER">Viewer</option>
+                  </select>
+                </label>
+                <label>
+                  Notes
+                  <textarea name="notes" maxLength={2000} />
+                </label>
+                <label className="flex items-center gap-2">
+                  <input className="min-h-0 w-auto" name="prepareAccess" type="checkbox" />
+                  Prepare app access after adding
+                </label>
+                <button className="button" type="submit">
+                  Add member
+                </button>
+              </form>
+            </FormDialog>
+          </div>
+        ) : null}
+      </div>
 
       <section className="stack">
-        <h2>Active members</h2>
-        <div className="data-list">
+        <h2>Organization members</h2>
+        <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <div
+            className="hidden grid-cols-[minmax(180px,1.4fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_100px_44px] items-center gap-4 border-b border-[var(--line-muted)] bg-[var(--surface-subtle)] px-4 py-[11px] text-xs font-semibold text-[var(--muted)] md:grid"
+            aria-hidden="true"
+          >
+            <span>Member</span>
+            <span>Contact</span>
+            <span>Access</span>
+            <span>Status</span>
+            <span />
+          </div>
           {payload.members.map((member) => (
-            <div className="row" key={member.id}>
-              <strong>{member.user.displayName ?? member.user.email ?? 'Member'}</strong>
-              <span>{member.user.email ?? 'No email'}</span>
-              <span>{member.role}</span>
-              {isOwner ? (
-                <div className="actions inline">
-                  <form action={updateMemberRole} className="actions inline">
-                    <input type="hidden" name="organizationId" value={orgId} />
-                    <input type="hidden" name="membershipId" value={member.id} />
-                    <select name="role" defaultValue={member.role} aria-label="Member role">
-                      <option value="OWNER">Owner</option>
-                      <option value="ADMIN">Admin</option>
-                      <option value="MEMBER">Member</option>
-                      <option value="VIEWER">Viewer</option>
-                    </select>
-                    <ConfirmSubmitButton
-                      confirmLabel="Change role"
-                      description={`Apply the selected organization role to ${member.user.displayName ?? member.user.email ?? 'this member'}.`}
-                      title="Change member role?"
-                      triggerLabel="Update role"
-                    />
-                  </form>
-                  {member.id !== payload.actorMembershipId ? (
-                    <form action={removeMember}>
-                      <input type="hidden" name="organizationId" value={orgId} />
-                      <input type="hidden" name="membershipId" value={member.id} />
-                      <ConfirmSubmitButton
-                        confirmLabel="Remove member"
-                        confirmVariant="danger"
-                        description={`Remove ${member.user.displayName ?? member.user.email ?? 'this member'} from this organization. Their account will remain available.`}
-                        title="Remove member?"
-                        triggerLabel="Remove"
-                        variant="danger"
-                      />
-                    </form>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+            <article
+              className="grid min-h-[68px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-b border-[var(--line-muted)] px-4 py-[11px] last:border-b-0 md:grid-cols-[minmax(180px,1.4fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_100px_44px] md:gap-4"
+              key={member.id}
+            >
+              <div className="grid min-w-0 gap-[3px]">
+                <strong>{member.profile.displayName}</strong>
+                <span className="truncate text-[var(--muted)]">
+                  {member.source === 'MANUAL' ? 'Added manually' : 'App member'}
+                </span>
+              </div>
+              <span className="col-start-1 truncate text-[var(--muted)] md:col-auto">
+                {member.profile.email ?? member.profile.phone ?? 'No contact information'}
+              </span>
+              <div className="col-start-1 grid min-w-0 gap-[3px] md:col-auto">
+                <StatusBadge status={member.accountState} />
+                {member.activeClaim?.status === 'REQUESTED' ? (
+                  <small className="truncate text-[var(--muted)]">
+                    Requested by {member.activeClaim.requestedBy?.displayName ?? 'Telegram user'}
+                  </small>
+                ) : null}
+              </div>
+              <div className="col-start-1 md:col-auto">
+                <MemberRoleStatus membershipId={member.id} role={member.role} />
+              </div>
+              <MemberActions
+                member={member}
+                organizationId={orgId}
+                canManage={canManage}
+                isOwner={isOwner}
+                isCurrentMember={member.id === payload.actorMembershipId}
+                updateProfile={updateProfile}
+                updateRole={updateMemberRole}
+                removeMember={removeMember}
+                generateClaim={generateClaim}
+                claimAction={claimAction}
+              />
+            </article>
           ))}
+          {payload.members.length === 0 ? (
+            <p className="m-0 px-4 py-8 text-center">No members match this filter.</p>
+          ) : null}
         </div>
       </section>
-
-      {canInvite ? (
-        <section className="stack">
-          <h2>Pending invitations</h2>
-          <div className="data-list">
-            {payload.pendingInvitations.length === 0 ? <p>No active invitations.</p> : null}
-            {payload.pendingInvitations.map((invitation) => (
-              <form className="row" action={invitationAction} key={invitation.id}>
-                <input type="hidden" name="organizationId" value={orgId} />
-                <input type="hidden" name="invitationId" value={invitation.id} />
-                <strong>{invitation.targetDisplay ?? invitation.email ?? 'Claimable link'}</strong>
-                <span>{invitation.role}</span>
-                <span>{new Date(invitation.expiresAt).toLocaleDateString()}</span>
-                <div className="actions inline">
-                  {invitation.email ? (
-                    <button className="button secondary" name="action" value="resend" type="submit">
-                      Resend
-                    </button>
-                  ) : null}
-                  <ConfirmSubmitButton
-                    confirmLabel="Revoke invitation"
-                    confirmVariant="danger"
-                    description="This invitation link will stop working immediately. You can create a new invitation later."
-                    name="action"
-                    title="Revoke invitation?"
-                    triggerLabel="Revoke"
-                    value="revoke"
-                    variant="danger"
-                  />
-                </div>
-              </form>
-            ))}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }

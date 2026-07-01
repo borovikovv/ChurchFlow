@@ -31,6 +31,29 @@ export const organizationMemberStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'RE
 export const updateOrganizationMemberRoleSchema = z.object({
   role: organizationRoleSchema,
 });
+export const organizationMemberAccountStateSchema = z.enum([
+  'UNCLAIMED',
+  'CLAIM_PENDING',
+  'CLAIM_REQUESTED',
+  'CLAIMED',
+  'ACCOUNT_DISABLED',
+]);
+export const organizationMembersAccessFilterSchema = z.enum([
+  'all',
+  'connected',
+  'offline',
+  'requested',
+  'suspended',
+]);
+export const listOrganizationMembersQuerySchema = z.object({
+  access: organizationMembersAccessFilterSchema.default('all'),
+});
+export const membershipSourceSchema = z.enum([
+  'EXISTING',
+  'MANUAL',
+  'INVITATION',
+  'ORGANIZATION_APPROVAL',
+]);
 export const organizationRequestStatusSchema = z.enum([
   'PENDING',
   'APPROVED',
@@ -46,6 +69,50 @@ const optionalTrimmedString = (max: number) =>
     .optional()
     .transform((value) => (value === '' ? undefined : value));
 
+const nullableTrimmedString = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((value) => (value === '' ? null : value));
+
+export const createManualOrganizationMemberSchema = z.object({
+  displayName: z.string().trim().min(2).max(160),
+  email: nullableTrimmedString(255)
+    .refine(
+      (value) =>
+        value === undefined || value === null || z.string().email().safeParse(value).success,
+      { message: 'Invalid email' },
+    )
+    .transform((value) => value?.toLowerCase() ?? value),
+  phone: nullableTrimmedString(40),
+  notes: nullableTrimmedString(2000),
+  role: z.enum(['MEMBER', 'VIEWER']).default('MEMBER'),
+});
+
+export const updateOrganizationMemberProfileSchema = z
+  .object({
+    displayName: z.string().trim().min(2).max(160).optional(),
+    email: nullableTrimmedString(255)
+      .refine(
+        (value) =>
+          value === undefined || value === null || z.string().email().safeParse(value).success,
+        { message: 'Invalid email' },
+      )
+      .transform((value) => value?.toLowerCase() ?? value),
+    phone: nullableTrimmedString(40),
+    notes: nullableTrimmedString(2000),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'At least one profile field is required',
+  });
+
+export const membershipClaimTokenSchema = z.object({
+  token: z.string().min(32).max(512),
+});
+
 export const organizationSchema = z.object({
   id: uuidSchema,
   name: z.string().min(1).max(160),
@@ -55,7 +122,7 @@ export const organizationSchema = z.object({
 });
 
 export const createOrganizationSchema = z.object({
-  name: z.string().min(1).max(160),
+  name: z.string().trim().min(1).max(160),
   slug: slugSchema,
   description: z.string().max(500).optional(),
 });

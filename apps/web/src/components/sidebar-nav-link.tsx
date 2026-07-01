@@ -9,13 +9,21 @@ export function SidebarNavLink({
   href,
   children,
   exact = false,
+  activePrefixes = [],
 }: {
   href: string;
   children: ReactNode;
   exact?: boolean;
+  activePrefixes?: string[];
 }) {
   const pathname = usePathname();
-  const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  const hrefIsActive = exact
+    ? pathname === href
+    : pathname === href || pathname.startsWith(`${href}/`);
+  const prefixIsActive = activePrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  const active = hrefIsActive || prefixIsActive;
 
   return (
     <Link className={active ? 'sidebar-link active' : 'sidebar-link'} href={href as Route}>

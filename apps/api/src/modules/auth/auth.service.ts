@@ -25,6 +25,9 @@ const TELEGRAM_ISSUER = 'https://oauth.telegram.org';
 const TELEGRAM_AUTHORIZATION_URL = 'https://oauth.telegram.org/auth';
 const TELEGRAM_TOKEN_URL = 'https://oauth.telegram.org/token';
 const TELEGRAM_JWKS_URL = 'https://oauth.telegram.org/.well-known/jwks.json';
+const TELEGRAM_CLOCK_SKEW_SECONDS = 5 * 60;
+const MAX_TELEGRAM_SUB_LENGTH = 255;
+const UNSAFE_ENCODED_REDIRECT_CHARACTERS = /%(?:2f|5c|0[0-9a-f]|1[0-9a-f]|7f)/i;
 
 export interface AuthUserResult {
   id: string;
@@ -43,6 +46,7 @@ export interface BeginTelegramLoginResult {
   authorizationUrl: string;
   state: string;
   codeVerifier: string;
+  nonce: string;
   redirectTo?: string;
 }
 
@@ -67,6 +71,7 @@ interface TelegramIdTokenClaims {
   sub: string;
   exp: number;
   iat: number;
+  nonce: string;
   name?: string;
   preferred_username?: string;
   picture?: string;
@@ -106,6 +111,7 @@ interface TelegramLoginAccountState {
   hasActiveMembership: boolean;
   hasOrganizationRequest: boolean;
   hasPendingOrganizationRequest: boolean;
+  hasMembershipClaim: boolean;
   isPlatformAdmin: boolean;
 }
 
@@ -134,6 +140,7 @@ interface AuthRepositoryPort {
   hasPendingTelegramInvitation(providerAccountId: string): Promise<boolean>;
   hasValidClaimableInvitationTokenHash(tokenHash: string): Promise<boolean>;
   hasValidPlatformAdminBootstrapTokenHash(tokenHash: string): Promise<boolean>;
+  hasValidMembershipClaimTokenHash(tokenHash: string): Promise<boolean>;
   findTelegramLoginAccountState(
     providerAccountId: string,
   ): Promise<TelegramLoginAccountState | null>;
@@ -165,6 +172,7 @@ export class AuthService {
   beginTelegramLogin(input: { redirectTo?: string }): BeginTelegramLoginResult {
     const state = randomBytes(32).toString('base64url');
     const codeVerifier = randomBytes(64).toString('base64url');
+    const nonce = randomBytes(32).toString('base64url');
     const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
     const redirectTo = this.normalizeRedirectTo(input.redirectTo);
     const authorizationUrl = new URL(TELEGRAM_AUTHORIZATION_URL);
@@ -174,6 +182,7 @@ export class AuthService {
     authorizationUrl.searchParams.set('response_type', 'code');
     authorizationUrl.searchParams.set('scope', 'openid profile');
     authorizationUrl.searchParams.set('state', state);
+    authorizationUrl.searchParams.set('nonce', nonce);
     authorizationUrl.searchParams.set('code_challenge', codeChallenge);
     authorizationUrl.searchParams.set('code_challenge_method', 'S256');
 
@@ -181,6 +190,7 @@ export class AuthService {
       authorizationUrl: authorizationUrl.toString(),
       state,
       codeVerifier,
+      nonce,
       ...(redirectTo ? { redirectTo } : {}),
     };
   }
@@ -190,6 +200,7 @@ export class AuthService {
     state: string;
     expectedState: string;
     codeVerifier: string;
+    expectedNonce: string;
     redirectTo?: string;
   }): Promise<CompleteTelegramLoginResult> {
     if (input.state !== input.expectedState) {
@@ -197,7 +208,7 @@ export class AuthService {
     }
 
     const tokenResponse = await this.exchangeTelegramCode(input.code, input.codeVerifier);
-    const claims = await this.verifyTelegramIdToken(tokenResponse.id_token);
+    const claims = await this.verifyTelegramIdToken(tokenResponse.id_token, input.expectedNonce);
     const redirectTo = this.normalizeRedirectTo(input.redirectTo);
     const { user, defaultRedirectTo } = await this.resolveTelegramLoginUser(claims, redirectTo);
 
@@ -223,6 +234,7 @@ export class AuthService {
     const hasPlatformAdminBootstrapRedirect =
       await this.hasValidPlatformAdminBootstrapRedirect(redirectTo);
     const hasOrganizationOnboardingRedirect = this.isOrganizationOnboardingRedirect(redirectTo);
+    const hasMembershipClaimRedirect = await this.hasValidMembershipClaimRedirect(redirectTo);
     const accountState = await this.authRepository.findTelegramLoginAccountState(claims.sub);
 
     if (!accountState) {
@@ -230,25 +242,36 @@ export class AuthService {
         !hasPendingInvitation &&
         !hasClaimableInvitationRedirect &&
         !hasPlatformAdminBootstrapRedirect &&
-        !hasOrganizationOnboardingRedirect
+        !hasOrganizationOnboardingRedirect &&
+        !hasMembershipClaimRedirect
       ) {
         throw new UnauthorizedException('Account is not invited to ChurchFlow');
       }
 
-      const createdUser = await this.authRepository.createTelegramUserForAdmission({
-        providerAccountId: claims.sub,
-        ...(claims.name ? { displayName: claims.name } : {}),
-        ...(claims.preferred_username ? { username: claims.preferred_username } : {}),
-        ...(claims.picture ? { avatarUrl: claims.picture } : {}),
-      });
+      let createdUser: AuthRepositoryUser;
+      try {
+        createdUser = await this.authRepository.createTelegramUserForAdmission({
+          providerAccountId: claims.sub,
+          ...(claims.name ? { displayName: claims.name } : {}),
+          ...(claims.preferred_username ? { username: claims.preferred_username } : {}),
+          ...(claims.picture ? { avatarUrl: claims.picture } : {}),
+        });
+      } catch (error: unknown) {
+        if (error instanceof Error && error.message === 'TELEGRAM_ACCOUNT_INACTIVE') {
+          throw new UnauthorizedException('Telegram account is not active');
+        }
+        throw error;
+      }
 
       return {
         user: this.toAuthUserResult(createdUser),
         defaultRedirectTo: hasPendingInvitation
           ? '/invitations/pending'
-          : hasOrganizationOnboardingRedirect
-            ? (redirectTo ?? '/organization-request')
-            : (redirectTo ?? '/'),
+          : hasMembershipClaimRedirect
+            ? (redirectTo ?? '/member-claims/accept')
+            : hasOrganizationOnboardingRedirect
+              ? (redirectTo ?? '/organization-request')
+              : (redirectTo ?? '/'),
       };
     }
 
@@ -260,10 +283,12 @@ export class AuthService {
       !accountState.hasActiveMembership &&
       !accountState.isPlatformAdmin &&
       !accountState.hasOrganizationRequest &&
+      !accountState.hasMembershipClaim &&
       !hasPendingInvitation &&
       !hasClaimableInvitationRedirect &&
       !hasPlatformAdminBootstrapRedirect &&
-      !hasOrganizationOnboardingRedirect
+      !hasOrganizationOnboardingRedirect &&
+      !hasMembershipClaimRedirect
     ) {
       throw new UnauthorizedException('Account is not associated with an organization');
     }
@@ -277,14 +302,18 @@ export class AuthService {
       user: this.toAuthUserResult(touchedUser),
       defaultRedirectTo: accountState.isPlatformAdmin
         ? '/admin/organizations'
-          : !accountState.hasActiveMembership && accountState.hasOrganizationRequest
-            ? '/organization-request/status'
-          : !accountState.hasActiveMembership && hasPendingInvitation
-            ? '/invitations/pending'
-            : !accountState.hasActiveMembership &&
-                (hasClaimableInvitationRedirect || hasPlatformAdminBootstrapRedirect)
-              ? (redirectTo ?? '/')
-              : '/',
+        : !accountState.hasActiveMembership && accountState.hasOrganizationRequest
+          ? '/organization-request/status'
+          : !accountState.hasActiveMembership && accountState.hasMembershipClaim
+            ? '/member-claims/status'
+            : !accountState.hasActiveMembership && hasPendingInvitation
+              ? '/invitations/pending'
+              : !accountState.hasActiveMembership &&
+                  (hasClaimableInvitationRedirect || hasPlatformAdminBootstrapRedirect)
+                ? (redirectTo ?? '/')
+                : !accountState.hasActiveMembership && hasMembershipClaimRedirect
+                  ? (redirectTo ?? '/member-claims/accept')
+                  : '/',
     };
   }
 
@@ -304,6 +333,12 @@ export class AuthService {
     }
 
     return this.authRepository.hasValidPlatformAdminBootstrapTokenHash(this.hashToken(token));
+  }
+
+  private hasValidMembershipClaimRedirect(redirectTo?: string): Promise<boolean> {
+    const token = this.extractTokenFromRedirect(redirectTo, '/member-claims/accept');
+    if (!token) return Promise.resolve(false);
+    return this.authRepository.hasValidMembershipClaimTokenHash(this.hashToken(token));
   }
 
   private extractInvitationTokenFromRedirect(redirectTo?: string): string | null {
@@ -478,7 +513,10 @@ export class AuthService {
     return parsed;
   }
 
-  private async verifyTelegramIdToken(idToken: string): Promise<TelegramIdTokenClaims> {
+  private async verifyTelegramIdToken(
+    idToken: string,
+    expectedNonce: string,
+  ): Promise<TelegramIdTokenClaims> {
     const [encodedHeader, encodedPayload, encodedSignature] = idToken.split('.');
     if (!encodedHeader || !encodedPayload || !encodedSignature) {
       throw new UnauthorizedException('Invalid Telegram ID token');
@@ -508,10 +546,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid Telegram ID token signature');
     }
 
+    const now = Math.floor(Date.now() / 1000);
     if (
       claims.iss !== TELEGRAM_ISSUER ||
       claims.aud !== this.telegramClientId ||
-      claims.exp <= Math.floor(Date.now() / 1000)
+      claims.exp <= now ||
+      claims.iat > now + TELEGRAM_CLOCK_SKEW_SECONDS ||
+      claims.nonce !== expectedNonce ||
+      claims.sub.trim().length === 0 ||
+      claims.sub.length > MAX_TELEGRAM_SUB_LENGTH
     ) {
       throw new UnauthorizedException('Invalid Telegram ID token claims');
     }
@@ -564,7 +607,8 @@ export class AuthService {
       typeof value['aud'] === 'string' &&
       typeof value['sub'] === 'string' &&
       typeof value['exp'] === 'number' &&
-      typeof value['iat'] === 'number'
+      typeof value['iat'] === 'number' &&
+      typeof value['nonce'] === 'string'
     ) {
       return {
         iss: value['iss'],
@@ -572,6 +616,7 @@ export class AuthService {
         sub: value['sub'],
         exp: value['exp'],
         iat: value['iat'],
+        nonce: value['nonce'],
         ...(typeof value['name'] === 'string' ? { name: value['name'] } : {}),
         ...(typeof value['preferred_username'] === 'string'
           ? { preferred_username: value['preferred_username'] }
@@ -673,11 +718,32 @@ export class AuthService {
   }
 
   private normalizeRedirectTo(value?: string): string | undefined {
-    if (!value || !value.startsWith('/') || value.startsWith('//')) {
+    if (
+      !value ||
+      this.hasUnsafeRedirectCharacters(value) ||
+      UNSAFE_ENCODED_REDIRECT_CHARACTERS.test(value)
+    ) {
       return undefined;
     }
 
-    return value;
+    try {
+      const appUrl = new URL(this.webAppUrl);
+      const redirectUrl = new URL(value, appUrl);
+      if (redirectUrl.origin !== appUrl.origin) {
+        return undefined;
+      }
+
+      return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private hasUnsafeRedirectCharacters(value: string): boolean {
+    return Array.from(value).some((character) => {
+      const codePoint = character.codePointAt(0);
+      return character === '\\' || codePoint === undefined || codePoint <= 31 || codePoint === 127;
+    });
   }
 
   private normalizePem(value: string): string {
@@ -702,5 +768,9 @@ export class AuthService {
 
   private get telegramRedirectUri(): string {
     return this.config.getOrThrow<string>('TELEGRAM_REDIRECT_URI');
+  }
+
+  private get webAppUrl(): string {
+    return this.config.getOrThrow<string>('WEB_APP_URL');
   }
 }
