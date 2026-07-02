@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { generateKeyPairSync, sign } = require('node:crypto');
+const { createHash, generateKeyPairSync, sign } = require('node:crypto');
 const { AuthService } = require('../dist/modules/auth/auth.service.js');
 const {
   OrganizationRequestsService,
@@ -58,6 +58,128 @@ function createAuthService(repository) {
     repository,
   );
 }
+
+function createRefreshAuthService(repository) {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+
+  return new AuthService(
+    {
+      getOrThrow(key) {
+        if (key === 'JWT_ACCESS_PRIVATE_KEY') {
+          return privateKey.export({ type: 'pkcs8', format: 'pem' });
+        }
+        throw new Error(`Unexpected refresh config key: ${key}`);
+      },
+    },
+    repository,
+  );
+}
+
+function activeRefreshSession(overrides = {}) {
+  return {
+    id: '3d3205cc-e8f4-4eb5-9b57-fcd1ffed8dd0',
+    userId: 'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
+    expiresAt: new Date(Date.now() + 60_000),
+    revokedAt: null,
+    user: {
+      id: 'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
+      email: null,
+      displayName: 'Refresh User',
+      platformRole: 'USER',
+      deletedAt: null,
+    },
+    ...overrides,
+  };
+}
+
+test('valid refresh token issues a 15-minute access token without extending session', async () => {
+  const refreshToken = 'opaque-refresh-token';
+  const session = activeRefreshSession();
+  const originalSessionExpiry = session.expiresAt.getTime();
+  let receivedHash;
+  let createSessionCalls = 0;
+  const service = createRefreshAuthService({
+    findSessionByRefreshTokenHash: async (hash) => {
+      receivedHash = hash;
+      return session;
+    },
+    createSession: async () => {
+      createSessionCalls += 1;
+    },
+  });
+
+  const before = Date.now();
+  const result = await service.refreshAccessToken(refreshToken);
+  const [, body] = result.accessToken.split('.');
+  const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+
+  assert.equal(receivedHash, createHash('sha256').update(refreshToken).digest('hex'));
+  assert.notEqual(receivedHash, refreshToken);
+  assert.equal(payload.sub, session.userId);
+  assert.equal(payload.sid, session.id);
+  assert.equal(payload.type, 'access');
+  assert.equal(payload.exp - payload.iat, 15 * 60);
+  assert.ok(result.accessTokenExpiresAt.getTime() >= before + 15 * 60 * 1000);
+  assert.equal(createSessionCalls, 0);
+  assert.equal(session.expiresAt.getTime(), originalSessionExpiry);
+});
+
+for (const [name, session] of [
+  ['missing', null],
+  ['expired', activeRefreshSession({ expiresAt: new Date(Date.now() - 1) })],
+  ['revoked', activeRefreshSession({ revokedAt: new Date() })],
+  [
+    'deleted-user',
+    activeRefreshSession({
+      user: { ...activeRefreshSession().user, deletedAt: new Date() },
+    }),
+  ],
+]) {
+  test(`${name} refresh session is rejected`, async () => {
+    const service = createRefreshAuthService({
+      findSessionByRefreshTokenHash: async () => session,
+    });
+
+    await assert.rejects(
+      service.refreshAccessToken('invalid-or-inactive-refresh-token'),
+      /Refresh session is no longer active/,
+    );
+  });
+}
+
+test('new session stores only refresh hash and has an absolute 30-day expiry', async () => {
+  let createdSession;
+  const service = createRefreshAuthService({
+    createSession: async (input) => {
+      createdSession = input;
+      return { id: '3d3205cc-e8f4-4eb5-9b57-fcd1ffed8dd0' };
+    },
+  });
+
+  const before = Date.now();
+  const result = await service.createUserSession('b919dd9a-12d5-4460-b0e2-f22f85ca507b');
+
+  assert.notEqual(createdSession.refreshTokenHash, result.refreshToken);
+  assert.equal(createdSession.refreshTokenHash.length, 64);
+  assert.equal(
+    createdSession.refreshTokenHash,
+    createHash('sha256').update(result.refreshToken).digest('hex'),
+  );
+  assert.ok(createdSession.expiresAt.getTime() >= before + 30 * 24 * 60 * 60 * 1000);
+  assert.equal(createdSession.expiresAt.getTime(), result.refreshTokenExpiresAt.getTime());
+});
+
+test('logout revokes the current server-side session', async () => {
+  let revokedSessionId;
+  const service = createRefreshAuthService({
+    revokeSession: async (sessionId) => {
+      revokedSessionId = sessionId;
+    },
+  });
+
+  assert.deepEqual(await service.logout('session-to-revoke'), { ok: true });
+  assert.equal(revokedSessionId, 'session-to-revoke');
+});
 
 test('unknown Telegram user is admitted from the organization request route', async () => {
   const service = createAuthService(createAuthRepository());

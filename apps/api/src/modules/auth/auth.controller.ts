@@ -185,27 +185,36 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   async refresh(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<RefreshAccessTokenResult> {
     const refreshToken = this.parseCookies(request.headers.cookie)[AUTH_COOKIE_NAMES.refresh];
     if (!refreshToken) {
+      this.clearAuthCookies(response);
       throw new UnauthorizedException('Missing refresh token');
     }
 
-    const serviceResult = (await this.authService.refreshAccessToken(refreshToken)) as unknown;
-    if (!isRefreshAccessTokenResult(serviceResult)) {
-      throw new InternalServerErrorException('Invalid refresh response');
+    try {
+      const serviceResult = (await this.authService.refreshAccessToken(refreshToken)) as unknown;
+      if (!isRefreshAccessTokenResult(serviceResult)) {
+        throw new InternalServerErrorException('Invalid refresh response');
+      }
+
+      const result: RefreshAccessTokenResult = serviceResult;
+      response.cookie(AUTH_COOKIE_NAMES.access, result.accessToken, {
+        ...this.cookieOptions,
+        expires: result.accessTokenExpiresAt,
+      });
+
+      return result;
+    } catch (caught: unknown) {
+      if (caught instanceof UnauthorizedException) {
+        this.clearAuthCookies(response);
+      }
+      throw caught;
     }
-
-    const result: RefreshAccessTokenResult = serviceResult;
-    response.cookie(AUTH_COOKIE_NAMES.access, result.accessToken, {
-      ...this.cookieOptions,
-      expires: result.accessTokenExpiresAt,
-    });
-
-    return result;
   }
 
   @Post('logout')

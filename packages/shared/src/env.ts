@@ -83,13 +83,19 @@ export const webEnvSchema = z
     NEXT_PUBLIC_WEB_URL: z.string().url().optional(),
     API_INTERNAL_URL: z.string().url().optional(),
     NEXT_PUBLIC_API_URL: z.string().url().optional(),
+    JWT_ACCESS_PUBLIC_KEY: pemKeySchema('JWT_ACCESS_PUBLIC_KEY', 'PUBLIC').optional(),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== 'production') {
       return;
     }
 
-    for (const key of ['NEXT_PUBLIC_WEB_URL', 'API_INTERNAL_URL', 'NEXT_PUBLIC_API_URL'] as const) {
+    for (const key of [
+      'NEXT_PUBLIC_WEB_URL',
+      'API_INTERNAL_URL',
+      'NEXT_PUBLIC_API_URL',
+      'JWT_ACCESS_PUBLIC_KEY',
+    ] as const) {
       if (!env[key]) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -104,6 +110,7 @@ export const webEnvSchema = z
     NEXT_PUBLIC_WEB_URL: env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000',
     API_INTERNAL_URL: env.API_INTERNAL_URL ?? 'http://localhost:4000/v1',
     NEXT_PUBLIC_API_URL: env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1',
+    JWT_ACCESS_PUBLIC_KEY: env.JWT_ACCESS_PUBLIC_KEY,
   }));
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

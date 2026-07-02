@@ -1,5 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { AUTH_COOKIE_NAMES } from '@churchflow/shared';
+import {
+  internalRedirectTarget,
+  isAccessTokenFresh,
+  setCookieHeader,
+} from './src/auth/middleware-session';
+import { isProtectedRoute } from './src/auth/route-policy';
 
 interface RefreshAccessTokenResult {
   accessToken: string;
@@ -7,40 +13,91 @@ interface RefreshAccessTokenResult {
 }
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
+  const protectedRoute = isProtectedRoute(request.nextUrl.pathname);
   const accessToken = request.cookies.get(AUTH_COOKIE_NAMES.access)?.value;
   const refreshToken = request.cookies.get(AUTH_COOKIE_NAMES.refresh)?.value;
 
-  if (accessToken && isAccessTokenFresh(accessToken)) {
+  if (
+    accessToken &&
+    (await isAccessTokenFresh(accessToken, process.env['JWT_ACCESS_PUBLIC_KEY']))
+  ) {
     return NextResponse.next();
   }
 
   if (refreshToken) {
     const refreshed = await refreshAccessToken(request);
     if (refreshed) {
-      const response = NextResponse.next();
-      response.cookies.set(AUTH_COOKIE_NAMES.access, refreshed.accessToken, {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: request.nextUrl.protocol === 'https:' || process.env['NODE_ENV'] === 'production',
-        path: '/',
-        expires: new Date(refreshed.accessTokenExpiresAt),
-      });
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set(
+        'cookie',
+        setCookieHeader(
+          request.headers.get('cookie'),
+          AUTH_COOKIE_NAMES.access,
+          refreshed.accessToken,
+        ),
+      );
+      const response = NextResponse.next({ request: { headers: requestHeaders } });
+      response.cookies.set(
+        AUTH_COOKIE_NAMES.access,
+        refreshed.accessToken,
+        authCookieOptions(request, refreshed.accessTokenExpiresAt),
+      );
 
       return response;
     }
+
+    return unauthenticatedResponse(request, protectedRoute, true);
+  }
+
+  return unauthenticatedResponse(request, protectedRoute, Boolean(accessToken));
+}
+
+function unauthenticatedResponse(
+  request: NextRequest,
+  protectedRoute: boolean,
+  clearCookies: boolean,
+): NextResponse {
+  if (!protectedRoute) {
+    const response = NextResponse.next();
+    if (clearCookies) clearAuthCookies(response, request);
+    return response;
   }
 
   const loginUrl = new URL('/login', request.url);
-  loginUrl.searchParams.set('redirectTo', `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  loginUrl.searchParams.set(
+    'redirectTo',
+    internalRedirectTarget(request.nextUrl.pathname, request.nextUrl.search),
+  );
   const response = NextResponse.redirect(loginUrl);
-  response.cookies.delete(AUTH_COOKIE_NAMES.access);
+  if (clearCookies) clearAuthCookies(response, request);
 
   return response;
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*', '/profile', '/invitations/pending'],
+  matcher: [
+    '/((?!api(?:/|$)|v1(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|robots\\.txt$|sitemap\\.xml$|.*\\.(?:avif|css|eot|gif|ico|jpe?g|js|json|map|png|svg|ttf|webp|woff2?)$).*)',
+  ],
 };
+
+function clearAuthCookies(response: NextResponse, request: NextRequest): void {
+  const options = authCookieOptions(request);
+  response.cookies.set(AUTH_COOKIE_NAMES.access, '', { ...options, expires: new Date(0) });
+  response.cookies.set(AUTH_COOKIE_NAMES.refresh, '', { ...options, expires: new Date(0) });
+}
+
+function authCookieOptions(request: NextRequest, expiresAt?: string) {
+  const domain = process.env['COOKIE_DOMAIN'];
+
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: request.nextUrl.protocol === 'https:' || process.env['NODE_ENV'] === 'production',
+    path: '/',
+    ...(expiresAt ? { expires: new Date(expiresAt) } : {}),
+    ...(domain ? { domain } : {}),
+  };
+}
 
 async function refreshAccessToken(
   request: NextRequest,
@@ -84,32 +141,6 @@ async function refreshAccessToken(
   }
 
   return undefined;
-}
-
-function isAccessTokenFresh(token: string): boolean {
-  const [, payload] = token.split('.');
-  if (!payload) {
-    return false;
-  }
-
-  try {
-    const decoded = JSON.parse(base64UrlDecode(payload)) as unknown;
-
-    return (
-      isRecord(decoded) &&
-      typeof decoded['exp'] === 'number' &&
-      decoded['exp'] > Math.floor(Date.now() / 1000) + 5
-    );
-  } catch {
-    return false;
-  }
-}
-
-function base64UrlDecode(value: string): string {
-  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
-
-  return atob(padded);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

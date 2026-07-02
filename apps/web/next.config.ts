@@ -6,6 +6,7 @@ const env = webEnvSchema.parse({
   NEXT_PUBLIC_WEB_URL: process.env['NEXT_PUBLIC_WEB_URL'],
   NEXT_PUBLIC_API_URL: process.env['NEXT_PUBLIC_API_URL'],
   API_INTERNAL_URL: process.env['API_INTERNAL_URL'],
+  JWT_ACCESS_PUBLIC_KEY: process.env['JWT_ACCESS_PUBLIC_KEY'],
 });
 const webHost = new URL(env.NEXT_PUBLIC_WEB_URL).host;
 

@@ -19,7 +19,9 @@ export function isPlatformAdminRole(role: PlatformRole | null | undefined): bool
 
 export async function hasServerSession(): Promise<boolean> {
   const cookieStore = await cookies();
-  return cookieStore.has(AUTH_COOKIE_NAMES.access);
+  // Middleware validates/refreshes the session before application routes execute.
+  // The refresh cookie is only a session candidate; API guards remain authoritative.
+  return cookieStore.has(AUTH_COOKIE_NAMES.access) || cookieStore.has(AUTH_COOKIE_NAMES.refresh);
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
