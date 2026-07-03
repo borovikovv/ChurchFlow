@@ -1,15 +1,15 @@
 import { redirect } from 'next/navigation';
-import type { Route } from 'next';
 import { getCurrentUser, requireServerSession } from '@/auth/session';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { ProfileForm } from './_components/profile-form';
 
 export default async function ProfilePage() {
   await requireServerSession('/profile');
 
   const user = await getCurrentUser();
   if (!user) {
-    redirect('/login?error=Unable%20to%20load%20profile' as Route);
+    redirect('/login');
   }
 
   return (
@@ -28,6 +28,10 @@ export default async function ProfilePage() {
             <StatusBadge status={user.platformRole} />
           </dd>
         </dl>
+        <ProfileForm
+          baptizedAt={user.baptizedAt?.slice(0, 10) ?? null}
+          baptismChurchName={user.baptismChurchName}
+        />
       </div>
     </main>
   );

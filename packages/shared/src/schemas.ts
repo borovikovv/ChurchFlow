@@ -78,6 +78,50 @@ const nullableTrimmedString = (max: number) =>
     .optional()
     .transform((value) => (value === '' ? null : value));
 
+const nullablePastOrTodayDate = z
+  .string()
+  .date()
+  .nullable()
+  .optional()
+  .refine((value) => value == null || value <= new Date().toISOString().slice(0, 10), {
+    message: 'Date cannot be in the future',
+  });
+
+export const updateCurrentUserProfileSchema = z
+  .object({
+    baptizedAt: nullablePastOrTodayDate,
+    baptismChurchName: nullableTrimmedString(160),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'At least one profile field is required',
+  });
+
+export const organizationMemberRelationshipTypeSchema = z.enum([
+  'SPOUSE',
+  'PARENT',
+  'CHILD',
+  'SIBLING',
+  'OTHER',
+]);
+
+export const createOrganizationMemberRelationshipSchema = z.object({
+  relatedMembershipId: uuidSchema,
+  type: organizationMemberRelationshipTypeSchema,
+  notes: nullableTrimmedString(1000),
+});
+
+export const createMemberPhotoUploadSchema = z.object({
+  filename: z.string().trim().min(1).max(255),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  byteSize: z
+    .number()
+    .int()
+    .positive()
+    .max(5 * 1024 * 1024),
+});
+
+export const confirmMemberPhotoUploadSchema = z.object({ assetId: uuidSchema });
+
 export const createManualOrganizationMemberSchema = z.object({
   displayName: z.string().trim().min(2).max(160),
   email: nullableTrimmedString(255)
@@ -89,6 +133,9 @@ export const createManualOrganizationMemberSchema = z.object({
     .transform((value) => value?.toLowerCase() ?? value),
   phone: nullableTrimmedString(40),
   notes: nullableTrimmedString(2000),
+  memberSince: nullablePastOrTodayDate,
+  biography: nullableTrimmedString(5000),
+  familyNotes: nullableTrimmedString(3000),
   role: z.enum(['MEMBER', 'VIEWER']).default('MEMBER'),
 });
 
@@ -104,6 +151,9 @@ export const updateOrganizationMemberProfileSchema = z
       .transform((value) => value?.toLowerCase() ?? value),
     phone: nullableTrimmedString(40),
     notes: nullableTrimmedString(2000),
+    memberSince: nullablePastOrTodayDate,
+    biography: nullableTrimmedString(5000),
+    familyNotes: nullableTrimmedString(3000),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: 'At least one profile field is required',

@@ -439,14 +439,37 @@
     white-space: nowrap;
   }
 
+  .sidebar-account-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .sidebar-account-row strong {
+    min-width: 0;
+  }
+
   .sidebar-account-label {
     color: var(--muted);
     font-size: 12px;
   }
 
-  .sidebar-account form,
+  .sidebar-account form {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
   .sidebar-logout {
-    width: 100%;
+    width: 34px;
+    min-height: 34px;
+    padding: 6px;
+    color: var(--muted);
+  }
+
+  .sidebar-logout:hover {
+    color: var(--danger);
   }
 
   .app-main {
@@ -836,6 +859,10 @@
       display: none;
     }
 
+    .sidebar-account-row {
+      flex: 1;
+    }
+
     .sidebar-account form,
     .sidebar-logout {
       width: auto;
@@ -861,6 +888,5 @@
     .details {
       grid-template-columns: 1fr;
     }
-
   }
 }

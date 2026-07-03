@@ -70,6 +70,14 @@ enum MembershipClaimStatus {
   EXPIRED
 }
 
+enum OrganizationMemberRelationshipType {
+  SPOUSE
+  PARENT
+  CHILD
+  SIBLING
+  OTHER
+}
+
 enum OrganizationRequestStatus {
   PENDING
   APPROVED
@@ -116,15 +124,17 @@ enum FeatureFlagScope {
 }
 
 model User {
-  id            String       @id @default(uuid()) @db.Uuid
-  email         String?      @unique @db.Citext
-  displayName   String?
-  avatarUrl     String?
-  emailVerified DateTime?
-  platformRole  PlatformRole @default(USER) @map("platform_role")
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
-  deletedAt     DateTime?    @map("deleted_at")
+  id                String       @id @default(uuid()) @db.Uuid
+  email             String?      @unique @db.Citext
+  displayName       String?
+  avatarUrl         String?
+  baptizedAt        DateTime?    @map("baptized_at") @db.Date
+  baptismChurchName String?      @map("baptism_church_name")
+  emailVerified     DateTime?
+  platformRole      PlatformRole @default(USER) @map("platform_role")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  deletedAt         DateTime?    @map("deleted_at")
 
   accounts                        AuthAccount[]
   sessions                        Session[]
@@ -211,13 +221,14 @@ model Organization {
   updatedAt   DateTime           @updatedAt @map("updated_at")
   deletedAt   DateTime?          @map("deleted_at")
 
-  members      OrganizationMember[]
-  invitations  OrganizationInvitation[]
-  website      OrganizationWebsite?
-  mediaAssets  MediaAsset[]
-  auditLogs    AuditLog[]
-  featureFlags FeatureFlag[]
-  requests     OrganizationRequest[]
+  members             OrganizationMember[]
+  invitations         OrganizationInvitation[]
+  website             OrganizationWebsite?
+  mediaAssets         MediaAsset[]
+  auditLogs           AuditLog[]
+  featureFlags        FeatureFlag[]
+  requests            OrganizationRequest[]
+  memberRelationships OrganizationMemberRelationship[]
 
   @@index([status])
   @@index([slug])
@@ -239,11 +250,13 @@ model OrganizationMember {
   createdAt       DateTime                 @default(now()) @map("created_at")
   updatedAt       DateTime                 @updatedAt @map("updated_at")
 
-  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user         User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdBy    User?                      @relation("MembershipCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  profile      OrganizationMemberProfile?
-  claims       MembershipClaim[]
+  organization          Organization                     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                  User?                            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdBy             User?                            @relation("MembershipCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  profile               OrganizationMemberProfile?
+  claims                MembershipClaim[]
+  outgoingRelationships OrganizationMemberRelationship[] @relation("RelationshipFrom")
+  incomingRelationships OrganizationMemberRelationship[] @relation("RelationshipTo")
 
   @@unique([organizationId, userId])
   @@index([organizationId])
@@ -256,20 +269,45 @@ model OrganizationMember {
 }
 
 model OrganizationMemberProfile {
-  id           String   @id @default(uuid()) @db.Uuid
-  membershipId String   @unique @map("membership_id") @db.Uuid
-  displayName  String   @map("display_name")
-  email        String?  @db.Citext
-  phone        String?
-  notes        String?
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                  String    @id @default(uuid()) @db.Uuid
+  membershipId        String    @unique @map("membership_id") @db.Uuid
+  displayName         String    @map("display_name")
+  email               String?   @db.Citext
+  phone               String?
+  notes               String?
+  memberSince         DateTime? @map("member_since") @db.Date
+  biography           String?
+  familyNotes         String?   @map("family_notes")
+  profilePhotoAssetId String?   @unique @map("profile_photo_asset_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  membership OrganizationMember @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membership        OrganizationMember @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  profilePhotoAsset MediaAsset?        @relation(fields: [profilePhotoAssetId], references: [id], onDelete: SetNull)
 
   @@index([email])
   @@index([phone])
   @@map("organization_member_profiles")
+}
+
+model OrganizationMemberRelationship {
+  id               String                             @id @default(uuid()) @db.Uuid
+  organizationId   String                             @map("organization_id") @db.Uuid
+  fromMembershipId String                             @map("from_membership_id") @db.Uuid
+  toMembershipId   String                             @map("to_membership_id") @db.Uuid
+  type             OrganizationMemberRelationshipType
+  notes            String?
+  createdAt        DateTime                           @default(now()) @map("created_at")
+  updatedAt        DateTime                           @updatedAt @map("updated_at")
+
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fromMembership OrganizationMember @relation("RelationshipFrom", fields: [fromMembershipId], references: [id], onDelete: Cascade)
+  toMembership   OrganizationMember @relation("RelationshipTo", fields: [toMembershipId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, fromMembershipId, toMembershipId, type], map: "organization_member_relationships_organization_id_from_membersh")
+  @@index([organizationId, fromMembershipId], map: "member_relationships_from_idx")
+  @@index([organizationId, toMembershipId], map: "member_relationships_to_idx")
+  @@map("organization_member_relationships")
 }
 
 model MembershipClaim {
@@ -465,7 +503,8 @@ model MediaAsset {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberProfile OrganizationMemberProfile?
 
   @@unique([bucket, objectKey])
   @@index([organizationId, createdAt])

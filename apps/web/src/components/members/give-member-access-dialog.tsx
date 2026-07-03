@@ -5,10 +5,7 @@ import { CopyField } from '@/components/copy-field';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { Button } from '@/components/ui/button';
 import { manageMemberAccess } from './member-access.actions';
-import type {
-  GiveMemberAccessDialogProps,
-  MemberAccessActionState,
-} from './member-access.types';
+import type { GiveMemberAccessDialogProps, MemberAccessActionState } from './member-access.types';
 
 const initialState: MemberAccessActionState = {
   claimId: null,

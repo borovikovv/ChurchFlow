@@ -103,6 +103,8 @@ Create only the folders needed by the current change. Avoid empty architecture s
 - Always clean up subscriptions, listeners, timers, and observers created by an effect.
 - Extract reusable stateful logic into a named `use-<name>.ts` hook. Keep a single-feature hook beside that feature; move it to `src/hooks` only when unrelated features reuse it.
 - Hooks must expose a small domain-oriented API and must not hide surprising page refreshes, global mutations, or unrelated side effects.
+- Do not create `window`/`document` custom events, DOM event buses, or subscriptions merely to synchronize React components. Lift state to their nearest common owner and pass typed data and callbacks; use context or an established external store only when component distance genuinely requires it.
+- A browser event is not sufficient justification for `useEffect` when the application itself emits that event to coordinate React state. Reserve effects for systems whose lifecycle exists outside React, such as native browser state, third-party widgets, network subscriptions, observers, and timers.
 
 ## Next.js and server/client boundaries
 

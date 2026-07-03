@@ -1,14 +1,48 @@
 'use client';
 
-import { useActionState, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
-import { PhoneInputField } from '@/components/ui/phone-input-field';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { GiveMemberAccessDialog } from './give-member-access-dialog';
+import { MemberPhotoField, validateMemberPhoto } from './member-photo-upload';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  updateOrganizationMemberProfileSchema,
+  type UpdateOrganizationMemberProfileInput,
+} from '@churchflow/shared';
+import { useForm } from 'react-hook-form';
+import { toast } from 'react-toastify';
+import { FormDatePicker } from '@/components/forms/form-date-picker';
+import { FormField } from '@/components/forms/form-field';
 
 type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 type FormAction = (formData: FormData) => void | Promise<void>;
+type RelationshipAction = (formData: FormData) => Promise<{ ok: boolean; error?: string }>;
+
+export interface ProfileUpdateState {
+  updated: boolean;
+  error: string | null;
+}
+
+type ProfileUpdateAction = (
+  state: ProfileUpdateState,
+  formData: FormData,
+) => Promise<ProfileUpdateState>;
+
+type PrepareMemberPhotoAction = (input: {
+  organizationId: string;
+  membershipId: string;
+  filename: string;
+  mimeType: string;
+  byteSize: number;
+}) => Promise<{ ok: boolean; error?: string; assetId?: string; uploadUrl?: string }>;
+
+type ConfirmMemberPhotoAction = (input: {
+  organizationId: string;
+  membershipId: string;
+  assetId: string;
+}) => Promise<{ ok: boolean; error?: string; photoUrl?: string }>;
 
 export interface RoleUpdateState {
   role: OrganizationRole;
@@ -17,12 +51,7 @@ export interface RoleUpdateState {
   error: string | null;
 }
 
-type RoleUpdateAction = (
-  state: RoleUpdateState,
-  formData: FormData,
-) => Promise<RoleUpdateState>;
-
-const roleUpdatedEvent = 'churchflow:member-role-updated';
+type RoleUpdateAction = (state: RoleUpdateState, formData: FormData) => Promise<RoleUpdateState>;
 
 const actionItemClassName =
   'flex min-h-[38px] w-full cursor-pointer items-center justify-start gap-2.5 rounded-md border-0 bg-transparent px-2.5 py-2 text-left font-medium text-[var(--foreground)] shadow-none hover:bg-[var(--surface-subtle)]';
@@ -36,11 +65,23 @@ interface EditableMember {
     email: string | null;
     phone: string | null;
     notes: string | null;
+    memberSince: string | null;
+    biography: string | null;
+    familyNotes: string | null;
+    photoUrl: string | null;
   };
   activeClaim: {
     id: string;
     status: 'PENDING' | 'REQUESTED';
   } | null;
+  relationships?: Array<{
+    id: string;
+    type: 'SPOUSE' | 'PARENT' | 'CHILD' | 'SIBLING' | 'OTHER';
+    fromMembershipId: string;
+    toMembershipId: string;
+    fromMembership: { id: string; profile: { displayName: string } | null };
+    toMembership: { id: string; profile: { displayName: string } | null };
+  }>;
 }
 
 function MenuIcon({ children }: { children: ReactNode }) {
@@ -59,13 +100,114 @@ function EditMemberSheet({
   member,
   organizationId,
   action,
+  memberCandidates,
+  createRelationship,
+  deleteRelationship,
+  preparePhoto,
+  confirmPhoto,
+  onProfileUpdated,
 }: {
   member: EditableMember;
   organizationId: string;
-  action: FormAction;
+  action: ProfileUpdateAction;
+  memberCandidates: Array<{ id: string; displayName: string }>;
+  createRelationship: RelationshipAction;
+  deleteRelationship: RelationshipAction;
+  preparePhoto: PrepareMemberPhotoAction;
+  confirmPhoto: ConfirmMemberPhotoAction;
+  onProfileUpdated: (profile: Partial<EditableMember['profile']>) => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [savedPhotoUrl, setSavedPhotoUrl] = useState(member.profile.photoUrl);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [relatedMembershipId, setRelatedMembershipId] = useState('');
+  const [relationshipType, setRelationshipType] = useState('SPOUSE');
+  const [relationships, setRelationships] = useState(member.relationships ?? []);
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<UpdateOrganizationMemberProfileInput>({
+    resolver: zodResolver(updateOrganizationMemberProfileSchema),
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
+    defaultValues: {
+      displayName: member.profile.displayName,
+      email: member.profile.email,
+      phone: member.profile.phone,
+      notes: member.profile.notes,
+      memberSince: member.profile.memberSince?.slice(0, 10) ?? null,
+      biography: member.profile.biography,
+      familyNotes: member.profile.familyNotes,
+    },
+  });
+
+  const submit = handleSubmit(async (values) => {
+    const currentPhotoError = validateMemberPhoto(photo);
+    setPhotoError(currentPhotoError);
+    if (currentPhotoError) return;
+
+    let nextPhotoUrl = savedPhotoUrl;
+    if (photo) {
+      setUploading(true);
+      try {
+        const prepared = await preparePhoto({
+          organizationId,
+          membershipId: member.id,
+          filename: photo.name,
+          mimeType: photo.type,
+          byteSize: photo.size,
+        });
+        if (!prepared.ok || !prepared.assetId || !prepared.uploadUrl) {
+          throw new Error(prepared.error ?? 'Unable to prepare photo upload.');
+        }
+        const upload = await fetch(prepared.uploadUrl, {
+          method: 'PUT',
+          headers: { 'content-type': photo.type },
+          body: photo,
+        });
+        if (!upload.ok) throw new Error('Photo upload failed.');
+        const confirmed = await confirmPhoto({
+          organizationId,
+          membershipId: member.id,
+          assetId: prepared.assetId,
+        });
+        if (!confirmed.ok) throw new Error(confirmed.error ?? 'Unable to confirm photo.');
+        nextPhotoUrl = confirmed.photoUrl ?? nextPhotoUrl;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Photo upload failed.');
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    const formData = new FormData();
+    formData.set('organizationId', organizationId);
+    formData.set('membershipId', member.id);
+    for (const [key, value] of Object.entries(values)) formData.set(key, value ?? '');
+    const result = await action({ updated: false, error: null }, formData);
+    if (result.error) toast.error(result.error);
+    else {
+      toast.success('Member profile updated.');
+      setSavedPhotoUrl(nextPhotoUrl);
+      setPhoto(null);
+      onProfileUpdated({
+        ...(values.displayName !== undefined ? { displayName: values.displayName } : {}),
+        ...(values.email !== undefined ? { email: values.email } : {}),
+        ...(values.phone !== undefined ? { phone: values.phone } : {}),
+        ...(values.notes !== undefined ? { notes: values.notes } : {}),
+        ...(values.memberSince !== undefined ? { memberSince: values.memberSince } : {}),
+        ...(values.biography !== undefined ? { biography: values.biography } : {}),
+        ...(values.familyNotes !== undefined ? { familyNotes: values.familyNotes } : {}),
+        photoUrl: nextPhotoUrl,
+      });
+    }
+  });
 
   return (
     <>
@@ -81,13 +223,17 @@ function EditMemberSheet({
       </button>
       <dialog
         aria-labelledby={titleId}
-        className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-[480px] border-0 border-l border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[-16px_0_48px_rgba(31,35,40,0.18)] backdrop:bg-[rgba(31,35,40,0.45)]"
+        className="fixed inset-0 m-auto max-h-[min(800px,80dvh)] w-[min(560px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
         onClick={(event) => {
           if (event.target === event.currentTarget) event.currentTarget.close();
         }}
         ref={dialogRef}
       >
-        <form action={action} className="grid h-full grid-rows-[auto_1fr_auto]">
+        <form
+          onSubmit={submit}
+          className="grid max-h-[min(800px,80dvh)] grid-rows-[auto_minmax(0,1fr)_auto]"
+          noValidate
+        >
           <header className="flex items-start justify-between gap-4 border-b border-[var(--line-muted)] p-6 [&_h2]:m-0 [&_p]:m-0">
             <div>
               <p>Edit profile</p>
@@ -105,31 +251,151 @@ function EditMemberSheet({
           <div className="flex flex-col gap-[18px] overflow-y-auto p-6">
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="membershipId" value={member.id} />
-            <label>
-              Name
-              <input name="displayName" defaultValue={member.profile.displayName} required />
-            </label>
-            <label>
-              Email
-              <input name="email" type="email" defaultValue={member.profile.email ?? ''} />
-            </label>
-            <label>
-              Phone
-              <PhoneInputField
-                name="phone"
-                {...(member.profile.phone ? { defaultValue: member.profile.phone } : {})}
-              />
-            </label>
+            <MemberPhotoField
+              currentUrl={savedPhotoUrl}
+              file={photo}
+              error={photoError}
+              onChange={(nextPhoto, nextError) => {
+                setPhoto(nextPhoto);
+                setPhotoError(nextError);
+              }}
+            />
+            <FormField label="Name" error={errors.displayName?.message}>
+              {({ id, errorId, invalid }) => (
+                <input
+                  id={id}
+                  aria-describedby={errorId}
+                  aria-invalid={invalid}
+                  {...register('displayName')}
+                />
+              )}
+            </FormField>
+            <FormField label="Email" error={errors.email?.message}>
+              {({ id, errorId, invalid }) => (
+                <input
+                  id={id}
+                  type="email"
+                  aria-describedby={errorId}
+                  aria-invalid={invalid}
+                  {...register('email')}
+                />
+              )}
+            </FormField>
+            <FormField label="Phone" error={errors.phone?.message}>
+              {({ id, errorId, invalid }) => (
+                <input
+                  id={id}
+                  aria-describedby={errorId}
+                  aria-invalid={invalid}
+                  {...register('phone')}
+                />
+              )}
+            </FormField>
             <label>
               Notes
-              <textarea name="notes" rows={5} defaultValue={member.profile.notes ?? ''} />
+              <textarea rows={5} {...register('notes')} />
             </label>
+            <FormDatePicker
+              control={control}
+              name="memberSince"
+              label="Member since"
+              error={errors.memberSince?.message}
+            />
+            <label>
+              Biography
+              <textarea rows={6} {...register('biography')} />
+            </label>
+            <label>
+              Family notes
+              <textarea rows={4} {...register('familyNotes')} />
+            </label>
+            <fieldset className="grid gap-3 border-t border-[var(--line)] pt-4">
+              <legend className="font-semibold pr-2">Family relationships</legend>
+              {relationships.map((relationship) => {
+                const other =
+                  relationship.fromMembershipId === member.id
+                    ? relationship.toMembership
+                    : relationship.fromMembership;
+                return (
+                  <div className="flex items-center justify-between gap-3" key={relationship.id}>
+                    <span>
+                      {other.profile?.displayName ?? 'Member'} · {relationship.type.toLowerCase()}
+                    </span>
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={async () => {
+                        const data = new FormData();
+                        data.set('organizationId', organizationId);
+                        data.set('relationshipId', relationship.id);
+                        const result = await deleteRelationship(data);
+                        if (result.ok) {
+                          setRelationships((current) =>
+                            current.filter(({ id }) => id !== relationship.id),
+                          );
+                          toast.success('Relationship removed.');
+                        } else toast.error(result.error ?? 'Unable to remove relationship.');
+                      }}
+                    >
+                      Remove
+                    </button>
+                    <input type="hidden" name="organizationId" value={organizationId} />
+                  </div>
+                );
+              })}
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={relatedMembershipId}
+                  onChange={(event) => setRelatedMembershipId(event.target.value)}
+                >
+                  <option value="">Select member</option>
+                  {memberCandidates
+                    .filter((candidate) => candidate.id !== member.id)
+                    .map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {candidate.displayName}
+                      </option>
+                    ))}
+                </select>
+                <select
+                  value={relationshipType}
+                  onChange={(event) => setRelationshipType(event.target.value)}
+                >
+                  <option value="SPOUSE">Spouse</option>
+                  <option value="PARENT">Parent</option>
+                  <option value="CHILD">Child</option>
+                  <option value="SIBLING">Sibling</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={!relatedMembershipId}
+                onClick={async () => {
+                  const data = new FormData();
+                  data.set('organizationId', organizationId);
+                  data.set('membershipId', member.id);
+                  data.set('relatedMembershipId', relatedMembershipId);
+                  data.set('relationshipType', relationshipType);
+                  const result = await createRelationship(data);
+                  if (result.ok) {
+                    toast.success('Relationship added.');
+                    setRelatedMembershipId('');
+                  } else toast.error(result.error ?? 'Unable to add relationship.');
+                }}
+              >
+                Add relationship
+              </button>
+            </fieldset>
           </div>
           <footer className="flex justify-end gap-2 border-t border-[var(--line-muted)] bg-[var(--surface)] px-6 py-4">
             <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
               Cancel
             </Button>
-            <Button type="submit">Save changes</Button>
+            <Button disabled={isSubmitting || uploading} type="submit">
+              {uploading ? 'Uploading…' : isSubmitting ? 'Saving…' : 'Save changes'}
+            </Button>
           </footer>
         </form>
       </dialog>
@@ -141,30 +407,35 @@ function ChangeRoleDialog({
   member,
   organizationId,
   action,
+  onRoleUpdated,
 }: {
   member: EditableMember;
   organizationId: string;
   action: RoleUpdateAction;
+  onRoleUpdated: (role: OrganizationRole) => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  const [state, formAction, pending] = useActionState(action, {
-    role: member.role,
-    updated: false,
-    version: 0,
-    error: null,
-  });
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!state.updated) return;
-
-    window.dispatchEvent(
-      new CustomEvent(roleUpdatedEvent, {
-        detail: { membershipId: member.id, role: state.role },
-      }),
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    const formData = new FormData(event.currentTarget);
+    const result = await action(
+      { role: member.role, updated: false, version: 0, error: null },
+      formData,
     );
+    setPending(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    onRoleUpdated(result.role);
     dialogRef.current?.close();
-  }, [member.id, state.role, state.updated, state.version]);
+  }
 
   return (
     <>
@@ -183,14 +454,14 @@ function ChangeRoleDialog({
         className="fixed inset-0 m-auto max-h-[calc(100dvh-32px)] w-[min(480px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)] backdrop:backdrop-blur-[1px]"
         ref={dialogRef}
       >
-        <form action={formAction} className="grid gap-6 p-6">
+        <form onSubmit={submit} className="grid gap-6 p-6">
           <div className="grid gap-2 [&_h2]:m-0 [&_h2]:text-xl [&_p]:m-0 [&_p]:text-[var(--muted)]">
             <h2 id={titleId}>Change member role</h2>
             <p>Choose the organization access level for {member.profile.displayName}.</p>
           </div>
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="membershipId" value={member.id} />
-          {state.error ? <p className="form-error m-0">{state.error}</p> : null}
+          {error ? <p className="form-error m-0">{error}</p> : null}
           <label>
             Role
             <select name="role" defaultValue={member.role}>
@@ -218,29 +489,8 @@ function ChangeRoleDialog({
   );
 }
 
-export function MemberRoleStatus({
-  membershipId,
-  role,
-}: {
-  membershipId: string;
-  role: OrganizationRole;
-}) {
-  const [currentRole, setCurrentRole] = useState(role);
-
-  useEffect(() => {
-    const updateRole = (event: Event) => {
-      const { membershipId: updatedMembershipId, role: updatedRole } = (
-        event as CustomEvent<{ membershipId: string; role: OrganizationRole }>
-      ).detail;
-
-      if (updatedMembershipId === membershipId) setCurrentRole(updatedRole);
-    };
-
-    window.addEventListener(roleUpdatedEvent, updateRole);
-    return () => window.removeEventListener(roleUpdatedEvent, updateRole);
-  }, [membershipId]);
-
-  return <StatusBadge status={currentRole} />;
+export function MemberRoleStatus({ role }: { role: OrganizationRole }) {
+  return <StatusBadge status={role} />;
 }
 
 export function MemberActions({
@@ -253,16 +503,30 @@ export function MemberActions({
   updateRole,
   removeMember,
   claimAction,
+  memberCandidates,
+  createRelationship,
+  deleteRelationship,
+  preparePhoto,
+  confirmPhoto,
+  onProfileUpdated,
+  onRoleUpdated,
 }: {
   member: EditableMember;
   organizationId: string;
   canManage: boolean;
   isOwner: boolean;
   isCurrentMember: boolean;
-  updateProfile: FormAction;
+  updateProfile: ProfileUpdateAction;
   updateRole: RoleUpdateAction;
   removeMember: FormAction;
   claimAction: FormAction;
+  memberCandidates: Array<{ id: string; displayName: string }>;
+  createRelationship: RelationshipAction;
+  deleteRelationship: RelationshipAction;
+  preparePhoto: PrepareMemberPhotoAction;
+  confirmPhoto: ConfirmMemberPhotoAction;
+  onProfileUpdated: (profile: Partial<EditableMember['profile']>) => void;
+  onRoleUpdated: (role: OrganizationRole) => void;
 }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
 
@@ -295,10 +559,25 @@ export function MemberActions({
       </summary>
       <div className="absolute top-[calc(100%+6px)] right-0 z-10 w-[220px] overflow-hidden rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-1.5 shadow-[0_12px_32px_rgba(31,35,40,0.16)]">
         {canManage ? (
-          <EditMemberSheet member={member} organizationId={organizationId} action={updateProfile} />
+          <EditMemberSheet
+            member={member}
+            organizationId={organizationId}
+            action={updateProfile}
+            memberCandidates={memberCandidates}
+            createRelationship={createRelationship}
+            deleteRelationship={deleteRelationship}
+            preparePhoto={preparePhoto}
+            confirmPhoto={confirmPhoto}
+            onProfileUpdated={onProfileUpdated}
+          />
         ) : null}
         {isOwner ? (
-          <ChangeRoleDialog member={member} organizationId={organizationId} action={updateRole} />
+          <ChangeRoleDialog
+            member={member}
+            organizationId={organizationId}
+            action={updateRole}
+            onRoleUpdated={onRoleUpdated}
+          />
         ) : null}
         {canManage && member.accountState === 'UNCLAIMED' ? (
           <GiveMemberAccessDialog
@@ -315,13 +594,31 @@ export function MemberActions({
             <input type="hidden" name="claimId" value={member.activeClaim.id} />
             {member.activeClaim.status === 'REQUESTED' ? (
               <>
-                <button className={actionItemClassName} name="action" value="approve" type="submit">Approve access</button>
-                <button className={`${actionItemClassName} !text-[var(--danger)]`} name="action" value="reject" type="submit">Reject request</button>
+                <button className={actionItemClassName} name="action" value="approve" type="submit">
+                  Approve access
+                </button>
+                <button
+                  className={`${actionItemClassName} !text-[var(--danger)]`}
+                  name="action"
+                  value="reject"
+                  type="submit"
+                >
+                  Reject request
+                </button>
               </>
             ) : (
-              <button className={actionItemClassName} name="action" value="refresh" type="submit">Refresh access link</button>
+              <button className={actionItemClassName} name="action" value="refresh" type="submit">
+                Refresh access link
+              </button>
             )}
-            <button className={`${actionItemClassName} !text-[var(--danger)]`} name="action" value="revoke" type="submit">Revoke access link</button>
+            <button
+              className={`${actionItemClassName} !text-[var(--danger)]`}
+              name="action"
+              value="revoke"
+              type="submit"
+            >
+              Revoke access link
+            </button>
           </form>
         ) : null}
         {isOwner && !isCurrentMember ? (

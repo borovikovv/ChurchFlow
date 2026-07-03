@@ -6,6 +6,7 @@ import { getCurrentUser, hasServerSession, isPlatformAdminRole } from '@/auth/se
 import { AppShell } from '@/components/app-shell';
 import { ToastProvider } from '@/components/toast-provider';
 import 'react-toastify/dist/ReactToastify.css';
+import 'react-datepicker/dist/react-datepicker.css';
 import 'react-phone-number-input/style.css';
 import './globals.css';
 
@@ -21,6 +22,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        <div id="datepicker-portal" />
         {user ? (
           <AppShell
             isPlatformAdmin={isPlatformAdminRole(user.platformRole)}

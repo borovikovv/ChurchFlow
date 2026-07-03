@@ -6,6 +6,8 @@ import { UpdateMembershipRoleDto } from './dto/update-membership-role.dto';
 import { CreateManualMemberDto } from './dto/create-manual-member.dto';
 import { UpdateMemberProfileDto } from './dto/update-member-profile.dto';
 import { ListMembershipsQueryDto } from './dto/list-memberships-query.dto';
+import { CreateMemberRelationshipDto } from './dto/create-member-relationship.dto';
+import { Delete } from '@nestjs/common';
 
 @Controller('organizations/:organizationId/memberships')
 @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
@@ -64,6 +66,47 @@ export class MembershipsController {
       organizationId,
       membershipId,
       body.role,
+      this.getActorUserId(request),
+    );
+  }
+
+  @Get(':membershipId/relationships')
+  listRelationships(
+    @Param('organizationId') organizationId: string,
+    @Param('membershipId') membershipId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.membershipsService.listRelationships(
+      organizationId,
+      membershipId,
+      this.getActorUserId(request),
+    );
+  }
+
+  @Post(':membershipId/relationships')
+  createRelationship(
+    @Param('organizationId') organizationId: string,
+    @Param('membershipId') membershipId: string,
+    @Body() body: CreateMemberRelationshipDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.membershipsService.createRelationship(
+      organizationId,
+      membershipId,
+      body,
+      this.getActorUserId(request),
+    );
+  }
+
+  @Delete('relationships/:relationshipId')
+  deleteRelationship(
+    @Param('organizationId') organizationId: string,
+    @Param('relationshipId') relationshipId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.membershipsService.deleteRelationship(
+      organizationId,
+      relationshipId,
       this.getActorUserId(request),
     );
   }

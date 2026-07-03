@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { fileURLToPath } from 'node:url';
 import { webEnvSchema } from '@churchflow/shared';
 
 const env = webEnvSchema.parse({
@@ -9,10 +10,21 @@ const env = webEnvSchema.parse({
   JWT_ACCESS_PUBLIC_KEY: process.env['JWT_ACCESS_PUBLIC_KEY'],
 });
 const webHost = new URL(env.NEXT_PUBLIC_WEB_URL).host;
+const sharedSource = fileURLToPath(new URL('./src/shared/index.ts', import.meta.url));
 
 const nextConfig: NextConfig = {
   typedRoutes: true,
   reactStrictMode: true,
+  webpack(config) {
+    config.resolve.alias['@churchflow/shared$'] = sharedSource;
+    config.resolve.extensionAlias = {
+      ...config.resolve.extensionAlias,
+      '.js': ['.ts', '.tsx', '.js'],
+      '.mjs': ['.mts', '.mjs'],
+      '.cjs': ['.cts', '.cjs'],
+    };
+    return config;
+  },
   allowedDevOrigins: [webHost],
   async rewrites() {
     return [

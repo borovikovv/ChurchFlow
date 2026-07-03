@@ -11,6 +11,8 @@ export interface CurrentUser {
   email: string | null;
   displayName: string | null;
   platformRole: PlatformRole;
+  baptizedAt: string | null;
+  baptismChurchName: string | null;
 }
 
 export function isPlatformAdminRole(role: PlatformRole | null | undefined): boolean {

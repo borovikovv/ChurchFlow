@@ -31,7 +31,7 @@ export function FormDialog({
       </Button>
       <dialog
         aria-labelledby={titleId}
-        className="fixed inset-0 m-auto max-h-[calc(100dvh-32px)] w-[min(480px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)] backdrop:backdrop-blur-[1px]"
+        className="fixed inset-0 m-auto max-h-[min(800px,80dvh)] w-[min(480px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)] backdrop:backdrop-blur-[1px]"
         onClose={(event) => {
           const parentMenu = event.currentTarget.closest('details');
           if (parentMenu) parentMenu.open = false;
@@ -41,12 +41,24 @@ export function FormDialog({
         }}
         ref={dialogRef}
       >
-        <div className="grid gap-6 p-6">
-          <h2 id={titleId}>{title}</h2>
-          {children}
-          <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-            Cancel
-          </Button>
+        <div className="grid max-h-[min(800px,80dvh)] grid-rows-[auto_minmax(0,1fr)_auto]">
+          <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
+            <h2 id={titleId}>{title}</h2>
+            <button
+              aria-label="Close"
+              className="text-2xl text-[var(--muted)]"
+              type="button"
+              onClick={() => dialogRef.current?.close()}
+            >
+              ×
+            </button>
+          </header>
+          <div className="min-h-0 overflow-y-auto p-5">{children}</div>
+          <footer className="flex justify-end border-t border-[var(--line)] p-5">
+            <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
+              Cancel
+            </Button>
+          </footer>
         </div>
       </dialog>
     </>

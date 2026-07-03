@@ -10,6 +10,7 @@ import type {
   CreateManualOrganizationMemberInput,
   OrganizationMembersAccessFilter,
   UpdateOrganizationMemberProfileInput,
+  CreateOrganizationMemberRelationshipInput,
 } from '@churchflow/shared';
 import { MembershipsRepository } from './repositories/memberships.repository';
 
@@ -44,10 +45,10 @@ export class MembershipsService {
             ? 'CLAIMED'
             : 'ACCOUNT_DISABLED'
           : activeClaim?.status === 'REQUESTED'
-              ? 'CLAIM_REQUESTED'
-              : activeClaim
-                ? 'CLAIM_PENDING'
-                : 'UNCLAIMED';
+            ? 'CLAIM_REQUESTED'
+            : activeClaim
+              ? 'CLAIM_PENDING'
+              : 'UNCLAIMED';
 
         return {
           id: member.id,
@@ -57,12 +58,23 @@ export class MembershipsService {
           claimedAt: member.claimedAt,
           accountState,
           profile: member.profile
-            ? { ...member.profile, notes: canManageProfiles ? member.profile.notes : null }
+            ? {
+                ...member.profile,
+                notes: canManageProfiles ? member.profile.notes : null,
+                biography: canManageProfiles ? member.profile.biography : null,
+                familyNotes: canManageProfiles ? member.profile.familyNotes : null,
+                photoUrl: member.user?.avatarUrl ?? null,
+              }
             : {
                 displayName: member.user?.displayName ?? member.user?.email ?? 'Member',
                 email: member.user?.email ?? null,
                 phone: null,
                 notes: null,
+                memberSince: null,
+                biography: null,
+                familyNotes: null,
+                profilePhotoAssetId: null,
+                photoUrl: member.user?.avatarUrl ?? null,
               },
           user: member.user
             ? {
@@ -81,6 +93,67 @@ export class MembershipsService {
       }),
       pendingInvitations,
     };
+  }
+
+  async listRelationships(organizationId: string, membershipId: string, actorUserId: string) {
+    const actor = await this.membershipsRepository.findActiveMembership(
+      organizationId,
+      actorUserId,
+    );
+    if (!actor || !['OWNER', 'ADMIN'].includes(actor.role))
+      throw new ForbiddenException(
+        'Only organization owners and admins can view member relationships',
+      );
+    return this.membershipsRepository.listRelationships(organizationId, membershipId);
+  }
+
+  async createRelationship(
+    organizationId: string,
+    membershipId: string,
+    input: CreateOrganizationMemberRelationshipInput,
+    actorUserId: string,
+  ) {
+    try {
+      return await this.membershipsRepository.createRelationship({
+        organizationId,
+        membershipId,
+        ...input,
+        actorUserId,
+      });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : '';
+      if (code === 'ACTOR_CANNOT_MANAGE_MEMBERS')
+        throw new ForbiddenException(
+          'Only organization owners and admins can manage relationships',
+        );
+      if (code === 'MEMBERSHIP_NOT_FOUND')
+        throw new NotFoundException('Organization member was not found');
+      if (code === 'SELF_RELATIONSHIP' || code === 'RELATIONSHIP_EXISTS')
+        throw new ConflictException(
+          code === 'SELF_RELATIONSHIP'
+            ? 'A member cannot be related to themselves'
+            : 'Relationship already exists',
+        );
+      throw error;
+    }
+  }
+
+  async deleteRelationship(organizationId: string, relationshipId: string, actorUserId: string) {
+    try {
+      return await this.membershipsRepository.deleteRelationship(
+        organizationId,
+        relationshipId,
+        actorUserId,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message === 'ACTOR_CANNOT_MANAGE_MEMBERS')
+        throw new ForbiddenException(
+          'Only organization owners and admins can manage relationships',
+        );
+      if (error instanceof Error && error.message === 'RELATIONSHIP_NOT_FOUND')
+        throw new NotFoundException('Relationship was not found');
+      throw error;
+    }
   }
 
   async createManualMember(

@@ -3,85 +3,25 @@ import type { Route } from 'next';
 import { redirect } from 'next/navigation';
 import { apiFetch } from '@/api/client';
 import { CopyField } from '@/components/copy-field';
+import type { InlineInvitationState } from '@/components/members/invite-app-user-form';
+import type { RoleUpdateState } from '@/components/members/member-actions';
+import { MembersManager } from './_components/members-manager';
 import {
-  InviteAppUserForm,
-  type InlineInvitationState,
-} from '@/components/members/invite-app-user-form';
-import {
-  MemberActions,
-  MemberRoleStatus,
-  type RoleUpdateState,
-} from '@/components/members/member-actions';
-import { FormDialog } from '@/components/ui/form-dialog';
-import { PhoneInputField } from '@/components/ui/phone-input-field';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { Tabs } from '@/components/ui/tabs';
+  confirmMemberPhotoAction,
+  prepareMemberPhotoAction,
+  updateMemberProfileAction,
+} from './actions';
+import type {
+  ClaimMutationResult,
+  InvitationMutationResult,
+  MemberRelationship,
+  MembersPayload,
+  PendingInvitation,
+} from './types';
 import {
   organizationMembersAccessFilterSchema,
   type OrganizationMembersAccessFilter,
 } from '@churchflow/shared';
-
-type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
-type AccountState =
-  | 'UNCLAIMED'
-  | 'CLAIM_PENDING'
-  | 'CLAIM_REQUESTED'
-  | 'CLAIMED'
-  | 'ACCOUNT_DISABLED';
-
-interface OrganizationMember {
-  id: string;
-  role: OrganizationRole;
-  status: string;
-  source: string;
-  accountState: AccountState;
-  claimedAt: string | null;
-  profile: {
-    displayName: string;
-    email: string | null;
-    phone: string | null;
-    notes: string | null;
-  };
-  user: { id: string; email: string | null; displayName: string | null } | null;
-  activeClaim: {
-    id: string;
-    status: 'PENDING' | 'REQUESTED';
-    expiresAt: string;
-    requestedBy: { id: string; displayName: string | null; avatarUrl: string | null } | null;
-  } | null;
-}
-
-interface PendingInvitation {
-  id: string;
-  mode: string;
-  targetDisplay: string | null;
-  email: string | null;
-  role: string;
-  expiresAt: string;
-}
-
-interface MembersPayload {
-  actorRole: OrganizationRole | null;
-  actorMembershipId: string | null;
-  members: OrganizationMember[];
-  pendingInvitations: PendingInvitation[];
-}
-
-interface InvitationMutationResult {
-  invitation: PendingInvitation;
-  acceptUrl: string;
-  emailSent: boolean;
-}
-
-interface ClaimMutationResult {
-  claim: { id: string };
-  claimUrl: string;
-  emailSent: boolean;
-}
-
-interface CreatedManualMember {
-  id: string;
-}
 
 function membersUrl(organizationId: string, params?: Record<string, string>): Route {
   const query = params ? `?${new URLSearchParams(params).toString()}` : '';
@@ -135,28 +75,6 @@ async function manageInlineInvitation(
     : { ...previousState, error: result.error.message };
 }
 
-async function invitationAction(formData: FormData) {
-  'use server';
-  const organizationId = String(formData.get('organizationId'));
-  const invitationId = String(formData.get('invitationId'));
-  const action = String(formData.get('action'));
-  const result = await apiFetch<InvitationMutationResult | PendingInvitation>(
-    `/organizations/${organizationId}/invitations/${invitationId}/${action}`,
-    { method: 'POST' },
-  );
-  revalidatePath(`/dashboard/${organizationId}/members`);
-  if (!result.ok) redirect(membersUrl(organizationId, { error: result.error.message }));
-  if ('acceptUrl' in result.data) {
-    redirect(
-      membersUrl(organizationId, {
-        claimLink: result.data.acceptUrl,
-        message: 'Invitation refreshed.',
-      }),
-    );
-  }
-  redirect(membersUrl(organizationId, { message: 'Invitation revoked.' }));
-}
-
 async function mutateAndRedirect(
   organizationId: string,
   path: string,
@@ -170,74 +88,6 @@ async function mutateAndRedirect(
       organizationId,
       result.ok ? { message: successMessage } : { error: result.error.message },
     ),
-  );
-}
-
-async function createManualMember(formData: FormData) {
-  'use server';
-  const organizationId = String(formData.get('organizationId'));
-  const result = await apiFetch<CreatedManualMember>(
-    `/organizations/${organizationId}/memberships/manual`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        displayName: formData.get('displayName'),
-        email: formData.get('email') || null,
-        phone: formData.get('phone') || null,
-        notes: formData.get('notes') || null,
-        role: formData.get('role'),
-      }),
-    },
-  );
-  revalidatePath(`/dashboard/${organizationId}/members`);
-  if (!result.ok) {
-    redirect(membersUrl(organizationId, { error: result.error.message }));
-  }
-
-  if (formData.get('prepareAccess') === 'on') {
-    const claim = await apiFetch<ClaimMutationResult>(
-      `/organizations/${organizationId}/memberships/${result.data.id}/claim`,
-      { method: 'POST' },
-    );
-    if (!claim.ok) {
-      redirect(
-        membersUrl(organizationId, {
-          error: `Member was created, but access could not be prepared: ${claim.error.message}`,
-        }),
-      );
-    }
-    redirect(
-      membersUrl(organizationId, {
-        claimLink: claim.data.claimUrl,
-        message: claim.data.emailSent
-          ? 'Member added; access link created and emailed.'
-          : 'Member added; access link created.',
-      }),
-    );
-  }
-
-  redirect(membersUrl(organizationId, { message: 'Manual member added.' }));
-}
-
-async function updateProfile(formData: FormData) {
-  'use server';
-  const organizationId = String(formData.get('organizationId'));
-  const membershipId = String(formData.get('membershipId'));
-  await mutateAndRedirect(
-    organizationId,
-    `/organizations/${organizationId}/memberships/${membershipId}/profile`,
-    {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        displayName: formData.get('displayName'),
-        email: formData.get('email') || null,
-        phone: formData.get('phone') || null,
-        notes: formData.get('notes') || null,
-      }),
-    },
-    'Member profile updated.',
   );
 }
 
@@ -273,6 +123,34 @@ async function removeMember(formData: FormData) {
     { method: 'POST' },
     'Member removed.',
   );
+}
+
+async function createRelationship(formData: FormData) {
+  'use server';
+  const organizationId = String(formData.get('organizationId'));
+  const membershipId = String(formData.get('membershipId'));
+  const result = await apiFetch(
+    `/organizations/${organizationId}/memberships/${membershipId}/relationships`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        relatedMembershipId: formData.get('relatedMembershipId'),
+        type: formData.get('relationshipType'),
+      }),
+    },
+  );
+  return result.ok ? { ok: true as const } : { ok: false as const, error: result.error.message };
+}
+
+async function deleteRelationship(formData: FormData) {
+  'use server';
+  const organizationId = String(formData.get('organizationId'));
+  const result = await apiFetch(
+    `/organizations/${organizationId}/memberships/relationships/${String(formData.get('relationshipId'))}`,
+    { method: 'DELETE' },
+  );
+  return result.ok ? { ok: true as const } : { ok: false as const, error: result.error.message };
 }
 
 async function updateMemberRole(
@@ -316,8 +194,28 @@ export default async function MembersDashboardPage({
   const payload: MembersPayload = result.ok
     ? result.data
     : { actorRole: null, actorMembershipId: null, members: [], pendingInvitations: [] };
+  if (result.ok) {
+    await Promise.all(
+      payload.members.map(async (member) => {
+        if (!member.profile.profilePhotoAssetId) return;
+        const photo = await apiFetch<{ url: string }>(
+          `/organizations/${orgId}/media/${member.profile.profilePhotoAssetId}/read-url`,
+        );
+        if (photo.ok) member.profile.photoUrl = photo.data.url;
+      }),
+    );
+  }
   const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
-  const isOwner = payload.actorRole === 'OWNER';
+  if (canManage) {
+    await Promise.all(
+      payload.members.map(async (member) => {
+        const relationships = await apiFetch<MemberRelationship[]>(
+          `/organizations/${orgId}/memberships/${member.id}/relationships`,
+        );
+        member.relationships = relationships.ok ? relationships.data : [];
+      }),
+    );
+  }
 
   return (
     <div className="stack">
@@ -328,140 +226,44 @@ export default async function MembersDashboardPage({
       {message ? <p>{message}</p> : null}
       {claimLink ? <CopyField value={claimLink} /> : null}
 
-      <div className="flex flex-col items-stretch gap-4 border-b border-[var(--line)] md:flex-row md:items-end md:justify-between [&_.ui-tabs]:flex-1 [&_.ui-tabs]:border-b-0">
-        <Tabs
-          label="Member access filters"
-          items={[
-            { label: 'All', href: membersUrl(orgId), active: memberAccess === 'all' },
-            {
-              label: 'Telegram connected',
-              href: membersUrl(orgId, { access: 'connected' }),
-              active: memberAccess === 'connected',
-            },
-            {
-              label: 'No app access',
-              href: membersUrl(orgId, { access: 'offline' }),
-              active: memberAccess === 'offline',
-            },
-            {
-              label: 'Access requested',
-              href: membersUrl(orgId, { access: 'requested' }),
-              active: memberAccess === 'requested',
-            },
-            {
-              label: 'Suspended',
-              href: membersUrl(orgId, { access: 'suspended' }),
-              active: memberAccess === 'suspended',
-            },
-          ]}
-        />
-        {canManage ? (
-          <div className="flex shrink-0 justify-end gap-2 pb-2">
-            <FormDialog triggerLabel="Invite app user" title="Invite an app user">
-              <p className="-mt-4 mb-0">
-                Send an email invitation or generate a link you can share yourself.
-              </p>
-              <InviteAppUserForm organizationId={orgId} action={manageInlineInvitation} />
-            </FormDialog>
-            <FormDialog
-              triggerLabel="Add new member"
-              triggerVariant="primary"
-              title="Add member manually"
-            >
-              <form className="grid gap-4" action={createManualMember}>
-                <input type="hidden" name="organizationId" value={orgId} />
-                <label>
-                  Name
-                  <input name="displayName" required maxLength={160} />
-                </label>
-                <label>
-                  Email
-                  <input name="email" type="email" maxLength={255} />
-                </label>
-                <label>
-                  Phone
-                  <PhoneInputField name="phone" />
-                </label>
-                <label>
-                  Role
-                  <select name="role" defaultValue="MEMBER">
-                    <option value="MEMBER">Member</option>
-                    <option value="VIEWER">Viewer</option>
-                  </select>
-                </label>
-                <label>
-                  Notes
-                  <textarea name="notes" maxLength={2000} />
-                </label>
-                <label className="flex items-center gap-2">
-                  <input className="min-h-0 w-auto" name="prepareAccess" type="checkbox" />
-                  Prepare app access after adding
-                </label>
-                <button className="button" type="submit">
-                  Add member
-                </button>
-              </form>
-            </FormDialog>
-          </div>
-        ) : null}
-      </div>
-
-      <section className="stack">
-        <h2>Organization members</h2>
-        <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]">
-          <div
-            className="hidden grid-cols-[minmax(180px,1.4fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_100px_44px] items-center gap-4 border-b border-[var(--line-muted)] bg-[var(--surface-subtle)] px-4 py-[11px] text-xs font-semibold text-[var(--muted)] md:grid"
-            aria-hidden="true"
-          >
-            <span>Member</span>
-            <span>Contact</span>
-            <span>Access</span>
-            <span>Status</span>
-            <span />
-          </div>
-          {payload.members.map((member) => (
-            <article
-              className="grid min-h-[68px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-b border-[var(--line-muted)] px-4 py-[11px] last:border-b-0 md:grid-cols-[minmax(180px,1.4fr)_minmax(180px,1.2fr)_minmax(150px,1fr)_100px_44px] md:gap-4"
-              key={member.id}
-            >
-              <div className="grid min-w-0 gap-[3px]">
-                <strong>{member.profile.displayName}</strong>
-                <span className="truncate text-[var(--muted)]">
-                  {member.source === 'MANUAL' ? 'Added manually' : 'App member'}
-                </span>
-              </div>
-              <span className="col-start-1 truncate text-[var(--muted)] md:col-auto">
-                {member.profile.email ?? member.profile.phone ?? 'No contact information'}
-              </span>
-              <div className="col-start-1 grid min-w-0 gap-[3px] md:col-auto">
-                <StatusBadge status={member.accountState} />
-                {member.activeClaim?.status === 'REQUESTED' ? (
-                  <small className="truncate text-[var(--muted)]">
-                    Requested by {member.activeClaim.requestedBy?.displayName ?? 'Telegram user'}
-                  </small>
-                ) : null}
-              </div>
-              <div className="col-start-1 md:col-auto">
-                <MemberRoleStatus membershipId={member.id} role={member.role} />
-              </div>
-              <MemberActions
-                member={member}
-                organizationId={orgId}
-                canManage={canManage}
-                isOwner={isOwner}
-                isCurrentMember={member.id === payload.actorMembershipId}
-                updateProfile={updateProfile}
-                updateRole={updateMemberRole}
-                removeMember={removeMember}
-                claimAction={claimAction}
-              />
-            </article>
-          ))}
-          {payload.members.length === 0 ? (
-            <p className="m-0 px-4 py-8 text-center">No members match this filter.</p>
-          ) : null}
-        </div>
-      </section>
+      <MembersManager
+        organizationId={orgId}
+        initialMembers={payload.members}
+        actorMembershipId={payload.actorMembershipId}
+        actorRole={payload.actorRole}
+        manageInvitation={manageInlineInvitation}
+        updateProfile={updateMemberProfileAction}
+        updateRole={updateMemberRole}
+        removeMember={removeMember}
+        claimAction={claimAction}
+        createRelationship={createRelationship}
+        deleteRelationship={deleteRelationship}
+        preparePhoto={prepareMemberPhotoAction}
+        confirmPhoto={confirmMemberPhotoAction}
+        tabs={[
+          { label: 'All', href: membersUrl(orgId), active: memberAccess === 'all' },
+          {
+            label: 'Telegram connected',
+            href: membersUrl(orgId, { access: 'connected' }),
+            active: memberAccess === 'connected',
+          },
+          {
+            label: 'No app access',
+            href: membersUrl(orgId, { access: 'offline' }),
+            active: memberAccess === 'offline',
+          },
+          {
+            label: 'Access requested',
+            href: membersUrl(orgId, { access: 'requested' }),
+            active: memberAccess === 'requested',
+          },
+          {
+            label: 'Suspended',
+            href: membersUrl(orgId, { access: 'suspended' }),
+            active: memberAccess === 'suspended',
+          },
+        ]}
+      />
     </div>
   );
 }

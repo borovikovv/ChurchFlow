@@ -35,8 +35,10 @@ export function AppShell({
 
         <div className="sidebar-account">
           <span className="sidebar-account-label">Signed in as</span>
-          <strong title={displayName}>{displayName}</strong>
-          <LogoutButton />
+          <div className="sidebar-account-row">
+            <strong title={displayName}>{displayName}</strong>
+            <LogoutButton />
+          </div>
         </div>
       </aside>
       <div className="app-main">{children}</div>

@@ -8,5 +8,8 @@ export class CreateManualMemberDto implements CreateManualOrganizationMemberInpu
   email?: string | null;
   phone?: string | null;
   notes?: string | null;
+  memberSince?: string | null;
+  biography?: string | null;
+  familyNotes?: string | null;
   role!: 'MEMBER' | 'VIEWER';
 }

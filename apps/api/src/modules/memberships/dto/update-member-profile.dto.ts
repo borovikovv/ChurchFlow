@@ -8,4 +8,7 @@ export class UpdateMemberProfileDto implements UpdateOrganizationMemberProfileIn
   email?: string | null;
   phone?: string | null;
   notes?: string | null;
+  memberSince?: string | null;
+  biography?: string | null;
+  familyNotes?: string | null;
 }

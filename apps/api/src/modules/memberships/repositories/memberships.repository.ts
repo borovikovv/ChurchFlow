@@ -11,10 +11,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class MembershipsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listForOrganization(
-    organizationId: string,
-    access: OrganizationMembersAccessFilter,
-  ) {
+  async listForOrganization(organizationId: string, access: OrganizationMembersAccessFilter) {
     const now = new Date();
     const accessWhere: Record<
       OrganizationMembersAccessFilter,
@@ -61,6 +58,7 @@ export class MembershipsRepository {
             id: true,
             email: true,
             displayName: true,
+            avatarUrl: true,
             accounts: {
               where: { provider: 'telegram', deletedAt: null },
               select: { id: true },
@@ -128,6 +126,11 @@ export class MembershipsRepository {
               email: input.email ?? null,
               phone: input.phone ?? null,
               notes: input.notes ?? null,
+              memberSince: input.memberSince
+                ? new Date(`${input.memberSince}T00:00:00.000Z`)
+                : null,
+              biography: input.biography ?? null,
+              familyNotes: input.familyNotes ?? null,
             },
           },
         },
@@ -183,12 +186,24 @@ export class MembershipsRepository {
           email: input.email ?? null,
           phone: input.phone ?? null,
           notes: input.notes ?? null,
+          memberSince: input.memberSince ? new Date(`${input.memberSince}T00:00:00.000Z`) : null,
+          biography: input.biography ?? null,
+          familyNotes: input.familyNotes ?? null,
         },
         update: {
           ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
           ...(input.email !== undefined ? { email: input.email } : {}),
           ...(input.phone !== undefined ? { phone: input.phone } : {}),
           ...(input.notes !== undefined ? { notes: input.notes } : {}),
+          ...(input.memberSince !== undefined
+            ? {
+                memberSince: input.memberSince
+                  ? new Date(`${input.memberSince}T00:00:00.000Z`)
+                  : null,
+              }
+            : {}),
+          ...(input.biography !== undefined ? { biography: input.biography } : {}),
+          ...(input.familyNotes !== undefined ? { familyNotes: input.familyNotes } : {}),
         },
       });
 
@@ -204,6 +219,117 @@ export class MembershipsRepository {
       });
 
       return profile;
+    });
+  }
+
+  async listRelationships(organizationId: string, membershipId: string) {
+    return this.prisma.organizationMemberRelationship.findMany({
+      where: {
+        organizationId,
+        OR: [{ fromMembershipId: membershipId }, { toMembershipId: membershipId }],
+      },
+      include: {
+        fromMembership: { include: { profile: true } },
+        toMembership: { include: { profile: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createRelationship(input: {
+    organizationId: string;
+    membershipId: string;
+    relatedMembershipId: string;
+    type: 'SPOUSE' | 'PARENT' | 'CHILD' | 'SIBLING' | 'OTHER';
+    notes?: string | null | undefined;
+    actorUserId: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const actor = await tx.organizationMember.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          userId: input.actorUserId,
+          role: { in: ['OWNER', 'ADMIN'] },
+          status: 'ACTIVE',
+          removedAt: null,
+          organization: { status: 'ACTIVE', deletedAt: null },
+        },
+      });
+      if (!actor) throw new Error('ACTOR_CANNOT_MANAGE_MEMBERS');
+      const members = await tx.organizationMember.findMany({
+        where: {
+          organizationId: input.organizationId,
+          id: { in: [input.membershipId, input.relatedMembershipId] },
+          status: { not: 'REMOVED' },
+          removedAt: null,
+        },
+        select: { id: true },
+      });
+      if (input.membershipId === input.relatedMembershipId) throw new Error('SELF_RELATIONSHIP');
+      if (members.length !== 2) throw new Error('MEMBERSHIP_NOT_FOUND');
+      let fromMembershipId = input.membershipId;
+      let toMembershipId = input.relatedMembershipId;
+      let type = input.type;
+      if (type === 'CHILD') {
+        [fromMembershipId, toMembershipId] = [toMembershipId, fromMembershipId];
+        type = 'PARENT';
+      }
+      if (type !== 'PARENT' && fromMembershipId > toMembershipId)
+        [fromMembershipId, toMembershipId] = [toMembershipId, fromMembershipId];
+      const existing = await tx.organizationMemberRelationship.findFirst({
+        where: { organizationId: input.organizationId, fromMembershipId, toMembershipId, type },
+      });
+      if (existing) throw new Error('RELATIONSHIP_EXISTS');
+      const relationship = await tx.organizationMemberRelationship.create({
+        data: {
+          organizationId: input.organizationId,
+          fromMembershipId,
+          toMembershipId,
+          type,
+          notes: input.notes ?? null,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: 'CREATE_MEMBER_RELATIONSHIP',
+          entityType: 'OrganizationMemberRelationship',
+          entityId: relationship.id,
+          metadata: { type },
+        },
+      });
+      return relationship;
+    });
+  }
+
+  async deleteRelationship(organizationId: string, relationshipId: string, actorUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const actor = await tx.organizationMember.findFirst({
+        where: {
+          organizationId,
+          userId: actorUserId,
+          role: { in: ['OWNER', 'ADMIN'] },
+          status: 'ACTIVE',
+          removedAt: null,
+        },
+      });
+      if (!actor) throw new Error('ACTOR_CANNOT_MANAGE_MEMBERS');
+      const relationship = await tx.organizationMemberRelationship.findFirst({
+        where: { id: relationshipId, organizationId },
+      });
+      if (!relationship) throw new Error('RELATIONSHIP_NOT_FOUND');
+      await tx.organizationMemberRelationship.delete({ where: { id: relationshipId } });
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'DELETE_MEMBER_RELATIONSHIP',
+          entityType: 'OrganizationMemberRelationship',
+          entityId: relationshipId,
+        },
+      });
+      return { deletedRelationshipId: relationshipId };
     });
   }
 

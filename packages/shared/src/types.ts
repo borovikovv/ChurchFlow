@@ -16,6 +16,10 @@ import type {
   organizationMembersAccessFilterSchema,
   websitePageSchema,
   websiteSectionSchema,
+  updateCurrentUserProfileSchema,
+  createOrganizationMemberRelationshipSchema,
+  createMemberPhotoUploadSchema,
+  confirmMemberPhotoUploadSchema,
 } from './schemas.js';
 
 export type UUID = string;
@@ -37,10 +41,14 @@ export type UpdateOrganizationMemberProfileInput = z.infer<
   typeof updateOrganizationMemberProfileSchema
 >;
 export type MembershipClaimTokenInput = z.infer<typeof membershipClaimTokenSchema>;
-export type OrganizationMembersAccessFilter = z.infer<
-  typeof organizationMembersAccessFilterSchema
->;
+export type OrganizationMembersAccessFilter = z.infer<typeof organizationMembersAccessFilterSchema>;
 export type ListOrganizationMembersQuery = z.infer<typeof listOrganizationMembersQuerySchema>;
+export type UpdateCurrentUserProfileInput = z.infer<typeof updateCurrentUserProfileSchema>;
+export type CreateOrganizationMemberRelationshipInput = z.infer<
+  typeof createOrganizationMemberRelationshipSchema
+>;
+export type CreateMemberPhotoUploadInput = z.infer<typeof createMemberPhotoUploadSchema>;
+export type ConfirmMemberPhotoUploadInput = z.infer<typeof confirmMemberPhotoUploadSchema>;
 
 export interface OrganizationRequestStatusItem {
   id: string;
