@@ -85,7 +85,7 @@ export function CreateMemberDialog({
               ×
             </button>
           </header>
-          <div className="min-h-0 overflow-y-auto p-5">
+          <div className="flex flex-col min-h-0 overflow-y-auto gap-4 p-5">
             <FormField label="Name" error={errors.displayName?.message}>
               {({ id, errorId, invalid }) => (
                 <input

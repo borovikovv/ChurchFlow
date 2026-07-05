@@ -248,7 +248,7 @@ function EditMemberSheet({
               ×
             </button>
           </header>
-          <div className="flex flex-col gap-[18px] overflow-y-auto p-6">
+          <div className="flex flex-col gap-4 overflow-y-auto p-6">
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="membershipId" value={member.id} />
             <MemberPhotoField

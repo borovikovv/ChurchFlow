@@ -37,7 +37,8 @@ export function FormDatePicker<
               dateFormat="MM/dd/yyyy"
               maxDate={new Date()}
               placeholderText="MM/DD/YYYY"
-              portalId="datepicker-portal"
+              popperClassName={styles['popper'] ?? ''}
+              popperProps={{ strategy: 'fixed' }}
               selected={parseCalendarDate(field.value as string | null | undefined)}
               selectsMultiple={false}
               selectsRange={false}

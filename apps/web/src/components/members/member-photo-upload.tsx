@@ -39,7 +39,7 @@ export function MemberPhotoField({
 
   const imageUrl = previewUrl ?? currentUrl;
   return (
-    <div className="relative grid gap-2 pb-5">
+    <div className="relative grid gap-2">
       <span className="font-semibold">Profile photo</span>
       {imageUrl ? (
         <Image

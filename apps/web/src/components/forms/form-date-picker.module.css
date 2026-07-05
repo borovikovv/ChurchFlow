@@ -16,6 +16,10 @@
   font-family: inherit !important;
 }
 
+.popper {
+  z-index: 1;
+}
+
 .calendar :global(.react-datepicker__header) {
   border: 0;
   background: var(--surface);
