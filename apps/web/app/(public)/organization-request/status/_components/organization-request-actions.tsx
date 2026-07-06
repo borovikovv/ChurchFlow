@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   deleteOrganizationRequest,
+  resendOrganizationRequestNotification,
   resubmitOrganizationRequest,
 } from '../actions';
 import {
@@ -75,6 +76,7 @@ export function OrganizationRequestActions({
   hasPendingRequest,
   onResubmitted,
   onDeleted,
+  onNotificationResult,
 }: OrganizationRequestActionsProps) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   const resubmitDialogRef = useRef<HTMLDialogElement>(null);
@@ -101,6 +103,7 @@ export function OrganizationRequestActions({
 
   const resubmit = () => {
     setError(null);
+    onNotificationResult(null);
     startTransition(async () => {
       const result = await resubmitOrganizationRequest(request.id);
       if (!result.ok) {
@@ -109,12 +112,21 @@ export function OrganizationRequestActions({
       }
 
       onResubmitted(result.data.request);
+      onNotificationResult(
+        result.data.notificationSent
+          ? { tone: 'success', text: 'Organization request submitted and admin notified.' }
+          : {
+              tone: 'warning',
+              text: 'Organization request submitted, but admin email notification could not be delivered.',
+            },
+      );
       resubmitDialogRef.current?.close();
     });
   };
 
   const deleteRequest = () => {
     setError(null);
+    onNotificationResult(null);
     startTransition(async () => {
       const result = await deleteOrganizationRequest(request.id);
       if (!result.ok) {
@@ -124,6 +136,28 @@ export function OrganizationRequestActions({
 
       onDeleted(result.data.deletedRequestId);
       deleteDialogRef.current?.close();
+    });
+  };
+
+  const resendNotification = () => {
+    setError(null);
+    onNotificationResult(null);
+    startTransition(async () => {
+      const result = await resendOrganizationRequestNotification(request.id);
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
+
+      onNotificationResult(
+        result.data.notificationSent
+          ? { tone: 'success', text: 'Admin notification email sent again.' }
+          : {
+              tone: 'warning',
+              text: 'Request is still saved, but email notification could not be delivered.',
+            },
+      );
+      if (menuRef.current) menuRef.current.open = false;
     });
   };
 
@@ -141,6 +175,16 @@ export function OrganizationRequestActions({
           </svg>
         </summary>
         <div className="absolute top-[calc(100%+6px)] right-0 z-20 min-w-44 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-1.5 shadow-[0_12px_32px_rgba(31,35,40,0.16)]">
+          {request.status === 'PENDING' ? (
+            <button
+              className={requestActionMenuItemClassName}
+              disabled={pending}
+              onClick={resendNotification}
+              type="button"
+            >
+              Resend notification
+            </button>
+          ) : null}
           {request.status === 'APPROVED' && request.createdOrganization ? (
             <Link
               className={requestActionMenuItemClassName}

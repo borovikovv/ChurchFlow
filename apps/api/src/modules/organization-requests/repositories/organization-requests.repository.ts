@@ -64,6 +64,10 @@ export interface ResubmittedOrganizationRequest extends CreatedOrganizationReque
   createdAt: Date;
 }
 
+export interface OrganizationRequestNotificationCandidate extends CreatedOrganizationRequest {
+  status: OrganizationRequestStatus;
+}
+
 @Injectable()
 export class OrganizationRequestsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -289,6 +293,49 @@ export class OrganizationRequestsRepository {
     });
 
     return requests.map((request) => this.toDetail(request));
+  }
+
+  async findNotificationCandidateForRequester(
+    id: string,
+    requestedByUserId: string,
+    staleBefore: Date,
+  ): Promise<OrganizationRequestNotificationCandidate | null> {
+    await this.expireStalePending(this.prisma, staleBefore, { id, requestedByUserId });
+    const request = await this.prisma.organizationRequest.findUnique({
+      where: { id },
+      include: {
+        requestedBy: {
+          include: {
+            accounts: {
+              where: { provider: 'telegram', deletedAt: null },
+              select: { providerAccountId: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    if (!request || request.requestedByUserId !== requestedByUserId) {
+      return null;
+    }
+
+    return {
+      id: request.id,
+      organizationName: request.organizationName,
+      contactName: request.contactName,
+      contactEmail: request.contactEmail,
+      contactPhone: request.contactPhone,
+      message: request.message,
+      status: request.status,
+      requestedBy: request.requestedBy
+        ? {
+            accounts: request.requestedBy.accounts.map((account) => ({
+              providerAccountId: account.providerAccountId,
+            })),
+          }
+        : null,
+    };
   }
 
   async list(

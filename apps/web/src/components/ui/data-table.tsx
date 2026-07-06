@@ -12,16 +12,27 @@ import { useRouter } from 'next/navigation';
 import type { Route } from 'next';
 import { useState } from 'react';
 
+export interface DataTableColumnMeta {
+  headerClassName?: string;
+  cellClassName?: string;
+}
+
 export function DataTable<TData>({
   data,
   columns,
   getRowHref,
   emptyMessage = 'No results found.',
+  frameClassName,
+  tableClassName,
+  getRowClassName,
 }: {
   data: TData[];
   columns: Array<ColumnDef<TData>>;
   getRowHref?: (row: TData) => string;
   emptyMessage?: string;
+  frameClassName?: string;
+  tableClassName?: string;
+  getRowClassName?: (row: TData) => string | undefined;
 }) {
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -39,42 +50,53 @@ export function DataTable<TData>({
   }
 
   return (
-    <div className="data-table-frame">
-      <table className="data-table">
+    <div className={frameClassName ? `data-table-frame ${frameClassName}` : 'data-table-frame'}>
+      <table className={tableClassName ? `data-table ${tableClassName}` : 'data-table'}>
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <th key={header.id} scope="col">
-                  {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                    <button
-                      className="table-sort-button"
-                      onClick={header.column.getToggleSortingHandler()}
-                      type="button"
-                    >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      <span aria-hidden="true">
-                        {header.column.getIsSorted() === 'asc'
-                          ? ' ↑'
-                          : header.column.getIsSorted() === 'desc'
-                            ? ' ↓'
-                            : ''}
-                      </span>
-                    </button>
-                  ) : (
-                    flexRender(header.column.columnDef.header, header.getContext())
-                  )}
-                </th>
-              ))}
+              {headerGroup.headers.map((header) => {
+                const meta = header.column.columnDef.meta as DataTableColumnMeta | undefined;
+
+                return (
+                  <th className={meta?.headerClassName} key={header.id} scope="col">
+                    {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                      <button
+                        className="table-sort-button"
+                        onClick={header.column.getToggleSortingHandler()}
+                        type="button"
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        <span aria-hidden="true">
+                          {header.column.getIsSorted() === 'asc'
+                            ? ' ↑'
+                            : header.column.getIsSorted() === 'desc'
+                              ? ' ↓'
+                              : ''}
+                        </span>
+                      </button>
+                    ) : (
+                      flexRender(header.column.columnDef.header, header.getContext())
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           ))}
         </thead>
         <tbody>
           {table.getRowModel().rows.map((row) => {
             const href = getRowHref?.(row.original);
+            const rowClassName = getRowClassName?.(row.original);
             return (
               <tr
-                className={href ? 'clickable-table-row' : undefined}
+                className={
+                  href && rowClassName
+                    ? `clickable-table-row ${rowClassName}`
+                    : href
+                      ? 'clickable-table-row'
+                      : rowClassName
+                }
                 key={row.id}
                 onClick={href ? () => router.push(href as Route) : undefined}
                 onKeyDown={
@@ -90,9 +112,15 @@ export function DataTable<TData>({
                 role={href ? 'link' : undefined}
                 tabIndex={href ? 0 : undefined}
               >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
-                ))}
+                {row.getVisibleCells().map((cell) => {
+                  const meta = cell.column.columnDef.meta as DataTableColumnMeta | undefined;
+
+                  return (
+                    <td className={meta?.cellClassName} key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}

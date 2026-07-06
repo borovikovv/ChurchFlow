@@ -68,6 +68,10 @@ export interface ResubmitOrganizationRequestResult {
   notificationSent: boolean;
 }
 
+export interface ResendOrganizationRequestNotificationResult {
+  notificationSent: boolean;
+}
+
 export interface DeleteOrganizationRequestResult {
   deletedRequestId: string;
 }

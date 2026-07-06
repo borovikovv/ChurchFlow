@@ -6,6 +6,7 @@ export interface OrganizationRequestActionsProps {
   hasPendingRequest: boolean;
   onResubmitted: (request: OrganizationRequestStatusItem) => void;
   onDeleted: (requestId: string) => void;
+  onNotificationResult: (message: { tone: 'success' | 'warning'; text: string } | null) => void;
 }
 
 export interface LifecycleConfirmationDialogProps {

@@ -3,6 +3,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { formatIsoDate } from '@/lib/format-date';
 
 export interface OrganizationTableRow {
   id: string;
@@ -25,12 +26,6 @@ export interface OrganizationRequestTableRow {
   contactTelegramUsername: string | null;
   status: string;
   createdAt: string;
-}
-
-function formatIsoDate(value: string): string {
-  const isoDate = value.slice(0, 10);
-  const [year, month, day] = isoDate.split('-');
-  return year && month && day ? `${day}.${month}.${year}` : isoDate;
 }
 
 const organizationColumns: Array<ColumnDef<OrganizationTableRow>> = [

@@ -13,7 +13,7 @@ interface OrganizationRequestSummary {
 async function submitOrganizationRequest(formData: FormData) {
   'use server';
 
-  const result = await apiFetch('/organization-requests', {
+  const result = await apiFetch<{ notificationSent: boolean }>('/organization-requests', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -30,7 +30,8 @@ async function submitOrganizationRequest(formData: FormData) {
     redirect(`/organization-request?error=${encodeURIComponent(result.error.message)}` as Route);
   }
 
-  redirect('/organization-request/status' as Route);
+  const notification = result.data.notificationSent ? 'sent' : 'failed';
+  redirect(`/organization-request/status?submitted=1&notification=${notification}` as Route);
 }
 
 export default async function OrganizationRequestPage({

@@ -15,7 +15,10 @@ import type {
 } from '@churchflow/shared';
 import { slugSchema } from '@churchflow/shared';
 import { EmailService } from '../email/email.service';
-import { OrganizationRequestsRepository } from './repositories/organization-requests.repository';
+import {
+  OrganizationRequestsRepository,
+  type OrganizationRequestNotificationCandidate,
+} from './repositories/organization-requests.repository';
 
 const ORGANIZATION_REQUEST_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const UKRAINIAN_TRANSLITERATION: Readonly<Record<string, string>> = {
@@ -152,6 +155,11 @@ interface OrganizationRequestsRepositoryPort {
     requestedByUserId: string,
     staleBefore: Date,
   ): Promise<OrganizationRequestDetail[]>;
+  findNotificationCandidateForRequester(
+    id: string,
+    requestedByUserId: string,
+    staleBefore: Date,
+  ): Promise<OrganizationRequestNotificationCandidate | null>;
   list(status: string | undefined, staleBefore: Date): Promise<OrganizationRequestListItem[]>;
   findById(id: string, staleBefore: Date): Promise<OrganizationRequestDetail | null>;
   findOrganizationBySlug(slug: string): Promise<{ id: string } | null>;
@@ -267,6 +275,24 @@ export class OrganizationRequestsService {
       },
       notificationSent,
     };
+  }
+
+  async resendNotification(id: string, requestedByUserId: string) {
+    const request: OrganizationRequestNotificationCandidate | null =
+      await this.organizationRequestsRepository.findNotificationCandidateForRequester(
+        id,
+        requestedByUserId,
+        this.organizationRequestStaleBefore(),
+      );
+    if (!request) {
+      throw new NotFoundException('Organization request was not found');
+    }
+    if (request.status !== 'PENDING') {
+      throw new ConflictException('Only pending organization requests can resend notification');
+    }
+
+    const notificationSent = await this.sendAdminNotification(request);
+    return { notificationSent };
   }
 
   async deleteFromHistory(id: string, requestedByUserId: string) {

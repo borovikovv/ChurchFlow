@@ -33,6 +33,13 @@ export class OrganizationRequestsController {
     return this.organizationRequestsService.resubmit(id, this.getActorUserId(request));
   }
 
+  @Post('organization-requests/:id/resend-notification')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async resendNotification(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.organizationRequestsService.resendNotification(id, this.getActorUserId(request));
+  }
+
   @Delete('organization-requests/:id')
   @UseGuards(JwtAuthGuard)
   async deleteFromHistory(@Param('id') id: string, @Req() request: AuthenticatedRequest) {

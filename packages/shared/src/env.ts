@@ -9,7 +9,7 @@ const optionalNonEmptyString = z.preprocess(
 
 const optionalEmailProviderSchema = z.preprocess(
   (value) => (value === '' ? undefined : value),
-  z.enum(['resend', 'console']).optional(),
+  z.enum(['resend', 'console', 'smtp']).optional(),
 );
 
 const pemKeySchema = (label: string, keyType: 'PUBLIC' | 'PRIVATE') =>
@@ -41,6 +41,11 @@ export const apiEnvSchema = z
     EMAIL_PROVIDER: optionalEmailProviderSchema,
     EMAIL_FROM: optionalNonEmptyString,
     RESEND_API_KEY: optionalNonEmptyString,
+    SMTP_HOST: optionalNonEmptyString,
+    SMTP_PORT: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.coerce.number().int().positive().optional(),
+    ),
     S3_ENDPOINT: z.string().url(),
     S3_REGION: z.string().min(1),
     S3_BUCKET: z.string().min(1),
@@ -71,6 +76,18 @@ export const apiEnvSchema = z
             code: z.ZodIssueCode.custom,
             path: [key],
             message: `${key} is required when EMAIL_PROVIDER=resend`,
+          });
+        }
+      }
+    }
+
+    if (env.EMAIL_PROVIDER === 'smtp') {
+      for (const key of ['EMAIL_FROM', 'SMTP_HOST', 'SMTP_PORT'] as const) {
+        if (!env[key]) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required when EMAIL_PROVIDER=smtp`,
           });
         }
       }

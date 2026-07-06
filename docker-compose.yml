@@ -6,11 +6,11 @@ services:
       POSTGRES_USER: churchflow
       POSTGRES_PASSWORD: churchflow
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U churchflow -d churchflow"]
+      test: ['CMD-SHELL', 'pg_isready -U churchflow -d churchflow']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,21 +22,28 @@ services:
       MINIO_ROOT_USER: churchflow
       MINIO_ROOT_PASSWORD: churchflow-local-secret
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - '9000:9000'
+      - '9001:9001'
     volumes:
       - minio-data:/data
+
+  mailpit:
+    image: axllent/mailpit:v1.24
+    ports:
+      - '1025:1025'
+      - '8025:8025'
 
   caddy:
     image: caddy:2.8-alpine
     depends_on:
       - postgres
       - minio
+      - mailpit
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     volumes:
       - ./dev/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
