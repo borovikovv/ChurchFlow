@@ -17,7 +17,7 @@
 }
 
 .popper {
-  z-index: 1;
+  z-index: 2000;
 }
 
 .calendar :global(.react-datepicker__header) {

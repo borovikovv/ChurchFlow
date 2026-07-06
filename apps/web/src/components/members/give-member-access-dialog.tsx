@@ -32,6 +32,9 @@ export function GiveMemberAccessDialog({
   memberName,
   memberEmail,
   triggerClassName,
+  dialogRef,
+  onOpen,
+  onClose,
 }: GiveMemberAccessDialogProps) {
   const [state, formAction, pending] = useActionState(manageMemberAccess, initialState);
 
@@ -46,6 +49,9 @@ export function GiveMemberAccessDialog({
         </>
       }
       triggerVariant="ghost"
+      {...(dialogRef ? { dialogRef } : {})}
+      {...(onOpen ? { onOpen } : {})}
+      {...(onClose ? { onClose } : {})}
     >
       {state.claimId && state.claimUrl ? (
         <div className="grid gap-4">

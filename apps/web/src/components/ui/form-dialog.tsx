@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode, type RefObject } from 'react';
 import { Button, type ButtonVariant } from '@/components/ui/button';
 
 export function FormDialog({
@@ -9,14 +9,21 @@ export function FormDialog({
   triggerClassName,
   title,
   children,
+  dialogRef: externalDialogRef,
+  onOpen,
+  onClose,
 }: {
   triggerLabel: ReactNode;
   triggerVariant?: ButtonVariant;
   triggerClassName?: string;
   title: string;
   children: ReactNode;
+  dialogRef?: RefObject<HTMLDialogElement | null>;
+  onOpen?: () => void;
+  onClose?: () => void;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const internalDialogRef = useRef<HTMLDialogElement>(null);
+  const dialogRef = externalDialogRef ?? internalDialogRef;
   const titleId = useId();
 
   return (
@@ -25,17 +32,17 @@ export function FormDialog({
         className={triggerClassName}
         type="button"
         variant={triggerVariant}
-        onClick={() => dialogRef.current?.showModal()}
+        onClick={() => {
+          onOpen?.();
+          dialogRef.current?.showModal();
+        }}
       >
         {triggerLabel}
       </Button>
       <dialog
         aria-labelledby={titleId}
         className="fixed inset-0 m-auto max-h-[min(800px,80dvh)] w-[min(480px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)] backdrop:backdrop-blur-[1px]"
-        onClose={(event) => {
-          const parentMenu = event.currentTarget.closest('details');
-          if (parentMenu) parentMenu.open = false;
-        }}
+        onClose={onClose}
         onClick={(event) => {
           if (event.target === event.currentTarget) event.currentTarget.close();
         }}

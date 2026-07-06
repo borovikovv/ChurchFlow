@@ -6,8 +6,11 @@ import { useId, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import { z } from 'zod';
+import { FormCheckbox } from '@/components/forms/form-checkbox';
 import { FormDatePicker } from '@/components/forms/form-date-picker';
-import { FormField } from '@/components/forms/form-field';
+import { FormInput } from '@/components/forms/form-input';
+import { FormSelect } from '@/components/forms/form-select';
+import { FormTextarea } from '@/components/forms/form-textarea';
 import { Button } from '@/components/ui/button';
 import { createMemberAction } from '../actions';
 
@@ -86,93 +89,47 @@ export function CreateMemberDialog({
             </button>
           </header>
           <div className="flex flex-col min-h-0 overflow-y-auto gap-4 p-5">
-            <FormField label="Name" error={errors.displayName?.message}>
-              {({ id, errorId, invalid }) => (
-                <input
-                  id={id}
-                  aria-describedby={errorId}
-                  aria-invalid={invalid}
-                  {...register('displayName')}
-                />
-              )}
-            </FormField>
-            <FormField label="Email" error={errors.email?.message}>
-              {({ id, errorId, invalid }) => (
-                <input
-                  id={id}
-                  type="email"
-                  aria-describedby={errorId}
-                  aria-invalid={invalid}
-                  {...register('email')}
-                />
-              )}
-            </FormField>
-            <FormField label="Phone" error={errors.phone?.message}>
-              {({ id, errorId, invalid }) => (
-                <input
-                  id={id}
-                  aria-describedby={errorId}
-                  aria-invalid={invalid}
-                  {...register('phone')}
-                />
-              )}
-            </FormField>
-            <FormField label="Role" error={errors.role?.message}>
-              {({ id, errorId, invalid }) => (
-                <select
-                  id={id}
-                  aria-describedby={errorId}
-                  aria-invalid={invalid}
-                  {...register('role')}
-                >
-                  <option value="MEMBER">Member</option>
-                  <option value="VIEWER">Viewer</option>
-                </select>
-              )}
-            </FormField>
+            <FormInput
+              label="Name"
+              error={errors.displayName?.message}
+              {...register('displayName')}
+            />
+            <FormInput
+              label="Email"
+              type="email"
+              error={errors.email?.message}
+              {...register('email')}
+            />
+            <FormInput label="Phone" error={errors.phone?.message} {...register('phone')} />
+            <FormSelect label="Role" error={errors.role?.message} {...register('role')}>
+              <option value="MEMBER">Member</option>
+              <option value="VIEWER">Viewer</option>
+            </FormSelect>
             <FormDatePicker
               control={control}
               name="memberSince"
               label="Member since"
               error={errors.memberSince?.message}
             />
-            <FormField label="Notes" error={errors.notes?.message}>
-              {({ id, errorId, invalid }) => (
-                <textarea
-                  id={id}
-                  rows={4}
-                  aria-describedby={errorId}
-                  aria-invalid={invalid}
-                  {...register('notes')}
-                />
-              )}
-            </FormField>
-            <FormField label="Biography" error={errors.biography?.message}>
-              {({ id, errorId, invalid }) => (
-                <textarea
-                  id={id}
-                  rows={5}
-                  aria-describedby={errorId}
-                  aria-invalid={invalid}
-                  {...register('biography')}
-                />
-              )}
-            </FormField>
-            <FormField label="Family notes" error={errors.familyNotes?.message}>
-              {({ id, errorId, invalid }) => (
-                <textarea
-                  id={id}
-                  rows={4}
-                  aria-describedby={errorId}
-                  aria-invalid={invalid}
-                  {...register('familyNotes')}
-                />
-              )}
-            </FormField>
-            <label className="flex items-center gap-2">
-              <input className="min-h-0 w-auto" type="checkbox" {...register('prepareAccess')} />
-              Prepare app access after adding
-            </label>
+            <FormTextarea
+              label="Notes"
+              rows={4}
+              error={errors.notes?.message}
+              {...register('notes')}
+            />
+            <FormTextarea
+              label="Biography"
+              rows={5}
+              error={errors.biography?.message}
+              {...register('biography')}
+            />
+            <FormTextarea
+              label="Family notes"
+              rows={4}
+              error={errors.familyNotes?.message}
+              {...register('familyNotes')}
+            />
+            <FormCheckbox label="Prepare app access after adding" {...register('prepareAccess')} />
           </div>
           <footer className="flex justify-end gap-2 border-t border-[var(--line)] p-5">
             <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>

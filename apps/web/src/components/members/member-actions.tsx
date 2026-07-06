@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { useCloseOnOutsideClick } from '@/hooks/use-close-on-outside-click';
 import { GiveMemberAccessDialog } from './give-member-access-dialog';
 import { MemberPhotoField, validateMemberPhoto } from './member-photo-upload';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +15,9 @@ import {
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import { FormDatePicker } from '@/components/forms/form-date-picker';
-import { FormField } from '@/components/forms/form-field';
+import { FormInput } from '@/components/forms/form-input';
+import { FormSelect } from '@/components/forms/form-select';
+import { FormTextarea } from '@/components/forms/form-textarea';
 
 type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 type FormAction = (formData: FormData) => void | Promise<void>;
@@ -106,6 +109,9 @@ function EditMemberSheet({
   preparePhoto,
   confirmPhoto,
   onProfileUpdated,
+  dialogRef,
+  onOpen,
+  onClose,
 }: {
   member: EditableMember;
   organizationId: string;
@@ -116,8 +122,10 @@ function EditMemberSheet({
   preparePhoto: PrepareMemberPhotoAction;
   confirmPhoto: ConfirmMemberPhotoAction;
   onProfileUpdated: (profile: Partial<EditableMember['profile']>) => void;
+  dialogRef: RefObject<HTMLDialogElement | null>;
+  onOpen: () => void;
+  onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const [photo, setPhoto] = useState<File | null>(null);
   const [savedPhotoUrl, setSavedPhotoUrl] = useState(member.profile.photoUrl);
@@ -214,7 +222,10 @@ function EditMemberSheet({
       <button
         className={actionItemClassName}
         type="button"
-        onClick={() => dialogRef.current?.showModal()}
+        onClick={() => {
+          onOpen();
+          dialogRef.current?.showModal();
+        }}
       >
         <MenuIcon>
           <path d="M4 20h4l11-11-4-4L4 16v4Zm9-13 4 4M13 5l2-2 4 4-2 2" />
@@ -224,9 +235,7 @@ function EditMemberSheet({
       <dialog
         aria-labelledby={titleId}
         className="fixed inset-0 m-auto max-h-[min(800px,80dvh)] w-[min(560px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
-        onClick={(event) => {
-          if (event.target === event.currentTarget) event.currentTarget.close();
-        }}
+        onClose={onClose}
         ref={dialogRef}
       >
         <form
@@ -260,55 +269,42 @@ function EditMemberSheet({
                 setPhotoError(nextError);
               }}
             />
-            <FormField label="Name" error={errors.displayName?.message}>
-              {({ id, errorId, invalid }) => (
-                <input
-                  id={id}
-                  aria-describedby={errorId}
-                  aria-invalid={invalid}
-                  {...register('displayName')}
-                />
-              )}
-            </FormField>
-            <FormField label="Email" error={errors.email?.message}>
-              {({ id, errorId, invalid }) => (
-                <input
-                  id={id}
-                  type="email"
-                  aria-describedby={errorId}
-                  aria-invalid={invalid}
-                  {...register('email')}
-                />
-              )}
-            </FormField>
-            <FormField label="Phone" error={errors.phone?.message}>
-              {({ id, errorId, invalid }) => (
-                <input
-                  id={id}
-                  aria-describedby={errorId}
-                  aria-invalid={invalid}
-                  {...register('phone')}
-                />
-              )}
-            </FormField>
-            <label>
-              Notes
-              <textarea rows={5} {...register('notes')} />
-            </label>
+            <FormInput
+              label="Name"
+              error={errors.displayName?.message}
+              {...register('displayName')}
+            />
+            <FormInput
+              label="Email"
+              type="email"
+              error={errors.email?.message}
+              {...register('email')}
+            />
+            <FormInput label="Phone" error={errors.phone?.message} {...register('phone')} />
+            <FormTextarea
+              label="Notes"
+              rows={5}
+              error={errors.notes?.message}
+              {...register('notes')}
+            />
             <FormDatePicker
               control={control}
               name="memberSince"
               label="Member since"
               error={errors.memberSince?.message}
             />
-            <label>
-              Biography
-              <textarea rows={6} {...register('biography')} />
-            </label>
-            <label>
-              Family notes
-              <textarea rows={4} {...register('familyNotes')} />
-            </label>
+            <FormTextarea
+              label="Biography"
+              rows={6}
+              error={errors.biography?.message}
+              {...register('biography')}
+            />
+            <FormTextarea
+              label="Family notes"
+              rows={4}
+              error={errors.familyNotes?.message}
+              {...register('familyNotes')}
+            />
             <fieldset className="grid gap-3 border-t border-[var(--line)] pt-4">
               <legend className="font-semibold pr-2">Family relationships</legend>
               {relationships.map((relationship) => {
@@ -408,13 +404,18 @@ function ChangeRoleDialog({
   organizationId,
   action,
   onRoleUpdated,
+  dialogRef,
+  onOpen,
+  onClose,
 }: {
   member: EditableMember;
   organizationId: string;
   action: RoleUpdateAction;
   onRoleUpdated: (role: OrganizationRole) => void;
+  dialogRef: RefObject<HTMLDialogElement | null>;
+  onOpen: () => void;
+  onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -442,7 +443,10 @@ function ChangeRoleDialog({
       <button
         className={actionItemClassName}
         type="button"
-        onClick={() => dialogRef.current?.showModal()}
+        onClick={() => {
+          onOpen();
+          dialogRef.current?.showModal();
+        }}
       >
         <MenuIcon>
           <path d="M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM5 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2M18 8h4m-2-2v4" />
@@ -452,6 +456,7 @@ function ChangeRoleDialog({
       <dialog
         aria-labelledby={titleId}
         className="fixed inset-0 m-auto max-h-[calc(100dvh-32px)] w-[min(480px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)] backdrop:backdrop-blur-[1px]"
+        onClose={onClose}
         ref={dialogRef}
       >
         <form onSubmit={submit} className="grid gap-6 p-6">
@@ -462,19 +467,16 @@ function ChangeRoleDialog({
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="membershipId" value={member.id} />
           {error ? <p className="form-error m-0">{error}</p> : null}
-          <label>
-            Role
-            <select name="role" defaultValue={member.role}>
-              {member.accountState === 'CLAIMED' ? (
-                <>
-                  <option value="OWNER">Owner</option>
-                  <option value="ADMIN">Admin</option>
-                </>
-              ) : null}
-              <option value="MEMBER">Member</option>
-              <option value="VIEWER">Viewer</option>
-            </select>
-          </label>
+          <FormSelect label="Role" name="role" defaultValue={member.role}>
+            {member.accountState === 'CLAIMED' ? (
+              <>
+                <option value="OWNER">Owner</option>
+                <option value="ADMIN">Admin</option>
+              </>
+            ) : null}
+            <option value="MEMBER">Member</option>
+            <option value="VIEWER">Viewer</option>
+          </FormSelect>
           <div className="flex flex-col-reverse items-stretch justify-end gap-2 md:flex-row md:items-center">
             <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
               Cancel
@@ -529,16 +531,25 @@ export function MemberActions({
   onRoleUpdated: (role: OrganizationRole) => void;
 }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
+  const editDialogRef = useRef<HTMLDialogElement>(null);
+  const roleDialogRef = useRef<HTMLDialogElement>(null);
+  const accessDialogRef = useRef<HTMLDialogElement>(null);
+  const [openDialog, setOpenDialog] = useState<'edit' | 'role' | 'access' | null>(null);
 
-  useEffect(() => {
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+  useCloseOnOutsideClick({
+    refs: [
+      menuRef as RefObject<Element | null>,
+      editDialogRef as RefObject<Element | null>,
+      roleDialogRef as RefObject<Element | null>,
+      accessDialogRef as RefObject<Element | null>,
+    ],
+    onOutsideClick: () => {
+      if (menuRef.current) {
         menuRef.current.open = false;
       }
-    };
-    document.addEventListener('click', closeOnOutsideClick);
-    return () => document.removeEventListener('click', closeOnOutsideClick);
-  }, []);
+    },
+    enabled: openDialog === null,
+  });
 
   if (!canManage && !isOwner) return null;
 
@@ -569,6 +580,9 @@ export function MemberActions({
             preparePhoto={preparePhoto}
             confirmPhoto={confirmPhoto}
             onProfileUpdated={onProfileUpdated}
+            dialogRef={editDialogRef}
+            onOpen={() => setOpenDialog('edit')}
+            onClose={() => setOpenDialog(null)}
           />
         ) : null}
         {isOwner ? (
@@ -577,10 +591,16 @@ export function MemberActions({
             organizationId={organizationId}
             action={updateRole}
             onRoleUpdated={onRoleUpdated}
+            dialogRef={roleDialogRef}
+            onOpen={() => setOpenDialog('role')}
+            onClose={() => setOpenDialog(null)}
           />
         ) : null}
         {canManage && member.accountState === 'UNCLAIMED' ? (
           <GiveMemberAccessDialog
+            dialogRef={accessDialogRef}
+            onOpen={() => setOpenDialog('access')}
+            onClose={() => setOpenDialog(null)}
             memberEmail={member.profile.email}
             memberName={member.profile.displayName}
             membershipId={member.id}

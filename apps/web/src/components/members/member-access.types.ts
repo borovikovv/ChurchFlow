@@ -1,3 +1,5 @@
+import type { RefObject } from 'react';
+
 export interface MemberAccessActionState {
   claimId: string | null;
   claimUrl: string | null;
@@ -11,4 +13,7 @@ export interface GiveMemberAccessDialogProps {
   memberName: string;
   memberEmail: string | null;
   triggerClassName: string;
+  dialogRef?: RefObject<HTMLDialogElement | null>;
+  onOpen?: () => void;
+  onClose?: () => void;
 }
