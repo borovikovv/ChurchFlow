@@ -22,13 +22,13 @@ export function AppShell({
 
         <nav className="sidebar-navigation" aria-label="Application navigation">
           {isPlatformAdmin ? (
-            <SidebarNavLink href="/admin/organizations">Organizations</SidebarNavLink>
+            <SidebarNavLink href="/admin/organizations">All Organizations</SidebarNavLink>
           ) : null}
           <SidebarNavLink
             href="/organization-request/status"
             activePrefixes={['/organization-request', '/dashboard']}
           >
-            My requests
+            My Organizations
           </SidebarNavLink>
           <SidebarNavLink href="/profile">Profile</SidebarNavLink>
         </nav>

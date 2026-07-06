@@ -39,7 +39,7 @@ export function MemberPhotoField({
 
   const imageUrl = previewUrl ?? currentUrl;
   return (
-    <div className="relative grid gap-2">
+    <div className="grid gap-2">
       <span className="font-semibold">Profile photo</span>
       {imageUrl ? (
         <Image
@@ -62,10 +62,10 @@ export function MemberPhotoField({
           onChange(selected, validateMemberPhoto(selected));
         }}
       />
-      <small>JPEG, PNG, or WebP. Maximum 5 MB. Uploaded when you save.</small>
-      <span className="absolute bottom-0 left-0 text-xs font-medium text-[var(--danger)]">
-        {error ?? ''}
-      </span>
+      <div className="grid gap-1">
+        <small>JPEG, PNG, or WebP. Maximum 5 MB. Uploaded when you save.</small>
+        {error ? <p className="form-error m-0 text-xs">{error}</p> : null}
+      </div>
     </div>
   );
 }

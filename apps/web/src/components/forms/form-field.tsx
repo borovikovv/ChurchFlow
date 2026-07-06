@@ -15,18 +15,16 @@ export function FormField({
   const errorId = `${id}-error`;
 
   return (
-    <div className="relative grid gap-1.5">
+    <div className="grid gap-1.5">
       <label className="font-semibold" htmlFor={id}>
         {label}
       </label>
       {children({ id, errorId, invalid: Boolean(error) })}
-      <span
-        aria-live="polite"
-        className="absolute -bottom-4 left-0 text-xs font-medium text-[var(--danger)]"
-        id={errorId}
-      >
-        {error ?? ''}
-      </span>
+      {error ? (
+        <span aria-live="polite" className="text-xs font-medium text-[var(--danger)]" id={errorId}>
+          {error}
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -22,9 +22,8 @@ export default async function DashboardLayout({
       <Tabs
         label="Organization dashboard"
         items={[
-          { label: 'Overview', href: `/dashboard/${orgId}` },
-          { label: 'Website', href: `/dashboard/${orgId}/website` },
           { label: 'Members', href: `/dashboard/${orgId}/members` },
+          { label: 'Website', href: `/dashboard/${orgId}/website` },
         ]}
       />
       <main>{children}</main>
