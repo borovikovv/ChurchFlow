@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PagesRepository } from './repositories/pages.repository';
 
 @Injectable()
@@ -6,7 +6,13 @@ export class PagesService {
   constructor(private readonly pagesRepository: PagesRepository) {}
 
   async findPublicPage(orgSlug: string, pageSlug: string) {
-    return this.pagesRepository.findPublicPage(orgSlug, pageSlug);
+    const page = await this.pagesRepository.findPublicPage(orgSlug, pageSlug);
+
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    return page;
   }
 
   async listDashboardPages(organizationId: string) {

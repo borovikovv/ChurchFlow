@@ -26,6 +26,10 @@ export class OrganizationsService {
     }
   }
 
+  async listMine(userId: string) {
+    return this.organizationsRepository.listMine(userId);
+  }
+
   async listAdmin(status?: string) {
     return this.organizationsRepository.listAdmin(status);
   }

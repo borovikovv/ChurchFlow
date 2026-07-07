@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import type { Route } from 'next';
 import { AUTH_COOKIE_NAMES } from '@churchflow/shared';
 import { apiFetch } from '@/api/client';
+import { getOrganizationAccessState } from '@/features/organizations/server/access';
+import { organizationHomeRoute } from '@/features/organizations/routes';
 
 export type PlatformRole = 'USER' | 'ADMIN' | 'SUPER_ADMIN';
 
@@ -56,4 +58,35 @@ export async function requirePlatformAdmin(redirectTo: string): Promise<void> {
   }
 
   redirect('/' as Route);
+}
+
+export async function getPostLoginRedirect(): Promise<Route> {
+  const access = await getOrganizationAccessState();
+
+  if (access.canOpenAdmin) {
+    return '/admin/organizations' as Route;
+  }
+
+  if (access.organizations[0]) {
+    return organizationHomeRoute(access.organizations[0].id);
+  }
+
+  return '/organization-request/status' as Route;
+}
+
+export async function requireAdminOrganizationsAccess(redirectTo: string): Promise<void> {
+  if (!(await hasServerSession())) {
+    redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}` as Route);
+  }
+
+  const access = await getOrganizationAccessState();
+  if (access.canOpenAdmin) {
+    return;
+  }
+
+  if (access.organizations[0]) {
+    redirect(organizationHomeRoute(access.organizations[0].id));
+  }
+
+  redirect('/organization-request/status' as Route);
 }

@@ -1,7 +1,7 @@
 'use server';
 
-import { apiFetch } from '@/api/client';
 import type { UpdateCurrentUserProfileInput } from '@churchflow/shared';
+import { apiFetch } from '@/api/client';
 
 export async function updateCurrentUserProfile(input: UpdateCurrentUserProfileInput) {
   const result = await apiFetch('/users/me', {

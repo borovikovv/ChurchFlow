@@ -28,7 +28,12 @@
     box-sizing: border-box;
   }
 
+  html {
+    height: 100%;
+  }
+
   body {
+    min-height: 100%;
     margin: 0;
     background: var(--background);
     color: var(--foreground);
@@ -110,6 +115,7 @@
     position: sticky;
     top: 0;
     z-index: 20;
+    flex: 0 0 auto;
     border-bottom: 1px solid var(--line);
     background: var(--surface);
   }
@@ -365,7 +371,18 @@
   .app-shell {
     display: grid;
     grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-    min-height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+    flex: 1;
+  }
+
+  .app-frame {
+    display: flex;
+    height: 100vh;
+    min-height: 0;
+    max-height: 100vh;
+    overflow: hidden;
+    flex-direction: column;
   }
 
   .app-sidebar {
@@ -373,11 +390,19 @@
     top: 0;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100%;
+    min-height: 0;
     min-width: 0;
     border-right: 1px solid var(--line);
     padding: 16px 12px;
     background: var(--surface);
+    overflow: hidden;
+  }
+
+  .app-main {
+    min-height: 0;
+    min-width: 0;
+    overflow: auto;
   }
 
   .sidebar-brand {

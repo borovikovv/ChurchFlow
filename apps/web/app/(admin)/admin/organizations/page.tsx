@@ -1,19 +1,15 @@
 import { apiFetch } from '@/api/client';
-import {
-  OrganizationRequestsTable,
-  OrganizationsTable,
-  type OrganizationRequestTableRow,
-  type OrganizationTableRow,
-} from '@/components/admin/admin-tables';
+import { OrganizationsTable, type OrganizationTableRow } from '@/components/admin/admin-tables';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs } from '@/components/ui/tabs';
+import { ADMIN_ORGANIZATION_STATUS_FILTERS } from '@/admin/constants';
+import { requireAdminOrganizationsAccess } from '@/auth/session';
 import {
-  ADMIN_ORGANIZATION_REQUEST_STATUS_FILTERS,
-  ADMIN_ORGANIZATION_STATUS_FILTERS,
-} from '@/admin/constants';
-import { requirePlatformAdmin } from '@/auth/session';
+  getOrganizationAccessState,
+  isOrganizationAdminRole,
+} from '@/features/organizations/server/access';
 
-type WorkspaceView = 'organizations' | 'requests';
+type WorkspaceView = 'all' | 'mine';
 
 export default async function AdminOrganizationsPage({
   searchParams,
@@ -21,43 +17,55 @@ export default async function AdminOrganizationsPage({
   searchParams: Promise<{ view?: string; status?: string }>;
 }) {
   const { view: rawView, status } = await searchParams;
-  const view: WorkspaceView = rawView === 'requests' ? 'requests' : 'organizations';
-  const pageUrl = `/admin/organizations${view === 'requests' ? '?view=requests' : ''}`;
-  await requirePlatformAdmin(pageUrl);
-
-  const endpoint = view === 'requests' ? '/admin/organization-requests' : '/admin/organizations';
-  const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  const result = await apiFetch<OrganizationTableRow[] | OrganizationRequestTableRow[]>(
-    `${endpoint}${query}`,
+  const access = await getOrganizationAccessState();
+  const defaultView: WorkspaceView = access.isPlatformAdmin ? 'all' : 'mine';
+  const requestedView: WorkspaceView =
+    rawView === 'mine' || rawView === 'all' ? rawView : defaultView;
+  const view: WorkspaceView = access.isPlatformAdmin ? requestedView : 'mine';
+  const pageUrl = `/admin/organizations${view === 'mine' ? '?view=mine' : ''}`;
+  await requireAdminOrganizationsAccess(pageUrl);
+  const adminOrganizations = access.organizations.filter((organization) =>
+    isOrganizationAdminRole(organization.role),
   );
-
-  const statusItems =
-    view === 'requests'
-      ? ADMIN_ORGANIZATION_REQUEST_STATUS_FILTERS
-      : ADMIN_ORGANIZATION_STATUS_FILTERS;
+  const result =
+    view === 'all' && access.isPlatformAdmin
+      ? await apiFetch<OrganizationTableRow[]>(
+          `/admin/organizations${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+        )
+      : ({
+          ok: true as const,
+          data: adminOrganizations
+            .filter((organization) => !status || organization.status === status)
+            .map((organization) => ({
+              ...organization,
+              _count: {
+                members: 0,
+                invitations: 0,
+              },
+            })),
+        } satisfies { ok: true; data: OrganizationTableRow[] });
 
   return (
     <main className="page-content stack">
-      <PageHeader
-        title="Organizations"
-        description="Review organization access requests and manage every ChurchFlow tenant."
-      />
+      <PageHeader title="Organizations" description="Open organizations you administer." />
 
-      <Tabs
-        label="Organization workspace"
-        items={[
-          {
-            label: 'Organizations',
-            href: '/admin/organizations',
-            active: view === 'organizations',
-          },
-          {
-            label: 'Requests',
-            href: '/admin/organizations?view=requests',
-            active: view === 'requests',
-          },
-        ]}
-      />
+      {access.isPlatformAdmin ? (
+        <Tabs
+          label="Organization workspace"
+          items={[
+            {
+              label: 'All organizations',
+              href: '/admin/organizations',
+              active: view === 'all',
+            },
+            {
+              label: 'My organizations',
+              href: '/admin/organizations?view=mine',
+              active: view === 'mine',
+            },
+          ]}
+        />
+      ) : null}
 
       <div className="filter-bar">
         <span className="filter-label">Status</span>
@@ -66,15 +74,14 @@ export default async function AdminOrganizationsPage({
           items={[
             {
               label: 'ALL',
-              href:
-                view === 'requests' ? '/admin/organizations?view=requests' : '/admin/organizations',
+              href: view === 'mine' ? '/admin/organizations?view=mine' : '/admin/organizations',
               active: !status,
             },
-            ...statusItems.map((item) => ({
+            ...ADMIN_ORGANIZATION_STATUS_FILTERS.map((item) => ({
               label: item,
               href:
-                view === 'requests'
-                  ? `/admin/organizations?view=requests&status=${item}`
+                view === 'mine'
+                  ? `/admin/organizations?view=mine&status=${item}`
                   : `/admin/organizations?status=${item}`,
               active: status === item,
             })),
@@ -84,13 +91,7 @@ export default async function AdminOrganizationsPage({
 
       {!result.ok ? <p className="form-error">{result.error.message}</p> : null}
 
-      {view === 'organizations' ? (
-        <OrganizationsTable data={result.ok ? (result.data as OrganizationTableRow[]) : []} />
-      ) : (
-        <OrganizationRequestsTable
-          data={result.ok ? (result.data as OrganizationRequestTableRow[]) : []}
-        />
-      )}
+      <OrganizationsTable data={result.ok ? result.data : []} />
     </main>
   );
 }

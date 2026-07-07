@@ -129,6 +129,7 @@ Create only the folders needed by the current change. Avoid empty architecture s
 ## Readability guardrails
 
 - Name files and exports by domain responsibility, not implementation detail.
+- Keep reused string literals such as route segments, route paths, status values, permission names, and shared UI labels in named constants at the narrowest shared scope.
 - Prefer early returns and small named functions over deeply nested branches.
 - Avoid boolean-prop explosions; use explicit variants or composition when behavior diverges.
 - Do not create abstraction layers around a single trivial use. Extract when logic is complex, independently testable, or reused.

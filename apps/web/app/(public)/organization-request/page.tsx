@@ -5,10 +5,7 @@ import type { Route } from 'next';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { PhoneInputField } from '@/components/ui/phone-input-field';
-
-interface OrganizationRequestSummary {
-  status: string;
-}
+import { APP_ROUTES } from '@/routes';
 
 async function submitOrganizationRequest(formData: FormData) {
   'use server';
@@ -27,11 +24,15 @@ async function submitOrganizationRequest(formData: FormData) {
   });
 
   if (!result.ok) {
-    redirect(`/organization-request?error=${encodeURIComponent(result.error.message)}` as Route);
+    redirect(
+      `${APP_ROUTES.organizationRequest}?error=${encodeURIComponent(result.error.message)}` as Route,
+    );
   }
 
   const notification = result.data.notificationSent ? 'sent' : 'failed';
-  redirect(`/organization-request/status?submitted=1&notification=${notification}` as Route);
+  redirect(
+    `${APP_ROUTES.organizationRequestStatus}?submitted=1&notification=${notification}` as Route,
+  );
 }
 
 export default async function OrganizationRequestPage({
@@ -39,12 +40,8 @@ export default async function OrganizationRequestPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requireServerSession('/organization-request');
+  await requireServerSession(APP_ROUTES.organizationRequest);
   const { error } = await searchParams;
-  const requests = await apiFetch<OrganizationRequestSummary[]>('/organization-requests/mine');
-  if (requests.ok && requests.data.some((request) => request.status === 'PENDING')) {
-    redirect('/organization-request/status' as Route);
-  }
 
   return (
     <main className="page-content stack">

@@ -8,6 +8,32 @@ import type { z } from 'zod';
 export class OrganizationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  async listMine(userId: string) {
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: {
+        userId,
+        status: 'ACTIVE',
+        removedAt: null,
+      },
+      select: {
+        role: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            status: true,
+            description: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return memberships.map(({ organization, role }) => ({ ...organization, role }));
+  }
+
   async create(input: z.infer<typeof createOrganizationSchema>, ownerUserId: string) {
     return this.prisma.$transaction(async (tx) => {
       const owner = await tx.user.findFirst({

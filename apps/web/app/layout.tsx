@@ -2,8 +2,10 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { getCurrentUser, hasServerSession, isPlatformAdminRole } from '@/auth/session';
+import { getCurrentUser, hasServerSession } from '@/auth/session';
 import { AppShell } from '@/components/app-shell';
+import { getOrganizationAccessState } from '@/features/organizations/server/access';
+import { APP_ROUTES } from '@/routes';
 import { ToastProvider } from '@/components/toast-provider';
 import 'react-toastify/dist/ReactToastify.css';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -18,13 +20,14 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const hasSession = await hasServerSession();
   const user = hasSession ? await getCurrentUser() : null;
+  const access = user ? await getOrganizationAccessState(user) : null;
 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
         {user ? (
           <AppShell
-            isPlatformAdmin={isPlatformAdminRole(user.platformRole)}
+            canOpenAdmin={access?.canOpenAdmin ?? false}
             displayName={user.displayName ?? user.email ?? 'ChurchFlow user'}
           >
             {children}
@@ -33,7 +36,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <>
             <header className="site-header">
               <div className="site-header-inner">
-                <Link className="brand" href="/">
+                <Link className="brand" href={APP_ROUTES.home}>
                   <Image
                     src="/icons/church-flow.svg"
                     alt="ChurchFlow"
@@ -43,8 +46,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                   />
                 </Link>
                 <nav className="site-nav" aria-label="Main">
-                  <Link href="/organization-request">Request access</Link>
-                  <Link href="/login">Sign in</Link>
+                  <Link href={APP_ROUTES.organizationRequest}>Request access</Link>
+                  <Link href={APP_ROUTES.login}>Sign in</Link>
                 </nav>
               </div>
             </header>

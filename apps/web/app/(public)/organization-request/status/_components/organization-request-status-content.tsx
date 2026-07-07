@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { OrganizationRequestStatusItem } from '@churchflow/shared';
 import { ButtonLink } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { APP_ROUTES } from '@/routes';
 import type { OrganizationRequestStatusContentProps } from './organization-request-status-content.types';
 import { OrganizationRequestStatusTable } from './organization-request-status-table';
 
@@ -31,7 +32,7 @@ export function OrganizationRequestStatusContent({
         description="Track review progress and open organizations once they are approved."
         actions={
           !hasPendingRequest ? (
-            <ButtonLink href="/organization-request">Submit another request</ButtonLink>
+            <ButtonLink href={APP_ROUTES.organizationRequest}>Submit another request</ButtonLink>
           ) : null
         }
       />

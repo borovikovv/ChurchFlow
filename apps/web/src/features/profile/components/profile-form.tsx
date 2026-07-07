@@ -1,10 +1,10 @@
 'use client';
 
-import { zodResolver } from '@hookform/resolvers/zod';
 import {
   updateCurrentUserProfileSchema,
   type UpdateCurrentUserProfileInput,
 } from '@churchflow/shared';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';

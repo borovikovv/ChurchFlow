@@ -4,12 +4,23 @@ import { serverEnv } from '@/env/server';
 
 type ApiError = Extract<ApiResult<unknown>, { ok: false }>['error'];
 
+async function readJsonBody<T>(response: Response): Promise<T | undefined> {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return undefined;
+  }
+
+  return JSON.parse(text) as T;
+}
+
 export async function apiFetch<T>(
   path: string,
-  init: RequestInit & { useInternalUrl?: boolean } = {}
+  init: RequestInit & { useInternalUrl?: boolean } = {},
 ): Promise<ApiResult<T>> {
   const cookieStore = await cookies();
-  const baseUrl = init.useInternalUrl === false ? serverEnv.NEXT_PUBLIC_API_URL : serverEnv.API_INTERNAL_URL;
+  const baseUrl =
+    init.useInternalUrl === false ? serverEnv.NEXT_PUBLIC_API_URL : serverEnv.API_INTERNAL_URL;
   let response: Response;
 
   try {
@@ -18,9 +29,9 @@ export async function apiFetch<T>(
       headers: {
         accept: 'application/json',
         cookie: cookieStore.toString(),
-        ...init.headers
+        ...init.headers,
       },
-      cache: init.cache ?? 'no-store'
+      cache: init.cache ?? 'no-store',
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'API request failed';
@@ -29,15 +40,15 @@ export async function apiFetch<T>(
       ok: false,
       error: {
         code: 'API_UNREACHABLE',
-        message
-      }
+        message,
+      },
     };
   }
 
   if (!response.ok) {
     let error: ApiError | undefined;
     try {
-      const body = (await response.json()) as unknown;
+      const body = await readJsonBody<unknown>(response);
       if (
         typeof body === 'object' &&
         body !== null &&
@@ -53,7 +64,7 @@ export async function apiFetch<T>(
       ) {
         error = {
           code: body.error.code,
-          message: body.error.message
+          message: body.error.message,
         };
       }
     } catch {
@@ -64,13 +75,13 @@ export async function apiFetch<T>(
       ok: false,
       error: error ?? {
         code: `HTTP_${response.status}`,
-        message: 'Request failed'
-      }
+        message: 'Request failed',
+      },
     };
   }
 
   return {
     ok: true,
-    data: (await response.json()) as T
+    data: (await readJsonBody<T>(response)) as T,
   };
 }

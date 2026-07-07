@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
-import { apiFetch } from '@/api/client';
-import { Tabs } from '@/components/ui/tabs';
+import { getOrganizationAccessState } from '@/features/organizations/server/access';
 
 export default async function DashboardLayout({
   children,
@@ -11,21 +10,15 @@ export default async function DashboardLayout({
   params: Promise<{ orgId: string }>;
 }>) {
   const { orgId } = await params;
-  const access = await apiFetch(`/organizations/${orgId}/website`);
+  const access = await getOrganizationAccessState();
+  const hasMembership = access.organizations.some((organization) => organization.id === orgId);
 
-  if (!access.ok) {
+  if (!hasMembership && !access.isPlatformAdmin) {
     redirect('/invitations/pending' as Route);
   }
 
   return (
     <div className="dashboard">
-      <Tabs
-        label="Organization dashboard"
-        items={[
-          { label: 'Members', href: `/dashboard/${orgId}/members` },
-          { label: 'Website', href: `/dashboard/${orgId}/website` },
-        ]}
-      />
       <main>{children}</main>
     </div>
   );

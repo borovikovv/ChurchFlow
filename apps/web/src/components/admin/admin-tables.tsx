@@ -2,6 +2,7 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
+import { organizationHomeRoute } from '@/features/organizations/routes';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { formatIsoDate } from '@/lib/format-date';
 
@@ -15,6 +16,7 @@ export interface OrganizationTableRow {
     members: number;
     invitations: number;
   };
+  role?: string;
 }
 
 export interface OrganizationRequestTableRow {
@@ -90,7 +92,7 @@ export function OrganizationsTable({ data }: { data: OrganizationTableRow[] }) {
       columns={organizationColumns}
       data={data}
       emptyMessage="No organizations match this filter."
-      getRowHref={(organization) => `/admin/organizations/${organization.id}`}
+      getRowHref={(organization) => organizationHomeRoute(organization.id)}
     />
   );
 }

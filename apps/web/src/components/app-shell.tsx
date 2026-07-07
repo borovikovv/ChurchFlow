@@ -1,47 +1,87 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { LogoutButton } from '@/components/logout-button';
 import { SidebarNavLink } from '@/components/sidebar-nav-link';
+import { APP_ROUTES } from '@/routes';
+import {
+  ORGANIZATION_ROUTE_SEGMENTS,
+  organizationHomeRoute,
+  organizationMembersRoute,
+  organizationProfileRoute,
+  organizationWebsiteRoute,
+} from '@/features/organizations/routes';
+
+function getDashboardOrgId(pathname: string): string | null {
+  const [, section, orgId] = pathname.split('/');
+
+  return section === ORGANIZATION_ROUTE_SEGMENTS.dashboard && orgId ? orgId : null;
+}
 
 export function AppShell({
   children,
-  isPlatformAdmin,
+  canOpenAdmin,
   displayName,
 }: {
   children: ReactNode;
-  isPlatformAdmin: boolean;
+  canOpenAdmin: boolean;
   displayName: string;
 }) {
+  const pathname = usePathname();
+  const dashboardOrgId = getDashboardOrgId(pathname);
+
   return (
-    <div className="app-shell">
-      <aside className="app-sidebar">
-        <Link className="sidebar-brand flex justify-center" href="/">
-          <Image src="/icons/church-flow.svg" alt="ChurchFlow" width={52} height={36} priority />
-        </Link>
-
-        <nav className="sidebar-navigation" aria-label="Application navigation">
-          {isPlatformAdmin ? (
-            <SidebarNavLink href="/admin/organizations">All Organizations</SidebarNavLink>
+    <div className="app-frame">
+      <header className="site-header">
+        <div className="site-header-inner">
+          <Link className="brand" href={APP_ROUTES.home}>
+            <Image src="/icons/church-flow.svg" alt="ChurchFlow" width={60} height={40} priority />
+          </Link>
+          {canOpenAdmin ? (
+            <nav className="site-nav" aria-label="Admin navigation">
+              <Link href={APP_ROUTES.adminOrganizations}>Admin</Link>
+            </nav>
           ) : null}
-          <SidebarNavLink
-            href="/organization-request/status"
-            activePrefixes={['/organization-request', '/dashboard']}
-          >
-            My Organizations
-          </SidebarNavLink>
-          <SidebarNavLink href="/profile">Profile</SidebarNavLink>
-        </nav>
-
-        <div className="sidebar-account">
-          <span className="sidebar-account-label">Signed in as</span>
-          <div className="sidebar-account-row">
-            <strong title={displayName}>{displayName}</strong>
-            <LogoutButton />
-          </div>
         </div>
-      </aside>
-      <div className="app-main">{children}</div>
+      </header>
+      <div className="app-shell">
+        <aside className="app-sidebar">
+          <nav className="sidebar-navigation" aria-label="Application navigation">
+            {dashboardOrgId ? (
+              <>
+                <SidebarNavLink exact href={organizationHomeRoute(dashboardOrgId)}>
+                  Home
+                </SidebarNavLink>
+                <SidebarNavLink href={organizationMembersRoute(dashboardOrgId)}>
+                  Members
+                </SidebarNavLink>
+                <SidebarNavLink href={organizationProfileRoute(dashboardOrgId)}>
+                  Profile
+                </SidebarNavLink>
+                <SidebarNavLink href={organizationWebsiteRoute(dashboardOrgId)}>
+                  Website
+                </SidebarNavLink>
+              </>
+            ) : canOpenAdmin ? (
+              <SidebarNavLink href={APP_ROUTES.organizationRequest}>
+                Create organization
+              </SidebarNavLink>
+            ) : null}
+          </nav>
+
+          <div className="sidebar-account">
+            <span className="sidebar-account-label">Signed in as</span>
+            <div className="sidebar-account-row">
+              <strong title={displayName}>{displayName}</strong>
+              <LogoutButton />
+            </div>
+          </div>
+        </aside>
+        <div className="app-main">{children}</div>
+      </div>
     </div>
   );
 }

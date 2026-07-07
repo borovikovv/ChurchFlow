@@ -1,9 +1,12 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { isPlatformAdmin } from '@/auth/session';
+import { getPostLoginRedirect, hasServerSession } from '@/auth/session';
+import { redirect } from 'next/navigation';
 
 export default async function HomePage() {
-  const showAdminOrganizations = await isPlatformAdmin();
+  if (await hasServerSession()) {
+    redirect(await getPostLoginRedirect());
+  }
 
   return (
     <main className="section">
@@ -20,11 +23,9 @@ export default async function HomePage() {
         <p>
           Organization administration, member care, and public websites in one tenant-safe platform.
         </p>
-        {showAdminOrganizations ? (
-          <Link className="button" href={'/admin/organizations'}>
-            View organizations
-          </Link>
-        ) : null}
+        <Link className="button" href={'/login'}>
+          Sign in
+        </Link>
       </div>
     </main>
   );

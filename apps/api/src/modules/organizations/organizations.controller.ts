@@ -11,10 +11,17 @@ import { OrganizationsService } from './organizations.service';
 export class OrganizationsController {
   constructor(private readonly organizationsService: OrganizationsService) {}
 
+  @Get('/organizations/mine')
+  async listMine(@Req() request: AuthenticatedRequest) {
+    return this.organizationsService.listMine(this.getActorUserId(request));
+  }
+
   @Get('/admin/organizations')
   @UseGuards(JwtAuthGuard, PlatformAdminGuard)
   async listAdmin(@Query('status') status?: string) {
-    const parsedStatus: OrganizationStatus | undefined = status ? organizationStatusSchema.parse(status) : undefined;
+    const parsedStatus: OrganizationStatus | undefined = status
+      ? organizationStatusSchema.parse(status)
+      : undefined;
     return this.organizationsService.listAdmin(parsedStatus);
   }
 

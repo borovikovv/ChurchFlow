@@ -45,7 +45,7 @@ export function ProfileEditForm({
           Cancel
         </Button>
         <Button disabled={isSubmitting} type="submit">
-          {isSubmitting ? 'Saving…' : 'Save profile'}
+          {isSubmitting ? 'Saving...' : 'Save profile'}
         </Button>
       </div>
     </form>
