@@ -2,6 +2,7 @@ import { apiFetch } from '@/api/client';
 
 export type OrganizationMembershipRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 export type PlatformRole = 'USER' | 'ADMIN' | 'SUPER_ADMIN';
+export type OrganizationRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
 
 export interface CurrentUserForAccess {
   platformRole: PlatformRole;
@@ -15,10 +16,29 @@ export interface OrganizationAccessRecord {
   description: string | null;
   createdAt: string;
   role: OrganizationMembershipRole;
+  _count?: {
+    members: number;
+    invitations: number;
+  };
+}
+
+export interface OrganizationRequestAccessRecord {
+  id: string;
+  organizationName: string;
+  organizationSlug: string | null;
+  contactName: string;
+  status: OrganizationRequestStatus;
+  createdAt: string;
+  createdOrganization: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
 }
 
 export interface OrganizationAccessState {
   organizations: OrganizationAccessRecord[];
+  organizationRequests: OrganizationRequestAccessRecord[];
   isPlatformAdmin: boolean;
   canOpenAdmin: boolean;
 }
@@ -41,15 +61,24 @@ export async function getOrganizationAccessState(
         )
       : Promise.resolve(currentUser);
   const organizationsPromise = apiFetch<OrganizationAccessRecord[]>('/organizations/mine');
-  const [user, organizationsResult] = await Promise.all([userPromise, organizationsPromise]);
+  const organizationRequestsPromise =
+    apiFetch<OrganizationRequestAccessRecord[]>('/organization-requests/mine');
+  const [user, organizationsResult, organizationRequestsResult] = await Promise.all([
+    userPromise,
+    organizationsPromise,
+    organizationRequestsPromise,
+  ]);
   const organizations = organizationsResult.ok ? organizationsResult.data : [];
+  const organizationRequests = organizationRequestsResult.ok ? organizationRequestsResult.data : [];
   const isPlatformAdmin = isPlatformAdminRoleValue(user?.platformRole);
 
   return {
     organizations,
+    organizationRequests,
     isPlatformAdmin,
     canOpenAdmin:
       isPlatformAdmin ||
-      organizations.some((organization) => isOrganizationAdminRole(organization.role)),
+      organizations.some((organization) => isOrganizationAdminRole(organization.role)) ||
+      organizationRequests.length > 0,
   };
 }

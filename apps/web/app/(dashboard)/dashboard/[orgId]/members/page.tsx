@@ -227,6 +227,8 @@ export default async function MembersDashboardPage({
       {claimLink ? <CopyField value={claimLink} /> : null}
 
       <MembersManager
+        key={memberAccess}
+        memberAccess={memberAccess}
         organizationId={orgId}
         initialMembers={payload.members}
         actorMembershipId={payload.actorMembershipId}
@@ -240,29 +242,6 @@ export default async function MembersDashboardPage({
         deleteRelationship={deleteRelationship}
         preparePhoto={prepareMemberPhotoAction}
         confirmPhoto={confirmMemberPhotoAction}
-        tabs={[
-          { label: 'All', href: membersUrl(orgId), active: memberAccess === 'all' },
-          {
-            label: 'Telegram connected',
-            href: membersUrl(orgId, { access: 'connected' }),
-            active: memberAccess === 'connected',
-          },
-          {
-            label: 'No app access',
-            href: membersUrl(orgId, { access: 'offline' }),
-            active: memberAccess === 'offline',
-          },
-          {
-            label: 'Access requested',
-            href: membersUrl(orgId, { access: 'requested' }),
-            active: memberAccess === 'requested',
-          },
-          {
-            label: 'Suspended',
-            href: membersUrl(orgId, { access: 'suspended' }),
-            active: memberAccess === 'suspended',
-          },
-        ]}
       />
     </div>
   );

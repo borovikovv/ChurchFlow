@@ -1,14 +1,51 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@churchflow/db';
+import { Prisma, type OrganizationStatus } from '@churchflow/db';
 import type { z } from 'zod';
-import { createOrganizationSchema } from '@churchflow/shared';
+import {
+  createOrganizationSchema,
+  type AdminOrganizationWorkspaceStatus,
+  type AdminOrganizationWorkspaceView,
+} from '@churchflow/shared';
 import { AuditService } from '../audit/audit.service';
+import { OrganizationRequestsRepository } from '../organization-requests/repositories/organization-requests.repository';
 import { OrganizationsRepository } from './repositories/organizations.repository';
+
+type WorkspaceOrganizationRow = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  createdAt: string;
+  subtitle?: string;
+  itemType: 'organization' | 'request';
+  _count?: {
+    members: number;
+    invitations: number;
+  };
+  role?: string;
+};
+
+type OrganizationWorkspaceSource = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  createdAt: Date;
+  _count?: {
+    members: number;
+    invitations: number;
+  };
+  role?: string;
+};
+
+const ORGANIZATION_STATUSES = ['ACTIVE', 'SUSPENDED', 'ARCHIVED', 'DELETED'] as const;
+const REQUEST_STATUSES = ['PENDING', 'REJECTED', 'EXPIRED'] as const;
 
 @Injectable()
 export class OrganizationsService {
   constructor(
     private readonly organizationsRepository: OrganizationsRepository,
+    private readonly organizationRequestsRepository: OrganizationRequestsRepository,
     private readonly auditService: AuditService,
   ) {}
 
@@ -34,6 +71,55 @@ export class OrganizationsService {
     return this.organizationsRepository.listAdmin(status);
   }
 
+  async listWorkspace(
+    userId: string,
+    view?: AdminOrganizationWorkspaceView,
+    status?: AdminOrganizationWorkspaceStatus,
+  ): Promise<WorkspaceOrganizationRow[]> {
+    const platformRole = await this.organizationsRepository.findPlatformRole(userId);
+    const isPlatformAdmin = platformRole === 'ADMIN' || platformRole === 'SUPER_ADMIN';
+    const effectiveView: AdminOrganizationWorkspaceView =
+      isPlatformAdmin && view === 'all' ? 'all' : 'mine';
+    const organizationStatus = this.toOrganizationStatus(status);
+    const requestStatus = this.toRequestStatus(status);
+
+    if (effectiveView === 'all') {
+      const [organizations, requests] = await Promise.all([
+        this.organizationsRepository.listAdmin(organizationStatus),
+        this.organizationRequestsRepository.list(
+          requestStatus,
+          this.organizationRequestStaleBefore(),
+        ),
+      ]);
+
+      return [
+        ...organizations.map((organization) => this.mapOrganizationRow(organization)),
+        ...requests
+          .filter((request) => this.isDisplayedRequestStatus(request.status))
+          .map((request) => this.mapRequestRow(request)),
+      ].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    }
+
+    const [organizations, requests] = await Promise.all([
+      this.organizationsRepository.listMineAdmin(userId, organizationStatus),
+      this.organizationRequestsRepository.listForRequester(
+        userId,
+        this.organizationRequestStaleBefore(),
+      ),
+    ]);
+
+    return [
+      ...organizations.map((organization) => this.mapOrganizationRow(organization)),
+      ...requests
+        .filter(
+          (request) =>
+            this.isDisplayedRequestStatus(request.status) &&
+            (!requestStatus || request.status === requestStatus),
+        )
+        .map((request) => this.mapRequestRow(request)),
+    ].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
   async getAdmin(id: string) {
     const organization = await this.organizationsRepository.findAdminById(id);
     if (!organization) {
@@ -57,6 +143,64 @@ export class OrganizationsService {
 
   async deleteSoft(id: string, actorUserId: string) {
     return this.changeStatus(id, actorUserId, 'DELETE');
+  }
+
+  private organizationRequestStaleBefore(): Date {
+    return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  }
+
+  private mapOrganizationRow(
+    organization: OrganizationWorkspaceSource,
+  ): WorkspaceOrganizationRow {
+    return {
+      id: organization.id,
+      name: organization.name,
+      slug: organization.slug,
+      status: organization.status,
+      createdAt: organization.createdAt.toISOString(),
+      itemType: 'organization',
+      ...(organization._count ? { _count: organization._count } : {}),
+      ...(organization.role ? { role: organization.role } : {}),
+    };
+  }
+
+  private mapRequestRow(
+    request:
+      | Awaited<ReturnType<OrganizationRequestsRepository['list']>>[number]
+      | Awaited<ReturnType<OrganizationRequestsRepository['listForRequester']>>[number],
+  ): WorkspaceOrganizationRow {
+    return {
+      id: request.id,
+      name: request.organizationName,
+      slug:
+        'organizationSlug' in request
+          ? (request.organizationSlug ?? 'Organization request')
+          : 'Organization request',
+      status: request.status,
+      createdAt: request.createdAt.toISOString(),
+      subtitle: `Requested by ${request.contactName}`,
+      itemType: 'request',
+    };
+  }
+
+  private isDisplayedRequestStatus(status: string): status is (typeof REQUEST_STATUSES)[number] {
+    return REQUEST_STATUSES.includes(status as (typeof REQUEST_STATUSES)[number]);
+  }
+
+  private toOrganizationStatus(
+    status?: AdminOrganizationWorkspaceStatus,
+  ): OrganizationStatus | undefined {
+    return ORGANIZATION_STATUSES.includes(status as OrganizationStatus)
+      ? (status as OrganizationStatus)
+      : undefined;
+  }
+
+  private toRequestStatus(
+    status?: AdminOrganizationWorkspaceStatus,
+  ): 'PENDING' | 'REJECTED' | 'EXPIRED' | undefined {
+    return REQUEST_STATUSES.includes(status as (typeof REQUEST_STATUSES)[number])
+      ? (status as (typeof REQUEST_STATUSES)[number])
+      : undefined;
   }
 
   private async changeStatus(

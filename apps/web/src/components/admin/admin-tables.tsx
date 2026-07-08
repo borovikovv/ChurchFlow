@@ -12,6 +12,8 @@ export interface OrganizationTableRow {
   slug: string;
   status: string;
   createdAt: string;
+  subtitle?: string;
+  itemType?: 'organization' | 'request';
   _count?: {
     members: number;
     invitations: number;
@@ -37,7 +39,7 @@ const organizationColumns: Array<ColumnDef<OrganizationTableRow>> = [
     cell: ({ row }) => (
       <div className="table-primary-cell">
         <strong>{row.original.name}</strong>
-        <span>{row.original.slug}</span>
+        <span>{row.original.subtitle ?? row.original.slug}</span>
       </div>
     ),
   },
@@ -50,6 +52,7 @@ const organizationColumns: Array<ColumnDef<OrganizationTableRow>> = [
     id: 'members',
     accessorFn: (row) => row._count?.members ?? 0,
     header: 'Members',
+    cell: ({ row, getValue }) => (row.original.itemType === 'request' ? '—' : getValue()),
   },
   {
     accessorKey: 'createdAt',
@@ -92,7 +95,11 @@ export function OrganizationsTable({ data }: { data: OrganizationTableRow[] }) {
       columns={organizationColumns}
       data={data}
       emptyMessage="No organizations match this filter."
-      getRowHref={(organization) => organizationHomeRoute(organization.id)}
+      getRowHref={(organization) =>
+        organization.itemType === 'request'
+          ? `/admin/organization-requests/${organization.id}`
+          : organizationHomeRoute(organization.id)
+      }
     />
   );
 }

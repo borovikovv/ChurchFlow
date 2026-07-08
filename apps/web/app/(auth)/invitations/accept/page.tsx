@@ -49,7 +49,7 @@ export default async function AcceptInvitationPage({
 
   return (
     <main className="section">
-      <div className="shell stack">
+      <div className="shell stack max-w-[75%]">
         <h1>Invitation</h1>
         {!token || !invitation?.valid ? (
           <p>This invitation is invalid or no longer available.</p>
@@ -79,7 +79,7 @@ export default async function AcceptInvitationPage({
               </form>
             ) : (
               <Link
-                className="button"
+                className="button max-w-75"
                 href={`/login?redirectTo=${encodeURIComponent(`/invitations/accept?token=${token}`)}`}
               >
                 Sign in or create an account

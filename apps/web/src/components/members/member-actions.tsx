@@ -1,6 +1,14 @@
 'use client';
 
-import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -531,10 +539,41 @@ export function MemberActions({
   onRoleUpdated: (role: OrganizationRole) => void;
 }) {
   const menuRef = useRef<HTMLDetailsElement>(null);
+  const menuContentRef = useRef<HTMLDivElement>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const roleDialogRef = useRef<HTMLDialogElement>(null);
   const accessDialogRef = useRef<HTMLDialogElement>(null);
   const [openDialog, setOpenDialog] = useState<'edit' | 'role' | 'access' | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+
+    const updateMenuPosition = () => {
+      const trigger = menuRef.current?.querySelector('summary');
+      if (!trigger) return;
+
+      const triggerRect = trigger.getBoundingClientRect();
+      const menuHeight = menuContentRef.current?.offsetHeight ?? 0;
+      const preferredTop = triggerRect.bottom + 6;
+      const maxTop = window.innerHeight - menuHeight - 8;
+
+      setMenuPosition({
+        top: Math.max(8, Math.min(preferredTop, maxTop)),
+        right: Math.max(8, window.innerWidth - triggerRect.right),
+      });
+    };
+
+    updateMenuPosition();
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+    };
+  }, [menuOpen]);
 
   useCloseOnOutsideClick({
     refs: [
@@ -556,6 +595,7 @@ export function MemberActions({
   return (
     <details
       className="group relative col-start-2 row-start-1 row-end-[span_4] self-start justify-self-end md:col-auto md:row-auto md:self-auto"
+      onToggle={(event) => setMenuOpen(event.currentTarget.open)}
       ref={menuRef}
     >
       <summary
@@ -568,7 +608,11 @@ export function MemberActions({
           <circle cx="10" cy="16" r="1.6" />
         </svg>
       </summary>
-      <div className="absolute top-[calc(100%+6px)] right-0 z-10 w-[220px] overflow-hidden rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-1.5 shadow-[0_12px_32px_rgba(31,35,40,0.16)]">
+      <div
+        className="fixed z-50 w-[220px] overflow-hidden rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-1.5 shadow-[0_12px_32px_rgba(31,35,40,0.16)]"
+        ref={menuContentRef}
+        style={{ top: menuPosition.top, right: menuPosition.right }}
+      >
         {canManage ? (
           <EditMemberSheet
             member={member}

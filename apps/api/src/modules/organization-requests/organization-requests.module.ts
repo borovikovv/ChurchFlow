@@ -8,6 +8,7 @@ import { OrganizationRequestsRepository } from './repositories/organization-requ
 @Module({
   imports: [InvitationsModule],
   controllers: [OrganizationRequestsController],
-  providers: [OrganizationRequestsService, OrganizationRequestsRepository, PlatformAdminGuard]
+  providers: [OrganizationRequestsService, OrganizationRequestsRepository, PlatformAdminGuard],
+  exports: [OrganizationRequestsRepository],
 })
 export class OrganizationRequestsModule {}

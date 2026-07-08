@@ -60,6 +60,20 @@ export const organizationRequestStatusSchema = z.enum([
   'REJECTED',
   'EXPIRED',
 ]);
+export const adminOrganizationWorkspaceViewSchema = z.enum(['all', 'mine']);
+export const adminOrganizationWorkspaceStatusSchema = z.enum([
+  'ACTIVE',
+  'SUSPENDED',
+  'ARCHIVED',
+  'DELETED',
+  'PENDING',
+  'REJECTED',
+  'EXPIRED',
+]);
+export const listAdminOrganizationWorkspaceQuerySchema = z.object({
+  view: adminOrganizationWorkspaceViewSchema.optional(),
+  status: adminOrganizationWorkspaceStatusSchema.optional(),
+});
 
 const optionalTrimmedString = (max: number) =>
   z

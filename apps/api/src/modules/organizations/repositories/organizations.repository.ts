@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { OrganizationStatus, Prisma } from '@churchflow/db';
+import type { OrganizationStatus, PlatformRole, Prisma } from '@churchflow/db';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { createOrganizationSchema } from '@churchflow/shared';
 import type { z } from 'zod';
@@ -25,6 +25,56 @@ export class OrganizationsRepository {
             status: true,
             description: true,
             createdAt: true,
+            _count: {
+              select: {
+                members: {
+                  where: {
+                    status: { in: ['ACTIVE', 'SUSPENDED'] },
+                    removedAt: null,
+                  },
+                },
+                invitations: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return memberships.map(({ organization, role }) => ({ ...organization, role }));
+  }
+
+  async listMineAdmin(userId: string, status?: OrganizationStatus) {
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: {
+        userId,
+        role: { in: ['OWNER', 'ADMIN'] },
+        status: 'ACTIVE',
+        removedAt: null,
+        ...(status ? { organization: { status } } : {}),
+      },
+      select: {
+        role: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            status: true,
+            description: true,
+            createdAt: true,
+            _count: {
+              select: {
+                members: {
+                  where: {
+                    status: { in: ['ACTIVE', 'SUSPENDED'] },
+                    removedAt: null,
+                  },
+                },
+                invitations: true,
+              },
+            },
           },
         },
       },
@@ -142,5 +192,14 @@ export class OrganizationsRepository {
       where: { id },
       data: dataByAction[action],
     });
+  }
+
+  async findPlatformRole(userId: string): Promise<PlatformRole | null> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { platformRole: true },
+    });
+
+    return user?.platformRole ?? null;
   }
 }

@@ -11,6 +11,7 @@ These instructions apply to the entire repository. More specific `AGENTS.md` fil
 - Do not run a production Next.js build while a development server is active because both write to `.next`.
 - Do not add dependencies unless the task requires them.
 - Use clear English for code, identifiers, UI copy, comments, and documentation.
+- For API-backed lists and tables, the frontend must only send validated query parameters to backend endpoints. Do not merge datasets or reproduce backend filtering rules in the web layer.
 
 ## Quality checks
 
@@ -25,4 +26,3 @@ These instructions apply to the entire repository. More specific `AGENTS.md` fil
 - `apps/api`: NestJS API. Follow `apps/api/AGENTS.md`.
 - `packages/shared`: framework-neutral schemas and types shared across applications.
 - `packages/db`: Prisma schema, migrations, and generated database client exports.
-

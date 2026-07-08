@@ -4,6 +4,7 @@ import type { OrganizationStatus } from '@churchflow/db';
 import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
 import { PlatformAdminGuard } from '../../common/guards/platform-admin.guard';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { ListAdminOrganizationWorkspaceQueryDto } from './dto/list-admin-organization-workspace-query.dto';
 import { OrganizationsService } from './organizations.service';
 
 @Controller()
@@ -23,6 +24,18 @@ export class OrganizationsController {
       ? organizationStatusSchema.parse(status)
       : undefined;
     return this.organizationsService.listAdmin(parsedStatus);
+  }
+
+  @Get('/admin/organizations/workspace')
+  async listWorkspace(
+    @Query() query: ListAdminOrganizationWorkspaceQueryDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.organizationsService.listWorkspace(
+      this.getActorUserId(request),
+      query.view,
+      query.status,
+    );
   }
 
   @Get('/admin/organizations/:id')

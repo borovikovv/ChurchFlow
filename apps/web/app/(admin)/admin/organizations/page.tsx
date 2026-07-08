@@ -1,15 +1,38 @@
 import { apiFetch } from '@/api/client';
 import { OrganizationsTable, type OrganizationTableRow } from '@/components/admin/admin-tables';
+import { QueryFilterSelect } from '@/components/forms/query-filter-select';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs } from '@/components/ui/tabs';
-import { ADMIN_ORGANIZATION_STATUS_FILTERS } from '@/admin/constants';
-import { requireAdminOrganizationsAccess } from '@/auth/session';
 import {
-  getOrganizationAccessState,
-  isOrganizationAdminRole,
-} from '@/features/organizations/server/access';
+  ADMIN_ORGANIZATION_REQUEST_STATUS_FILTERS,
+  ADMIN_ORGANIZATION_STATUS_FILTERS,
+} from '@/admin/constants';
+import { requireAdminOrganizationsAccess } from '@/auth/session';
+import { getOrganizationAccessState } from '@/features/organizations/server/access';
 
 type WorkspaceView = 'all' | 'mine';
+
+const ADMIN_WORKSPACE_STATUS_FILTERS = [
+  ...ADMIN_ORGANIZATION_STATUS_FILTERS,
+  ...ADMIN_ORGANIZATION_REQUEST_STATUS_FILTERS,
+];
+const ADMIN_WORKSPACE_STATUS_OPTIONS = [
+  { label: 'All statuses', value: '' },
+  ...ADMIN_WORKSPACE_STATUS_FILTERS.map((item) => ({ label: item, value: item })),
+];
+
+function adminOrganizationsUrl(view: WorkspaceView, status?: string): string {
+  const params = new URLSearchParams();
+  if (view === 'mine') {
+    params.set('view', 'mine');
+  }
+  if (status) {
+    params.set('status', status);
+  }
+
+  const query = params.toString();
+  return query ? `/admin/organizations?${query}` : '/admin/organizations';
+}
 
 export default async function AdminOrganizationsPage({
   searchParams,
@@ -22,28 +45,14 @@ export default async function AdminOrganizationsPage({
   const requestedView: WorkspaceView =
     rawView === 'mine' || rawView === 'all' ? rawView : defaultView;
   const view: WorkspaceView = access.isPlatformAdmin ? requestedView : 'mine';
-  const pageUrl = `/admin/organizations${view === 'mine' ? '?view=mine' : ''}`;
+  const pageUrl = adminOrganizationsUrl(view, status);
   await requireAdminOrganizationsAccess(pageUrl);
-  const adminOrganizations = access.organizations.filter((organization) =>
-    isOrganizationAdminRole(organization.role),
+  const result = await apiFetch<OrganizationTableRow[]>(
+    `/admin/organizations/workspace?${new URLSearchParams({
+      view,
+      ...(status ? { status } : {}),
+    }).toString()}`,
   );
-  const result =
-    view === 'all' && access.isPlatformAdmin
-      ? await apiFetch<OrganizationTableRow[]>(
-          `/admin/organizations${status ? `?status=${encodeURIComponent(status)}` : ''}`,
-        )
-      : ({
-          ok: true as const,
-          data: adminOrganizations
-            .filter((organization) => !status || organization.status === status)
-            .map((organization) => ({
-              ...organization,
-              _count: {
-                members: 0,
-                invitations: 0,
-              },
-            })),
-        } satisfies { ok: true; data: OrganizationTableRow[] });
 
   return (
     <main className="page-content stack">
@@ -55,12 +64,12 @@ export default async function AdminOrganizationsPage({
           items={[
             {
               label: 'All organizations',
-              href: '/admin/organizations',
+              href: adminOrganizationsUrl('all', status),
               active: view === 'all',
             },
             {
               label: 'My organizations',
-              href: '/admin/organizations?view=mine',
+              href: adminOrganizationsUrl('mine', status),
               active: view === 'mine',
             },
           ]}
@@ -68,24 +77,12 @@ export default async function AdminOrganizationsPage({
       ) : null}
 
       <div className="filter-bar">
-        <span className="filter-label">Status</span>
-        <Tabs
-          label={`${view} status filters`}
-          items={[
-            {
-              label: 'ALL',
-              href: view === 'mine' ? '/admin/organizations?view=mine' : '/admin/organizations',
-              active: !status,
-            },
-            ...ADMIN_ORGANIZATION_STATUS_FILTERS.map((item) => ({
-              label: item,
-              href:
-                view === 'mine'
-                  ? `/admin/organizations?view=mine&status=${item}`
-                  : `/admin/organizations?status=${item}`,
-              active: status === item,
-            })),
-          ]}
+        <QueryFilterSelect
+          label="Status"
+          name="status"
+          options={ADMIN_WORKSPACE_STATUS_OPTIONS}
+          value={status ?? ''}
+          {...(view === 'mine' ? { preserveParams: { view: 'mine' } } : {})}
         />
       </div>
 
