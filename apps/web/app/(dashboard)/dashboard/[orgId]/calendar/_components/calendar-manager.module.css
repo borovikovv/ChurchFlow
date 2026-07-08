@@ -1,0 +1,146 @@
+.calendarRoot :global(.fc) {
+  color: var(--foreground);
+  font: inherit;
+}
+
+.calendarRoot :global(.fc .fc-toolbar.fc-header-toolbar) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.calendarRoot :global(.fc .fc-toolbar-title) {
+  color: var(--foreground);
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.calendarRoot :global(.fc .fc-button) {
+  border-color: var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-subtle);
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 600;
+  min-height: 32px;
+  padding: 4px 10px;
+  box-shadow: var(--shadow);
+}
+
+.calendarRoot :global(.fc .fc-button:hover),
+.calendarRoot :global(.fc .fc-button-primary:not(:disabled).fc-button-active) {
+  border-color: var(--line);
+  background: #eef1f4;
+  color: var(--foreground);
+}
+
+.calendarRoot :global(.fc .fc-button:focus),
+.calendarRoot :global(.fc .fc-button:focus-visible) {
+  box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.18);
+  outline: none;
+}
+
+.calendarRoot :global(.fc .fc-button .fc-icon) {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+}
+
+.calendarRoot :global(.fc-theme-standard td),
+.calendarRoot :global(.fc-theme-standard th),
+.calendarRoot :global(.fc-theme-standard .fc-scrollgrid) {
+  border-color: var(--line-muted);
+}
+
+.calendarRoot :global(.fc-theme-standard .fc-scrollgrid) {
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.calendarRoot :global(.fc .fc-col-header-cell) {
+  height: 30px;
+  background: var(--surface);
+}
+
+.calendarRoot :global(.fc .fc-daygrid-day-frame) {
+  min-height: clamp(108px, 13vh, 150px);
+  padding: 6px 6px 6px 2px;
+}
+
+.calendarRoot :global(.fc .fc-daygrid-day-number) {
+  color: var(--foreground);
+  font-weight: 600;
+  line-height: 1;
+  padding: 0;
+}
+
+.calendarRoot :global(.fc .fc-col-header-cell-cushion) {
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.calendarRoot :global(.fc .fc-day-today) {
+  background: #ddf4ff;
+}
+
+.calendarRoot :global(.fc .fc-daygrid-day.fc-day-other) {
+  background: #fbfbfc;
+}
+
+.calendarRoot :global(.fc .fc-daygrid-day.fc-day-other .fc-daygrid-day-number) {
+  color: #8c959f;
+}
+
+.calendarRoot :global(.fc .fc-daygrid-event) {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  margin: 2px 0 0;
+  padding: 0;
+}
+
+.calendarRoot :global(.fc .fc-event-main) {
+  color: inherit;
+}
+
+.calendarRoot :global(.fc .fc-daygrid-day-events) {
+  margin-top: 18px;
+}
+
+.calendarRoot :global(.fc .fc-daygrid-more-link) {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.2;
+}
+
+.calendarRoot :global(.fc .fc-daygrid-more-link:hover) {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+.calendarRoot :global(.fc .fc-more-popover) {
+  border-color: var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgba(31, 35, 40, 0.16);
+}
+
+.calendarRoot :global(.fc .fc-more-popover .fc-popover-header) {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-subtle);
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.calendarRoot :global(.fc .fc-more-popover .fc-popover-body) {
+  padding: 8px;
+}

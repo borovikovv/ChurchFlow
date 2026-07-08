@@ -9,6 +9,8 @@ export class CreateManualMemberDto implements CreateManualOrganizationMemberInpu
   phone?: string | null;
   notes?: string | null;
   memberSince?: string | null;
+  birthday?: string | null;
+  anniversary?: string | null;
   biography?: string | null;
   familyNotes?: string | null;
   role!: 'MEMBER' | 'VIEWER';

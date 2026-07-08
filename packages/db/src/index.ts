@@ -2,6 +2,9 @@ export { PrismaClient, Prisma } from '@prisma/client';
 export type {
   AuthProvider,
   AuditAction,
+  CalendarEventReminder,
+  CalendarEventRepeatPeriod,
+  CalendarEventType,
   FeatureFlagScope,
   InvitationMode,
   InvitationTargetProvider,

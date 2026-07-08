@@ -77,6 +77,8 @@ interface EditableMember {
     phone: string | null;
     notes: string | null;
     memberSince: string | null;
+    birthday: string | null;
+    anniversary: string | null;
     biography: string | null;
     familyNotes: string | null;
     photoUrl: string | null;
@@ -157,6 +159,8 @@ function EditMemberSheet({
       phone: member.profile.phone,
       notes: member.profile.notes,
       memberSince: member.profile.memberSince?.slice(0, 10) ?? null,
+      birthday: member.profile.birthday?.slice(0, 10) ?? null,
+      anniversary: member.profile.anniversary?.slice(0, 10) ?? null,
       biography: member.profile.biography,
       familyNotes: member.profile.familyNotes,
     },
@@ -218,6 +222,8 @@ function EditMemberSheet({
         ...(values.phone !== undefined ? { phone: values.phone } : {}),
         ...(values.notes !== undefined ? { notes: values.notes } : {}),
         ...(values.memberSince !== undefined ? { memberSince: values.memberSince } : {}),
+        ...(values.birthday !== undefined ? { birthday: values.birthday } : {}),
+        ...(values.anniversary !== undefined ? { anniversary: values.anniversary } : {}),
         ...(values.biography !== undefined ? { biography: values.biography } : {}),
         ...(values.familyNotes !== undefined ? { familyNotes: values.familyNotes } : {}),
         photoUrl: nextPhotoUrl,
@@ -300,6 +306,18 @@ function EditMemberSheet({
               name="memberSince"
               label="Member since"
               error={errors.memberSince?.message}
+            />
+            <FormDatePicker
+              control={control}
+              name="birthday"
+              label="Birthday"
+              error={errors.birthday?.message}
+            />
+            <FormDatePicker
+              control={control}
+              name="anniversary"
+              label="Anniversary"
+              error={errors.anniversary?.message}
             />
             <FormTextarea
               label="Biography"

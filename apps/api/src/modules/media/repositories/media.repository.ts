@@ -35,6 +35,21 @@ export class MediaRepository {
       },
     });
   }
+
+  findManageableOrganization(organizationId: string, actorUserId: string) {
+    return this.prisma.organizationMember.findFirst({
+      where: {
+        organizationId,
+        userId: actorUserId,
+        role: { in: ['OWNER', 'ADMIN'] },
+        status: 'ACTIVE',
+        removedAt: null,
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { id: true },
+    });
+  }
+
   createPendingAsset(data: {
     organizationId: string;
     bucket: string;
@@ -53,11 +68,49 @@ export class MediaRepository {
       },
     });
   }
+
+  createPendingCalendarEventAsset(data: {
+    organizationId: string;
+    bucket: string;
+    objectKey: string;
+    filename: string;
+    mimeType: string;
+    byteSize: number;
+  }) {
+    return this.prisma.mediaAsset.create({
+      data: {
+        ...data,
+        byteSize: BigInt(data.byteSize),
+        metadata: { status: 'pending', purpose: 'calendar-event-image' },
+      },
+    });
+  }
+
   findAsset(assetId: string, organizationId: string) {
     return this.prisma.mediaAsset.findFirst({
       where: { id: assetId, organizationId, deletedAt: null },
     });
   }
+
+  async confirmCalendarEventImage(organizationId: string, assetId: string, actorUserId: string) {
+    const asset = await this.prisma.mediaAsset.update({
+      where: { id: assetId },
+      data: { metadata: { status: 'confirmed', purpose: 'calendar-event-image' } },
+      select: { id: true },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId,
+        action: 'CONFIRM_CALENDAR_EVENT_IMAGE',
+        entityType: 'MediaAsset',
+        entityId: assetId,
+        metadata: { assetId },
+      },
+    });
+    return { assetId: asset.id };
+  }
+
   async attachPhoto(
     organizationId: string,
     membershipId: string,

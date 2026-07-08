@@ -24,7 +24,13 @@ interface CreatedMember {
   id: string;
   role: string;
   source: string;
-  profile: { displayName: string; email: string | null; phone: string | null };
+  profile: {
+    displayName: string;
+    email: string | null;
+    phone: string | null;
+    birthday: string | null;
+    anniversary: string | null;
+  };
 }
 
 export function CreateMemberDialog({
@@ -110,6 +116,18 @@ export function CreateMemberDialog({
               name="memberSince"
               label="Member since"
               error={errors.memberSince?.message}
+            />
+            <FormDatePicker
+              control={control}
+              name="birthday"
+              label="Birthday"
+              error={errors.birthday?.message}
+            />
+            <FormDatePicker
+              control={control}
+              name="anniversary"
+              label="Anniversary"
+              error={errors.anniversary?.message}
             />
             <FormTextarea
               label="Notes"

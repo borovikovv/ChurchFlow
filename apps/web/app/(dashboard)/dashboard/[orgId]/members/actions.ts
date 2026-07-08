@@ -13,7 +13,13 @@ export async function createMemberAction(input: {
     id: string;
     role: string;
     source: string;
-    profile: { displayName: string; email: string | null; phone: string | null };
+    profile: {
+      displayName: string;
+      email: string | null;
+      phone: string | null;
+      birthday: string | null;
+      anniversary: string | null;
+    };
   }>(`/organizations/${input.organizationId}/memberships/manual`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -53,6 +59,8 @@ export async function updateMemberProfileAction(
         phone: formData.get('phone') || null,
         notes: formData.get('notes') || null,
         memberSince: formData.get('memberSince') || null,
+        birthday: formData.get('birthday') || null,
+        anniversary: formData.get('anniversary') || null,
         biography: formData.get('biography') || null,
         familyNotes: formData.get('familyNotes') || null,
       }),

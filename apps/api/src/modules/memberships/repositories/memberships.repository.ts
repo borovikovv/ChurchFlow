@@ -129,6 +129,10 @@ export class MembershipsRepository {
               memberSince: input.memberSince
                 ? new Date(`${input.memberSince}T00:00:00.000Z`)
                 : null,
+              birthday: input.birthday ? new Date(`${input.birthday}T00:00:00.000Z`) : null,
+              anniversary: input.anniversary
+                ? new Date(`${input.anniversary}T00:00:00.000Z`)
+                : null,
               biography: input.biography ?? null,
               familyNotes: input.familyNotes ?? null,
             },
@@ -187,6 +191,8 @@ export class MembershipsRepository {
           phone: input.phone ?? null,
           notes: input.notes ?? null,
           memberSince: input.memberSince ? new Date(`${input.memberSince}T00:00:00.000Z`) : null,
+          birthday: input.birthday ? new Date(`${input.birthday}T00:00:00.000Z`) : null,
+          anniversary: input.anniversary ? new Date(`${input.anniversary}T00:00:00.000Z`) : null,
           biography: input.biography ?? null,
           familyNotes: input.familyNotes ?? null,
         },
@@ -199,6 +205,18 @@ export class MembershipsRepository {
             ? {
                 memberSince: input.memberSince
                   ? new Date(`${input.memberSince}T00:00:00.000Z`)
+                  : null,
+              }
+            : {}),
+          ...(input.birthday !== undefined
+            ? {
+                birthday: input.birthday ? new Date(`${input.birthday}T00:00:00.000Z`) : null,
+              }
+            : {}),
+          ...(input.anniversary !== undefined
+            ? {
+                anniversary: input.anniversary
+                  ? new Date(`${input.anniversary}T00:00:00.000Z`)
                   : null,
               }
             : {}),

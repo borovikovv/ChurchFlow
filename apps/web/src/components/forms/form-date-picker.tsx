@@ -15,11 +15,15 @@ export function FormDatePicker<
   name,
   label,
   error,
+  maxDate = new Date(),
+  disabled = false,
 }: {
   control: Control<T, TContext, TTransformedValues>;
   name: Path<T>;
   label: string;
   error?: string | undefined;
+  maxDate?: Date | null;
+  disabled?: boolean;
 }) {
   return (
     <FormField label={label} error={error}>
@@ -35,7 +39,7 @@ export function FormDatePicker<
               calendarClassName={styles['calendar'] ?? ''}
               className={styles['input'] ?? ''}
               dateFormat="MM/dd/yyyy"
-              maxDate={new Date()}
+              disabled={disabled}
               placeholderText="MM/DD/YYYY"
               popperClassName={styles['popper'] ?? ''}
               popperProps={{ strategy: 'fixed' }}
@@ -46,6 +50,7 @@ export function FormDatePicker<
               showYearDropdown
               dropdownMode="select"
               isClearable
+              {...(maxDate ? { maxDate } : {})}
               onBlur={field.onBlur}
               onChange={(date: Date | null) => field.onChange(formatCalendarDate(date))}
             />

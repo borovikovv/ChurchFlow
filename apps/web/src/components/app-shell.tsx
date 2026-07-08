@@ -9,6 +9,7 @@ import { SidebarNavLink } from '@/components/sidebar-nav-link';
 import { APP_ROUTES } from '@/routes';
 import {
   ORGANIZATION_ROUTE_SEGMENTS,
+  organizationCalendarRoute,
   organizationHomeRoute,
   organizationMembersRoute,
   organizationProfileRoute,
@@ -57,6 +58,9 @@ export function AppShell({
                 </SidebarNavLink>
                 <SidebarNavLink href={organizationMembersRoute(dashboardOrgId)}>
                   Members
+                </SidebarNavLink>
+                <SidebarNavLink href={organizationCalendarRoute(dashboardOrgId)}>
+                  Calendar
                 </SidebarNavLink>
                 <SidebarNavLink href={organizationProfileRoute(dashboardOrgId)}>
                   Profile

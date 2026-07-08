@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { PUBLIC_SECTION_TYPES } from './constants.js';
+import {
+  CALENDAR_EVENT_REMINDERS,
+  CALENDAR_EVENT_REPEAT_PERIOD,
+  CALENDAR_EVENT_REPEAT_PERIODS,
+  CALENDAR_EVENT_TYPE,
+  CALENDAR_EVENT_TYPES,
+  PUBLIC_SECTION_TYPES,
+} from './constants.js';
 
 export const uuidSchema = z.string().uuid();
 export const slugSchema = z
@@ -48,6 +55,10 @@ export const organizationMembersAccessFilterSchema = z.enum([
 export const listOrganizationMembersQuerySchema = z.object({
   access: organizationMembersAccessFilterSchema.default('all'),
 });
+export const calendarEventTypeSchema = z.enum(CALENDAR_EVENT_TYPES);
+export const calendarEventReminderSchema = z.enum(CALENDAR_EVENT_REMINDERS);
+export const calendarEventRepeatPeriodSchema = z.enum(CALENDAR_EVENT_REPEAT_PERIODS);
+export const calendarEventTypesSchema = z.array(calendarEventTypeSchema);
 export const membershipSourceSchema = z.enum([
   'EXISTING',
   'MANUAL',
@@ -101,6 +112,81 @@ const nullablePastOrTodayDate = z
     message: 'Date cannot be in the future',
   });
 
+const dateTimeStringSchema = z.string().datetime({ offset: true });
+
+const calendarEventTypesQuerySchema = z.preprocess((value) => {
+  if (Array.isArray(value)) return value.flatMap((item) => String(item).split(','));
+  if (typeof value === 'string') return value.split(',').filter(Boolean);
+  return value;
+}, calendarEventTypesSchema.optional());
+
+export const listCalendarEventsQuerySchema = z
+  .object({
+    rangeStart: dateTimeStringSchema,
+    rangeEnd: dateTimeStringSchema,
+    types: calendarEventTypesQuerySchema,
+  })
+  .refine((value) => new Date(value.rangeStart) < new Date(value.rangeEnd), {
+    path: ['rangeEnd'],
+    message: 'Range end must be after range start',
+  });
+
+export const updateCalendarPreferencesSchema = z.object({
+  visibleEventTypes: calendarEventTypesSchema,
+});
+
+const calendarEventInputSchema = z.object({
+  type: calendarEventTypeSchema,
+  title: z.string().trim().min(1).max(180),
+  description: nullableTrimmedString(3000),
+  startsAt: dateTimeStringSchema,
+  endsAt: dateTimeStringSchema.nullable().optional(),
+  allDay: z.boolean().default(false),
+  reminder: calendarEventReminderSchema.nullable().optional(),
+  repeatPeriod: calendarEventRepeatPeriodSchema.default(CALENDAR_EVENT_REPEAT_PERIOD.none),
+  linkedMembershipId: uuidSchema.nullable().optional(),
+  imageAssetId: uuidSchema.nullable().optional(),
+  assigneeMembershipIds: z.array(uuidSchema).default([]),
+  taskCompleted: z.boolean().default(false),
+});
+
+function refineCalendarEventInput(
+  value:
+    | z.infer<typeof calendarEventInputSchema>
+    | z.infer<ReturnType<typeof calendarEventInputSchema.partial>>,
+  ctx: z.RefinementCtx,
+) {
+  if (value.startsAt && value.endsAt && new Date(value.startsAt) > new Date(value.endsAt)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['endsAt'],
+      message: 'End time must be after start time',
+    });
+  }
+
+  if (value.type === CALENDAR_EVENT_TYPE.task && value.assigneeMembershipIds?.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['assigneeMembershipIds'],
+      message: 'Task events require at least one assignee',
+    });
+  }
+}
+
+export const createCalendarEventSchema =
+  calendarEventInputSchema.superRefine(refineCalendarEventInput);
+
+export const updateCalendarEventSchema = calendarEventInputSchema
+  .partial()
+  .superRefine(refineCalendarEventInput)
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'At least one event field is required',
+  });
+
+export const toggleCalendarTaskCompletionSchema = z.object({
+  completed: z.boolean(),
+});
+
 export const updateCurrentUserProfileSchema = z
   .object({
     baptizedAt: nullablePastOrTodayDate,
@@ -148,6 +234,8 @@ export const createManualOrganizationMemberSchema = z.object({
   phone: nullableTrimmedString(40),
   notes: nullableTrimmedString(2000),
   memberSince: nullablePastOrTodayDate,
+  birthday: nullablePastOrTodayDate,
+  anniversary: nullablePastOrTodayDate,
   biography: nullableTrimmedString(5000),
   familyNotes: nullableTrimmedString(3000),
   role: z.enum(['MEMBER', 'VIEWER']).default('MEMBER'),
@@ -166,6 +254,8 @@ export const updateOrganizationMemberProfileSchema = z
     phone: nullableTrimmedString(40),
     notes: nullableTrimmedString(2000),
     memberSince: nullablePastOrTodayDate,
+    birthday: nullablePastOrTodayDate,
+    anniversary: nullablePastOrTodayDate,
     biography: nullableTrimmedString(5000),
     familyNotes: nullableTrimmedString(3000),
   })

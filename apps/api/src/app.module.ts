@@ -18,6 +18,7 @@ import { HealthModule } from './modules/health/health.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { PlatformAdminBootstrapModule } from './modules/platform-admin-bootstrap/platform-admin-bootstrap.module';
 import { MembershipClaimsModule } from './modules/membership-claims/membership-claims.module';
+import { CalendarEventsModule } from './modules/calendar-events/calendar-events.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { MembershipClaimsModule } from './modules/membership-claims/membership-c
     OrganizationsModule,
     MembershipsModule,
     MembershipClaimsModule,
+    CalendarEventsModule,
     WebsitesModule,
     PagesModule,
     MediaModule,

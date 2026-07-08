@@ -28,6 +28,8 @@ export interface OrganizationMember {
     phone: string | null;
     notes: string | null;
     memberSince: string | null;
+    birthday: string | null;
+    anniversary: string | null;
     biography: string | null;
     familyNotes: string | null;
     profilePhotoAssetId: string | null;

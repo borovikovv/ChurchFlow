@@ -176,6 +176,8 @@ export function MembersManager({
                       ...created.profile,
                       notes: null,
                       memberSince: null,
+                      birthday: null,
+                      anniversary: null,
                       biography: null,
                       familyNotes: null,
                       profilePhotoAssetId: null,

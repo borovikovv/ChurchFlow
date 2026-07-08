@@ -14,6 +14,33 @@ export class MediaController {
   async list(@Param('organizationId') organizationId: string) {
     return this.mediaService.listForOrganization(organizationId);
   }
+
+  @Post('calendar-events/image-upload')
+  createCalendarEventImageUpload(
+    @Param('organizationId') organizationId: string,
+    @Body() body: CreateMemberPhotoUploadDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.mediaService.createCalendarEventImageUpload(
+      organizationId,
+      body,
+      this.actorUserId(request),
+    );
+  }
+
+  @Post('calendar-events/image-confirm')
+  confirmCalendarEventImage(
+    @Param('organizationId') organizationId: string,
+    @Body() body: ConfirmMemberPhotoUploadDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.mediaService.confirmCalendarEventImage(
+      organizationId,
+      body.assetId,
+      this.actorUserId(request),
+    );
+  }
+
   @Post('members/:membershipId/photo-upload')
   createPhotoUpload(
     @Param('organizationId') organizationId: string,

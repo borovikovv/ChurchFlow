@@ -23,6 +23,14 @@ import type {
   createOrganizationMemberRelationshipSchema,
   createMemberPhotoUploadSchema,
   confirmMemberPhotoUploadSchema,
+  calendarEventTypeSchema,
+  calendarEventReminderSchema,
+  calendarEventRepeatPeriodSchema,
+  listCalendarEventsQuerySchema,
+  createCalendarEventSchema,
+  updateCalendarEventSchema,
+  updateCalendarPreferencesSchema,
+  toggleCalendarTaskCompletionSchema,
 } from './schemas.js';
 
 export type UUID = string;
@@ -59,6 +67,65 @@ export type CreateOrganizationMemberRelationshipInput = z.infer<
 >;
 export type CreateMemberPhotoUploadInput = z.infer<typeof createMemberPhotoUploadSchema>;
 export type ConfirmMemberPhotoUploadInput = z.infer<typeof confirmMemberPhotoUploadSchema>;
+export type CalendarEventType = z.infer<typeof calendarEventTypeSchema>;
+export type CalendarEventReminder = z.infer<typeof calendarEventReminderSchema>;
+export type CalendarEventRepeatPeriod = z.infer<typeof calendarEventRepeatPeriodSchema>;
+export type ListCalendarEventsQuery = z.infer<typeof listCalendarEventsQuerySchema>;
+export type CreateCalendarEventInput = z.infer<typeof createCalendarEventSchema>;
+export type UpdateCalendarEventInput = z.infer<typeof updateCalendarEventSchema>;
+export type UpdateCalendarPreferencesInput = z.infer<typeof updateCalendarPreferencesSchema>;
+export type ToggleCalendarTaskCompletionInput = z.infer<typeof toggleCalendarTaskCompletionSchema>;
+
+export interface CalendarEventMemberSummary {
+  id: string;
+  displayName: string;
+  photoAssetId: string | null;
+  photoUrl: string | null;
+}
+
+export interface CalendarEventImageSummary {
+  id: string;
+  url: string | null;
+}
+
+export interface CalendarEventItem {
+  id: string;
+  occurrenceId: string;
+  baseEventId: string;
+  type: CalendarEventType;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  allDay: boolean;
+  reminder: CalendarEventReminder | null;
+  repeatPeriod: CalendarEventRepeatPeriod;
+  taskCompleted: boolean;
+  linkedMember: CalendarEventMemberSummary | null;
+  assignees: CalendarEventMemberSummary[];
+  image: CalendarEventImageSummary | null;
+}
+
+export interface CalendarMemberOption {
+  id: string;
+  displayName: string;
+  birthday: string | null;
+  anniversary: string | null;
+  photoAssetId: string | null;
+  photoUrl: string | null;
+}
+
+export interface CalendarPreferences {
+  visibleEventTypes: CalendarEventType[];
+}
+
+export interface CalendarEventsPayload {
+  actorRole: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER' | null;
+  canManage: boolean;
+  events: CalendarEventItem[];
+  preferences: CalendarPreferences;
+  members: CalendarMemberOption[];
+}
 
 export interface OrganizationRequestStatusItem {
   id: string;

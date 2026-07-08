@@ -1,6 +1,7 @@
 'use client';
 
 import type { InputHTMLAttributes, ReactNode } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type FormCheckboxProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
   label: ReactNode;
@@ -8,9 +9,6 @@ type FormCheckboxProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
 
 export function FormCheckbox({ label, className, ...props }: FormCheckboxProps) {
   return (
-    <label className="flex items-center gap-2 font-normal">
-      <input className={`min-h-0 w-auto ${className ?? ''}`.trim()} type="checkbox" {...props} />
-      <span>{label}</span>
-    </label>
+    <Checkbox inputClassName={className} label={label} labelClassName="font-normal" {...props} />
   );
 }

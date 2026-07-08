@@ -123,6 +123,27 @@ enum FeatureFlagScope {
   USER
 }
 
+enum CalendarEventType {
+  BIRTHDAY
+  ANNIVERSARY
+  TASK
+  EVENT
+}
+
+enum CalendarEventReminder {
+  ONE_HOUR
+  ONE_DAY
+  ONE_WEEK
+}
+
+enum CalendarEventRepeatPeriod {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
 model User {
   id                String       @id @default(uuid()) @db.Uuid
   email             String?      @unique @db.Citext
@@ -150,6 +171,8 @@ model User {
   consumedPlatformAdminBootstraps PlatformAdminBootstrapToken[]
   auditLogs                       AuditLog[]
   featureFlags                    FeatureFlag[]
+  createdCalendarEvents           CalendarEvent[]               @relation("CalendarEventCreator")
+  calendarPreferences             CalendarPreference[]
 
   @@map("users")
 }
@@ -229,6 +252,8 @@ model Organization {
   featureFlags        FeatureFlag[]
   requests            OrganizationRequest[]
   memberRelationships OrganizationMemberRelationship[]
+  calendarEvents      CalendarEvent[]
+  calendarPreferences CalendarPreference[]
 
   @@index([status])
   @@index([slug])
@@ -257,6 +282,8 @@ model OrganizationMember {
   claims                MembershipClaim[]
   outgoingRelationships OrganizationMemberRelationship[] @relation("RelationshipFrom")
   incomingRelationships OrganizationMemberRelationship[] @relation("RelationshipTo")
+  linkedCalendarEvents  CalendarEvent[]                  @relation("CalendarEventLinkedMember")
+  assignedCalendarTasks CalendarEventAssignee[]
 
   @@unique([organizationId, userId])
   @@index([organizationId])
@@ -276,6 +303,8 @@ model OrganizationMemberProfile {
   phone               String?
   notes               String?
   memberSince         DateTime? @map("member_since") @db.Date
+  birthday            DateTime? @db.Date
+  anniversary         DateTime? @db.Date
   biography           String?
   familyNotes         String?   @map("family_notes")
   profilePhotoAssetId String?   @unique @map("profile_photo_asset_id") @db.Uuid
@@ -503,8 +532,9 @@ model MediaAsset {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  organization  Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  memberProfile OrganizationMemberProfile?
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberProfile  OrganizationMemberProfile?
+  calendarEvents CalendarEvent[]
 
   @@unique([bucket, objectKey])
   @@index([organizationId, createdAt])
@@ -529,6 +559,68 @@ model AuditLog {
   @@index([organizationId, createdAt])
   @@index([actorUserId, createdAt])
   @@map("audit_logs")
+}
+
+model CalendarEvent {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  organizationId     String                    @map("organization_id") @db.Uuid
+  createdByUserId    String?                   @map("created_by_user_id") @db.Uuid
+  linkedMembershipId String?                   @map("linked_membership_id") @db.Uuid
+  imageAssetId       String?                   @map("image_asset_id") @db.Uuid
+  type               CalendarEventType
+  title              String
+  description        String?
+  startsAt           DateTime                  @map("starts_at")
+  endsAt             DateTime?                 @map("ends_at")
+  allDay             Boolean                   @default(false) @map("all_day")
+  reminder           CalendarEventReminder?
+  repeatPeriod       CalendarEventRepeatPeriod @default(NONE) @map("repeat_period")
+  taskCompleted      Boolean                   @default(false) @map("task_completed")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+  deletedAt          DateTime?                 @map("deleted_at")
+
+  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy        User?                   @relation("CalendarEventCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  linkedMembership OrganizationMember?     @relation("CalendarEventLinkedMember", fields: [linkedMembershipId], references: [id], onDelete: SetNull)
+  imageAsset       MediaAsset?             @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
+  assignees        CalendarEventAssignee[]
+
+  @@index([organizationId, startsAt])
+  @@index([organizationId, type, startsAt])
+  @@index([organizationId, deletedAt])
+  @@index([linkedMembershipId])
+  @@index([imageAssetId])
+  @@map("calendar_events")
+}
+
+model CalendarEventAssignee {
+  eventId      String   @map("event_id") @db.Uuid
+  membershipId String   @map("membership_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  event      CalendarEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  membership OrganizationMember @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, membershipId])
+  @@index([membershipId])
+  @@map("calendar_event_assignees")
+}
+
+model CalendarPreference {
+  id                String              @id @default(uuid()) @db.Uuid
+  organizationId    String              @map("organization_id") @db.Uuid
+  userId            String              @map("user_id") @db.Uuid
+  visibleEventTypes CalendarEventType[] @default([BIRTHDAY, ANNIVERSARY, TASK, EVENT]) @map("visible_event_types")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("calendar_preferences")
 }
 
 model FeatureFlag {

@@ -2,6 +2,7 @@ import type { Route } from 'next';
 
 export const ORGANIZATION_ROUTE_SEGMENTS = {
   dashboard: 'dashboard',
+  calendar: 'calendar',
   members: 'members',
   profile: 'profile',
   website: 'website',
@@ -14,6 +15,10 @@ export function organizationHomeRoute(organizationId: string): Route {
 
 export function organizationMembersRoute(organizationId: string): Route {
   return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.members}` as Route;
+}
+
+export function organizationCalendarRoute(organizationId: string): Route {
+  return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.calendar}` as Route;
 }
 
 export function organizationProfileRoute(organizationId: string): Route {
