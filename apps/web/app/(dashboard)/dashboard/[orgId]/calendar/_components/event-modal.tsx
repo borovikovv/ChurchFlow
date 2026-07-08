@@ -49,6 +49,7 @@ export function EventModal({
   const readonly = !canManage;
   const [assigneeToAdd, setAssigneeToAdd] = useState('');
   const {
+    clearErrors,
     control,
     handleSubmit,
     register,
@@ -236,6 +237,7 @@ export function EventModal({
                           [...values.assigneeMembershipIds, assigneeToAdd],
                           { shouldDirty: true, shouldValidate: true },
                         );
+                        clearErrors('assigneeMembershipIds');
                         setAssigneeToAdd('');
                       }}
                     >
