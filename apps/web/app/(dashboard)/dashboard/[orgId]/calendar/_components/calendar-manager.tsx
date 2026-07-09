@@ -3,7 +3,7 @@
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin, { type DateClickArg } from '@fullcalendar/interaction';
 import FullCalendar from '@fullcalendar/react';
-import type { DatesSetArg, EventClickArg, EventInput } from '@fullcalendar/core';
+import type { DatesSetArg, EventClickArg, EventContentArg, EventInput } from '@fullcalendar/core';
 import { toPng } from 'html-to-image';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'react-toastify';
@@ -243,6 +243,17 @@ export function CalendarManager({
     if (item) openEdit(item);
   }
 
+  function handleTaskToggle(event: CalendarEventItem, completed: boolean) {
+    void toggleTask(event, completed);
+  }
+
+  function handleEventContent(arg: EventContentArg) {
+    return renderEventContent(arg, {
+      canManage,
+      onTaskToggle: handleTaskToggle,
+    });
+  }
+
   return (
     <div className="grid min-h-[680px] gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
       <CalendarSidebar
@@ -288,7 +299,7 @@ export function CalendarManager({
             datesSet={handleDatesSet}
             dateClick={handleDateClick}
             eventClick={handleEventClick}
-            eventContent={renderEventContent}
+            eventContent={handleEventContent}
             events={calendarEvents}
             firstDay={1}
             headerToolbar={{

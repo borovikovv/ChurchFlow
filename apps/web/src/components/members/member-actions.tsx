@@ -366,7 +366,8 @@ function EditMemberSheet({
                 );
               })}
               <div className="grid grid-cols-2 gap-2">
-                <select
+                <FormSelect
+                  label="Related member"
                   value={relatedMembershipId}
                   onChange={(event) => setRelatedMembershipId(event.target.value)}
                 >
@@ -378,8 +379,9 @@ function EditMemberSheet({
                         {candidate.displayName}
                       </option>
                     ))}
-                </select>
-                <select
+                </FormSelect>
+                <FormSelect
+                  label="Relationship"
                   value={relationshipType}
                   onChange={(event) => setRelationshipType(event.target.value)}
                 >
@@ -388,7 +390,7 @@ function EditMemberSheet({
                   <option value="CHILD">Child</option>
                   <option value="SIBLING">Sibling</option>
                   <option value="OTHER">Other</option>
-                </select>
+                </FormSelect>
               </div>
               <button
                 className="button secondary"

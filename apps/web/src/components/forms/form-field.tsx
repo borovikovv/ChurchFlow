@@ -5,18 +5,22 @@ import { useId, type ReactNode } from 'react';
 export function FormField({
   label,
   error,
+  className = 'grid gap-1.5',
+  labelClassName = 'font-semibold',
   children,
 }: {
   label: string;
   error?: string | undefined;
+  className?: string | undefined;
+  labelClassName?: string | undefined;
   children: (accessibility: { id: string; errorId: string; invalid: boolean }) => ReactNode;
 }) {
   const id = useId();
   const errorId = `${id}-error`;
 
   return (
-    <div className="grid gap-1.5">
-      <label className="font-semibold" htmlFor={id}>
+    <div className={className}>
+      <label className={labelClassName} htmlFor={id}>
         {label}
       </label>
       {children({ id, errorId, invalid: Boolean(error) })}

@@ -211,40 +211,38 @@ export function EventModal({
           {values.type === CALENDAR_TYPE.task ? (
             <>
               <div className="grid gap-2 sm:col-span-2">
-                <label>
-                  Assignees
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <select
-                      disabled={readonly || availableAssignees.length === 0}
-                      value={assigneeToAdd}
-                      onChange={(event) => setAssigneeToAdd(event.currentTarget.value)}
-                    >
-                      <option value="">Select member</option>
-                      {availableAssignees.map((member) => (
-                        <option key={member.id} value={member.id}>
-                          {member.displayName}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      disabled={readonly || !assigneeToAdd}
-                      type="button"
-                      variant="secondary"
-                      onClick={() => {
-                        if (!assigneeToAdd) return;
-                        setValue(
-                          'assigneeMembershipIds',
-                          [...values.assigneeMembershipIds, assigneeToAdd],
-                          { shouldDirty: true, shouldValidate: true },
-                        );
-                        clearErrors('assigneeMembershipIds');
-                        setAssigneeToAdd('');
-                      }}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                </label>
+                <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <FormSelect
+                    disabled={readonly || availableAssignees.length === 0}
+                    label="Assignees"
+                    value={assigneeToAdd}
+                    onChange={(event) => setAssigneeToAdd(event.currentTarget.value)}
+                  >
+                    <option value="">Select member</option>
+                    {availableAssignees.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.displayName}
+                      </option>
+                    ))}
+                  </FormSelect>
+                  <Button
+                    disabled={readonly || !assigneeToAdd}
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      if (!assigneeToAdd) return;
+                      setValue(
+                        'assigneeMembershipIds',
+                        [...values.assigneeMembershipIds, assigneeToAdd],
+                        { shouldDirty: true, shouldValidate: true },
+                      );
+                      clearErrors('assigneeMembershipIds');
+                      setAssigneeToAdd('');
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
                 {selectedAssignees.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {selectedAssignees.map((member) => (

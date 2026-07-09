@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import { CopyField } from '@/components/copy-field';
+import { FormSelect } from '@/components/forms/form-select';
 import { Button } from '@/components/ui/button';
 
 export interface InlineInvitationState {
@@ -64,13 +65,10 @@ export function InviteAppUserForm({
         <span className="text-xs font-normal text-[var(--muted)]">Optional</span>
         <input name="notificationEmail" type="email" placeholder="member@example.com" />
       </label>
-      <label>
-        Role
-        <select name="role" defaultValue="MEMBER">
-          <option value="MEMBER">Member</option>
-          <option value="VIEWER">Viewer</option>
-        </select>
-      </label>
+      <FormSelect label="Role" name="role" defaultValue="MEMBER">
+        <option value="MEMBER">Member</option>
+        <option value="VIEWER">Viewer</option>
+      </FormSelect>
       <Button disabled={pending} type="submit">
         {pending ? 'Creating…' : 'Create invitation'}
       </Button>

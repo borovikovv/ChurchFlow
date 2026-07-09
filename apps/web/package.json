@@ -25,6 +25,7 @@
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.80.0",
     "react-phone-number-input": "^3.4.17",
+    "react-select": "^5.10.2",
     "react-toastify": "^11.1.0",
     "zod": "^3.24.1"
   },
