@@ -32,6 +32,10 @@ export function AppShell({
   displayName: string;
 }) {
   const pathname = usePathname();
+  if (pathname === '/o' || pathname.startsWith('/o/')) {
+    return <>{children}</>;
+  }
+
   const dashboardOrgId = getDashboardOrgId(pathname);
 
   return (

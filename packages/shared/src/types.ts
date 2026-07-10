@@ -19,6 +19,12 @@ import type {
   listAdminOrganizationWorkspaceQuerySchema,
   websitePageSchema,
   websiteSectionSchema,
+  updateWebsiteSettingsSchema,
+  upsertWebsitePageSchema,
+  upsertWebsiteSectionSchema,
+  publishWebsiteSchema,
+  publishWebsitePageSchema,
+  reorderWebsiteSectionsSchema,
   updateCurrentUserProfileSchema,
   createOrganizationMemberRelationshipSchema,
   createMemberPhotoUploadSchema,
@@ -39,6 +45,12 @@ export type Organization = z.infer<typeof organizationSchema>;
 export type OrganizationWebsite = z.infer<typeof organizationWebsiteSchema>;
 export type WebsitePage = z.infer<typeof websitePageSchema>;
 export type WebsiteSection = z.infer<typeof websiteSectionSchema>;
+export type UpdateWebsiteSettingsInput = z.infer<typeof updateWebsiteSettingsSchema>;
+export type UpsertWebsitePageInput = z.infer<typeof upsertWebsitePageSchema>;
+export type UpsertWebsiteSectionInput = z.infer<typeof upsertWebsiteSectionSchema>;
+export type PublishWebsiteInput = z.infer<typeof publishWebsiteSchema>;
+export type PublishWebsitePageInput = z.infer<typeof publishWebsitePageSchema>;
+export type ReorderWebsiteSectionsInput = z.infer<typeof reorderWebsiteSectionsSchema>;
 export type CreateOrganizationRequestInput = z.infer<typeof createOrganizationRequestSchema>;
 export type ApproveOrganizationRequestInput = z.infer<typeof approveOrganizationRequestSchema>;
 export type RejectOrganizationRequestInput = z.infer<typeof rejectOrganizationRequestSchema>;

@@ -1,14 +1,26 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { apiFetch } from '@/api/client';
-import { SectionRenderer, type PublicSection } from '@/components/sections/section-renderer';
+import { SectionRenderer } from '@/components/sections/section-renderer';
+import { publicPageMetadata, type PublicPageResponse } from '../../_lib/public-website';
 
-interface PublicPageResponse {
-  title: string;
-  sections: PublicSection[];
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ orgSlug: string; pageSlug: string }>;
+}): Promise<Metadata> {
+  const { orgSlug, pageSlug } = await params;
+  const result = await apiFetch<PublicPageResponse>(`/public/o/${orgSlug}/pages/${pageSlug}`);
+
+  return publicPageMetadata({
+    page: result.ok ? result.data : null,
+    orgSlug,
+    pageSlug,
+  });
 }
 
 export default async function OrganizationPublicPage({
-  params
+  params,
 }: {
   params: Promise<{ orgSlug: string; pageSlug: string }>;
 }) {
@@ -21,7 +33,7 @@ export default async function OrganizationPublicPage({
 
   return (
     <main>
-      <SectionRenderer sections={result.data.sections} />
+      <SectionRenderer sections={result.data.sections} website={result.data.website} />
     </main>
   );
 }

@@ -1,11 +1,9 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
-import Link from 'next/link';
 import { Suspense } from 'react';
 import { getCurrentUser, hasServerSession } from '@/auth/session';
 import { AppShell } from '@/components/app-shell';
 import { getOrganizationAccessState } from '@/features/organizations/server/access';
-import { APP_ROUTES } from '@/routes';
+import { PublicAppHeader } from '@/components/public-app-header';
 import { ToastProvider } from '@/components/toast-provider';
 import 'react-toastify/dist/ReactToastify.css';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -34,23 +32,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           </AppShell>
         ) : (
           <>
-            <header className="site-header">
-              <div className="site-header-inner">
-                <Link className="brand" href={APP_ROUTES.home}>
-                  <Image
-                    src="/icons/church-flow.svg"
-                    alt="ChurchFlow"
-                    width={60}
-                    height={40}
-                    priority
-                  />
-                </Link>
-                <nav className="site-nav" aria-label="Main">
-                  <Link href={APP_ROUTES.organizationRequest}>Request access</Link>
-                  <Link href={APP_ROUTES.login}>Sign in</Link>
-                </nav>
-              </div>
-            </header>
+            <PublicAppHeader />
             {children}
           </>
         )}

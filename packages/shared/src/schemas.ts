@@ -417,6 +417,18 @@ export const upsertWebsiteSectionSchema = z.object({
   content: z.record(z.unknown()).default({}),
 });
 
+export const publishWebsiteSchema = z.object({
+  published: z.boolean(),
+});
+
+export const publishWebsitePageSchema = z.object({
+  published: z.boolean(),
+});
+
+export const reorderWebsiteSectionsSchema = z.object({
+  sectionIds: z.array(uuidSchema).min(1),
+});
+
 export const mediaAssetSchema = z.object({
   id: uuidSchema,
   organizationId: uuidSchema,
