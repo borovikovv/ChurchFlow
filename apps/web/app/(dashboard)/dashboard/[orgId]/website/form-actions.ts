@@ -1,7 +1,5 @@
 'use server';
 
-import type { Route } from 'next';
-import { redirect } from 'next/navigation';
 import {
   createWebsitePageAction,
   createWebsiteSectionAction,
@@ -13,7 +11,23 @@ import {
   updateWebsiteSectionAction,
   updateWebsiteSettingsAction,
 } from './actions';
+import type { DashboardPage, DashboardSection, DashboardWebsite } from './types';
 import { pageInput, sectionInput, websiteSettingsInput } from './website-form-utils';
+import { sectionVariant, STARTER_HOME_SECTIONS } from './website-section-presets';
+
+export type WebsiteFormResult =
+  | { ok: false; error: string }
+  | { ok: true; message: string; mutation: WebsiteMutation };
+
+type WebsiteMutation =
+  | { type: 'website'; website: DashboardWebsite }
+  | { type: 'page'; page: DashboardPage }
+  | { type: 'page-created'; page: DashboardPage }
+  | { type: 'section-created'; pageId: string; section: DashboardSection }
+  | { type: 'section-updated'; section: DashboardSection }
+  | { type: 'section-deleted'; sectionId: string }
+  | { type: 'sections-reordered'; pageId: string; sections: DashboardSection[] }
+  | { type: 'starter-home'; page?: DashboardPage; pageId: string; sections: DashboardSection[] };
 
 export async function updateSettings(formData: FormData) {
   const organizationId = readOrganizationId(formData);
@@ -21,7 +35,10 @@ export async function updateSettings(formData: FormData) {
     organizationId,
     settings: websiteSettingsInput(formData),
   });
-  redirectActionResult(organizationId, result, 'Website settings saved.');
+  return actionResult(result, 'Website settings saved.', (success) => ({
+    type: 'website',
+    website: success.website,
+  }));
 }
 
 export async function setWebsitePublished(formData: FormData) {
@@ -30,7 +47,10 @@ export async function setWebsitePublished(formData: FormData) {
     organizationId,
     published: formData.get('published') === 'true',
   });
-  redirectActionResult(organizationId, result, 'Website publication status updated.');
+  return actionResult(result, 'Website publication status updated.', (success) => ({
+    type: 'website',
+    website: success.website,
+  }));
 }
 
 export async function createPage(formData: FormData) {
@@ -39,7 +59,69 @@ export async function createPage(formData: FormData) {
     organizationId,
     page: pageInput(formData),
   });
-  redirectActionResult(organizationId, result, 'Page created.');
+  return actionResult(result, 'Page created.', (success) => ({
+    type: 'page-created',
+    page: success.page,
+  }));
+}
+
+export async function createStarterHome(formData: FormData) {
+  const organizationId = readOrganizationId(formData);
+  let pageId = String(formData.get('pageId') ?? '');
+  let createdPage: DashboardPage | undefined;
+  const existingVariants = new Set(
+    String(formData.get('existingVariants') ?? '')
+      .split(',')
+      .filter(Boolean),
+  );
+
+  if (!pageId) {
+    const pageResult = await createWebsitePageAction({
+      organizationId,
+      page: {
+        slug: 'home',
+        title: 'Home',
+        status: 'PUBLISHED',
+        seo: {},
+      },
+    });
+    if (!pageResult.ok) {
+      return actionError(pageResult.error);
+    }
+    pageId = pageResult.page.id;
+    createdPage = pageResult.page;
+  }
+
+  const createdSectionItems: DashboardSection[] = [];
+  for (const section of STARTER_HOME_SECTIONS) {
+    if (existingVariants.has(sectionVariant(section))) {
+      continue;
+    }
+
+    const result = await createWebsiteSectionAction({
+      organizationId,
+      pageId,
+      section,
+    });
+    if (!result.ok) {
+      return actionError(result.error);
+    }
+    createdSectionItems.push(result.section);
+  }
+
+  return {
+    ok: true as const,
+    message:
+      createdSectionItems.length > 0
+        ? 'Starter home page added.'
+        : 'Starter home page is already complete.',
+    mutation: {
+      type: 'starter-home' as const,
+      ...(createdPage ? { page: createdPage } : {}),
+      pageId,
+      sections: createdSectionItems,
+    },
+  };
 }
 
 export async function updatePage(formData: FormData) {
@@ -49,7 +131,10 @@ export async function updatePage(formData: FormData) {
     pageId: String(formData.get('pageId')),
     page: pageInput(formData),
   });
-  redirectActionResult(organizationId, result, 'Page saved.');
+  return actionResult(result, 'Page saved.', (success) => ({
+    type: 'page',
+    page: success.page,
+  }));
 }
 
 export async function setPagePublished(formData: FormData) {
@@ -59,7 +144,10 @@ export async function setPagePublished(formData: FormData) {
     pageId: String(formData.get('pageId')),
     published: formData.get('published') === 'true',
   });
-  redirectActionResult(organizationId, result, 'Page publication status updated.');
+  return actionResult(result, 'Page publication status updated.', (success) => ({
+    type: 'page',
+    page: success.page,
+  }));
 }
 
 export async function createSection(formData: FormData) {
@@ -69,7 +157,11 @@ export async function createSection(formData: FormData) {
     pageId: String(formData.get('pageId')),
     section: sectionInput(formData),
   });
-  redirectActionResult(organizationId, result, 'Section added.');
+  return actionResult(result, 'Section added.', (success) => ({
+    type: 'section-created',
+    pageId: String(formData.get('pageId')),
+    section: success.section,
+  }));
 }
 
 export async function updateSection(formData: FormData) {
@@ -79,7 +171,10 @@ export async function updateSection(formData: FormData) {
     sectionId: String(formData.get('sectionId')),
     section: sectionInput(formData),
   });
-  redirectActionResult(organizationId, result, 'Section saved.');
+  return actionResult(result, 'Section saved.', (success) => ({
+    type: 'section-updated',
+    section: success.section,
+  }));
 }
 
 export async function deleteSection(formData: FormData) {
@@ -88,7 +183,10 @@ export async function deleteSection(formData: FormData) {
     organizationId,
     sectionId: String(formData.get('sectionId')),
   });
-  redirectActionResult(organizationId, result, 'Section removed.');
+  return actionResult(result, 'Section removed.', (success) => ({
+    type: 'section-deleted',
+    sectionId: success.sectionId,
+  }));
 }
 
 export async function reorderSections(formData: FormData) {
@@ -107,30 +205,33 @@ export async function reorderSections(formData: FormData) {
     pageId: String(formData.get('pageId')),
     sectionIds: nextIds,
   });
-  redirectActionResult(organizationId, result, 'Sections reordered.');
+  return actionResult(result, 'Sections reordered.', (success) => ({
+    type: 'sections-reordered',
+    pageId: String(formData.get('pageId')),
+    sections: success.sections,
+  }));
 }
 
 function readOrganizationId(formData: FormData): string {
   return String(formData.get('organizationId') ?? '');
 }
 
-function redirectWithFeedback(organizationId: string, message?: string, error?: string): never {
-  const params = new URLSearchParams();
-  if (message) params.set('message', message);
-  if (error) params.set('error', error);
-  const query = params.toString();
+function actionResult<TResult extends { ok: true } | { ok: false; error: string }>(
+  result: TResult,
+  successMessage: string,
+  mutation: (success: Extract<TResult, { ok: true }>) => WebsiteMutation,
+): WebsiteFormResult {
+  if (!result.ok) {
+    return actionError(result.error);
+  }
 
-  redirect(`/dashboard/${organizationId}/website${query ? `?${query}` : ''}` as Route);
+  return {
+    ok: true,
+    message: successMessage,
+    mutation: mutation(result as Extract<TResult, { ok: true }>),
+  };
 }
 
-function redirectActionResult(
-  organizationId: string,
-  result: { ok: true } | { ok: false; error: string },
-  successMessage: string,
-): never {
-  redirectWithFeedback(
-    organizationId,
-    result.ok ? successMessage : undefined,
-    result.ok ? undefined : result.error,
-  );
+function actionError(error: string): WebsiteFormResult {
+  return { ok: false, error };
 }

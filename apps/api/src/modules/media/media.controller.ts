@@ -41,6 +41,32 @@ export class MediaController {
     );
   }
 
+  @Post('website-sections/background-upload')
+  createWebsiteSectionBackgroundUpload(
+    @Param('organizationId') organizationId: string,
+    @Body() body: CreateMemberPhotoUploadDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.mediaService.createWebsiteSectionBackgroundUpload(
+      organizationId,
+      body,
+      this.actorUserId(request),
+    );
+  }
+
+  @Post('website-sections/background-confirm')
+  confirmWebsiteSectionBackground(
+    @Param('organizationId') organizationId: string,
+    @Body() body: ConfirmMemberPhotoUploadDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.mediaService.confirmWebsiteSectionBackground(
+      organizationId,
+      body.assetId,
+      this.actorUserId(request),
+    );
+  }
+
   @Post('members/:membershipId/photo-upload')
   createPhotoUpload(
     @Param('organizationId') organizationId: string,

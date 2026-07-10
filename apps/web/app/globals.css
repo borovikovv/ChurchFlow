@@ -393,10 +393,13 @@
   }
 
   .app-frame {
+    position: fixed;
+    inset: 0;
     display: flex;
-    height: 100vh;
+    height: 100dvh;
     min-height: 0;
-    max-height: 100vh;
+    max-height: 100dvh;
+    width: 100%;
     overflow: hidden;
     flex-direction: column;
   }
@@ -418,7 +421,9 @@
   .app-main {
     min-height: 0;
     min-width: 0;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .sidebar-brand {
@@ -854,6 +859,8 @@
 
   .dashboard {
     display: grid;
+    align-content: start;
+    grid-auto-rows: max-content;
     gap: 20px;
     padding: clamp(20px, 3vw, 40px);
   }
@@ -863,6 +870,7 @@
   }
 
   .dashboard main {
+    align-self: start;
     min-width: 0;
   }
 

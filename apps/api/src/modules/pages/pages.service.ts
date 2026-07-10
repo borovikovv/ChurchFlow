@@ -4,11 +4,15 @@ import type {
   UpsertWebsitePageInput,
   UpsertWebsiteSectionInput,
 } from '@churchflow/shared';
+import { MediaService } from '../media/media.service';
 import { isPrismaKnownRequestError, PagesRepository } from './repositories/pages.repository';
 
 @Injectable()
 export class PagesService {
-  constructor(private readonly pagesRepository: PagesRepository) {}
+  constructor(
+    private readonly pagesRepository: PagesRepository,
+    private readonly mediaService: MediaService,
+  ) {}
 
   async findPublicPage(orgSlug: string, pageSlug: string) {
     const page = await this.pagesRepository.findPublicPage(orgSlug, pageSlug);
@@ -17,11 +21,13 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return page;
+    return this.enrichSectionBackgrounds(page);
   }
 
   async listDashboardPages(organizationId: string) {
-    return this.pagesRepository.listDashboardPages(organizationId);
+    const pages = await this.pagesRepository.listDashboardPages(organizationId);
+
+    return Promise.all(pages.map((page) => this.enrichSectionBackgrounds(page)));
   }
 
   async listPublicPagesForSitemap() {
@@ -41,7 +47,7 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return page;
+    return this.enrichSectionBackgrounds(page);
   }
 
   async createPage(organizationId: string, input: UpsertWebsitePageInput) {
@@ -118,4 +124,56 @@ export class PagesService {
 
     return error;
   }
+
+  private async enrichSectionBackgrounds<
+    TPage extends {
+      organizationId: string;
+      sections: Array<{ content: unknown }>;
+    },
+  >(page: TPage): Promise<TPage> {
+    const assetIds = new Set<string>();
+    page.sections.forEach((section) => {
+      const assetId = readContentText(section.content, 'backgroundImageAssetId');
+      if (assetId) assetIds.add(assetId);
+    });
+
+    if (assetIds.size === 0) {
+      return page;
+    }
+
+    const urls = new Map<string, string>();
+    await Promise.all(
+      [...assetIds].map(async (assetId) => {
+        try {
+          const result = await this.mediaService.getReadUrl(assetId, page.organizationId);
+          urls.set(assetId, result.url);
+        } catch {
+          // Missing background assets should not hide otherwise published page content.
+        }
+      }),
+    );
+
+    return {
+      ...page,
+      sections: page.sections.map((section) => {
+        const assetId = readContentText(section.content, 'backgroundImageAssetId');
+        if (!assetId || !urls.has(assetId)) return section;
+
+        return {
+          ...section,
+          content:
+            typeof section.content === 'object' && section.content !== null
+              ? { ...section.content, backgroundImageUrl: urls.get(assetId) }
+              : section.content,
+        };
+      }),
+    };
+  }
+}
+
+function readContentText(content: unknown, key: string): string | undefined {
+  if (typeof content !== 'object' || content === null) return undefined;
+  const value = (content as Record<string, unknown>)[key];
+
+  return typeof value === 'string' && value.trim() ? value : undefined;
 }

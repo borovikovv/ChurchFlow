@@ -86,6 +86,23 @@ export class MediaRepository {
     });
   }
 
+  createPendingWebsiteSectionBackgroundAsset(data: {
+    organizationId: string;
+    bucket: string;
+    objectKey: string;
+    filename: string;
+    mimeType: string;
+    byteSize: number;
+  }) {
+    return this.prisma.mediaAsset.create({
+      data: {
+        ...data,
+        byteSize: BigInt(data.byteSize),
+        metadata: { status: 'pending', purpose: 'website-section-background' },
+      },
+    });
+  }
+
   findAsset(assetId: string, organizationId: string) {
     return this.prisma.mediaAsset.findFirst({
       where: { id: assetId, organizationId, deletedAt: null },
@@ -103,6 +120,29 @@ export class MediaRepository {
         organizationId,
         actorUserId,
         action: 'CONFIRM_CALENDAR_EVENT_IMAGE',
+        entityType: 'MediaAsset',
+        entityId: assetId,
+        metadata: { assetId },
+      },
+    });
+    return { assetId: asset.id };
+  }
+
+  async confirmWebsiteSectionBackground(
+    organizationId: string,
+    assetId: string,
+    actorUserId: string,
+  ) {
+    const asset = await this.prisma.mediaAsset.update({
+      where: { id: assetId },
+      data: { metadata: { status: 'confirmed', purpose: 'website-section-background' } },
+      select: { id: true },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId,
+        action: 'CONFIRM_WEBSITE_SECTION_BACKGROUND',
         entityType: 'MediaAsset',
         entityId: assetId,
         metadata: { assetId },
