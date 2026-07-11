@@ -119,11 +119,16 @@ export function MembersManager({
             isOwner={isOwner}
             isCurrentMember={member.id === actorMembershipId}
             memberCandidates={memberCandidates}
-            onProfileUpdated={(profile) => {
+            onProfileUpdated={(updates) => {
+              const { ministries, ...profile } = updates;
               setMembers((current) =>
                 current.map((item) =>
                   item.id === member.id
-                    ? { ...item, profile: { ...item.profile, ...profile } }
+                    ? {
+                        ...item,
+                        ...(ministries !== undefined ? { ministries } : {}),
+                        profile: { ...item.profile, ...profile },
+                      }
                     : item,
                 ),
               );
@@ -170,6 +175,7 @@ export function MembersManager({
                     ...created,
                     role: created.role as OrganizationRole,
                     status: 'ACTIVE',
+                    ministries: created.ministries,
                     accountState: 'UNCLAIMED',
                     claimedAt: null,
                     profile: {

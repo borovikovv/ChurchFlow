@@ -1,7 +1,7 @@
 'use server';
 
 import { apiFetch } from '@/api/client';
-import type { CreateManualOrganizationMemberInput } from '@churchflow/shared';
+import type { CreateManualOrganizationMemberInput, MemberMinistry } from '@churchflow/shared';
 import type { ProfileUpdateState } from '@/components/members/member-actions';
 
 export async function createMemberAction(input: {
@@ -13,6 +13,7 @@ export async function createMemberAction(input: {
     id: string;
     role: string;
     source: string;
+    ministries: MemberMinistry[];
     profile: {
       displayName: string;
       email: string | null;
@@ -63,6 +64,7 @@ export async function updateMemberProfileAction(
         anniversary: formData.get('anniversary') || null,
         biography: formData.get('biography') || null,
         familyNotes: formData.get('familyNotes') || null,
+        ministries: formData.getAll('ministries'),
       }),
     },
   );

@@ -32,6 +32,8 @@ import type {
   calendarEventTypeSchema,
   calendarEventReminderSchema,
   calendarEventRepeatPeriodSchema,
+  calendarServiceRoleSchema,
+  memberMinistrySchema,
   listCalendarEventsQuerySchema,
   createCalendarEventSchema,
   updateCalendarEventSchema,
@@ -82,6 +84,8 @@ export type ConfirmMemberPhotoUploadInput = z.infer<typeof confirmMemberPhotoUpl
 export type CalendarEventType = z.infer<typeof calendarEventTypeSchema>;
 export type CalendarEventReminder = z.infer<typeof calendarEventReminderSchema>;
 export type CalendarEventRepeatPeriod = z.infer<typeof calendarEventRepeatPeriodSchema>;
+export type CalendarServiceRole = z.infer<typeof calendarServiceRoleSchema>;
+export type MemberMinistry = z.infer<typeof memberMinistrySchema>;
 export type ListCalendarEventsQuery = z.infer<typeof listCalendarEventsQuerySchema>;
 export type CreateCalendarEventInput = z.infer<typeof createCalendarEventSchema>;
 export type UpdateCalendarEventInput = z.infer<typeof updateCalendarEventSchema>;
@@ -100,6 +104,24 @@ export interface CalendarEventImageSummary {
   url: string | null;
 }
 
+export interface CalendarServicePerson {
+  membershipId: string | null;
+  customName: string | null;
+  displayName: string;
+  photoAssetId: string | null;
+  photoUrl: string | null;
+}
+
+export interface CalendarServiceDetails {
+  hasCommunion: boolean;
+  biblePassage: string | null;
+  preacher: CalendarServicePerson | null;
+  serviceHost: CalendarServicePerson | null;
+  worshipLead: CalendarServicePerson | null;
+  communionLead: CalendarServicePerson | null;
+  songs: string[];
+}
+
 export interface CalendarEventItem {
   id: string;
   occurrenceId: string;
@@ -116,6 +138,7 @@ export interface CalendarEventItem {
   linkedMember: CalendarEventMemberSummary | null;
   assignees: CalendarEventMemberSummary[];
   image: CalendarEventImageSummary | null;
+  serviceDetails: CalendarServiceDetails | null;
 }
 
 export interface CalendarMemberOption {
@@ -125,6 +148,7 @@ export interface CalendarMemberOption {
   anniversary: string | null;
   photoAssetId: string | null;
   photoUrl: string | null;
+  ministries: MemberMinistry[];
 }
 
 export interface CalendarPreferences {

@@ -6,6 +6,7 @@ import { CALENDAR_REPEAT, CALENDAR_TYPE } from './calendar-constants';
 import { combineLocalDateTime } from './calendar-date-utils';
 
 export function formPayload(form: CalendarFormState): CreateCalendarEventInput {
+  const isService = form.type === CALENDAR_TYPE.service;
   return {
     type: form.type,
     title: form.title,
@@ -21,6 +22,7 @@ export function formPayload(form: CalendarFormState): CreateCalendarEventInput {
     imageAssetId: form.imageAssetId || null,
     assigneeMembershipIds: form.type === CALENDAR_TYPE.task ? form.assigneeMembershipIds : [],
     taskCompleted: form.type === CALENDAR_TYPE.task ? form.taskCompleted : false,
+    ...(isService ? { serviceDetails: serviceDetailsPayload(form.serviceDetails) } : {}),
   };
 }
 
@@ -62,6 +64,32 @@ export function validateCalendarForm(
     valid = false;
   }
 
+  if (form.type === CALENDAR_TYPE.service) {
+    valid =
+      validateServicePerson(form.serviceDetails.preacher, 'serviceDetails.preacher', setError) &&
+      valid;
+    valid =
+      validateOptionalServicePerson(
+        form.serviceDetails.serviceHost,
+        'serviceDetails.serviceHost',
+        setError,
+      ) && valid;
+    valid =
+      validateServicePerson(
+        form.serviceDetails.worshipLead,
+        'serviceDetails.worshipLead',
+        setError,
+      ) && valid;
+    if (form.serviceDetails.hasCommunion) {
+      const communionLeadValid = validateServicePerson(
+        form.serviceDetails.communionLead,
+        'serviceDetails.communionLead',
+        setError,
+      );
+      valid = valid && communionLeadValid;
+    }
+  }
+
   return valid;
 }
 
@@ -91,6 +119,60 @@ export function autofillMemberEvent(
   }
 
   return form;
+}
+
+function serviceDetailsPayload(
+  serviceDetails: CalendarFormState['serviceDetails'],
+): NonNullable<CreateCalendarEventInput['serviceDetails']> {
+  return {
+    preacher: servicePersonPayload(serviceDetails.preacher),
+    serviceHost: servicePersonPayload(serviceDetails.serviceHost),
+    worshipLead: servicePersonPayload(serviceDetails.worshipLead),
+    hasCommunion: serviceDetails.hasCommunion,
+    communionLead: serviceDetails.hasCommunion
+      ? servicePersonPayload(serviceDetails.communionLead)
+      : undefined,
+    biblePassage: serviceDetails.biblePassage || null,
+    songs: serviceDetails.songs
+      .split('\n')
+      .map((song) => song.trim())
+      .filter(Boolean),
+  };
+}
+
+function servicePersonPayload(person: CalendarFormState['serviceDetails']['preacher']) {
+  const membershipId = person.membershipId || undefined;
+  const customName = person.customName.trim() || undefined;
+  if (!membershipId && !customName) return undefined;
+  return { membershipId, customName };
+}
+
+function validateServicePerson(
+  person: CalendarFormState['serviceDetails']['preacher'],
+  path: `serviceDetails.${'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead'}`,
+  setError: UseFormSetError<CalendarFormState>,
+): boolean {
+  const hasMember = Boolean(person.membershipId);
+  const hasGuest = Boolean(person.customName.trim());
+  if (hasMember === hasGuest) {
+    setError(path, { message: 'Select a member or enter a guest name.' });
+    return false;
+  }
+  return true;
+}
+
+function validateOptionalServicePerson(
+  person: CalendarFormState['serviceDetails']['preacher'],
+  path: `serviceDetails.${'serviceHost'}`,
+  setError: UseFormSetError<CalendarFormState>,
+): boolean {
+  const hasMember = Boolean(person.membershipId);
+  const hasGuest = Boolean(person.customName.trim());
+  if (hasMember && hasGuest) {
+    setError(path, { message: 'Select a member or enter a guest name, not both.' });
+    return false;
+  }
+  return true;
 }
 
 export function applyFormValues(

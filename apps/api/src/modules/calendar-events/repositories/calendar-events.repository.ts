@@ -27,6 +27,22 @@ const calendarEventInclude = {
     },
     orderBy: { createdAt: 'asc' as const },
   },
+  serviceDetails: {
+    include: {
+      participants: {
+        include: {
+          membership: {
+            include: {
+              profile: true,
+              user: { select: { displayName: true, email: true, avatarUrl: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' as const },
+      },
+      songs: { orderBy: { order: 'asc' as const } },
+    },
+  },
 } as const;
 
 export type CalendarEventRecord = Prisma.CalendarEventGetPayload<{
@@ -59,6 +75,7 @@ export class CalendarEventsRepository {
       },
       include: {
         profile: true,
+        ministries: true,
         user: { select: { displayName: true, email: true, avatarUrl: true } },
       },
       orderBy: { createdAt: 'asc' },
@@ -117,6 +134,10 @@ export class CalendarEventsRepository {
     return this.prisma.$transaction(async (tx) => {
       await this.assertManageableActor(tx, organizationId, actorUserId);
       await this.assertReferencesBelongToOrganization(tx, organizationId, input);
+      const serviceParticipants =
+        input.type === CALENDAR_EVENT_TYPE.service && input.serviceDetails
+          ? await this.buildServiceParticipants(tx, organizationId, input.serviceDetails)
+          : [];
 
       const data: Prisma.CalendarEventUncheckedCreateInput = {
         organizationId,
@@ -137,6 +158,25 @@ export class CalendarEventsRepository {
         data.assignees = {
           createMany: {
             data: input.assigneeMembershipIds.map((membershipId) => ({ membershipId })),
+          },
+        };
+      }
+      if (input.type === CALENDAR_EVENT_TYPE.service && input.serviceDetails) {
+        data.serviceDetails = {
+          create: {
+            organizationId,
+            hasCommunion: input.serviceDetails.hasCommunion,
+            biblePassage: input.serviceDetails.biblePassage ?? null,
+            participants: { createMany: { data: serviceParticipants } },
+            songs: {
+              createMany: {
+                data: input.serviceDetails.songs.map((title, index) => ({
+                  organizationId,
+                  order: index,
+                  title,
+                })),
+              },
+            },
           },
         };
       }
@@ -187,6 +227,48 @@ export class CalendarEventsRepository {
             data: assigneeMembershipIds.map((membershipId) => ({ eventId, membershipId })),
           });
         }
+      }
+
+      if (nextType === CALENDAR_EVENT_TYPE.service && input.serviceDetails) {
+        const serviceParticipants = await this.buildServiceParticipants(
+          tx,
+          organizationId,
+          input.serviceDetails,
+        );
+        await tx.calendarServiceDetails.upsert({
+          where: { eventId },
+          create: {
+            eventId,
+            organizationId,
+            hasCommunion: input.serviceDetails.hasCommunion,
+            biblePassage: input.serviceDetails.biblePassage ?? null,
+          },
+          update: {
+            hasCommunion: input.serviceDetails.hasCommunion,
+            biblePassage: input.serviceDetails.biblePassage ?? null,
+          },
+        });
+        await tx.calendarServiceParticipant.deleteMany({ where: { eventId } });
+        if (serviceParticipants.length > 0) {
+          await tx.calendarServiceParticipant.createMany({
+            data: serviceParticipants.map((participant) => ({ ...participant, eventId })),
+          });
+        }
+        await tx.calendarServiceSong.deleteMany({ where: { eventId } });
+        if (input.serviceDetails.songs.length > 0) {
+          await tx.calendarServiceSong.createMany({
+            data: input.serviceDetails.songs.map((title, index) => ({
+              organizationId,
+              eventId,
+              order: index,
+              title,
+            })),
+          });
+        }
+      }
+
+      if (nextType !== CALENDAR_EVENT_TYPE.service) {
+        await tx.calendarServiceDetails.deleteMany({ where: { eventId } });
       }
 
       const event = await tx.calendarEvent.update({
@@ -306,11 +388,15 @@ export class CalendarEventsRepository {
       linkedMembershipId?: string | null | undefined;
       assigneeMembershipIds?: string[] | undefined;
       imageAssetId?: string | null | undefined;
+      serviceDetails?:
+        | CreateCalendarEventInput['serviceDetails']
+        | UpdateCalendarEventInput['serviceDetails'];
     },
   ) {
     const membershipIds = [
       ...(input.linkedMembershipId ? [input.linkedMembershipId] : []),
       ...(input.assigneeMembershipIds ?? []),
+      ...serviceDetailMembershipIds(input.serviceDetails),
     ];
 
     if (membershipIds.length > 0) {
@@ -333,4 +419,68 @@ export class CalendarEventsRepository {
       if (!asset) throw new Error('IMAGE_NOT_FOUND');
     }
   }
+
+  private async buildServiceParticipants(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    serviceDetails: NonNullable<CreateCalendarEventInput['serviceDetails']>,
+  ) {
+    const roleInputs = [
+      { role: 'PREACHER' as const, person: serviceDetails.preacher },
+      { role: 'SERVICE_HOST' as const, person: serviceDetails.serviceHost },
+      { role: 'WORSHIP_LEAD' as const, person: serviceDetails.worshipLead },
+      { role: 'COMMUNION_LEAD' as const, person: serviceDetails.communionLead },
+    ].filter(({ person }) => person);
+    const membershipIds = roleInputs
+      .map(({ person }) => person?.membershipId)
+      .filter((id): id is string => Boolean(id));
+    const members =
+      membershipIds.length > 0
+        ? await tx.organizationMember.findMany({
+            where: {
+              organizationId,
+              id: { in: [...new Set(membershipIds)] },
+              status: 'ACTIVE',
+              removedAt: null,
+            },
+            include: {
+              profile: true,
+              user: { select: { displayName: true, email: true } },
+            },
+          })
+        : [];
+    const memberById = new Map(members.map((member) => [member.id, member]));
+
+    return roleInputs.map(({ role, person }) => {
+      const membership = person?.membershipId ? memberById.get(person.membershipId) : null;
+      const customName = person?.customName ?? null;
+      return {
+        organizationId,
+        role,
+        membershipId: membership?.id ?? null,
+        customName,
+        displayNameSnapshot: membership
+          ? (membership.profile?.displayName ??
+            membership.user?.displayName ??
+            membership.user?.email ??
+            'Member')
+          : customName,
+      };
+    });
+  }
+}
+
+function serviceDetailMembershipIds(
+  serviceDetails:
+    | CreateCalendarEventInput['serviceDetails']
+    | UpdateCalendarEventInput['serviceDetails']
+    | undefined,
+): string[] {
+  if (!serviceDetails) return [];
+  return [
+    serviceDetails.preacher?.membershipId,
+    serviceDetails.serviceHost?.membershipId,
+    serviceDetails.worshipLead?.membershipId,
+    serviceDetails.communionLead?.membershipId,
+  ].filter((id): id is string => Boolean(id));
 }

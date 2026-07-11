@@ -17,7 +17,9 @@ import { GiveMemberAccessDialog } from './give-member-access-dialog';
 import { MemberPhotoField, validateMemberPhoto } from './member-photo-upload';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  MEMBER_MINISTRIES,
   updateOrganizationMemberProfileSchema,
+  type MemberMinistry,
   type UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
 import { useForm } from 'react-hook-form';
@@ -26,6 +28,7 @@ import { FormDatePicker } from '@/components/forms/form-date-picker';
 import { FormInput } from '@/components/forms/form-input';
 import { FormSelect } from '@/components/forms/form-select';
 import { FormTextarea } from '@/components/forms/form-textarea';
+import { FormCheckbox } from '@/components/forms/form-checkbox';
 
 type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 type FormAction = (formData: FormData) => void | Promise<void>;
@@ -71,6 +74,7 @@ interface EditableMember {
   id: string;
   role: OrganizationRole;
   accountState: string;
+  ministries: MemberMinistry[];
   profile: {
     displayName: string;
     email: string | null;
@@ -96,6 +100,21 @@ interface EditableMember {
     toMembership: { id: string; profile: { displayName: string } | null };
   }>;
 }
+
+type MemberProfileUpdate = Partial<EditableMember['profile']> & {
+  ministries?: MemberMinistry[];
+};
+
+const MINISTRY_LABELS: Record<MemberMinistry, string> = {
+  PREACHING: 'Preaching',
+  WORSHIP: 'Worship',
+  DEACON: 'Deacon',
+  MINISTER: 'Minister',
+  TEACHER: 'Teacher',
+  MISSIONARY: 'Missionary',
+  EVANGELIST: 'Evangelist',
+  CHAPLAIN: 'Chaplain',
+};
 
 function MenuIcon({ children }: { children: ReactNode }) {
   return (
@@ -131,7 +150,7 @@ function EditMemberSheet({
   deleteRelationship: RelationshipAction;
   preparePhoto: PrepareMemberPhotoAction;
   confirmPhoto: ConfirmMemberPhotoAction;
-  onProfileUpdated: (profile: Partial<EditableMember['profile']>) => void;
+  onProfileUpdated: (profile: MemberProfileUpdate) => void;
   dialogRef: RefObject<HTMLDialogElement | null>;
   onOpen: () => void;
   onClose: () => void;
@@ -163,6 +182,7 @@ function EditMemberSheet({
       anniversary: member.profile.anniversary?.slice(0, 10) ?? null,
       biography: member.profile.biography,
       familyNotes: member.profile.familyNotes,
+      ministries: member.ministries,
     },
   });
 
@@ -209,7 +229,13 @@ function EditMemberSheet({
     const formData = new FormData();
     formData.set('organizationId', organizationId);
     formData.set('membershipId', member.id);
-    for (const [key, value] of Object.entries(values)) formData.set(key, value ?? '');
+    for (const [key, value] of Object.entries(values)) {
+      if (Array.isArray(value)) {
+        value.forEach((item) => formData.append(key, item));
+      } else {
+        formData.set(key, value ?? '');
+      }
+    }
     const result = await action({ updated: false, error: null }, formData);
     if (result.error) toast.error(result.error);
     else {
@@ -226,6 +252,7 @@ function EditMemberSheet({
         ...(values.anniversary !== undefined ? { anniversary: values.anniversary } : {}),
         ...(values.biography !== undefined ? { biography: values.biography } : {}),
         ...(values.familyNotes !== undefined ? { familyNotes: values.familyNotes } : {}),
+        ...(values.ministries !== undefined ? { ministries: values.ministries } : {}),
         photoUrl: nextPhotoUrl,
       });
     }
@@ -331,6 +358,19 @@ function EditMemberSheet({
               error={errors.familyNotes?.message}
               {...register('familyNotes')}
             />
+            <fieldset className="grid gap-2 rounded-md border border-[var(--line)] p-3">
+              <legend className="px-1 font-semibold">Ministries</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {MEMBER_MINISTRIES.map((ministry) => (
+                  <FormCheckbox
+                    key={ministry}
+                    label={MINISTRY_LABELS[ministry]}
+                    value={ministry}
+                    {...register('ministries')}
+                  />
+                ))}
+              </div>
+            </fieldset>
             <fieldset className="grid gap-3 border-t border-[var(--line)] pt-4">
               <legend className="font-semibold pr-2">Family relationships</legend>
               {relationships.map((relationship) => {
@@ -555,7 +595,7 @@ export function MemberActions({
   deleteRelationship: RelationshipAction;
   preparePhoto: PrepareMemberPhotoAction;
   confirmPhoto: ConfirmMemberPhotoAction;
-  onProfileUpdated: (profile: Partial<EditableMember['profile']>) => void;
+  onProfileUpdated: (profile: MemberProfileUpdate) => void;
   onRoleUpdated: (role: OrganizationRole) => void;
 }) {
   const menuRef = useRef<HTMLDetailsElement>(null);

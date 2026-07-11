@@ -18,6 +18,7 @@ export const EVENT_TYPES: Array<{ value: CalendarEventType; label: string }> = [
   { value: CALENDAR_TYPE.birthday, label: 'Birthdays' },
   { value: CALENDAR_TYPE.anniversary, label: 'Anniversaries' },
   { value: CALENDAR_TYPE.event, label: 'Events' },
+  { value: CALENDAR_TYPE.service, label: 'Services' },
 ];
 
 export const EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
@@ -25,6 +26,7 @@ export const EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
   ANNIVERSARY: 'Anniversary',
   TASK: 'Task',
   EVENT: 'Event',
+  SERVICE: 'Service',
 };
 
 export const EVENT_TYPE_OPTIONS = CALENDAR_EVENT_TYPES.map((value) => ({
@@ -57,6 +59,7 @@ export const EVENT_TYPE_STYLES: Record<CalendarEventType, string> = {
   ANNIVERSARY: 'border-l-pink-500 bg-pink-50 text-pink-900',
   TASK: 'border-l-sky-500 bg-sky-50 text-sky-900',
   EVENT: 'border-l-blue-600 bg-blue-50 text-blue-900',
+  SERVICE: 'border-l-yellow-500 bg-yellow-50 text-yellow-950',
 };
 
 export const EVENT_TYPE_DOT_STYLES: Record<CalendarEventType, string> = {
@@ -64,6 +67,7 @@ export const EVENT_TYPE_DOT_STYLES: Record<CalendarEventType, string> = {
   ANNIVERSARY: 'bg-pink-500',
   TASK: 'bg-sky-500',
   EVENT: 'bg-blue-600',
+  SERVICE: 'bg-yellow-500',
 };
 
 export const TRANSPARENT_IMAGE_PLACEHOLDER =

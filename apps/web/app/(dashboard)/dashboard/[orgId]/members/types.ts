@@ -1,3 +1,5 @@
+import type { MemberMinistry } from '@churchflow/shared';
+
 export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 export type AccountState =
   | 'UNCLAIMED'
@@ -20,6 +22,7 @@ export interface OrganizationMember {
   role: OrganizationRole;
   status: string;
   source: string;
+  ministries: MemberMinistry[];
   accountState: AccountState;
   claimedAt: string | null;
   profile: {

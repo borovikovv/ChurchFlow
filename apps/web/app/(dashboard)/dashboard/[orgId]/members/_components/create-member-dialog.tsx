@@ -1,7 +1,8 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createManualOrganizationMemberSchema } from '@churchflow/shared';
+import { createManualOrganizationMemberSchema, MEMBER_MINISTRIES } from '@churchflow/shared';
+import type { MemberMinistry } from '@churchflow/shared';
 import { useId, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
@@ -24,6 +25,7 @@ interface CreatedMember {
   id: string;
   role: string;
   source: string;
+  ministries: MemberMinistry[];
   profile: {
     displayName: string;
     email: string | null;
@@ -32,6 +34,17 @@ interface CreatedMember {
     anniversary: string | null;
   };
 }
+
+const MINISTRY_LABELS: Record<MemberMinistry, string> = {
+  PREACHING: 'Preaching',
+  WORSHIP: 'Worship',
+  DEACON: 'Deacon',
+  MINISTER: 'Minister',
+  TEACHER: 'Teacher',
+  MISSIONARY: 'Missionary',
+  EVANGELIST: 'Evangelist',
+  CHAPLAIN: 'Chaplain',
+};
 
 export function CreateMemberDialog({
   organizationId,
@@ -52,7 +65,7 @@ export function CreateMemberDialog({
     resolver: zodResolver(formSchema),
     mode: 'onBlur',
     reValidateMode: 'onChange',
-    defaultValues: { role: 'MEMBER', prepareAccess: false },
+    defaultValues: { role: 'MEMBER', prepareAccess: false, ministries: [] },
   });
 
   const submit = handleSubmit(async (values) => {
@@ -111,6 +124,19 @@ export function CreateMemberDialog({
               <option value="MEMBER">Member</option>
               <option value="VIEWER">Viewer</option>
             </FormSelect>
+            <fieldset className="grid gap-2 rounded-md border border-[var(--line)] p-3">
+              <legend className="px-1 font-semibold">Ministries</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {MEMBER_MINISTRIES.map((ministry) => (
+                  <FormCheckbox
+                    key={ministry}
+                    label={MINISTRY_LABELS[ministry]}
+                    value={ministry}
+                    {...register('ministries')}
+                  />
+                ))}
+              </div>
+            </fieldset>
             <FormDatePicker
               control={control}
               name="memberSince"

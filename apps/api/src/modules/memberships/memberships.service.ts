@@ -55,6 +55,7 @@ export class MembershipsService {
           role: member.role,
           status: member.status,
           source: member.source,
+          ministries: member.ministries.map(({ ministry }) => ministry),
           claimedAt: member.claimedAt,
           accountState,
           profile: member.profile

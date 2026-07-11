@@ -128,6 +128,7 @@ enum CalendarEventType {
   ANNIVERSARY
   TASK
   EVENT
+  SERVICE
 }
 
 enum CalendarEventReminder {
@@ -142,6 +143,24 @@ enum CalendarEventRepeatPeriod {
   WEEKLY
   MONTHLY
   YEARLY
+}
+
+enum CalendarServiceRole {
+  PREACHER
+  SERVICE_HOST
+  WORSHIP_LEAD
+  COMMUNION_LEAD
+}
+
+enum MemberMinistry {
+  PREACHING
+  WORSHIP
+  DEACON
+  MINISTER
+  TEACHER
+  MISSIONARY
+  EVANGELIST
+  CHAPLAIN
 }
 
 model User {
@@ -254,6 +273,11 @@ model Organization {
   memberRelationships OrganizationMemberRelationship[]
   calendarEvents      CalendarEvent[]
   calendarPreferences CalendarPreference[]
+  memberMinistries    OrganizationMemberMinistry[]
+  preacherQueue       PreacherQueueEntry[]
+  calendarServices    CalendarServiceDetails[]
+  serviceParticipants CalendarServiceParticipant[]
+  serviceSongs        CalendarServiceSong[]
 
   @@index([status])
   @@index([slug])
@@ -284,6 +308,9 @@ model OrganizationMember {
   incomingRelationships OrganizationMemberRelationship[] @relation("RelationshipTo")
   linkedCalendarEvents  CalendarEvent[]                  @relation("CalendarEventLinkedMember")
   assignedCalendarTasks CalendarEventAssignee[]
+  serviceParticipants   CalendarServiceParticipant[]
+  ministries            OrganizationMemberMinistry[]
+  preacherQueueEntries  PreacherQueueEntry[]
 
   @@unique([organizationId, userId])
   @@index([organizationId])
@@ -337,6 +364,21 @@ model OrganizationMemberRelationship {
   @@index([organizationId, fromMembershipId], map: "member_relationships_from_idx")
   @@index([organizationId, toMembershipId], map: "member_relationships_to_idx")
   @@map("organization_member_relationships")
+}
+
+model OrganizationMemberMinistry {
+  organizationId String         @map("organization_id") @db.Uuid
+  membershipId   String         @map("membership_id") @db.Uuid
+  ministry       MemberMinistry
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership   OrganizationMember @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, ministry])
+  @@index([organizationId, ministry])
+  @@index([organizationId, membershipId])
+  @@map("organization_member_ministries")
 }
 
 model MembershipClaim {
@@ -585,6 +627,7 @@ model CalendarEvent {
   linkedMembership OrganizationMember?     @relation("CalendarEventLinkedMember", fields: [linkedMembershipId], references: [id], onDelete: SetNull)
   imageAsset       MediaAsset?             @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
   assignees        CalendarEventAssignee[]
+  serviceDetails   CalendarServiceDetails?
 
   @@index([organizationId, startsAt])
   @@index([organizationId, type, startsAt])
@@ -592,6 +635,61 @@ model CalendarEvent {
   @@index([linkedMembershipId])
   @@index([imageAssetId])
   @@map("calendar_events")
+}
+
+model CalendarServiceDetails {
+  eventId        String   @id @map("event_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  hasCommunion   Boolean  @default(false) @map("has_communion")
+  biblePassage   String?  @map("bible_passage")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  event        CalendarEvent                @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organization Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  participants CalendarServiceParticipant[]
+  songs        CalendarServiceSong[]
+
+  @@index([organizationId])
+  @@map("calendar_service_details")
+}
+
+model CalendarServiceParticipant {
+  id                  String              @id @default(uuid()) @db.Uuid
+  organizationId      String              @map("organization_id") @db.Uuid
+  eventId             String              @map("event_id") @db.Uuid
+  role                CalendarServiceRole
+  membershipId        String?             @map("membership_id") @db.Uuid
+  customName          String?             @map("custom_name")
+  displayNameSnapshot String?             @map("display_name_snapshot")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event        CalendarServiceDetails @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+  membership   OrganizationMember?    @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, role])
+  @@index([organizationId, role])
+  @@index([membershipId])
+  @@map("calendar_service_participants")
+}
+
+model CalendarServiceSong {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  eventId        String   @map("event_id") @db.Uuid
+  order          Int
+  title          String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event        CalendarServiceDetails @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+
+  @@unique([eventId, order])
+  @@index([organizationId])
+  @@map("calendar_service_songs")
 }
 
 model CalendarEventAssignee {
@@ -611,7 +709,7 @@ model CalendarPreference {
   id                String              @id @default(uuid()) @db.Uuid
   organizationId    String              @map("organization_id") @db.Uuid
   userId            String              @map("user_id") @db.Uuid
-  visibleEventTypes CalendarEventType[] @default([BIRTHDAY, ANNIVERSARY, TASK, EVENT]) @map("visible_event_types")
+  visibleEventTypes CalendarEventType[] @default([BIRTHDAY, ANNIVERSARY, TASK, EVENT, SERVICE]) @map("visible_event_types")
   createdAt         DateTime            @default(now()) @map("created_at")
   updatedAt         DateTime            @updatedAt @map("updated_at")
 
@@ -621,6 +719,25 @@ model CalendarPreference {
   @@unique([organizationId, userId])
   @@index([userId])
   @@map("calendar_preferences")
+}
+
+model PreacherQueueEntry {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  membershipId   String    @map("membership_id") @db.Uuid
+  position       Int
+  active         Boolean   @default(true)
+  lastAssignedAt DateTime? @map("last_assigned_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership   OrganizationMember @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, membershipId])
+  @@unique([organizationId, position])
+  @@index([organizationId, active, position])
+  @@map("preacher_queue_entries")
 }
 
 model FeatureFlag {

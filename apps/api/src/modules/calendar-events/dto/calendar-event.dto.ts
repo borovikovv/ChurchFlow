@@ -37,6 +37,7 @@ export class CreateCalendarEventDto implements CreateCalendarEventInput {
   imageAssetId?: string | null;
   assigneeMembershipIds!: string[];
   taskCompleted!: boolean;
+  serviceDetails?: CreateCalendarEventInput['serviceDetails'];
 }
 
 export class UpdateCalendarEventDto implements UpdateCalendarEventInput {
@@ -54,6 +55,7 @@ export class UpdateCalendarEventDto implements UpdateCalendarEventInput {
   imageAssetId?: string | null;
   assigneeMembershipIds?: string[];
   taskCompleted?: boolean;
+  serviceDetails?: UpdateCalendarEventInput['serviceDetails'];
 }
 
 export class ToggleCalendarTaskCompletionDto implements ToggleCalendarTaskCompletionInput {

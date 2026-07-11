@@ -27,8 +27,6 @@ export default async function OrganizationProfilePage({
           description="Your identity and platform access in ChurchFlow."
         >
           <dl className="details">
-            <dt>User ID</dt>
-            <dd>{user.id}</dd>
             <dt>Email</dt>
             <dd>{user.email ?? 'Not set'}</dd>
             <dt>Name</dt>

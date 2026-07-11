@@ -34,6 +34,7 @@ type FormSelectProps = {
   required?: boolean | undefined;
   selectClassName?: string | undefined;
   value?: string | number | readonly string[] | undefined;
+  clearable?: boolean | undefined;
 };
 
 type OptionElementProps = {
@@ -127,6 +128,7 @@ export function FormSelect({
   className,
   defaultValue,
   disabled,
+  clearable,
   labelClassName,
   name,
   onBlur,
@@ -152,6 +154,7 @@ export function FormSelect({
             aria-invalid={invalid}
             inputId={id}
             instanceId={id}
+            isClearable={Boolean(clearable)}
             isDisabled={Boolean(disabled)}
             isOptionDisabled={(option) => Boolean(option.isDisabled)}
             maxMenuHeight={maxMenuHeight}

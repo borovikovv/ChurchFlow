@@ -5,6 +5,8 @@ import {
   CALENDAR_EVENT_REPEAT_PERIODS,
   CALENDAR_EVENT_TYPE,
   CALENDAR_EVENT_TYPES,
+  CALENDAR_SERVICE_ROLES,
+  MEMBER_MINISTRIES,
   PUBLIC_SECTION_TYPES,
 } from './constants.js';
 
@@ -59,6 +61,9 @@ export const calendarEventTypeSchema = z.enum(CALENDAR_EVENT_TYPES);
 export const calendarEventReminderSchema = z.enum(CALENDAR_EVENT_REMINDERS);
 export const calendarEventRepeatPeriodSchema = z.enum(CALENDAR_EVENT_REPEAT_PERIODS);
 export const calendarEventTypesSchema = z.array(calendarEventTypeSchema);
+export const calendarServiceRoleSchema = z.enum(CALENDAR_SERVICE_ROLES);
+export const memberMinistrySchema = z.enum(MEMBER_MINISTRIES);
+export const memberMinistriesSchema = z.array(memberMinistrySchema);
 export const membershipSourceSchema = z.enum([
   'EXISTING',
   'MANUAL',
@@ -135,6 +140,62 @@ export const updateCalendarPreferencesSchema = z.object({
   visibleEventTypes: calendarEventTypesSchema,
 });
 
+const calendarServicePersonInputSchema = z
+  .object({
+    membershipId: uuidSchema.optional(),
+    customName: optionalTrimmedString(160),
+  })
+  .superRefine((value, ctx) => {
+    const hasMembership = Boolean(value.membershipId);
+    const hasCustomName = Boolean(value.customName);
+    if (hasMembership === hasCustomName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select a member or enter a guest name',
+      });
+    }
+  });
+
+const optionalCalendarServicePersonInputSchema = z
+  .object({
+    membershipId: uuidSchema.optional(),
+    customName: optionalTrimmedString(160),
+  })
+  .superRefine((value, ctx) => {
+    const hasMembership = Boolean(value.membershipId);
+    const hasCustomName = Boolean(value.customName);
+    if (hasMembership && hasCustomName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select a member or enter a guest name, not both',
+      });
+    }
+  })
+  .transform((value) => {
+    if (!value.membershipId && !value.customName) return undefined;
+    return value;
+  });
+
+const calendarServiceDetailsInputSchema = z
+  .object({
+    preacher: calendarServicePersonInputSchema.optional(),
+    serviceHost: optionalCalendarServicePersonInputSchema.optional(),
+    worshipLead: calendarServicePersonInputSchema.optional(),
+    hasCommunion: z.boolean().default(false),
+    communionLead: calendarServicePersonInputSchema.optional(),
+    biblePassage: nullableTrimmedString(180),
+    songs: z.array(z.string().trim().min(1).max(180)).default([]),
+  })
+  .superRefine((value, ctx) => {
+    if (value.hasCommunion && !value.communionLead) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['communionLead'],
+        message: 'Communion lead is required when communion is enabled',
+      });
+    }
+  });
+
 const calendarEventInputSchema = z.object({
   type: calendarEventTypeSchema,
   title: z.string().trim().min(1).max(180),
@@ -148,6 +209,7 @@ const calendarEventInputSchema = z.object({
   imageAssetId: uuidSchema.nullable().optional(),
   assigneeMembershipIds: z.array(uuidSchema).default([]),
   taskCompleted: z.boolean().default(false),
+  serviceDetails: calendarServiceDetailsInputSchema.optional(),
 });
 
 function refineCalendarEventInput(
@@ -169,6 +231,22 @@ function refineCalendarEventInput(
       code: z.ZodIssueCode.custom,
       path: ['assigneeMembershipIds'],
       message: 'Task events require at least one assignee',
+    });
+  }
+
+  if (value.type === CALENDAR_EVENT_TYPE.service && !value.serviceDetails) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['serviceDetails'],
+      message: 'Service events require service details',
+    });
+  }
+
+  if (value.type && value.type !== CALENDAR_EVENT_TYPE.service && value.serviceDetails) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['serviceDetails'],
+      message: 'Only service events can include service details',
     });
   }
 }
@@ -239,6 +317,7 @@ export const createManualOrganizationMemberSchema = z.object({
   biography: nullableTrimmedString(5000),
   familyNotes: nullableTrimmedString(3000),
   role: z.enum(['MEMBER', 'VIEWER']).default('MEMBER'),
+  ministries: memberMinistriesSchema.optional(),
 });
 
 export const updateOrganizationMemberProfileSchema = z
@@ -258,6 +337,7 @@ export const updateOrganizationMemberProfileSchema = z
     anniversary: nullablePastOrTodayDate,
     biography: nullableTrimmedString(5000),
     familyNotes: nullableTrimmedString(3000),
+    ministries: memberMinistriesSchema.optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: 'At least one profile field is required',

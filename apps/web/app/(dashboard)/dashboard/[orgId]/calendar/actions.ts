@@ -182,6 +182,14 @@ export async function enrichCalendarImageUrls(
     event.assignees.forEach((assignee) => {
       if (assignee.photoAssetId) photoAssetIds.add(assignee.photoAssetId);
     });
+    [
+      event.serviceDetails?.preacher,
+      event.serviceDetails?.serviceHost,
+      event.serviceDetails?.worshipLead,
+      event.serviceDetails?.communionLead,
+    ].forEach((person) => {
+      if (person?.photoAssetId) photoAssetIds.add(person.photoAssetId);
+    });
     if (event.image?.id) eventImageIds.add(event.image.id);
   });
 
@@ -207,6 +215,16 @@ export async function enrichCalendarImageUrls(
     event.assignees.forEach((assignee) => {
       if (assignee.photoAssetId && urls.has(assignee.photoAssetId)) {
         assignee.photoUrl = urls.get(assignee.photoAssetId) ?? null;
+      }
+    });
+    [
+      event.serviceDetails?.preacher,
+      event.serviceDetails?.serviceHost,
+      event.serviceDetails?.worshipLead,
+      event.serviceDetails?.communionLead,
+    ].forEach((person) => {
+      if (person?.photoAssetId && urls.has(person.photoAssetId)) {
+        person.photoUrl = urls.get(person.photoAssetId) ?? null;
       }
     });
     if (event.image?.id && urls.has(event.image.id)) {

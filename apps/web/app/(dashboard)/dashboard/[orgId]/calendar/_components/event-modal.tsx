@@ -1,13 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import {
+  useForm,
+  type UseFormClearErrors,
+  type UseFormRegister,
+  type UseFormSetValue,
+} from 'react-hook-form';
 import { toast } from 'react-toastify';
 import type {
   CalendarEventItem,
   CalendarEventType,
   CalendarMemberOption,
+  MemberMinistry,
 } from '@churchflow/shared';
+import { MEMBER_MINISTRY } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FormDatePicker } from '@/components/forms/form-date-picker';
@@ -22,6 +29,16 @@ import {
 } from './calendar-constants';
 import type { CalendarFormState } from './calendar-types';
 import { applyFormValues, autofillMemberEvent, validateCalendarForm } from './calendar-form-utils';
+
+const SERVICE_ROLE_PRIORITIES: Record<
+  'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead',
+  MemberMinistry[]
+> = {
+  preacher: [MEMBER_MINISTRY.preaching],
+  serviceHost: [MEMBER_MINISTRY.minister, MEMBER_MINISTRY.deacon, MEMBER_MINISTRY.teacher],
+  worshipLead: [MEMBER_MINISTRY.worship],
+  communionLead: [MEMBER_MINISTRY.deacon, MEMBER_MINISTRY.minister],
+};
 
 export function EventModal({
   canManage,
@@ -277,6 +294,85 @@ export function EventModal({
               <Checkbox disabled={readonly} label="Completed" {...register('taskCompleted')} />
             </>
           ) : null}
+          {values.type === CALENDAR_TYPE.service ? (
+            <fieldset className="grid items-start gap-4 rounded-md border border-[var(--line)] p-4 sm:col-span-2 sm:grid-cols-2">
+              <legend className="px-1 font-semibold">Service details</legend>
+              <ServiceRoleField
+                disabled={readonly}
+                error={errors.serviceDetails?.preacher?.message}
+                label="Preacher"
+                members={members}
+                role="preacher"
+                values={values.serviceDetails.preacher}
+                register={register}
+                setValue={setValue}
+                clearErrors={clearErrors}
+              />
+              <ServiceRoleField
+                disabled={readonly}
+                error={errors.serviceDetails?.serviceHost?.message}
+                label="Service host"
+                members={members}
+                role="serviceHost"
+                values={values.serviceDetails.serviceHost}
+                register={register}
+                setValue={setValue}
+                clearErrors={clearErrors}
+              />
+              <ServiceRoleField
+                disabled={readonly}
+                error={errors.serviceDetails?.worshipLead?.message}
+                label="Worship lead"
+                members={members}
+                role="worshipLead"
+                values={values.serviceDetails.worshipLead}
+                register={register}
+                setValue={setValue}
+                clearErrors={clearErrors}
+              />
+              <div className="self-start">
+                <FormTextarea
+                  disabled={readonly}
+                  error={errors.serviceDetails?.biblePassage?.message}
+                  className="min-h-31"
+                  label="Bible passage"
+                  {...register('serviceDetails.biblePassage')}
+                />
+              </div>
+              <div className="self-start pt-1">
+                <Checkbox
+                  disabled={readonly}
+                  label="Communion"
+                  {...register('serviceDetails.hasCommunion')}
+                />
+              </div>
+              <div className="min-h-[150px]">
+                {values.serviceDetails.hasCommunion ? (
+                  <ServiceRoleField
+                    disabled={readonly}
+                    error={errors.serviceDetails?.communionLead?.message}
+                    label="Communion lead"
+                    members={members}
+                    role="communionLead"
+                    values={values.serviceDetails.communionLead}
+                    register={register}
+                    setValue={setValue}
+                    clearErrors={clearErrors}
+                  />
+                ) : null}
+              </div>
+              <div className="sm:col-span-2">
+                <FormTextarea
+                  disabled={readonly}
+                  error={errors.serviceDetails?.songs?.message}
+                  label="Songs"
+                  rows={4}
+                  placeholder="One song per line"
+                  {...register('serviceDetails.songs')}
+                />
+              </div>
+            </fieldset>
+          ) : null}
           {canManage ? (
             <label className="sm:col-span-2">
               Event image
@@ -329,4 +425,90 @@ export function EventModal({
       </div>
     </div>
   );
+}
+
+function ServiceRoleField({
+  disabled,
+  error,
+  label,
+  members,
+  role,
+  values,
+  register,
+  setValue,
+  clearErrors,
+}: {
+  disabled: boolean;
+  error?: string | undefined;
+  label: string;
+  members: CalendarMemberOption[];
+  role: 'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead';
+  values: CalendarFormState['serviceDetails']['preacher'];
+  register: UseFormRegister<CalendarFormState>;
+  setValue: UseFormSetValue<CalendarFormState>;
+  clearErrors: UseFormClearErrors<CalendarFormState>;
+}) {
+  const sortedMembers = sortMembersByMinistry(members, SERVICE_ROLE_PRIORITIES[role]);
+  const baseName = `serviceDetails.${role}` as const;
+
+  return (
+    <div className="grid gap-2">
+      <FormSelect
+        clearable
+        disabled={disabled}
+        error={error}
+        label={label}
+        name={`${baseName}.membershipId`}
+        value={values.membershipId}
+        onChange={(event) => {
+          const nextMembershipId = event.currentTarget.value;
+          setValue(`${baseName}.membershipId`, nextMembershipId, {
+            shouldDirty: true,
+            shouldValidate: true,
+          });
+          if (nextMembershipId) {
+            setValue(`${baseName}.customName`, '', { shouldDirty: true, shouldValidate: true });
+          }
+          clearErrors(baseName);
+        }}
+      >
+        <option value="">No member selected</option>
+        {sortedMembers.map((member) => (
+          <option key={member.id} value={member.id}>
+            {member.displayName}
+          </option>
+        ))}
+      </FormSelect>
+      <FormInput
+        disabled={disabled || Boolean(values.membershipId)}
+        label={`${label} guest`}
+        placeholder={values.membershipId ? 'Clear member to enter a guest name' : 'Guest name'}
+        {...register(`${baseName}.customName`, {
+          onChange: (event) => {
+            if (event.currentTarget.value.trim()) {
+              setValue(`${baseName}.membershipId`, '', {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+            }
+            clearErrors(baseName);
+          },
+        })}
+      />
+    </div>
+  );
+}
+
+function sortMembersByMinistry(members: CalendarMemberOption[], priorities: MemberMinistry[]) {
+  return [...members].sort((left, right) => {
+    const leftRank = ministryRank(left.ministries, priorities);
+    const rightRank = ministryRank(right.ministries, priorities);
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    return left.displayName.localeCompare(right.displayName);
+  });
+}
+
+function ministryRank(ministries: MemberMinistry[], priorities: MemberMinistry[]) {
+  const rank = priorities.findIndex((ministry) => ministries.includes(ministry));
+  return rank === -1 ? Number.MAX_SAFE_INTEGER : rank;
 }

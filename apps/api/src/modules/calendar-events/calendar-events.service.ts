@@ -7,6 +7,8 @@ import {
 import type {
   CalendarEventItem,
   CalendarEventMemberSummary,
+  CalendarServiceDetails,
+  CalendarServicePerson,
   CalendarEventType,
   CreateCalendarEventInput,
   ListCalendarEventsQuery,
@@ -61,6 +63,7 @@ export class CalendarEventsService {
         anniversary: formatDateOnly(member.profile?.anniversary ?? null),
         photoAssetId: member.profile?.profilePhotoAssetId ?? null,
         photoUrl: member.user?.avatarUrl ?? null,
+        ministries: member.ministries.map(({ ministry }) => ministry),
       })),
       events: events.flatMap((event) => expandEvent(event, rangeStart, rangeEnd)),
     };
@@ -195,6 +198,47 @@ function baseEventToItem(event: CalendarEventRecord): CalendarEventItem {
       .map((assignee) => memberSummary(assignee.membership))
       .filter((member): member is CalendarEventMemberSummary => member !== null),
     image: event.imageAsset ? { id: event.imageAsset.id, url: null } : null,
+    serviceDetails: serviceDetailsSummary(event.serviceDetails),
+  };
+}
+
+function servicePersonSummary(
+  participant: NonNullable<CalendarEventRecord['serviceDetails']>['participants'][number],
+): CalendarServicePerson {
+  return {
+    membershipId: participant.membershipId,
+    customName: participant.customName,
+    displayName:
+      participant.displayNameSnapshot ??
+      participant.membership?.profile?.displayName ??
+      participant.membership?.user?.displayName ??
+      participant.membership?.user?.email ??
+      participant.customName ??
+      'Guest',
+    photoAssetId: participant.membership?.profile?.profilePhotoAssetId ?? null,
+    photoUrl: participant.membership?.user?.avatarUrl ?? null,
+  };
+}
+
+function serviceDetailsSummary(
+  details: CalendarEventRecord['serviceDetails'],
+): CalendarServiceDetails | null {
+  if (!details) return null;
+  const participants = new Map(
+    details.participants.map((participant) => [
+      participant.role,
+      servicePersonSummary(participant),
+    ]),
+  );
+
+  return {
+    hasCommunion: details.hasCommunion,
+    biblePassage: details.biblePassage,
+    preacher: participants.get('PREACHER') ?? null,
+    serviceHost: participants.get('SERVICE_HOST') ?? null,
+    worshipLead: participants.get('WORSHIP_LEAD') ?? null,
+    communionLead: participants.get('COMMUNION_LEAD') ?? null,
+    songs: details.songs.map((song) => song.title),
   };
 }
 

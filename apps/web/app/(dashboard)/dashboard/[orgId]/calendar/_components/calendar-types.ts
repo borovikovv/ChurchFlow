@@ -26,6 +26,22 @@ export interface CalendarFormState {
   imageUrl: string | null;
   assigneeMembershipIds: string[];
   taskCompleted: boolean;
+  serviceDetails: CalendarServiceFormDetails;
+}
+
+export interface CalendarServiceFormPerson {
+  membershipId: string;
+  customName: string;
+}
+
+export interface CalendarServiceFormDetails {
+  preacher: CalendarServiceFormPerson;
+  serviceHost: CalendarServiceFormPerson;
+  worshipLead: CalendarServiceFormPerson;
+  hasCommunion: boolean;
+  communionLead: CalendarServiceFormPerson;
+  biblePassage: string;
+  songs: string;
 }
 
 export interface CalendarManagerActions {

@@ -1,6 +1,6 @@
 import type { CalendarEventItem } from '@churchflow/shared';
 import { CALENDAR_REPEAT, CALENDAR_TYPE } from './calendar-constants';
-import type { CalendarFormState } from './calendar-types';
+import type { CalendarFormState, CalendarServiceFormPerson } from './calendar-types';
 
 export function newEventForm(date: string): CalendarFormState {
   return {
@@ -19,6 +19,7 @@ export function newEventForm(date: string): CalendarFormState {
     imageUrl: null,
     assigneeMembershipIds: [],
     taskCompleted: false,
+    serviceDetails: emptyServiceDetails(),
   };
 }
 
@@ -42,6 +43,40 @@ export function eventForm(event: CalendarEventItem): CalendarFormState {
     imageUrl: event.image?.url ?? null,
     assigneeMembershipIds: event.assignees.map((assignee) => assignee.id),
     taskCompleted: event.taskCompleted,
+    serviceDetails: {
+      preacher: servicePersonForm(event.serviceDetails?.preacher ?? null),
+      serviceHost: servicePersonForm(event.serviceDetails?.serviceHost ?? null),
+      worshipLead: servicePersonForm(event.serviceDetails?.worshipLead ?? null),
+      hasCommunion: event.serviceDetails?.hasCommunion ?? false,
+      communionLead: servicePersonForm(event.serviceDetails?.communionLead ?? null),
+      biblePassage: event.serviceDetails?.biblePassage ?? '',
+      songs: event.serviceDetails?.songs.join('\n') ?? '',
+    },
+  };
+}
+
+export function emptyServiceDetails(): CalendarFormState['serviceDetails'] {
+  return {
+    preacher: emptyServicePerson(),
+    serviceHost: emptyServicePerson(),
+    worshipLead: emptyServicePerson(),
+    hasCommunion: false,
+    communionLead: emptyServicePerson(),
+    biblePassage: '',
+    songs: '',
+  };
+}
+
+function emptyServicePerson(): CalendarServiceFormPerson {
+  return { membershipId: '', customName: '' };
+}
+
+function servicePersonForm(
+  person: NonNullable<CalendarEventItem['serviceDetails']>['preacher'] | null,
+): CalendarServiceFormPerson {
+  return {
+    membershipId: person?.membershipId ?? '',
+    customName: person?.customName ?? '',
   };
 }
 

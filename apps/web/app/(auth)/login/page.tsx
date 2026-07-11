@@ -1,7 +1,8 @@
+import Image from 'next/image';
 import { startProviderLogin } from './actions';
 
 const providers = [
-  { id: 'telegram', label: 'Continue with Telegram', mark: 'T' },
+  { id: 'telegram', label: 'Continue with Telegram', icon: '/icons/socials/telegram.svg' },
 ] as const;
 
 export default async function LoginPage({
@@ -14,7 +15,15 @@ export default async function LoginPage({
   return (
     <main className="section">
       <div className="shell stack auth-panel">
-        <h1>Sign in</h1>
+        <Image
+          alt="ChurchFlow"
+          className="home-logo"
+          height={240}
+          priority
+          src="/icons/church-flow.svg"
+          width={360}
+        />
+        <h1 className="sr-only">Sign in to ChurchFlow</h1>
         {error ? <p className="form-error">{error}</p> : null}
         <div className="auth-provider-list" aria-label="Sign-in providers">
           {providers.map((provider) => (
@@ -22,7 +31,9 @@ export default async function LoginPage({
               <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
               <input type="hidden" name="provider" value={provider.id} />
               <button className="auth-provider-button" type="submit">
-                <span className="auth-provider-mark">{provider.mark}</span>
+                <span className="auth-provider-mark">
+                  <Image src={provider.icon} alt="" width={20} height={20} aria-hidden="true" />
+                </span>
                 {provider.label}
               </button>
             </form>

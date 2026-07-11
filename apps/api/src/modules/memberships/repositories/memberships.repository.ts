@@ -53,6 +53,7 @@ export class MembershipsRepository {
       },
       include: {
         profile: true,
+        ministries: true,
         user: {
           select: {
             id: true,
@@ -140,6 +141,15 @@ export class MembershipsRepository {
         },
         include: { profile: true },
       });
+      if (input.ministries && input.ministries.length > 0) {
+        await tx.organizationMemberMinistry.createMany({
+          data: input.ministries.map((ministry) => ({
+            organizationId,
+            membershipId: membership.id,
+            ministry,
+          })),
+        });
+      }
 
       await tx.auditLog.create({
         data: {
@@ -152,7 +162,16 @@ export class MembershipsRepository {
         },
       });
 
-      return membership;
+      return {
+        ...membership,
+        ministries:
+          input.ministries?.map((ministry) => ({
+            organizationId,
+            membershipId: membership.id,
+            ministry,
+            createdAt: new Date(),
+          })) ?? [],
+      };
     });
   }
 
@@ -224,6 +243,19 @@ export class MembershipsRepository {
           ...(input.familyNotes !== undefined ? { familyNotes: input.familyNotes } : {}),
         },
       });
+
+      if (input.ministries !== undefined) {
+        await tx.organizationMemberMinistry.deleteMany({ where: { membershipId } });
+        if (input.ministries.length > 0) {
+          await tx.organizationMemberMinistry.createMany({
+            data: input.ministries.map((ministry) => ({
+              organizationId,
+              membershipId,
+              ministry,
+            })),
+          });
+        }
+      }
 
       await tx.auditLog.create({
         data: {
