@@ -26,10 +26,12 @@ export function AppShell({
   children,
   canOpenAdmin,
   displayName,
+  websiteOrganizationIds,
 }: {
   children: ReactNode;
   canOpenAdmin: boolean;
   displayName: string;
+  websiteOrganizationIds: string[];
 }) {
   const pathname = usePathname();
   if (pathname === '/o' || pathname.startsWith('/o/')) {
@@ -37,6 +39,7 @@ export function AppShell({
   }
 
   const dashboardOrgId = getDashboardOrgId(pathname);
+  const canOpenWebsite = dashboardOrgId ? websiteOrganizationIds.includes(dashboardOrgId) : false;
 
   return (
     <div className="app-frame">
@@ -69,9 +72,11 @@ export function AppShell({
                 <SidebarNavLink href={organizationProfileRoute(dashboardOrgId)}>
                   Profile
                 </SidebarNavLink>
-                <SidebarNavLink href={organizationWebsiteRoute(dashboardOrgId)}>
-                  Website
-                </SidebarNavLink>
+                {canOpenWebsite ? (
+                  <SidebarNavLink href={organizationWebsiteRoute(dashboardOrgId)}>
+                    Website
+                  </SidebarNavLink>
+                ) : null}
               </>
             ) : canOpenAdmin ? (
               <SidebarNavLink href={APP_ROUTES.organizationRequest}>

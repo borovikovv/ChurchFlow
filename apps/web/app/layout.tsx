@@ -2,7 +2,10 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { getCurrentUser, hasServerSession } from '@/auth/session';
 import { AppShell } from '@/components/app-shell';
-import { getOrganizationAccessState } from '@/features/organizations/server/access';
+import {
+  getOrganizationAccessState,
+  isOrganizationAdminRole,
+} from '@/features/organizations/server/access';
 import { PublicAppHeader } from '@/components/public-app-header';
 import { ToastProvider } from '@/components/toast-provider';
 import 'react-toastify/dist/ReactToastify.css';
@@ -27,6 +30,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <AppShell
             canOpenAdmin={access?.canOpenAdmin ?? false}
             displayName={user.displayName ?? user.email ?? 'ChurchFlow user'}
+            websiteOrganizationIds={
+              access?.organizations
+                .filter((organization) => isOrganizationAdminRole(organization.role))
+                .map((organization) => organization.id) ?? []
+            }
           >
             {children}
           </AppShell>

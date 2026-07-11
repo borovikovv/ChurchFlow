@@ -18,9 +18,13 @@ export function Checkbox({
 }: CheckboxProps) {
   return (
     <label
-      className={`group flex min-w-0 cursor-pointer items-center gap-2 text-sm font-semibold ${props.disabled ? 'cursor-not-allowed opacity-60' : ''} ${labelClassName ?? ''}`.trim()}
+      className={`group relative flex min-w-0 cursor-pointer items-center gap-2 text-sm font-semibold ${props.disabled ? 'cursor-not-allowed opacity-60' : ''} ${labelClassName ?? ''}`.trim()}
     >
-      <input className={`peer sr-only ${inputClassName ?? ''}`.trim()} type="checkbox" {...props} />
+      <input
+        className={`peer absolute left-0 top-1/2 z-10 h-4 w-4 -translate-y-1/2 cursor-pointer opacity-0 disabled:cursor-not-allowed ${inputClassName ?? ''}`.trim()}
+        type="checkbox"
+        {...props}
+      />
       <span className="grid h-4 w-4 shrink-0 place-items-center rounded border border-[var(--line)] bg-[var(--surface)] text-[var(--surface)] shadow-[var(--shadow)] transition-colors group-hover:border-[var(--accent-strong)] peer-checked:border-[var(--accent-strong)] peer-checked:bg-[var(--accent-strong)] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--accent)] peer-disabled:group-hover:border-[var(--line)] peer-checked:[&_svg]:opacity-100">
         <svg
           aria-hidden="true"

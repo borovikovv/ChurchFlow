@@ -89,7 +89,7 @@ export function CreateMemberDialog({
       <dialog
         ref={dialogRef}
         aria-labelledby={titleId}
-        className="fixed inset-0 m-auto max-h-[min(800px,80dvh)] w-[min(520px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
+        className="fixed left-1/2 top-1/2 h-fit max-h-[min(800px,80dvh)] w-[min(520px,calc(100%-32px))] max-w-none -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
       >
         <form
           className="grid max-h-[min(800px,80dvh)] grid-rows-[auto_minmax(0,1fr)_auto]"
@@ -107,7 +107,7 @@ export function CreateMemberDialog({
               ×
             </button>
           </header>
-          <div className="flex flex-col min-h-0 overflow-y-auto gap-4 p-5">
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-5">
             <FormInput
               label="Name"
               error={errors.displayName?.message}

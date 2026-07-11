@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -22,6 +23,18 @@ import {
   CalendarEventsRepository,
   type CalendarEventRecord,
 } from './repositories/calendar-events.repository';
+
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const DAYS_PER_WEEK = 7;
+const DAILY_REPEAT_INTERVAL_MS = MILLISECONDS_PER_DAY;
+const WEEKLY_REPEAT_INTERVAL_MS = DAYS_PER_WEEK * MILLISECONDS_PER_DAY;
+const DAILY_REPEAT_STEP_DAYS = 1;
+const WEEKLY_REPEAT_STEP_DAYS = DAYS_PER_WEEK;
+const MONTHLY_REPEAT_STEP_MONTHS = 1;
+const YEARLY_REPEAT_STEP_YEARS = 1;
+const MAX_EXPANDED_OCCURRENCES_PER_EVENT = 500;
+const MAX_OCCURRENCE_SEARCH_STEPS = 5000;
+const calendarEventsLogger = new Logger('CalendarEventsService');
 
 @Injectable()
 export class CalendarEventsService {
@@ -258,13 +271,14 @@ function expandEvent(
   const occurrenceSearchStart =
     duration === null ? rangeStart : new Date(rangeStart.getTime() - Math.max(duration, 0));
   let occurrenceStart = firstOccurrenceInRange(
+    event.id,
     event.startsAt,
     event.repeatPeriod,
     occurrenceSearchStart,
   );
   let guard = 0;
 
-  while (occurrenceStart < rangeEnd && guard < 500) {
+  while (occurrenceStart < rangeEnd && guard < MAX_EXPANDED_OCCURRENCES_PER_EVENT) {
     const occurrenceEnd = duration === null ? null : new Date(occurrenceStart.getTime() + duration);
     if (overlaps(occurrenceStart, occurrenceEnd, rangeStart, rangeEnd)) {
       const item = baseEventToItem(event);
@@ -273,14 +287,26 @@ function expandEvent(
       item.endsAt = occurrenceEnd?.toISOString() ?? null;
       items.push(item);
     }
-    occurrenceStart = nextOccurrence(occurrenceStart, event.repeatPeriod);
+    occurrenceStart = nextOccurrenceAfter(event.id, occurrenceStart, event.repeatPeriod);
     guard += 1;
+  }
+
+  if (occurrenceStart < rangeEnd) {
+    logRepeatWarning('Stopped expanding repeated calendar event after hitting occurrence limit', {
+      eventId: event.id,
+      repeatPeriod: event.repeatPeriod,
+      maxOccurrences: MAX_EXPANDED_OCCURRENCES_PER_EVENT,
+      rangeStart: rangeStart.toISOString(),
+      rangeEnd: rangeEnd.toISOString(),
+      lastOccurrenceStart: occurrenceStart.toISOString(),
+    });
   }
 
   return items;
 }
 
 function firstOccurrenceInRange(
+  eventId: string,
   startsAt: Date,
   repeatPeriod: CalendarEventRecord['repeatPeriod'],
   rangeStart: Date,
@@ -292,7 +318,9 @@ function firstOccurrenceInRange(
     repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.weekly
   ) {
     const intervalMs =
-      repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.daily ? 86_400_000 : 604_800_000;
+      repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.daily
+        ? DAILY_REPEAT_INTERVAL_MS
+        : WEEKLY_REPEAT_INTERVAL_MS;
     const elapsedIntervals = Math.floor(
       (rangeStart.getTime() - occurrenceStart.getTime()) / intervalMs,
     );
@@ -306,12 +334,23 @@ function firstOccurrenceInRange(
   }
 
   let guard = 0;
-  while (nextOccurrence(occurrenceStart, repeatPeriod) <= rangeStart && guard < 5000) {
-    occurrenceStart.setTime(nextOccurrence(occurrenceStart, repeatPeriod).getTime());
+  while (guard < MAX_OCCURRENCE_SEARCH_STEPS) {
+    const next = nextOccurrenceAfter(eventId, occurrenceStart, repeatPeriod);
+    if (next > rangeStart) return occurrenceStart;
+
+    occurrenceStart.setTime(next.getTime());
     guard += 1;
   }
 
-  return occurrenceStart;
+  logRepeatError('Could not find first repeated calendar occurrence within search limit', {
+    eventId,
+    repeatPeriod,
+    startsAt: startsAt.toISOString(),
+    rangeStart: rangeStart.toISOString(),
+    maxSearchSteps: MAX_OCCURRENCE_SEARCH_STEPS,
+    lastOccurrenceStart: occurrenceStart.toISOString(),
+  });
+  throw new Error('CALENDAR_REPEAT_SEARCH_LIMIT_REACHED');
 }
 
 function overlaps(start: Date, end: Date | null, rangeStart: Date, rangeEnd: Date): boolean {
@@ -320,11 +359,40 @@ function overlaps(start: Date, end: Date | null, rangeStart: Date, rangeEnd: Dat
 
 function nextOccurrence(value: Date, repeatPeriod: CalendarEventRecord['repeatPeriod']): Date {
   const next = new Date(value);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.daily) next.setUTCDate(next.getUTCDate() + 1);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.weekly) next.setUTCDate(next.getUTCDate() + 7);
+  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.daily)
+    next.setUTCDate(next.getUTCDate() + DAILY_REPEAT_STEP_DAYS);
+  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.weekly)
+    next.setUTCDate(next.getUTCDate() + WEEKLY_REPEAT_STEP_DAYS);
   if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.monthly)
-    next.setUTCMonth(next.getUTCMonth() + 1);
+    next.setUTCMonth(next.getUTCMonth() + MONTHLY_REPEAT_STEP_MONTHS);
   if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.yearly)
-    next.setUTCFullYear(next.getUTCFullYear() + 1);
+    next.setUTCFullYear(next.getUTCFullYear() + YEARLY_REPEAT_STEP_YEARS);
   return next;
+}
+
+function nextOccurrenceAfter(
+  eventId: string,
+  value: Date,
+  repeatPeriod: CalendarEventRecord['repeatPeriod'],
+): Date {
+  const next = nextOccurrence(value, repeatPeriod);
+  if (next <= value) {
+    logRepeatError('Calendar repeat calculation did not advance occurrence date', {
+      eventId,
+      repeatPeriod,
+      currentOccurrenceStart: value.toISOString(),
+      nextOccurrenceStart: next.toISOString(),
+    });
+    throw new Error('CALENDAR_REPEAT_DID_NOT_ADVANCE');
+  }
+
+  return next;
+}
+
+function logRepeatWarning(message: string, context: Record<string, unknown>) {
+  calendarEventsLogger.warn(`${message}: ${JSON.stringify(context)}`);
+}
+
+function logRepeatError(message: string, context: Record<string, unknown>) {
+  calendarEventsLogger.error(`${message}: ${JSON.stringify(context)}`);
 }

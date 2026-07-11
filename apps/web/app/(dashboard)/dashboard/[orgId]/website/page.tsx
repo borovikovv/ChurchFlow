@@ -1,8 +1,7 @@
-import { notFound } from 'next/navigation';
 import { apiFetch } from '@/api/client';
 import { PageHeader } from '@/components/ui/page-header';
 import { serverEnv } from '@/env/server';
-import { getOrganizationAccessState } from '@/features/organizations/server/access';
+import { requireWebsiteManageAccess } from '@/features/organizations/server/website-access';
 import { WebsiteManager } from './_components/website-manager';
 import type { DashboardPage, DashboardWebsite, WebsiteFeedback } from './types';
 
@@ -15,11 +14,8 @@ export default async function WebsiteDashboardPage({
 }) {
   const { orgId } = await params;
   const feedback = await searchParams;
-  const slug = await resolveOrganizationSlug(orgId);
-
-  if (!slug) {
-    notFound();
-  }
+  const organization = await requireWebsiteManageAccess(orgId);
+  const slug = organization.slug;
 
   const [websiteResult, pagesResult] = await Promise.all([
     apiFetch<DashboardWebsite>(`/organizations/${orgId}/website`),
@@ -47,27 +43,6 @@ export default async function WebsiteDashboardPage({
       website={website}
     />
   );
-}
-
-async function resolveOrganizationSlug(organizationId: string): Promise<string | null> {
-  const access = await getOrganizationAccessState();
-  const membershipOrganization = access.organizations.find(
-    (organization) => organization.id === organizationId,
-  );
-
-  if (membershipOrganization) {
-    return membershipOrganization.slug;
-  }
-
-  if (!access.isPlatformAdmin) {
-    return null;
-  }
-
-  const adminOrganization = await apiFetch<{ id: string; slug: string }>(
-    `/admin/organizations/${organizationId}`,
-  );
-
-  return adminOrganization.ok ? adminOrganization.data.slug : null;
 }
 
 function WebsiteLoadError({ message }: { message: string }) {

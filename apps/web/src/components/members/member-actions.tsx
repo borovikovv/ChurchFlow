@@ -275,7 +275,7 @@ function EditMemberSheet({
       </button>
       <dialog
         aria-labelledby={titleId}
-        className="fixed inset-0 m-auto max-h-[min(800px,80dvh)] w-[min(560px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
+        className="fixed left-1/2 top-1/2 h-fit max-h-[min(800px,80dvh)] w-[min(560px,calc(100%-32px))] max-w-none -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
         onClose={onClose}
         ref={dialogRef}
       >
@@ -298,7 +298,7 @@ function EditMemberSheet({
               ×
             </button>
           </header>
-          <div className="flex flex-col gap-4 overflow-y-auto p-6">
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-6">
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="membershipId" value={member.id} />
             <MemberPhotoField
