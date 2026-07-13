@@ -14,6 +14,8 @@ export class UsersRepository {
     return this.prisma.user.update({
       where: { id: userId },
       data: {
+        ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+        ...(input.email !== undefined ? { email: input.email } : {}),
         ...(input.baptizedAt !== undefined
           ? { baptizedAt: input.baptizedAt ? new Date(`${input.baptizedAt}T00:00:00.000Z`) : null }
           : {}),

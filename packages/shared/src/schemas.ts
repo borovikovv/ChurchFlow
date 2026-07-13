@@ -267,6 +267,17 @@ export const toggleCalendarTaskCompletionSchema = z.object({
 
 export const updateCurrentUserProfileSchema = z
   .object({
+    displayName: nullableTrimmedString(160).refine(
+      (value) => value === undefined || value === null || value.length >= 2,
+      { message: 'Name must be at least 2 characters' },
+    ),
+    email: nullableTrimmedString(255)
+      .refine(
+        (value) =>
+          value === undefined || value === null || z.string().email().safeParse(value).success,
+        { message: 'Invalid email' },
+      )
+      .transform((value) => value?.toLowerCase() ?? value),
     baptizedAt: nullablePastOrTodayDate,
     baptismChurchName: nullableTrimmedString(160),
   })

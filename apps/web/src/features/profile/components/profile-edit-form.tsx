@@ -23,7 +23,31 @@ export function ProfileEditForm({
   onCancel: () => void;
 }) {
   return (
-    <form className="form-grid" onSubmit={onSubmit} noValidate>
+    <form className="grid gap-4" onSubmit={onSubmit} noValidate>
+      <FormField label="Name" error={errors.displayName?.message}>
+        {({ id, errorId, invalid }) => (
+          <input
+            id={id}
+            aria-describedby={errorId}
+            aria-invalid={invalid}
+            autoComplete="name"
+            {...register('displayName')}
+          />
+        )}
+      </FormField>
+      <FormField label="Email" error={errors.email?.message}>
+        {({ id, errorId, invalid }) => (
+          <input
+            id={id}
+            aria-describedby={errorId}
+            aria-invalid={invalid}
+            autoComplete="email"
+            inputMode="email"
+            type="email"
+            {...register('email')}
+          />
+        )}
+      </FormField>
       <FormDatePicker
         control={control}
         name="baptizedAt"

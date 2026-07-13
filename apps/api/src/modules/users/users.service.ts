@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { Prisma } from '@churchflow/db';
 import { UsersRepository } from './repositories/users.repository';
 import type { UpdateCurrentUserProfileInput } from '@churchflow/shared';
 
@@ -11,6 +12,14 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, input: UpdateCurrentUserProfileInput) {
-    return this.usersRepository.updateProfile(userId, input);
+    try {
+      return await this.usersRepository.updateProfile(userId, input);
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Email is already in use');
+      }
+
+      throw error;
+    }
   }
 }

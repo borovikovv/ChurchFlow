@@ -1,9 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser, requireServerSession } from '@/auth/session';
-import { ProfileCard } from '@/features/profile/components/profile-card';
 import { ProfileForm } from '@/features/profile/components/profile-form';
 import { PageHeader } from '@/components/ui/page-header';
-import { StatusBadge } from '@/components/ui/status-badge';
 
 export default async function OrganizationProfilePage({
   params,
@@ -22,22 +20,10 @@ export default async function OrganizationProfilePage({
     <main className="stack">
       <PageHeader title="Profile" description="Your identity and platform access in ChurchFlow." />
       <div className="stack max-w-xl">
-        <ProfileCard
-          title="Account information"
-          description="Your identity and platform access in ChurchFlow."
-        >
-          <dl className="details">
-            <dt>Email</dt>
-            <dd>{user.email ?? 'Not set'}</dd>
-            <dt>Name</dt>
-            <dd>{user.displayName ?? 'Not set'}</dd>
-            <dt>Platform role</dt>
-            <dd>
-              <StatusBadge status={user.platformRole} />
-            </dd>
-          </dl>
-        </ProfileCard>
         <ProfileForm
+          displayName={user.displayName}
+          email={user.email}
+          platformRole={user.platformRole}
           baptizedAt={user.baptizedAt?.slice(0, 10) ?? null}
           baptismChurchName={user.baptismChurchName}
         />
