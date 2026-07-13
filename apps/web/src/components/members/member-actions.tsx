@@ -1,18 +1,14 @@
 'use client';
 
-import {
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type ReactNode,
-  type RefObject,
-} from 'react';
+import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { useCloseOnOutsideClick } from '@/hooks/use-close-on-outside-click';
+import {
+  TableRowAction,
+  TableRowActions,
+  tableRowActionClassNameFor,
+} from '@/components/ui/table-row-actions';
 import { GiveMemberAccessDialog } from './give-member-access-dialog';
 import { MemberPhotoField, validateMemberPhoto } from './member-photo-upload';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -66,9 +62,6 @@ export interface RoleUpdateState {
 }
 
 type RoleUpdateAction = (state: RoleUpdateState, formData: FormData) => Promise<RoleUpdateState>;
-
-const actionItemClassName =
-  'flex min-h-[38px] w-full cursor-pointer items-center justify-start gap-2.5 rounded-md border-0 bg-transparent px-2.5 py-2 text-left font-medium text-[var(--foreground)] shadow-none hover:bg-[var(--surface-subtle)]';
 
 interface EditableMember {
   id: string;
@@ -260,9 +253,7 @@ function EditMemberSheet({
 
   return (
     <>
-      <button
-        className={actionItemClassName}
-        type="button"
+      <TableRowAction
         onClick={() => {
           onOpen();
           dialogRef.current?.showModal();
@@ -272,7 +263,7 @@ function EditMemberSheet({
           <path d="M4 20h4l11-11-4-4L4 16v4Zm9-13 4 4M13 5l2-2 4 4-2 2" />
         </MenuIcon>
         Edit member
-      </button>
+      </TableRowAction>
       <dialog
         aria-labelledby={titleId}
         className="fixed left-1/2 top-1/2 h-fit max-h-[min(800px,80dvh)] w-[min(560px,calc(100%-32px))] max-w-none -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
@@ -508,9 +499,7 @@ function ChangeRoleDialog({
 
   return (
     <>
-      <button
-        className={actionItemClassName}
-        type="button"
+      <TableRowAction
         onClick={() => {
           onOpen();
           dialogRef.current?.showModal();
@@ -520,7 +509,7 @@ function ChangeRoleDialog({
           <path d="M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM5 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2M18 8h4m-2-2v4" />
         </MenuIcon>
         Change role
-      </button>
+      </TableRowAction>
       <dialog
         aria-labelledby={titleId}
         className="fixed inset-0 m-auto max-h-[calc(100dvh-32px)] w-[min(480px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)] backdrop:backdrop-blur-[1px]"
@@ -563,6 +552,33 @@ export function MemberRoleStatus({ role }: { role: OrganizationRole }) {
   return <StatusBadge status={role} />;
 }
 
+function GiveMemberAccessAction({
+  accessDialogRef,
+  member,
+  organizationId,
+  setOpenDialog,
+}: {
+  accessDialogRef: RefObject<HTMLDialogElement | null>;
+  member: EditableMember;
+  organizationId: string;
+  setOpenDialog: (dialog: 'access' | null) => void;
+}) {
+  return (
+    <GiveMemberAccessDialog
+      dialogRef={accessDialogRef}
+      onOpen={() => {
+        setOpenDialog('access');
+      }}
+      onClose={() => setOpenDialog(null)}
+      memberEmail={member.profile.email}
+      memberName={member.profile.displayName}
+      membershipId={member.id}
+      organizationId={organizationId}
+      triggerClassName={tableRowActionClassNameFor()}
+    />
+  );
+}
+
 export function MemberActions({
   member,
   organizationId,
@@ -598,169 +614,116 @@ export function MemberActions({
   onProfileUpdated: (profile: MemberProfileUpdate) => void;
   onRoleUpdated: (role: OrganizationRole) => void;
 }) {
-  const menuRef = useRef<HTMLDetailsElement>(null);
-  const menuContentRef = useRef<HTMLDivElement>(null);
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const roleDialogRef = useRef<HTMLDialogElement>(null);
   const accessDialogRef = useRef<HTMLDialogElement>(null);
   const [openDialog, setOpenDialog] = useState<'edit' | 'role' | 'access' | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
-
-  useLayoutEffect(() => {
-    if (!menuOpen) return;
-
-    const updateMenuPosition = () => {
-      const trigger = menuRef.current?.querySelector('summary');
-      if (!trigger) return;
-
-      const triggerRect = trigger.getBoundingClientRect();
-      const menuHeight = menuContentRef.current?.offsetHeight ?? 0;
-      const preferredTop = triggerRect.bottom + 6;
-      const maxTop = window.innerHeight - menuHeight - 8;
-
-      setMenuPosition({
-        top: Math.max(8, Math.min(preferredTop, maxTop)),
-        right: Math.max(8, window.innerWidth - triggerRect.right),
-      });
-    };
-
-    updateMenuPosition();
-    window.addEventListener('resize', updateMenuPosition);
-    window.addEventListener('scroll', updateMenuPosition, true);
-
-    return () => {
-      window.removeEventListener('resize', updateMenuPosition);
-      window.removeEventListener('scroll', updateMenuPosition, true);
-    };
-  }, [menuOpen]);
-
-  useCloseOnOutsideClick({
-    refs: [
-      menuRef as RefObject<Element | null>,
-      editDialogRef as RefObject<Element | null>,
-      roleDialogRef as RefObject<Element | null>,
-      accessDialogRef as RefObject<Element | null>,
-    ],
-    onOutsideClick: () => {
-      if (menuRef.current) {
-        menuRef.current.open = false;
-      }
-    },
-    enabled: openDialog === null,
-  });
 
   if (!canManage && !isOwner) return null;
 
   return (
-    <details
-      className="group relative col-start-2 row-start-1 row-end-[span_4] self-start justify-self-end md:col-auto md:row-auto md:self-auto"
-      onToggle={(event) => setMenuOpen(event.currentTarget.open)}
-      ref={menuRef}
+    <TableRowActions
+      ignoreOutsideClickRefs={[
+        editDialogRef as RefObject<Element | null>,
+        roleDialogRef as RefObject<Element | null>,
+        accessDialogRef as RefObject<Element | null>,
+      ]}
+      label={`Actions for ${member.profile.displayName}`}
+      outsideClickDisabled={openDialog !== null}
     >
-      <summary
-        className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-[var(--radius)] border border-transparent text-[var(--foreground)] hover:border-[var(--line)] hover:bg-[var(--surface-subtle)] group-open:border-[var(--accent)] group-open:bg-[var(--surface-subtle)] group-open:ring-2 group-open:ring-[rgba(9,105,218,0.15)] [&::-webkit-details-marker]:hidden"
-        aria-label={`Actions for ${member.profile.displayName}`}
-      >
-        <svg aria-hidden="true" className="h-5 w-5 fill-current" viewBox="0 0 20 20">
-          <circle cx="10" cy="4" r="1.6" />
-          <circle cx="10" cy="10" r="1.6" />
-          <circle cx="10" cy="16" r="1.6" />
-        </svg>
-      </summary>
-      <div
-        className="fixed z-50 w-[220px] overflow-hidden rounded-[10px] border border-[var(--line)] bg-[var(--surface)] p-1.5 shadow-[0_12px_32px_rgba(31,35,40,0.16)]"
-        ref={menuContentRef}
-        style={{ top: menuPosition.top, right: menuPosition.right }}
-      >
-        {canManage ? (
-          <EditMemberSheet
-            member={member}
-            organizationId={organizationId}
-            action={updateProfile}
-            memberCandidates={memberCandidates}
-            createRelationship={createRelationship}
-            deleteRelationship={deleteRelationship}
-            preparePhoto={preparePhoto}
-            confirmPhoto={confirmPhoto}
-            onProfileUpdated={onProfileUpdated}
-            dialogRef={editDialogRef}
-            onOpen={() => setOpenDialog('edit')}
-            onClose={() => setOpenDialog(null)}
-          />
-        ) : null}
-        {isOwner ? (
-          <ChangeRoleDialog
-            member={member}
-            organizationId={organizationId}
-            action={updateRole}
-            onRoleUpdated={onRoleUpdated}
-            dialogRef={roleDialogRef}
-            onOpen={() => setOpenDialog('role')}
-            onClose={() => setOpenDialog(null)}
-          />
-        ) : null}
-        {canManage && member.accountState === 'UNCLAIMED' ? (
-          <GiveMemberAccessDialog
-            dialogRef={accessDialogRef}
-            onOpen={() => setOpenDialog('access')}
-            onClose={() => setOpenDialog(null)}
-            memberEmail={member.profile.email}
-            memberName={member.profile.displayName}
-            membershipId={member.id}
-            organizationId={organizationId}
-            triggerClassName={actionItemClassName}
-          />
-        ) : null}
-        {canManage && member.activeClaim ? (
-          <form className="contents" action={claimAction}>
-            <input type="hidden" name="organizationId" value={organizationId} />
-            <input type="hidden" name="claimId" value={member.activeClaim.id} />
-            {member.activeClaim.status === 'REQUESTED' ? (
-              <>
-                <button className={actionItemClassName} name="action" value="approve" type="submit">
-                  Approve access
-                </button>
-                <button
-                  className={`${actionItemClassName} !text-[var(--danger)]`}
-                  name="action"
-                  value="reject"
-                  type="submit"
-                >
-                  Reject request
-                </button>
-              </>
-            ) : (
-              <button className={actionItemClassName} name="action" value="refresh" type="submit">
-                Refresh access link
+      {canManage ? (
+        <EditMemberSheet
+          member={member}
+          organizationId={organizationId}
+          action={updateProfile}
+          memberCandidates={memberCandidates}
+          createRelationship={createRelationship}
+          deleteRelationship={deleteRelationship}
+          preparePhoto={preparePhoto}
+          confirmPhoto={confirmPhoto}
+          onProfileUpdated={onProfileUpdated}
+          dialogRef={editDialogRef}
+          onOpen={() => setOpenDialog('edit')}
+          onClose={() => setOpenDialog(null)}
+        />
+      ) : null}
+      {isOwner ? (
+        <ChangeRoleDialog
+          member={member}
+          organizationId={organizationId}
+          action={updateRole}
+          onRoleUpdated={onRoleUpdated}
+          dialogRef={roleDialogRef}
+          onOpen={() => setOpenDialog('role')}
+          onClose={() => setOpenDialog(null)}
+        />
+      ) : null}
+      {canManage && member.accountState === 'UNCLAIMED' ? (
+        <GiveMemberAccessAction
+          accessDialogRef={accessDialogRef}
+          member={member}
+          organizationId={organizationId}
+          setOpenDialog={setOpenDialog}
+        />
+      ) : null}
+      {canManage && member.activeClaim ? (
+        <form className="contents" action={claimAction}>
+          <input type="hidden" name="organizationId" value={organizationId} />
+          <input type="hidden" name="claimId" value={member.activeClaim.id} />
+          {member.activeClaim.status === 'REQUESTED' ? (
+            <>
+              <button
+                className={tableRowActionClassNameFor()}
+                name="action"
+                value="approve"
+                type="submit"
+              >
+                Approve access
               </button>
-            )}
+              <button
+                className={tableRowActionClassNameFor({ destructive: true })}
+                name="action"
+                value="reject"
+                type="submit"
+              >
+                Reject request
+              </button>
+            </>
+          ) : (
             <button
-              className={`${actionItemClassName} !text-[var(--danger)]`}
+              className={tableRowActionClassNameFor()}
               name="action"
-              value="revoke"
+              value="refresh"
               type="submit"
             >
-              Revoke access link
+              Refresh access link
             </button>
-          </form>
-        ) : null}
-        {isOwner && !isCurrentMember ? (
-          <form className="contents" action={removeMember}>
-            <input type="hidden" name="organizationId" value={organizationId} />
-            <input type="hidden" name="membershipId" value={member.id} />
-            <ConfirmSubmitButton
-              confirmLabel="Remove member"
-              confirmVariant="danger"
-              description={`Remove ${member.profile.displayName} from this organization.`}
-              title="Remove member?"
-              triggerClassName={`${actionItemClassName} !text-[var(--danger)]`}
-              triggerLabel="Remove member"
-              variant="ghost"
-            />
-          </form>
-        ) : null}
-      </div>
-    </details>
+          )}
+          <button
+            className={tableRowActionClassNameFor({ destructive: true })}
+            name="action"
+            value="revoke"
+            type="submit"
+          >
+            Revoke access link
+          </button>
+        </form>
+      ) : null}
+      {isOwner && !isCurrentMember ? (
+        <form className="contents" action={removeMember}>
+          <input type="hidden" name="organizationId" value={organizationId} />
+          <input type="hidden" name="membershipId" value={member.id} />
+          <ConfirmSubmitButton
+            confirmLabel="Remove member"
+            confirmVariant="danger"
+            description={`Remove ${member.profile.displayName} from this organization.`}
+            title="Remove member?"
+            triggerClassName={tableRowActionClassNameFor({ destructive: true })}
+            triggerLabel="Remove member"
+            variant="ghost"
+          />
+        </form>
+      ) : null}
+    </TableRowActions>
   );
 }

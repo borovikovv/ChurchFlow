@@ -100,7 +100,7 @@ export function CreateMemberDialog({
             <h2 id={titleId}>Add member manually</h2>
             <button
               aria-label="Close"
-              className="text-2xl text-[var(--muted)]"
+              className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
               type="button"
               onClick={() => dialogRef.current?.close()}
             >

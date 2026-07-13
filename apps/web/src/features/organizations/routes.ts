@@ -25,6 +25,10 @@ export function organizationProfileRoute(organizationId: string): Route {
   return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.profile}` as Route;
 }
 
+export function organizationProfileNotificationsRoute(organizationId: string): Route {
+  return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.profile}/notifications` as Route;
+}
+
 export function organizationWebsiteRoute(organizationId: string): Route {
   return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.website}` as Route;
 }

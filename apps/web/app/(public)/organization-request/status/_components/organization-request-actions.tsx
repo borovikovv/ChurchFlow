@@ -1,17 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useId, useRef, useState, useTransition } from 'react';
+import { useId, useRef, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  TableRowAction,
+  TableRowActions,
+  tableRowActionClassNameFor,
+} from '@/components/ui/table-row-actions';
 import {
   deleteOrganizationRequest,
   resendOrganizationRequestNotification,
   resubmitOrganizationRequest,
 } from '../actions';
-import {
-  requestActionDialogClassName,
-  requestActionMenuItemClassName,
-} from './organization-request-actions.styles';
+import { requestActionDialogClassName } from './organization-request-actions.styles';
 import type {
   LifecycleConfirmationDialogProps,
   OrganizationRequestActionsProps,
@@ -78,26 +80,13 @@ export function OrganizationRequestActions({
   onDeleted,
   onNotificationResult,
 }: OrganizationRequestActionsProps) {
-  const menuRef = useRef<HTMLDetailsElement>(null);
   const resubmitDialogRef = useRef<HTMLDialogElement>(null);
   const deleteDialogRef = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  useEffect(() => {
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        menuRef.current.open = false;
-      }
-    };
-
-    document.addEventListener('click', closeOnOutsideClick);
-    return () => document.removeEventListener('click', closeOnOutsideClick);
-  }, []);
-
   const openDialog = (dialog: HTMLDialogElement | null) => {
     setError(null);
-    if (menuRef.current) menuRef.current.open = false;
     dialog?.showModal();
   };
 
@@ -157,64 +146,43 @@ export function OrganizationRequestActions({
               text: 'Request is still saved, but email notification could not be delivered.',
             },
       );
-      if (menuRef.current) menuRef.current.open = false;
     });
   };
 
   return (
     <>
-      <details className="group relative justify-self-end" ref={menuRef}>
-        <summary
-          className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-[var(--radius)] border border-transparent text-[var(--foreground)] hover:border-[var(--line)] hover:bg-[var(--surface-subtle)] group-open:border-[var(--accent)] group-open:bg-[var(--surface-subtle)] group-open:ring-2 group-open:ring-[rgba(9,105,218,0.15)] [&::-webkit-details-marker]:hidden"
-          aria-label={`Actions for ${request.organizationName}`}
-        >
-          <svg aria-hidden="true" className="h-5 w-5 fill-current" viewBox="0 0 20 20">
-            <circle cx="10" cy="4" r="1.6" />
-            <circle cx="10" cy="10" r="1.6" />
-            <circle cx="10" cy="16" r="1.6" />
-          </svg>
-        </summary>
-        <div className="absolute top-[calc(100%+6px)] right-0 z-20 min-w-44 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-1.5 shadow-[0_12px_32px_rgba(31,35,40,0.16)]">
-          {request.status === 'PENDING' ? (
-            <button
-              className={requestActionMenuItemClassName}
-              disabled={pending}
-              onClick={resendNotification}
-              type="button"
+      <TableRowActions
+        className="group relative justify-self-end"
+        label={`Actions for ${request.organizationName}`}
+      >
+        {request.status === 'PENDING' ? (
+          <TableRowAction disabled={pending} onSelect={resendNotification}>
+            Resend notification
+          </TableRowAction>
+        ) : null}
+        {request.status === 'APPROVED' && request.createdOrganization ? (
+          <Link
+            className={`${tableRowActionClassNameFor()} hover:no-underline`}
+            href={`/dashboard/${request.createdOrganization.id}`}
+          >
+            Open dashboard
+          </Link>
+        ) : null}
+        {request.status === 'EXPIRED' ? (
+          <>
+            <TableRowAction
+              disabled={hasPendingRequest}
+              onSelect={() => openDialog(resubmitDialogRef.current)}
+              title={hasPendingRequest ? 'You already have a pending request' : undefined}
             >
-              Resend notification
-            </button>
-          ) : null}
-          {request.status === 'APPROVED' && request.createdOrganization ? (
-            <Link
-              className={requestActionMenuItemClassName}
-              href={`/dashboard/${request.createdOrganization.id}`}
-            >
-              Open dashboard
-            </Link>
-          ) : null}
-          {request.status === 'EXPIRED' ? (
-            <>
-              <button
-                className={requestActionMenuItemClassName}
-                disabled={hasPendingRequest}
-                onClick={() => openDialog(resubmitDialogRef.current)}
-                title={hasPendingRequest ? 'You already have a pending request' : undefined}
-                type="button"
-              >
-                Submit again
-              </button>
-              <button
-                className={`${requestActionMenuItemClassName} !text-[var(--danger)]`}
-                onClick={() => openDialog(deleteDialogRef.current)}
-                type="button"
-              >
-                Delete from history
-              </button>
-            </>
-          ) : null}
-        </div>
-      </details>
+              Submit again
+            </TableRowAction>
+            <TableRowAction destructive onSelect={() => openDialog(deleteDialogRef.current)}>
+              Delete from history
+            </TableRowAction>
+          </>
+        ) : null}
+      </TableRowActions>
 
       <LifecycleConfirmationDialog
         confirmLabel="Submit again"

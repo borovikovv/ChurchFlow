@@ -42,6 +42,15 @@ export const CALENDAR_SERVICE_ROLE = {
   communionLead: 'COMMUNION_LEAD',
 } as const;
 
+export const NOTIFICATION_TYPES = [
+  'TASK_ASSIGNED',
+  'TASK_UPDATED',
+  'TASK_DUE_REMINDER',
+  'SERVICE_ASSIGNED',
+  'SERVICE_REMINDER',
+  'ORGANIZATION_ANNOUNCEMENT',
+] as const;
+
 export const MEMBER_MINISTRIES = [
   'PREACHING',
   'WORSHIP',

@@ -152,6 +152,15 @@ enum CalendarServiceRole {
   COMMUNION_LEAD
 }
 
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_UPDATED
+  TASK_DUE_REMINDER
+  SERVICE_ASSIGNED
+  SERVICE_REMINDER
+  ORGANIZATION_ANNOUNCEMENT
+}
+
 enum MemberMinistry {
   PREACHING
   WORSHIP
@@ -192,6 +201,9 @@ model User {
   featureFlags                    FeatureFlag[]
   createdCalendarEvents           CalendarEvent[]               @relation("CalendarEventCreator")
   calendarPreferences             CalendarPreference[]
+  notifications                   Notification[]                @relation("NotificationRecipient")
+  notificationPreferences         NotificationPreference[]
+  telegramNotificationBinding     TelegramNotificationBinding?
 
   @@map("users")
 }
@@ -263,21 +275,23 @@ model Organization {
   updatedAt   DateTime           @updatedAt @map("updated_at")
   deletedAt   DateTime?          @map("deleted_at")
 
-  members             OrganizationMember[]
-  invitations         OrganizationInvitation[]
-  website             OrganizationWebsite?
-  mediaAssets         MediaAsset[]
-  auditLogs           AuditLog[]
-  featureFlags        FeatureFlag[]
-  requests            OrganizationRequest[]
-  memberRelationships OrganizationMemberRelationship[]
-  calendarEvents      CalendarEvent[]
-  calendarPreferences CalendarPreference[]
-  memberMinistries    OrganizationMemberMinistry[]
-  preacherQueue       PreacherQueueEntry[]
-  calendarServices    CalendarServiceDetails[]
-  serviceParticipants CalendarServiceParticipant[]
-  serviceSongs        CalendarServiceSong[]
+  members                 OrganizationMember[]
+  invitations             OrganizationInvitation[]
+  website                 OrganizationWebsite?
+  mediaAssets             MediaAsset[]
+  auditLogs               AuditLog[]
+  featureFlags            FeatureFlag[]
+  requests                OrganizationRequest[]
+  memberRelationships     OrganizationMemberRelationship[]
+  calendarEvents          CalendarEvent[]
+  calendarPreferences     CalendarPreference[]
+  memberMinistries        OrganizationMemberMinistry[]
+  preacherQueue           PreacherQueueEntry[]
+  calendarServices        CalendarServiceDetails[]
+  serviceParticipants     CalendarServiceParticipant[]
+  serviceSongs            CalendarServiceSong[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
 
   @@index([status])
   @@index([slug])
@@ -311,6 +325,7 @@ model OrganizationMember {
   serviceParticipants   CalendarServiceParticipant[]
   ministries            OrganizationMemberMinistry[]
   preacherQueueEntries  PreacherQueueEntry[]
+  notifications         Notification[]
 
   @@unique([organizationId, userId])
   @@index([organizationId])
@@ -377,7 +392,7 @@ model OrganizationMemberMinistry {
 
   @@id([membershipId, ministry])
   @@index([organizationId, ministry])
-  @@index([organizationId, membershipId])
+  @@index([organizationId, membershipId], map: "organization_member_ministries_organization_id_membership_id_id")
   @@map("organization_member_ministries")
 }
 
@@ -719,6 +734,75 @@ model CalendarPreference {
   @@unique([organizationId, userId])
   @@index([userId])
   @@map("calendar_preferences")
+}
+
+model Notification {
+  id                    String           @id @default(uuid()) @db.Uuid
+  organizationId        String           @map("organization_id") @db.Uuid
+  recipientUserId       String           @map("recipient_user_id") @db.Uuid
+  recipientMembershipId String?          @map("recipient_membership_id") @db.Uuid
+  type                  NotificationType
+  title                 String
+  body                  String?
+  url                   String?
+  entityType            String?          @map("entity_type")
+  entityId              String?          @map("entity_id") @db.Uuid
+  readAt                DateTime?        @map("read_at")
+  archivedAt            DateTime?        @map("archived_at")
+  deletedAt             DateTime?        @map("deleted_at")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipientUser       User                @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  recipientMembership OrganizationMember? @relation(fields: [recipientMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([recipientUserId, createdAt])
+  @@index([recipientUserId, readAt])
+  @@index([organizationId, recipientUserId, createdAt])
+  @@index([entityType, entityId])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                     String   @id @default(uuid()) @db.Uuid
+  organizationId         String   @map("organization_id") @db.Uuid
+  userId                 String   @map("user_id") @db.Uuid
+  inAppEnabled           Boolean  @default(true) @map("in_app_enabled")
+  emailEnabled           Boolean  @default(false) @map("email_enabled")
+  telegramEnabled        Boolean  @default(false) @map("telegram_enabled")
+  taskAssignedEnabled    Boolean  @default(true) @map("task_assigned_enabled")
+  serviceAssignedEnabled Boolean  @default(true) @map("service_assigned_enabled")
+  remindersEnabled       Boolean  @default(true) @map("reminders_enabled")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("notification_preferences")
+}
+
+model TelegramNotificationBinding {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @unique @map("user_id") @db.Uuid
+  telegramUserId String    @unique @map("telegram_user_id")
+  telegramChatId String    @map("telegram_chat_id")
+  username       String?
+  enabled        Boolean   @default(true)
+  connectedAt    DateTime  @default(now()) @map("connected_at")
+  lastSeenAt     DateTime? @map("last_seen_at")
+  revokedAt      DateTime? @map("revoked_at")
+  blockedAt      DateTime? @map("blocked_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([telegramChatId])
+  @@map("telegram_notification_bindings")
 }
 
 model PreacherQueueEntry {

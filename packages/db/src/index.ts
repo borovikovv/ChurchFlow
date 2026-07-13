@@ -11,6 +11,7 @@ export type {
   InvitationStatus,
   MembershipClaimStatus,
   MembershipSource,
+  NotificationType,
   OrganizationMemberStatus,
   OrganizationRequestStatus,
   OrganizationRole,

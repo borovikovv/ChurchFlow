@@ -7,6 +7,7 @@ import {
   CALENDAR_EVENT_TYPES,
   CALENDAR_SERVICE_ROLES,
   MEMBER_MINISTRIES,
+  NOTIFICATION_TYPES,
   PUBLIC_SECTION_TYPES,
 } from './constants.js';
 
@@ -138,6 +139,56 @@ export const listCalendarEventsQuerySchema = z
 
 export const updateCalendarPreferencesSchema = z.object({
   visibleEventTypes: calendarEventTypesSchema,
+});
+
+export const notificationTypeSchema = z.enum(NOTIFICATION_TYPES);
+
+export const listNotificationsQuerySchema = z.object({
+  cursor: uuidSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+export const notificationListItemSchema = z.object({
+  id: uuidSchema,
+  organizationId: uuidSchema,
+  type: notificationTypeSchema,
+  title: z.string(),
+  body: z.string().nullable(),
+  url: z.string().nullable(),
+  entityType: z.string().nullable(),
+  entityId: uuidSchema.nullable(),
+  readAt: z.string().datetime({ offset: true }).nullable(),
+  createdAt: z.string().datetime({ offset: true }),
+});
+
+export const notificationsPageSchema = z.object({
+  items: z.array(notificationListItemSchema),
+  nextCursor: z.string().nullable(),
+  unreadCount: z.number().int().min(0),
+});
+
+export const notificationsSummarySchema = z.object({
+  unreadCount: z.number().int().min(0),
+  recentItems: z.array(notificationListItemSchema),
+});
+
+export const updateNotificationPreferencesSchema = z.object({
+  inAppEnabled: z.boolean(),
+  emailEnabled: z.boolean(),
+  telegramEnabled: z.boolean(),
+  taskAssignedEnabled: z.boolean(),
+  serviceAssignedEnabled: z.boolean(),
+  remindersEnabled: z.boolean(),
+});
+
+export const notificationPreferencesSchema = updateNotificationPreferencesSchema.extend({
+  telegram: z.object({
+    connected: z.boolean(),
+    enabled: z.boolean(),
+    username: z.string().nullable(),
+    blockedAt: z.string().datetime({ offset: true }).nullable(),
+    revokedAt: z.string().datetime({ offset: true }).nullable(),
+  }),
 });
 
 const calendarServicePersonInputSchema = z

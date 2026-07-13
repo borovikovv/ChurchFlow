@@ -117,6 +117,17 @@ export class CalendarEventsRepository {
     });
   }
 
+  async getAssignmentSnapshot(organizationId: string, eventId: string) {
+    return this.prisma.calendarEvent.findFirst({
+      where: { id: eventId, organizationId, deletedAt: null },
+      select: {
+        id: true,
+        type: true,
+        assignees: { select: { membershipId: true } },
+      },
+    });
+  }
+
   async updatePreferences(
     organizationId: string,
     userId: string,

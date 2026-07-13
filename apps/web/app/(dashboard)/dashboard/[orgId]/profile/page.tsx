@@ -2,6 +2,11 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser, requireServerSession } from '@/auth/session';
 import { ProfileForm } from '@/features/profile/components/profile-form';
 import { PageHeader } from '@/components/ui/page-header';
+import { Tabs } from '@/components/ui/tabs';
+import {
+  organizationProfileNotificationsRoute,
+  organizationProfileRoute,
+} from '@/features/organizations/routes';
 
 export default async function OrganizationProfilePage({
   params,
@@ -19,6 +24,13 @@ export default async function OrganizationProfilePage({
   return (
     <main className="stack">
       <PageHeader title="Profile" description="Your identity and platform access in ChurchFlow." />
+      <Tabs
+        label="Profile settings"
+        items={[
+          { label: 'Profile', href: organizationProfileRoute(orgId) },
+          { label: 'Notifications', href: organizationProfileNotificationsRoute(orgId) },
+        ]}
+      />
       <div className="stack max-w-xl">
         <ProfileForm
           displayName={user.displayName}

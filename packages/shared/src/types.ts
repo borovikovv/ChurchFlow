@@ -39,6 +39,13 @@ import type {
   updateCalendarEventSchema,
   updateCalendarPreferencesSchema,
   toggleCalendarTaskCompletionSchema,
+  notificationTypeSchema,
+  listNotificationsQuerySchema,
+  notificationListItemSchema,
+  notificationsPageSchema,
+  notificationsSummarySchema,
+  notificationPreferencesSchema,
+  updateNotificationPreferencesSchema,
 } from './schemas.js';
 
 export type UUID = string;
@@ -91,6 +98,15 @@ export type CreateCalendarEventInput = z.infer<typeof createCalendarEventSchema>
 export type UpdateCalendarEventInput = z.infer<typeof updateCalendarEventSchema>;
 export type UpdateCalendarPreferencesInput = z.infer<typeof updateCalendarPreferencesSchema>;
 export type ToggleCalendarTaskCompletionInput = z.infer<typeof toggleCalendarTaskCompletionSchema>;
+export type NotificationType = z.infer<typeof notificationTypeSchema>;
+export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema>;
+export type NotificationListItem = z.infer<typeof notificationListItemSchema>;
+export type NotificationsPage = z.infer<typeof notificationsPageSchema>;
+export type NotificationsSummary = z.infer<typeof notificationsSummarySchema>;
+export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
+export type UpdateNotificationPreferencesInput = z.infer<
+  typeof updateNotificationPreferencesSchema
+>;
 
 export interface CalendarEventMemberSummary {
   id: string;

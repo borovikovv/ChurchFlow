@@ -19,6 +19,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { PlatformAdminBootstrapModule } from './modules/platform-admin-bootstrap/platform-admin-bootstrap.module';
 import { MembershipClaimsModule } from './modules/membership-claims/membership-claims.module';
 import { CalendarEventsModule } from './modules/calendar-events/calendar-events.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { CalendarEventsModule } from './modules/calendar-events/calendar-events.
     MembershipsModule,
     MembershipClaimsModule,
     CalendarEventsModule,
+    NotificationsModule,
     WebsitesModule,
     PagesModule,
     MediaModule,

@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { LogoutButton } from '@/components/logout-button';
 import { SidebarNavLink } from '@/components/sidebar-nav-link';
+import { NotificationBell } from '@/features/notifications/components/notification-bell';
 import { APP_ROUTES } from '@/routes';
 import {
   ORGANIZATION_ROUTE_SEGMENTS,
@@ -48,9 +49,10 @@ export function AppShell({
           <Link className="brand" href={APP_ROUTES.home}>
             <Image src="/icons/church-flow.svg" alt="ChurchFlow" width={60} height={40} priority />
           </Link>
-          {canOpenAdmin ? (
-            <nav className="site-nav" aria-label="Admin navigation">
-              <Link href={APP_ROUTES.adminOrganizations}>Admin</Link>
+          {canOpenAdmin || dashboardOrgId ? (
+            <nav className="site-nav" aria-label="Account navigation">
+              {dashboardOrgId ? <NotificationBell organizationId={dashboardOrgId} /> : null}
+              {canOpenAdmin ? <Link href={APP_ROUTES.adminOrganizations}>Admin</Link> : null}
             </nav>
           ) : null}
         </div>

@@ -16,6 +16,7 @@ import type {
   UpdateCalendarEventInput,
 } from '@churchflow/shared';
 import {
+  CALENDAR_EVENT_TYPE,
   CALENDAR_EVENT_REPEAT_PERIOD,
   DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES,
 } from '@churchflow/shared';
@@ -23,6 +24,7 @@ import {
   CalendarEventsRepository,
   type CalendarEventRecord,
 } from './repositories/calendar-events.repository';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const DAYS_PER_WEEK = 7;
@@ -38,7 +40,10 @@ const calendarEventsLogger = new Logger('CalendarEventsService');
 
 @Injectable()
 export class CalendarEventsService {
-  constructor(private readonly calendarEventsRepository: CalendarEventsRepository) {}
+  constructor(
+    private readonly calendarEventsRepository: CalendarEventsRepository,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   async listForOrganization(
     organizationId: string,
@@ -98,9 +103,10 @@ export class CalendarEventsService {
 
   async create(organizationId: string, input: CreateCalendarEventInput, actorUserId: string) {
     try {
-      return baseEventToItem(
-        await this.calendarEventsRepository.create(organizationId, input, actorUserId),
-      );
+      const event = await this.calendarEventsRepository.create(organizationId, input, actorUserId);
+      await this.tryCreateTaskAssignedNotifications(organizationId, event, actorUserId);
+
+      return baseEventToItem(event);
     } catch (error) {
       throw this.toHttpError(error);
     }
@@ -113,9 +119,27 @@ export class CalendarEventsService {
     actorUserId: string,
   ) {
     try {
-      return baseEventToItem(
-        await this.calendarEventsRepository.update(organizationId, eventId, input, actorUserId),
+      const previousAssignmentSnapshot =
+        input.type === CALENDAR_EVENT_TYPE.task || input.assigneeMembershipIds !== undefined
+          ? await this.calendarEventsRepository.getAssignmentSnapshot(organizationId, eventId)
+          : null;
+      const event = await this.calendarEventsRepository.update(
+        organizationId,
+        eventId,
+        input,
+        actorUserId,
       );
+      await this.tryCreateTaskAssignedNotifications(organizationId, event, actorUserId, {
+        previousAssigneeMembershipIds:
+          previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.task
+            ? previousAssignmentSnapshot.assignees.map((assignee) => assignee.membershipId)
+            : [],
+        skipUnlessAssigneesChanged:
+          previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.task &&
+          input.assigneeMembershipIds === undefined,
+      });
+
+      return baseEventToItem(event);
     } catch (error) {
       throw this.toHttpError(error);
     }
@@ -168,11 +192,54 @@ export class CalendarEventsService {
 
     return error;
   }
+
+  private async tryCreateTaskAssignedNotifications(
+    organizationId: string,
+    event: CalendarEventRecord,
+    actorUserId: string,
+    options: {
+      previousAssigneeMembershipIds?: string[];
+      skipUnlessAssigneesChanged?: boolean;
+    } = {},
+  ) {
+    if (event.type !== CALENDAR_EVENT_TYPE.task) return;
+    if (options.skipUnlessAssigneesChanged) return;
+
+    const previousAssigneeIds = new Set(options.previousAssigneeMembershipIds ?? []);
+    const assigneeMembershipIds = event.assignees
+      .map((assignee) => assignee.membershipId)
+      .filter((membershipId) => !previousAssigneeIds.has(membershipId));
+    if (assigneeMembershipIds.length === 0) return;
+
+    try {
+      await this.notificationsService.createTaskAssignedNotifications({
+        organizationId,
+        actorUserId,
+        eventId: event.id,
+        title: 'You were assigned a task',
+        body: taskAssignedNotificationBody(event),
+        url: `/dashboard/${organizationId}/calendar`,
+        assigneeMembershipIds,
+      });
+    } catch (error: unknown) {
+      calendarEventsLogger.error({
+        event: 'Task assignment notification creation failed',
+        organizationId,
+        calendarEventId: event.id,
+        assigneeMembershipIds,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 function formatDateOnly(value: Date | null): string | null {
   if (!value) return null;
   return value.toISOString().slice(0, 10);
+}
+
+function taskAssignedNotificationBody(event: CalendarEventRecord): string {
+  return `${event.title} starts at ${event.startsAt.toISOString()}.`;
 }
 
 function memberSummary(

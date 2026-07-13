@@ -101,7 +101,11 @@ export function EventModal({
       >
         <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
           <h2>{mode === 'create' ? 'New event' : (editingEvent?.title ?? 'Event')}</h2>
-          <button className="text-2xl text-[var(--muted)]" type="button" onClick={onClose}>
+          <button
+            className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
+            type="button"
+            onClick={onClose}
+          >
             ×
           </button>
         </header>
