@@ -115,6 +115,20 @@ interface TelegramLoginAccountState {
   isPlatformAdmin: boolean;
 }
 
+interface TelegramLoginResolution {
+  user: AuthUserResult;
+  defaultRedirectTo: string;
+  useRequestedRedirect: boolean;
+}
+
+interface RequestedRedirectPolicyInput {
+  redirectTo: string | undefined;
+  hasActiveMembership: boolean;
+  hasClaimableInvitationRedirect: boolean;
+  hasPlatformAdminBootstrapRedirect: boolean;
+  hasMembershipClaimRedirect: boolean;
+}
+
 interface SessionWithUser {
   id: string;
   userId: string;
@@ -210,24 +224,24 @@ export class AuthService {
     const tokenResponse = await this.exchangeTelegramCode(input.code, input.codeVerifier);
     const claims = await this.verifyTelegramIdToken(tokenResponse.id_token, input.expectedNonce);
     const redirectTo = this.normalizeRedirectTo(input.redirectTo);
-    const { user, defaultRedirectTo } = await this.resolveTelegramLoginUser(claims, redirectTo);
+    const { user, defaultRedirectTo, useRequestedRedirect } = await this.resolveTelegramLoginUser(
+      claims,
+      redirectTo,
+    );
 
     const session = await this.createUserSession(user.id);
 
     return {
       user,
       ...session,
-      redirectTo: redirectTo ?? defaultRedirectTo,
+      redirectTo: useRequestedRedirect && redirectTo ? redirectTo : defaultRedirectTo,
     };
   }
 
   private async resolveTelegramLoginUser(
     claims: TelegramIdTokenClaims,
     redirectTo?: string,
-  ): Promise<{
-    user: AuthUserResult;
-    defaultRedirectTo: string;
-  }> {
+  ): Promise<TelegramLoginResolution> {
     const hasPendingInvitation = await this.authRepository.hasPendingTelegramInvitation(claims.sub);
     const hasClaimableInvitationRedirect =
       await this.hasValidClaimableInvitationRedirect(redirectTo);
@@ -265,6 +279,13 @@ export class AuthService {
 
       return {
         user: this.toAuthUserResult(createdUser),
+        useRequestedRedirect: this.canUseRequestedRedirect({
+          redirectTo,
+          hasActiveMembership: false,
+          hasClaimableInvitationRedirect,
+          hasPlatformAdminBootstrapRedirect,
+          hasMembershipClaimRedirect,
+        }),
         defaultRedirectTo: hasPendingInvitation
           ? '/invitations/pending'
           : hasMembershipClaimRedirect
@@ -300,6 +321,13 @@ export class AuthService {
 
     return {
       user: this.toAuthUserResult(touchedUser),
+      useRequestedRedirect: this.canUseRequestedRedirect({
+        redirectTo,
+        hasActiveMembership: accountState.hasActiveMembership,
+        hasClaimableInvitationRedirect,
+        hasPlatformAdminBootstrapRedirect,
+        hasMembershipClaimRedirect,
+      }),
       defaultRedirectTo: accountState.isPlatformAdmin
         ? '/admin/organizations'
         : !accountState.hasActiveMembership && accountState.hasOrganizationRequest
@@ -346,15 +374,41 @@ export class AuthService {
   }
 
   private isOrganizationOnboardingRedirect(redirectTo?: string): boolean {
-    if (!redirectTo) {
+    const url = this.parseInternalRedirectUrl(redirectTo);
+    return (
+      url !== null &&
+      (url.pathname === '/organization-request' || url.pathname === '/organization-request/status')
+    );
+  }
+
+  private canUseRequestedRedirect(input: RequestedRedirectPolicyInput): boolean {
+    if (!input.redirectTo) {
       return false;
     }
 
-    const url = new URL(redirectTo, 'https://churchflow.local');
-    return (
-      url.origin === 'https://churchflow.local' &&
-      (url.pathname === '/organization-request' || url.pathname === '/organization-request/status')
-    );
+    if (this.matchesRedirectPath(input.redirectTo, '/invitations/accept')) {
+      return input.hasClaimableInvitationRedirect;
+    }
+
+    if (this.matchesRedirectPath(input.redirectTo, '/member-claims/accept')) {
+      return input.hasMembershipClaimRedirect;
+    }
+
+    if (this.matchesRedirectPath(input.redirectTo, '/platform-admin/bootstrap')) {
+      return input.hasPlatformAdminBootstrapRedirect;
+    }
+
+    if (this.isOrganizationOnboardingRedirect(input.redirectTo)) {
+      return !input.hasActiveMembership;
+    }
+
+    return true;
+  }
+
+  private matchesRedirectPath(redirectTo: string | undefined, path: string): boolean {
+    const url = this.parseInternalRedirectUrl(redirectTo);
+
+    return url !== null && url.pathname === path;
   }
 
   private extractTokenFromRedirect(redirectTo: string | undefined, path: string): string | null {
@@ -726,16 +780,26 @@ export class AuthService {
       return undefined;
     }
 
+    const redirectUrl = this.parseInternalRedirectUrl(value);
+    if (!redirectUrl) {
+      return undefined;
+    }
+
+    return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+  }
+
+  private parseInternalRedirectUrl(value: string | undefined): URL | null {
+    if (!value) {
+      return null;
+    }
+
     try {
       const appUrl = new URL(this.webAppUrl);
       const redirectUrl = new URL(value, appUrl);
-      if (redirectUrl.origin !== appUrl.origin) {
-        return undefined;
-      }
 
-      return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+      return redirectUrl.origin === appUrl.origin ? redirectUrl : null;
     } catch {
-      return undefined;
+      return null;
     }
   }
 

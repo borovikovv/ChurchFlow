@@ -1,7 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getCurrentUser, requireServerSession } from '@/auth/session';
-import { getOrganizationAccessState } from '@/features/organizations/server/access';
-import { organizationProfileRoute } from '@/features/organizations/routes';
+import { getCurrentUser, getPostLoginRedirect, requireServerSession } from '@/auth/session';
 import { APP_ROUTES } from '@/routes';
 
 export default async function ProfilePage() {
@@ -12,14 +10,5 @@ export default async function ProfilePage() {
     redirect(APP_ROUTES.login);
   }
 
-  const access = await getOrganizationAccessState(user);
-  const organization = access.organizations[0];
-
-  if (organization) {
-    redirect(organizationProfileRoute(organization.id));
-  }
-
-  redirect(
-    access.canOpenAdmin ? APP_ROUTES.adminOrganizations : APP_ROUTES.organizationRequestStatus,
-  );
+  redirect(await getPostLoginRedirect({ organizationRoute: 'profile' }));
 }
