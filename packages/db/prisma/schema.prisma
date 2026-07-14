@@ -158,6 +158,7 @@ enum NotificationType {
   TASK_DUE_REMINDER
   SERVICE_ASSIGNED
   SERVICE_REMINDER
+  BIRTHDAY_DIGEST
   ORGANIZATION_ANNOUNCEMENT
 }
 
@@ -188,22 +189,23 @@ model User {
   accounts                        AuthAccount[]
   sessions                        Session[]
   memberships                     OrganizationMember[]
-  createdMemberships              OrganizationMember[]          @relation("MembershipCreator")
-  requestedMembershipClaims       MembershipClaim[]             @relation("MembershipClaimRequester")
-  reviewedMembershipClaims        MembershipClaim[]             @relation("MembershipClaimReviewer")
-  createdMembershipClaims         MembershipClaim[]             @relation("MembershipClaimCreator")
-  invitations                     OrganizationInvitation[]      @relation("InvitationInviter")
-  reviewedOrganizationRequests    OrganizationRequest[]         @relation("OrganizationRequestReviewer")
-  requestedOrganizationRequests   OrganizationRequest[]         @relation("OrganizationRequestRequester")
-  claimedInvitations              OrganizationInvitation[]      @relation("InvitationClaimer")
+  createdMemberships              OrganizationMember[]            @relation("MembershipCreator")
+  requestedMembershipClaims       MembershipClaim[]               @relation("MembershipClaimRequester")
+  reviewedMembershipClaims        MembershipClaim[]               @relation("MembershipClaimReviewer")
+  createdMembershipClaims         MembershipClaim[]               @relation("MembershipClaimCreator")
+  invitations                     OrganizationInvitation[]        @relation("InvitationInviter")
+  reviewedOrganizationRequests    OrganizationRequest[]           @relation("OrganizationRequestReviewer")
+  requestedOrganizationRequests   OrganizationRequest[]           @relation("OrganizationRequestRequester")
+  claimedInvitations              OrganizationInvitation[]        @relation("InvitationClaimer")
   consumedPlatformAdminBootstraps PlatformAdminBootstrapToken[]
   auditLogs                       AuditLog[]
   featureFlags                    FeatureFlag[]
-  createdCalendarEvents           CalendarEvent[]               @relation("CalendarEventCreator")
+  createdCalendarEvents           CalendarEvent[]                 @relation("CalendarEventCreator")
   calendarPreferences             CalendarPreference[]
-  notifications                   Notification[]                @relation("NotificationRecipient")
+  notifications                   Notification[]                  @relation("NotificationRecipient")
   notificationPreferences         NotificationPreference[]
   telegramNotificationBinding     TelegramNotificationBinding?
+  telegramNotificationLinkTokens  TelegramNotificationLinkToken[]
 
   @@map("users")
 }
@@ -747,6 +749,7 @@ model Notification {
   url                   String?
   entityType            String?          @map("entity_type")
   entityId              String?          @map("entity_id") @db.Uuid
+  dedupeKey             String?          @map("dedupe_key")
   readAt                DateTime?        @map("read_at")
   archivedAt            DateTime?        @map("archived_at")
   deletedAt             DateTime?        @map("deleted_at")
@@ -757,6 +760,7 @@ model Notification {
   recipientUser       User                @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
   recipientMembership OrganizationMember? @relation(fields: [recipientMembershipId], references: [id], onDelete: SetNull)
 
+  @@unique([organizationId, recipientUserId, type, dedupeKey])
   @@index([recipientUserId, createdAt])
   @@index([recipientUserId, readAt])
   @@index([organizationId, recipientUserId, createdAt])
@@ -774,6 +778,7 @@ model NotificationPreference {
   taskAssignedEnabled    Boolean  @default(true) @map("task_assigned_enabled")
   serviceAssignedEnabled Boolean  @default(true) @map("service_assigned_enabled")
   remindersEnabled       Boolean  @default(true) @map("reminders_enabled")
+  birthdayDigestEnabled  Boolean  @default(true) @map("birthday_digest_enabled")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
@@ -803,6 +808,33 @@ model TelegramNotificationBinding {
 
   @@index([telegramChatId])
   @@map("telegram_notification_bindings")
+}
+
+model TelegramNotificationLinkToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("telegram_notification_link_tokens")
+}
+
+model ScheduledJobLock {
+  name        String   @id
+  ownerId     String   @map("owner_id")
+  lockedAt    DateTime @map("locked_at")
+  lockedUntil DateTime @map("locked_until")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([lockedUntil])
+  @@map("scheduled_job_locks")
 }
 
 model PreacherQueueEntry {

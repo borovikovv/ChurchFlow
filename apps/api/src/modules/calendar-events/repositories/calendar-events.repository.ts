@@ -124,6 +124,14 @@ export class CalendarEventsRepository {
         id: true,
         type: true,
         assignees: { select: { membershipId: true } },
+        serviceDetails: {
+          select: {
+            participants: {
+              where: { membershipId: { not: null } },
+              select: { membershipId: true },
+            },
+          },
+        },
       },
     });
   }

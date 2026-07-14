@@ -9,6 +9,7 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'react-toastify';
 import type { CalendarEventItem, CalendarEventsPayload } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
+import { NotificationDetailModal } from '@/features/notifications/components/notification-detail-modal';
 import {
   CALENDAR_TYPE,
   EVENT_TYPES,
@@ -340,6 +341,8 @@ export function CalendarManager({
           onDownload={() => void downloadPng()}
         />
       ) : null}
+
+      <NotificationDetailModal organizationId={organizationId} />
     </div>
   );
 }

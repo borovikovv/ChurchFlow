@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import {
@@ -6,11 +17,15 @@ import {
   UpdateNotificationPreferencesDto,
 } from './dto/notification.dto';
 import { NotificationsService } from './notifications.service';
+import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
 
 @Controller('organizations/:organizationId/notifications')
 @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly telegramBotService: TelegramBotService,
+  ) {}
 
   @Get()
   list(
@@ -57,12 +72,37 @@ export class NotificationsController {
     );
   }
 
+  @Post('telegram/link-token')
+  createTelegramLinkToken(@Req() request: AuthenticatedRequest) {
+    return this.telegramBotService.createLinkToken(this.actorUserId(request));
+  }
+
+  @Delete('telegram/binding')
+  disconnectTelegram(@Req() request: AuthenticatedRequest) {
+    return this.telegramBotService.disconnectUser(this.actorUserId(request)).then((telegram) => ({
+      telegram,
+    }));
+  }
+
   @Patch('read-all')
   markAllRead(
     @Param('organizationId') organizationId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.notificationsService.markAllRead(organizationId, this.actorUserId(request));
+  }
+
+  @Get(':notificationId')
+  detail(
+    @Param('organizationId') organizationId: string,
+    @Param('notificationId') notificationId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.notificationsService.detailForOrganization(
+      organizationId,
+      notificationId,
+      this.actorUserId(request),
+    );
   }
 
   @Patch(':notificationId/read')

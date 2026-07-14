@@ -105,6 +105,7 @@ export class CalendarEventsService {
     try {
       const event = await this.calendarEventsRepository.create(organizationId, input, actorUserId);
       await this.tryCreateTaskAssignedNotifications(organizationId, event, actorUserId);
+      await this.tryCreateServiceAssignedNotifications(organizationId, event, actorUserId);
 
       return baseEventToItem(event);
     } catch (error) {
@@ -120,7 +121,10 @@ export class CalendarEventsService {
   ) {
     try {
       const previousAssignmentSnapshot =
-        input.type === CALENDAR_EVENT_TYPE.task || input.assigneeMembershipIds !== undefined
+        input.type === CALENDAR_EVENT_TYPE.task ||
+        input.type === CALENDAR_EVENT_TYPE.service ||
+        input.assigneeMembershipIds !== undefined ||
+        input.serviceDetails !== undefined
           ? await this.calendarEventsRepository.getAssignmentSnapshot(organizationId, eventId)
           : null;
       const event = await this.calendarEventsRepository.update(
@@ -137,6 +141,17 @@ export class CalendarEventsService {
         skipUnlessAssigneesChanged:
           previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.task &&
           input.assigneeMembershipIds === undefined,
+      });
+      await this.tryCreateServiceAssignedNotifications(organizationId, event, actorUserId, {
+        previousParticipantMembershipIds:
+          previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.service
+            ? (previousAssignmentSnapshot.serviceDetails?.participants
+                .map((participant) => participant.membershipId)
+                .filter((membershipId): membershipId is string => Boolean(membershipId)) ?? [])
+            : [],
+        skipUnlessParticipantsChanged:
+          previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.service &&
+          input.serviceDetails === undefined,
       });
 
       return baseEventToItem(event);
@@ -231,6 +246,46 @@ export class CalendarEventsService {
       });
     }
   }
+
+  private async tryCreateServiceAssignedNotifications(
+    organizationId: string,
+    event: CalendarEventRecord,
+    actorUserId: string,
+    options: {
+      previousParticipantMembershipIds?: string[];
+      skipUnlessParticipantsChanged?: boolean;
+    } = {},
+  ) {
+    if (event.type !== CALENDAR_EVENT_TYPE.service) return;
+    if (options.skipUnlessParticipantsChanged) return;
+
+    const previousParticipantIds = new Set(options.previousParticipantMembershipIds ?? []);
+    const participantMembershipIds = (event.serviceDetails?.participants ?? [])
+      .map((participant) => participant.membershipId)
+      .filter((membershipId): membershipId is string => Boolean(membershipId))
+      .filter((membershipId) => !previousParticipantIds.has(membershipId));
+    if (participantMembershipIds.length === 0) return;
+
+    try {
+      await this.notificationsService.createServiceAssignedNotifications({
+        organizationId,
+        actorUserId,
+        eventId: event.id,
+        title: 'You were assigned to a service',
+        body: serviceAssignedNotificationBody(event),
+        url: `/dashboard/${organizationId}/calendar`,
+        participantMembershipIds,
+      });
+    } catch (error: unknown) {
+      calendarEventsLogger.error({
+        event: 'Service assignment notification creation failed',
+        organizationId,
+        calendarEventId: event.id,
+        participantMembershipIds,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 function formatDateOnly(value: Date | null): string | null {
@@ -239,7 +294,22 @@ function formatDateOnly(value: Date | null): string | null {
 }
 
 function taskAssignedNotificationBody(event: CalendarEventRecord): string {
-  return `${event.title} starts at ${event.startsAt.toISOString()}.`;
+  return `${event.title} starts at ${formatNotificationDateTime(event.startsAt)}.`;
+}
+
+function serviceAssignedNotificationBody(event: CalendarEventRecord): string {
+  return `${event.title} starts at ${formatNotificationDateTime(event.startsAt)}.`;
+}
+
+function formatNotificationDateTime(value: Date): string {
+  return new Intl.DateTimeFormat('uk-UA', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Kyiv',
+  }).format(value);
 }
 
 function memberSummary(

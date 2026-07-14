@@ -38,6 +38,13 @@ export const apiEnvSchema = z
       (value) => (value === '' ? undefined : value),
       z.string().url().optional(),
     ),
+    TELEGRAM_BOT_TOKEN: optionalNonEmptyString,
+    TELEGRAM_BOT_USERNAME: optionalNonEmptyString,
+    TELEGRAM_WEBHOOK_SECRET: optionalNonEmptyString,
+    TELEGRAM_WEBHOOK_URL: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().url().optional(),
+    ),
     EMAIL_PROVIDER: optionalEmailProviderSchema,
     EMAIL_FROM: optionalNonEmptyString,
     RESEND_API_KEY: optionalNonEmptyString,

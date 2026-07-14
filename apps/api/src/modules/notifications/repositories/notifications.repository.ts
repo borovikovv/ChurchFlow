@@ -19,9 +19,53 @@ const notificationSelect = {
   createdAt: true,
 } as const;
 
+const notificationDetailCalendarEventSelect = {
+  id: true,
+  type: true,
+  title: true,
+  description: true,
+  startsAt: true,
+  endsAt: true,
+  allDay: true,
+  assignees: {
+    include: {
+      membership: {
+        include: {
+          profile: true,
+          user: { select: { displayName: true, email: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
+  serviceDetails: {
+    include: {
+      participants: {
+        include: {
+          membership: {
+            include: {
+              profile: true,
+              user: { select: { displayName: true, email: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' as const },
+      },
+    },
+  },
+} as const;
+
 export type NotificationRecord = Prisma.NotificationGetPayload<{
   select: typeof notificationSelect;
 }>;
+
+export type NotificationCalendarEventDetailRecord = Prisma.CalendarEventGetPayload<{
+  select: typeof notificationDetailCalendarEventSelect;
+}>;
+
+export interface NotificationDetailRecord extends NotificationRecord {
+  calendarEvent: NotificationCalendarEventDetailRecord | null;
+}
 
 const notificationPreferenceSelect = {
   inAppEnabled: true,
@@ -30,6 +74,7 @@ const notificationPreferenceSelect = {
   taskAssignedEnabled: true,
   serviceAssignedEnabled: true,
   remindersEnabled: true,
+  birthdayDigestEnabled: true,
 } as const;
 
 export type NotificationPreferenceRecord = Prisma.NotificationPreferenceGetPayload<{
@@ -51,6 +96,37 @@ export interface TaskAssignedNotificationInput {
   body: string;
   url: string;
   assigneeMembershipIds: string[];
+}
+
+export interface ServiceAssignedNotificationInput {
+  organizationId: string;
+  actorUserId: string;
+  eventId: string;
+  title: string;
+  body: string;
+  url: string;
+  participantMembershipIds: string[];
+}
+
+export interface TaskAssignedNotificationResult {
+  createdCount: number;
+  telegramRecipientUserIds: string[];
+  notificationByRecipientUserId: Map<string, string>;
+}
+
+export type ServiceAssignedNotificationResult = TaskAssignedNotificationResult;
+
+export interface BirthdayDigestNotificationResult {
+  createdCount: number;
+  telegramRecipientUserIds: string[];
+  notificationByRecipientUserId: Map<string, string>;
+}
+
+export interface BirthdayDigestGroup {
+  organizationId: string;
+  organizationName: string;
+  birthdays: string[];
+  recipientUserIds: string[];
 }
 
 @Injectable()
@@ -104,9 +180,246 @@ export class NotificationsRepository {
     });
   }
 
-  async createTaskAssignedNotifications(input: TaskAssignedNotificationInput) {
-    const membershipIds = [...new Set(input.assigneeMembershipIds)];
-    if (membershipIds.length === 0) return { createdCount: 0 };
+  async createTaskAssignedNotifications(
+    input: TaskAssignedNotificationInput,
+  ): Promise<TaskAssignedNotificationResult> {
+    return this.createAssignmentNotifications({
+      organizationId: input.organizationId,
+      actorUserId: input.actorUserId,
+      eventId: input.eventId,
+      membershipIds: input.assigneeMembershipIds,
+      type: 'TASK_ASSIGNED',
+      preferenceKey: 'taskAssignedEnabled',
+      title: input.title,
+      body: input.body,
+      url: input.url,
+    });
+  }
+
+  async createServiceAssignedNotifications(
+    input: ServiceAssignedNotificationInput,
+  ): Promise<ServiceAssignedNotificationResult> {
+    return this.createAssignmentNotifications({
+      organizationId: input.organizationId,
+      actorUserId: input.actorUserId,
+      eventId: input.eventId,
+      membershipIds: input.participantMembershipIds,
+      type: 'SERVICE_ASSIGNED',
+      preferenceKey: 'serviceAssignedEnabled',
+      title: input.title,
+      body: input.body,
+      url: input.url,
+    });
+  }
+
+  async listBirthdayDigestGroups(now: Date): Promise<BirthdayDigestGroup[]> {
+    const month = now.getUTCMonth() + 1;
+    const day = now.getUTCDate();
+    const birthdays = await this.prisma.$queryRaw<
+      Array<{
+        organization_id: string;
+        organization_name: string;
+        display_name: string;
+      }>
+    >`
+      SELECT
+        "organizations"."id"::text AS "organization_id",
+        "organizations"."name" AS "organization_name",
+        "organization_member_profiles"."display_name" AS "display_name"
+      FROM "organization_member_profiles"
+      JOIN "organization_members"
+        ON "organization_members"."id" = "organization_member_profiles"."membership_id"
+      JOIN "organizations"
+        ON "organizations"."id" = "organization_members"."organization_id"
+      WHERE "organization_member_profiles"."birthday" IS NOT NULL
+        AND EXTRACT(MONTH FROM "organization_member_profiles"."birthday") = ${month}
+        AND EXTRACT(DAY FROM "organization_member_profiles"."birthday") = ${day}
+        AND "organization_members"."status" = 'ACTIVE'::"OrganizationMemberStatus"
+        AND "organization_members"."removed_at" IS NULL
+        AND "organizations"."status" = 'ACTIVE'::"OrganizationStatus"
+        AND "organizations"."deleted_at" IS NULL
+      ORDER BY "organizations"."name" ASC, "organization_member_profiles"."display_name" ASC
+    `;
+    if (birthdays.length === 0) return [];
+
+    const birthdayGroups = new Map<
+      string,
+      { organizationName: string; birthdays: string[]; recipientUserIds: string[] }
+    >();
+    for (const birthday of birthdays) {
+      const group = birthdayGroups.get(birthday.organization_id) ?? {
+        organizationName: birthday.organization_name,
+        birthdays: [],
+        recipientUserIds: [],
+      };
+      group.birthdays.push(birthday.display_name);
+      birthdayGroups.set(birthday.organization_id, group);
+    }
+
+    const recipientMemberships = await this.prisma.organizationMember.findMany({
+      where: {
+        organizationId: { in: [...birthdayGroups.keys()] },
+        role: { in: ['OWNER', 'ADMIN'] },
+        status: 'ACTIVE',
+        removedAt: null,
+        userId: { not: null },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: {
+        organizationId: true,
+        userId: true,
+        user: {
+          select: {
+            deletedAt: true,
+            notificationPreferences: {
+              select: {
+                inAppEnabled: true,
+                telegramEnabled: true,
+                birthdayDigestEnabled: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    for (const recipient of recipientMemberships) {
+      if (!recipient.userId || recipient.user?.deletedAt) continue;
+      const group = birthdayGroups.get(recipient.organizationId);
+      if (group) group.recipientUserIds.push(recipient.userId);
+    }
+
+    return [...birthdayGroups.entries()].flatMap(([organizationId, group]) =>
+      group.recipientUserIds.length > 0
+        ? [
+            {
+              organizationId,
+              organizationName: group.organizationName,
+              birthdays: group.birthdays,
+              recipientUserIds: [...new Set(group.recipientUserIds)],
+            },
+          ]
+        : [],
+    );
+  }
+
+  async createBirthdayDigestNotifications(input: {
+    organizationId: string;
+    recipientUserIds: string[];
+    title: string;
+    body: string;
+    url: string;
+    dedupeKey: string;
+  }): Promise<BirthdayDigestNotificationResult> {
+    const recipientUserIds = [...new Set(input.recipientUserIds)];
+    if (recipientUserIds.length === 0) return emptyNotificationCreationResult();
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { in: recipientUserIds },
+        deletedAt: null,
+        memberships: {
+          some: {
+            organizationId: input.organizationId,
+            role: { in: ['OWNER', 'ADMIN'] },
+            status: 'ACTIVE',
+            removedAt: null,
+          },
+        },
+      },
+      select: {
+        id: true,
+        notificationPreferences: {
+          where: { organizationId: input.organizationId },
+          select: {
+            inAppEnabled: true,
+            telegramEnabled: true,
+            birthdayDigestEnabled: true,
+          },
+          take: 1,
+        },
+        memberships: {
+          where: {
+            organizationId: input.organizationId,
+            role: { in: ['OWNER', 'ADMIN'] },
+            status: 'ACTIVE',
+            removedAt: null,
+          },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+    const eligibleUsers = users.filter((user) => {
+      const preferences = user.notificationPreferences[0];
+      return preferences ? preferences.birthdayDigestEnabled : true;
+    });
+    const telegramRecipientUserIds = eligibleUsers
+      .filter((user) => {
+        const preferences = user.notificationPreferences[0];
+        return Boolean(preferences?.telegramEnabled && preferences.birthdayDigestEnabled);
+      })
+      .map((user) => user.id);
+    const inAppUsers = eligibleUsers.filter((user) => {
+      const preferences = user.notificationPreferences[0];
+      return preferences ? preferences.inAppEnabled && preferences.birthdayDigestEnabled : true;
+    });
+    if (inAppUsers.length === 0) {
+      return {
+        createdCount: 0,
+        telegramRecipientUserIds,
+        notificationByRecipientUserId: new Map(),
+      };
+    }
+
+    const data: Prisma.NotificationCreateManyInput[] = inAppUsers.map((user) => ({
+      organizationId: input.organizationId,
+      recipientUserId: user.id,
+      recipientMembershipId: user.memberships[0]?.id ?? null,
+      type: 'BIRTHDAY_DIGEST',
+      title: input.title,
+      body: input.body,
+      url: input.url,
+      entityType: 'BirthdayDigest',
+      dedupeKey: input.dedupeKey,
+    }));
+    const result = await this.prisma.notification.createMany({
+      data,
+      skipDuplicates: true,
+    });
+    const notifications = await this.prisma.notification.findMany({
+      where: {
+        organizationId: input.organizationId,
+        recipientUserId: { in: data.map((notification) => notification.recipientUserId) },
+        type: 'BIRTHDAY_DIGEST',
+        dedupeKey: input.dedupeKey,
+        deletedAt: null,
+      },
+      select: { id: true, recipientUserId: true },
+    });
+
+    return {
+      createdCount: result.count,
+      telegramRecipientUserIds,
+      notificationByRecipientUserId: new Map(
+        notifications.map((notification) => [notification.recipientUserId, notification.id]),
+      ),
+    };
+  }
+
+  private async createAssignmentNotifications(input: {
+    organizationId: string;
+    actorUserId: string;
+    eventId: string;
+    membershipIds: string[];
+    type: 'TASK_ASSIGNED' | 'SERVICE_ASSIGNED';
+    preferenceKey: 'taskAssignedEnabled' | 'serviceAssignedEnabled';
+    title: string;
+    body: string;
+    url: string;
+  }): Promise<TaskAssignedNotificationResult> {
+    const membershipIds = [...new Set(input.membershipIds)];
+    if (membershipIds.length === 0) return emptyTaskAssignedNotificationResult();
 
     const assignees = await this.prisma.organizationMember.findMany({
       where: {
@@ -126,7 +439,9 @@ export class NotificationsRepository {
               where: { organizationId: input.organizationId },
               select: {
                 inAppEnabled: true,
+                telegramEnabled: true,
                 taskAssignedEnabled: true,
+                serviceAssignedEnabled: true,
               },
               take: 1,
             },
@@ -138,19 +453,37 @@ export class NotificationsRepository {
       if (!assignee.userId || assignee.userId === input.actorUserId) return false;
       const preferences = assignee.user?.notificationPreferences[0];
 
-      return preferences ? preferences.inAppEnabled && preferences.taskAssignedEnabled : true;
+      return preferences ? preferences[input.preferenceKey] : true;
     });
-    if (eligibleAssignees.length === 0) return { createdCount: 0 };
+    if (eligibleAssignees.length === 0) return emptyTaskAssignedNotificationResult();
+    const telegramRecipientUserIds = eligibleAssignees
+      .filter((assignee) => {
+        const preferences = assignee.user?.notificationPreferences[0];
+        return Boolean(preferences?.telegramEnabled && preferences[input.preferenceKey]);
+      })
+      .map((assignee) => assignee.userId)
+      .filter((userId): userId is string => Boolean(userId));
+    const inAppAssignees = eligibleAssignees.filter((assignee) => {
+      const preferences = assignee.user?.notificationPreferences[0];
+      return preferences ? preferences.inAppEnabled && preferences[input.preferenceKey] : true;
+    });
+    if (inAppAssignees.length === 0) {
+      return {
+        createdCount: 0,
+        telegramRecipientUserIds,
+        notificationByRecipientUserId: new Map(),
+      };
+    }
 
     const existingNotifications = await this.prisma.notification.findMany({
       where: {
         organizationId: input.organizationId,
         recipientUserId: {
-          in: eligibleAssignees
+          in: inAppAssignees
             .map((assignee) => assignee.userId)
             .filter((userId): userId is string => Boolean(userId)),
         },
-        type: 'TASK_ASSIGNED',
+        type: input.type,
         entityType: 'CalendarEvent',
         entityId: input.eventId,
         deletedAt: null,
@@ -160,7 +493,7 @@ export class NotificationsRepository {
     const existingRecipientIds = new Set(
       existingNotifications.map((notification) => notification.recipientUserId),
     );
-    const data: Prisma.NotificationCreateManyInput[] = eligibleAssignees.flatMap((assignee) => {
+    const data: Prisma.NotificationCreateManyInput[] = inAppAssignees.flatMap((assignee) => {
       const userId = assignee.userId;
       if (!userId || existingRecipientIds.has(userId)) return [];
 
@@ -168,7 +501,7 @@ export class NotificationsRepository {
         organizationId: input.organizationId,
         recipientUserId: userId,
         recipientMembershipId: assignee.id,
-        type: 'TASK_ASSIGNED',
+        type: input.type,
         title: input.title,
         body: input.body,
         url: input.url,
@@ -176,11 +509,36 @@ export class NotificationsRepository {
         entityId: input.eventId,
       };
     });
-    if (data.length === 0) return { createdCount: 0 };
+    if (data.length === 0) {
+      return {
+        createdCount: 0,
+        telegramRecipientUserIds,
+        notificationByRecipientUserId: new Map(),
+      };
+    }
 
     const result = await this.prisma.notification.createMany({ data });
+    const createdNotifications = await this.prisma.notification.findMany({
+      where: {
+        organizationId: input.organizationId,
+        recipientUserId: {
+          in: data.map((notification) => notification.recipientUserId),
+        },
+        type: input.type,
+        entityType: 'CalendarEvent',
+        entityId: input.eventId,
+        deletedAt: null,
+      },
+      select: { id: true, recipientUserId: true },
+    });
 
-    return { createdCount: result.count };
+    return {
+      createdCount: result.count,
+      telegramRecipientUserIds,
+      notificationByRecipientUserId: new Map(
+        createdNotifications.map((notification) => [notification.recipientUserId, notification.id]),
+      ),
+    };
   }
 
   async listForUser(organizationId: string, userId: string, query: ListNotificationsQuery) {
@@ -230,6 +588,36 @@ export class NotificationsRepository {
     return { recentItems, unreadCount };
   }
 
+  async getForUser(
+    organizationId: string,
+    userId: string,
+    notificationId: string,
+  ): Promise<NotificationDetailRecord | null> {
+    const notification = await this.prisma.notification.findFirst({
+      where: {
+        ...this.visibleWhere(organizationId, userId),
+        id: notificationId,
+      },
+      select: notificationSelect,
+    });
+    if (!notification) return null;
+
+    const calendarEvent =
+      notification.entityType === 'CalendarEvent' && notification.entityId
+        ? await this.prisma.calendarEvent.findFirst({
+            where: {
+              id: notification.entityId,
+              organizationId,
+              deletedAt: null,
+              organization: { status: 'ACTIVE', deletedAt: null },
+            },
+            select: notificationDetailCalendarEventSelect,
+          })
+        : null;
+
+    return { ...notification, calendarEvent };
+  }
+
   async markRead(organizationId: string, userId: string, notificationId: string) {
     const notification = await this.prisma.notification.findFirst({
       where: {
@@ -277,6 +665,18 @@ export class NotificationsRepository {
       organization: { status: 'ACTIVE', deletedAt: null },
     };
   }
+}
+
+function emptyTaskAssignedNotificationResult(): TaskAssignedNotificationResult {
+  return emptyNotificationCreationResult();
+}
+
+function emptyNotificationCreationResult(): TaskAssignedNotificationResult {
+  return {
+    createdCount: 0,
+    telegramRecipientUserIds: [],
+    notificationByRecipientUserId: new Map(),
+  };
 }
 
 function afterCursorWhere(cursor: {

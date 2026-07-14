@@ -1,4 +1,5 @@
 import type {
+  NotificationDetail,
   NotificationListItem,
   NotificationsPage,
   NotificationsSummary,
@@ -40,6 +41,17 @@ export function listNotifications(input: {
 export function getNotificationsSummary(organizationId: string): Promise<NotificationsSummary> {
   return requestJson<NotificationsSummary>(
     `/api/organizations/${encodeURIComponent(organizationId)}/notifications/summary`,
+  );
+}
+
+export function getNotificationDetail(input: {
+  organizationId: string;
+  notificationId: string;
+}): Promise<NotificationDetail> {
+  return requestJson<NotificationDetail>(
+    `/api/organizations/${encodeURIComponent(input.organizationId)}/notifications/${encodeURIComponent(
+      input.notificationId,
+    )}`,
   );
 }
 

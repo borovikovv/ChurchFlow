@@ -725,10 +725,17 @@
   .status-active,
   .status-approved,
   .status-admin,
+  .status-on,
   .status-super-admin {
     border-color: rgba(26, 127, 55, 0.25);
     background: #dafbe1;
     color: var(--success-strong);
+  }
+
+  .status-off {
+    border-color: var(--line);
+    background: var(--surface-subtle);
+    color: var(--muted);
   }
 
   .status-pending,

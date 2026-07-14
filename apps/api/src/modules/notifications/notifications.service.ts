@@ -1,6 +1,7 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type {
   ListNotificationsQuery,
+  NotificationDetail,
   NotificationPreferences,
   NotificationListItem,
   NotificationsPage,
@@ -9,15 +10,26 @@ import type {
 } from '@churchflow/shared';
 import {
   NotificationsRepository,
+  type ServiceAssignedNotificationInput,
+  type NotificationCalendarEventDetailRecord,
+  type NotificationDetailRecord,
   type NotificationPreferenceRecord,
   type NotificationRecord,
   type TaskAssignedNotificationInput,
   type TelegramNotificationBindingRecord,
 } from './repositories/notifications.repository';
+import { TelegramBotRepository } from '../telegram-bot/repositories/telegram-bot.repository';
+import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly notificationsRepository: NotificationsRepository) {}
+  private readonly logger = new Logger(NotificationsService.name);
+
+  constructor(
+    private readonly notificationsRepository: NotificationsRepository,
+    private readonly telegramBotRepository: TelegramBotRepository,
+    private readonly telegramBotService: TelegramBotService,
+  ) {}
 
   async listForOrganization(
     organizationId: string,
@@ -59,6 +71,31 @@ export class NotificationsService {
       recentItems: summary.recentItems.map(notificationToItem),
       unreadCount: summary.unreadCount,
     };
+  }
+
+  async detailForOrganization(
+    organizationId: string,
+    notificationId: string,
+    actorUserId: string,
+  ): Promise<NotificationDetail> {
+    const membership = await this.notificationsRepository.findActiveMembership(
+      organizationId,
+      actorUserId,
+    );
+    if (!membership) {
+      throw new NotFoundException('Notification was not found');
+    }
+
+    const notification = await this.notificationsRepository.getForUser(
+      organizationId,
+      actorUserId,
+      notificationId,
+    );
+    if (!notification) {
+      throw new NotFoundException('Notification was not found');
+    }
+
+    return notificationToDetail(notification);
   }
 
   async preferencesForOrganization(
@@ -109,7 +146,84 @@ export class NotificationsService {
   }
 
   async createTaskAssignedNotifications(input: TaskAssignedNotificationInput) {
-    return this.notificationsRepository.createTaskAssignedNotifications(input);
+    const result = await this.notificationsRepository.createTaskAssignedNotifications(input);
+    const deliveries = await this.telegramBotRepository.getTaskAssignedTelegramDeliveries({
+      organizationId: input.organizationId,
+      recipientUserIds: result.telegramRecipientUserIds,
+      notificationByRecipientUserId: result.notificationByRecipientUserId,
+      title: input.title,
+      body: input.body,
+      url: input.url,
+    });
+
+    await Promise.all(
+      deliveries.map((delivery) => this.telegramBotService.deliverNotification(delivery)),
+    );
+
+    return { createdCount: result.createdCount, telegramSentCount: deliveries.length };
+  }
+
+  async createServiceAssignedNotifications(input: ServiceAssignedNotificationInput) {
+    const result = await this.notificationsRepository.createServiceAssignedNotifications(input);
+    const deliveries = await this.telegramBotRepository.getServiceAssignedTelegramDeliveries({
+      organizationId: input.organizationId,
+      recipientUserIds: result.telegramRecipientUserIds,
+      notificationByRecipientUserId: result.notificationByRecipientUserId,
+      title: input.title,
+      body: input.body,
+      url: input.url,
+    });
+
+    await Promise.all(
+      deliveries.map((delivery) => this.telegramBotService.deliverNotification(delivery)),
+    );
+
+    return { createdCount: result.createdCount, telegramSentCount: deliveries.length };
+  }
+
+  async createBirthdayDigestNotifications(now = new Date()) {
+    const digestDate = formatDateKey(now);
+    const groups = await this.notificationsRepository.listBirthdayDigestGroups(now);
+    let createdCount = 0;
+    let telegramSentCount = 0;
+
+    for (const group of groups) {
+      const title = 'Birthdays today';
+      const body = birthdayDigestBody(group.birthdays);
+      const result = await this.notificationsRepository.createBirthdayDigestNotifications({
+        organizationId: group.organizationId,
+        recipientUserIds: group.recipientUserIds,
+        title,
+        body,
+        url: `/dashboard/${group.organizationId}/calendar`,
+        dedupeKey: `birthday-digest:${digestDate}`,
+      });
+      createdCount += result.createdCount;
+
+      const deliveries = await this.telegramBotRepository.getBirthdayDigestTelegramDeliveries({
+        organizationId: group.organizationId,
+        recipientUserIds: result.telegramRecipientUserIds,
+        notificationByRecipientUserId: result.notificationByRecipientUserId,
+        title,
+        body,
+        url: `/dashboard/${group.organizationId}/calendar`,
+      });
+      telegramSentCount += deliveries.length;
+
+      await Promise.all(
+        deliveries.map((delivery) => this.telegramBotService.deliverNotification(delivery)),
+      );
+    }
+
+    this.logger.log({
+      event: 'Birthday digest notifications processed',
+      digestDate,
+      organizationsCount: groups.length,
+      createdCount,
+      telegramSentCount,
+    });
+
+    return { organizationsCount: groups.length, createdCount, telegramSentCount };
   }
 
   async markRead(organizationId: string, notificationId: string, actorUserId: string) {
@@ -157,6 +271,7 @@ function preferencesToResponse(
     taskAssignedEnabled: preferences.taskAssignedEnabled,
     serviceAssignedEnabled: preferences.serviceAssignedEnabled,
     remindersEnabled: preferences.remindersEnabled,
+    birthdayDigestEnabled: preferences.birthdayDigestEnabled,
     telegram: {
       connected: Boolean(telegramBinding),
       enabled: isActiveTelegramBinding(telegramBinding),
@@ -184,4 +299,55 @@ function notificationToItem(notification: NotificationRecord): NotificationListI
     readAt: notification.readAt?.toISOString() ?? null,
     createdAt: notification.createdAt.toISOString(),
   };
+}
+
+function notificationToDetail(notification: NotificationDetailRecord): NotificationDetail {
+  return {
+    ...notificationToItem(notification),
+    calendarEvent: notification.calendarEvent
+      ? calendarEventToNotificationDetail(notification.calendarEvent)
+      : null,
+  };
+}
+
+function calendarEventToNotificationDetail(
+  event: NotificationCalendarEventDetailRecord,
+): NotificationDetail['calendarEvent'] {
+  return {
+    id: event.id,
+    type: event.type,
+    title: event.title,
+    description: event.description,
+    startsAt: event.startsAt.toISOString(),
+    endsAt: event.endsAt?.toISOString() ?? null,
+    allDay: event.allDay,
+    assignees: event.assignees.map((assignee) => ({
+      id: assignee.membership.id,
+      displayName: memberDisplayName(assignee.membership),
+    })),
+    participants: (event.serviceDetails?.participants ?? []).map((participant) => ({
+      role: participant.role,
+      displayName:
+        participant.displayNameSnapshot ??
+        (participant.membership ? memberDisplayName(participant.membership) : null) ??
+        participant.customName ??
+        'Guest',
+    })),
+  };
+}
+
+function memberDisplayName(member: {
+  profile: { displayName: string } | null;
+  user: { displayName: string | null; email: string | null } | null;
+}): string {
+  return member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? 'Member';
+}
+
+function birthdayDigestBody(names: string[]): string {
+  const firstName = names[0];
+  return names.length === 1 && firstName ? `Today: ${firstName}` : `Today: ${names.join(', ')}`;
+}
+
+function formatDateKey(value: Date): string {
+  return value.toISOString().slice(0, 10);
 }

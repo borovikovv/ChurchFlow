@@ -138,10 +138,11 @@ export function NotificationBell({ organizationId }: { organizationId: string })
 
     if (notification.url) {
       setOpen(false);
-      if (notification.url.startsWith('/')) {
-        router.push(notification.url as Route);
+      const url = notificationDetailUrl(notification.url, notification.id);
+      if (url.startsWith('/')) {
+        router.push(url as Route);
       } else {
-        window.location.assign(notification.url);
+        window.location.assign(url);
       }
     }
   };
@@ -327,6 +328,12 @@ function formatNotificationDateTime(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
+}
+
+function notificationDetailUrl(url: string, notificationId: string): string {
+  const separator = url.includes('?') ? '&' : '?';
+
+  return `${url}${separator}notificationId=${encodeURIComponent(notificationId)}`;
 }
 
 function BellIcon() {

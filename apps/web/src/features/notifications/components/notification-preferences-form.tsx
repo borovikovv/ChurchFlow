@@ -13,7 +13,11 @@ import { toast } from 'react-toastify';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { updateNotificationPreferences } from '../server/actions';
+import {
+  createTelegramNotificationLink,
+  disconnectTelegramNotifications,
+  updateNotificationPreferences,
+} from '../server/actions';
 
 export function NotificationPreferencesForm({
   organizationId,
@@ -25,6 +29,7 @@ export function NotificationPreferencesForm({
   userEmail: string | null;
 }) {
   const [savedPreferences, setSavedPreferences] = useState(preferences);
+  const [telegramActionPending, setTelegramActionPending] = useState(false);
   const {
     register,
     handleSubmit,
@@ -57,6 +62,48 @@ export function NotificationPreferencesForm({
 
     toast.error(result.error);
   });
+
+  const connectTelegram = async () => {
+    if (telegramActionPending) return;
+    setTelegramActionPending(true);
+
+    try {
+      const result = await createTelegramNotificationLink(organizationId);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+
+      window.open(result.data.url, '_blank', 'noopener,noreferrer');
+      toast.info('Finish connecting Telegram in the bot chat.');
+    } finally {
+      setTelegramActionPending(false);
+    }
+  };
+
+  const disconnectTelegram = async () => {
+    if (telegramActionPending) return;
+    setTelegramActionPending(true);
+
+    try {
+      const result = await disconnectTelegramNotifications(organizationId);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+
+      const nextPreferences = {
+        ...savedPreferences,
+        telegramEnabled: false,
+        telegram: result.data.telegram,
+      };
+      setSavedPreferences(nextPreferences);
+      reset(toFormValues(nextPreferences, userEmail));
+      toast.success('Telegram notifications disconnected.');
+    } finally {
+      setTelegramActionPending(false);
+    }
+  };
 
   return (
     <form className="stack max-w-2xl" onSubmit={submit}>
@@ -100,14 +147,27 @@ export function NotificationPreferencesForm({
                 label="Enabled"
                 {...register('telegramEnabled')}
               />
-              <Button
-                disabled
-                type="button"
-                variant="secondary"
-                className="min-h-8 px-2 py-1 text-xs"
-              >
-                Connect bot
-              </Button>
+              {savedPreferences.telegram.enabled ? (
+                <Button
+                  disabled={telegramActionPending}
+                  onClick={disconnectTelegram}
+                  type="button"
+                  variant="secondary"
+                  className="min-h-8 px-2 py-1 text-xs"
+                >
+                  {telegramActionPending ? 'Disconnecting...' : 'Disconnect'}
+                </Button>
+              ) : (
+                <Button
+                  disabled={telegramActionPending}
+                  onClick={connectTelegram}
+                  type="button"
+                  variant="secondary"
+                  className="min-h-8 px-2 py-1 text-xs"
+                >
+                  {telegramActionPending ? 'Opening...' : 'Connect bot'}
+                </Button>
+              )}
             </div>
           </PreferenceRow>
         </div>
@@ -122,9 +182,34 @@ export function NotificationPreferencesForm({
         </div>
 
         <div className="grid gap-3">
-          <Checkbox label="Task assignments" {...register('taskAssignedEnabled')} />
-          <Checkbox label="Service assignments" {...register('serviceAssignedEnabled')} />
-          <Checkbox label="Reminders" {...register('remindersEnabled')} />
+          <PreferenceRow
+            title="Task assignments"
+            description="Notify members when they are assigned to a task."
+            checked={values.taskAssignedEnabled}
+          >
+            <Checkbox label="Enabled" {...register('taskAssignedEnabled')} />
+          </PreferenceRow>
+          <PreferenceRow
+            title="Service assignments"
+            description="Notify members when they are assigned to a service."
+            checked={values.serviceAssignedEnabled}
+          >
+            <Checkbox label="Enabled" {...register('serviceAssignedEnabled')} />
+          </PreferenceRow>
+          <PreferenceRow
+            title="Reminders"
+            description="Notify members before upcoming calendar items."
+            checked={values.remindersEnabled}
+          >
+            <Checkbox label="Enabled" {...register('remindersEnabled')} />
+          </PreferenceRow>
+          <PreferenceRow
+            title="Birthday digest"
+            description="Notify owners and admins about member birthdays today."
+            checked={values.birthdayDigestEnabled}
+          >
+            <Checkbox label="Enabled" {...register('birthdayDigestEnabled')} />
+          </PreferenceRow>
         </div>
       </section>
 
@@ -195,5 +280,6 @@ function toFormValues(
     taskAssignedEnabled: preferences.taskAssignedEnabled,
     serviceAssignedEnabled: preferences.serviceAssignedEnabled,
     remindersEnabled: preferences.remindersEnabled,
+    birthdayDigestEnabled: preferences.birthdayDigestEnabled,
   };
 }

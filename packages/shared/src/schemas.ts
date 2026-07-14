@@ -161,6 +161,32 @@ export const notificationListItemSchema = z.object({
   createdAt: z.string().datetime({ offset: true }),
 });
 
+export const notificationCalendarEventDetailSchema = z.object({
+  id: uuidSchema,
+  type: calendarEventTypeSchema,
+  title: z.string(),
+  description: z.string().nullable(),
+  startsAt: z.string().datetime({ offset: true }),
+  endsAt: z.string().datetime({ offset: true }).nullable(),
+  allDay: z.boolean(),
+  assignees: z.array(
+    z.object({
+      id: uuidSchema,
+      displayName: z.string(),
+    }),
+  ),
+  participants: z.array(
+    z.object({
+      role: calendarServiceRoleSchema,
+      displayName: z.string(),
+    }),
+  ),
+});
+
+export const notificationDetailSchema = notificationListItemSchema.extend({
+  calendarEvent: notificationCalendarEventDetailSchema.nullable(),
+});
+
 export const notificationsPageSchema = z.object({
   items: z.array(notificationListItemSchema),
   nextCursor: z.string().nullable(),
@@ -179,6 +205,7 @@ export const updateNotificationPreferencesSchema = z.object({
   taskAssignedEnabled: z.boolean(),
   serviceAssignedEnabled: z.boolean(),
   remindersEnabled: z.boolean(),
+  birthdayDigestEnabled: z.boolean(),
 });
 
 export const notificationPreferencesSchema = updateNotificationPreferencesSchema.extend({
@@ -189,6 +216,15 @@ export const notificationPreferencesSchema = updateNotificationPreferencesSchema
     blockedAt: z.string().datetime({ offset: true }).nullable(),
     revokedAt: z.string().datetime({ offset: true }).nullable(),
   }),
+});
+
+export const telegramNotificationLinkSchema = z.object({
+  url: z.string().url(),
+  expiresAt: z.string().datetime({ offset: true }),
+});
+
+export const telegramNotificationDisconnectSchema = z.object({
+  telegram: notificationPreferencesSchema.shape.telegram,
 });
 
 const calendarServicePersonInputSchema = z

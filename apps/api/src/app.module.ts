@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { resolve } from 'node:path';
 import { apiEnvSchema } from '@churchflow/shared';
@@ -20,6 +21,8 @@ import { PlatformAdminBootstrapModule } from './modules/platform-admin-bootstrap
 import { MembershipClaimsModule } from './modules/membership-claims/membership-claims.module';
 import { CalendarEventsModule } from './modules/calendar-events/calendar-events.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ScheduledJobsModule } from './modules/scheduled-jobs/scheduled-jobs.module';
+import { TelegramBotModule } from './modules/telegram-bot/telegram-bot.module';
 
 @Module({
   imports: [
@@ -35,6 +38,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
         limit: 120,
       },
     ]),
+    ScheduleModule.forRoot(),
     PrismaModule,
     EmailModule,
     AuditModule,
@@ -47,7 +51,9 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     MembershipsModule,
     MembershipClaimsModule,
     CalendarEventsModule,
+    ScheduledJobsModule,
     NotificationsModule,
+    TelegramBotModule,
     WebsitesModule,
     PagesModule,
     MediaModule,

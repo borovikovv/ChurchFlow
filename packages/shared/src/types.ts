@@ -42,9 +42,12 @@ import type {
   notificationTypeSchema,
   listNotificationsQuerySchema,
   notificationListItemSchema,
+  notificationDetailSchema,
   notificationsPageSchema,
   notificationsSummarySchema,
   notificationPreferencesSchema,
+  telegramNotificationDisconnectSchema,
+  telegramNotificationLinkSchema,
   updateNotificationPreferencesSchema,
 } from './schemas.js';
 
@@ -101,12 +104,15 @@ export type ToggleCalendarTaskCompletionInput = z.infer<typeof toggleCalendarTas
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema>;
 export type NotificationListItem = z.infer<typeof notificationListItemSchema>;
+export type NotificationDetail = z.infer<typeof notificationDetailSchema>;
 export type NotificationsPage = z.infer<typeof notificationsPageSchema>;
 export type NotificationsSummary = z.infer<typeof notificationsSummarySchema>;
 export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
 export type UpdateNotificationPreferencesInput = z.infer<
   typeof updateNotificationPreferencesSchema
 >;
+export type TelegramNotificationLink = z.infer<typeof telegramNotificationLinkSchema>;
+export type TelegramNotificationDisconnect = z.infer<typeof telegramNotificationDisconnectSchema>;
 
 export interface CalendarEventMemberSummary {
   id: string;
