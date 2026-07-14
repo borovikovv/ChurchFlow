@@ -187,11 +187,7 @@ export function NotificationBell({ organizationId }: { organizationId: string })
       </button>
 
       {open ? (
-        <section
-          className="absolute right-0 top-12 z-30 grid w-[min(380px,calc(100vw-32px))] gap-0 overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow)]"
-          role="dialog"
-          aria-label="Notifications"
-        >
+        <section className="notification-bell-panel" role="dialog" aria-label="Notifications">
           <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] p-3">
             <div>
               <h2 className="m-0 text-base font-semibold">Notifications</h2>
@@ -225,7 +221,7 @@ export function NotificationBell({ organizationId }: { organizationId: string })
               No notifications yet.
             </p>
           ) : (
-            <div className="h-[360px]" role="menu" aria-label="Notification list">
+            <div className="notification-bell-list" role="menu" aria-label="Notification list">
               <Virtuoso
                 data={items}
                 endReached={loadNextPage}
