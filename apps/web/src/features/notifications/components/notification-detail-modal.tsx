@@ -2,19 +2,18 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Route } from 'next';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { NotificationDetail } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
-import { getNotificationDetail, markNotificationRead } from '../actions';
+import { useNotificationDetail } from '../hooks/use-notification-detail';
 
 export function NotificationDetailModal({ organizationId }: { organizationId: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const notificationId = searchParams.get('notificationId');
-  const [notification, setNotification] = useState<NotificationDetail | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const notificationQuery = useNotificationDetail({ organizationId, notificationId });
+  const notification = notificationQuery.data ?? null;
 
   const closeHref = useMemo(() => {
     const next = new URLSearchParams(searchParams);
@@ -23,37 +22,6 @@ export function NotificationDetailModal({ organizationId }: { organizationId: st
 
     return query ? `${pathname}?${query}` : pathname;
   }, [pathname, searchParams]);
-
-  useEffect(() => {
-    if (!notificationId) {
-      setNotification(null);
-      setError(null);
-      return;
-    }
-
-    let active = true;
-    setLoading(true);
-    setError(null);
-
-    getNotificationDetail({ organizationId, notificationId })
-      .then((detail) => {
-        if (!active) return;
-        setNotification(detail);
-        if (!detail.readAt) {
-          void markNotificationRead({ organizationId, notificationId }).catch(() => undefined);
-        }
-      })
-      .catch(() => {
-        if (active) setError('Notification could not be loaded.');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [notificationId, organizationId]);
 
   if (!notificationId) return null;
 
@@ -83,10 +51,10 @@ export function NotificationDetailModal({ organizationId }: { organizationId: st
         </header>
 
         <div className="overflow-auto p-4">
-          {loading ? (
+          {notificationQuery.isLoading ? (
             <p className="m-0 text-sm text-[var(--muted)]">Loading notification...</p>
-          ) : error ? (
-            <p className="form-error m-0">{error}</p>
+          ) : notificationQuery.isError ? (
+            <p className="form-error m-0">Notification could not be loaded.</p>
           ) : notification ? (
             <div className="stack">
               <div className="stack gap-1">
