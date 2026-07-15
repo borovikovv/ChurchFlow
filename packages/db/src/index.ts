@@ -2,6 +2,9 @@ export { PrismaClient, Prisma } from '@prisma/client';
 export type {
   AuthProvider,
   AuditAction,
+  BudgetCategoryType,
+  BudgetEntryField,
+  BudgetGroup,
   CalendarEventReminder,
   CalendarEventRepeatPeriod,
   CalendarEventType,

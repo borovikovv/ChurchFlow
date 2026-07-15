@@ -75,6 +75,7 @@ Create only the folders needed by the current change. Avoid empty architecture s
 
 - Use Tailwind utilities for all new or changed UI styling.
 - Keep one-off layout and visual rules directly in the owning component through `className`.
+- Use `class-variance-authority` (`cva`) for conditional style variants. Keep component-specific `cva` definitions in a colocated `<component-name>.styles.ts` file beside the component.
 - When Tailwind class groups repeat or form reusable variants, move them beside the component into `<component-name>.styles.ts` as named class maps or variant helpers.
 - If a component genuinely requires CSS that Tailwind cannot express cleanly, use a colocated `<component-name>.module.css`; do not add feature selectors to global CSS.
 - Use `app/globals.css` only for project-wide design tokens, resets, base element rules, and truly global primitives.

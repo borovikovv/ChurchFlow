@@ -1,7 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { NotificationPreferences, TelegramNotificationLink } from '@churchflow/shared';
+import {
+  CALENDAR_SERVICE_ROLE_LABELS,
+  type CalendarServiceRole,
+  type NotificationPreferences,
+  type TelegramNotificationLink,
+} from '@churchflow/shared';
 import {
   TelegramBotRepository,
   type TelegramNotificationDelivery,
@@ -359,19 +364,8 @@ function formatParticipants(service: UpcomingSundayServiceRecord): string | null
     .join('\n');
 }
 
-function formatServiceRole(role: string): string {
-  switch (role) {
-    case 'PREACHER':
-      return 'Preacher';
-    case 'SERVICE_HOST':
-      return 'Host';
-    case 'WORSHIP_LEAD':
-      return 'Worship';
-    case 'COMMUNION_LEAD':
-      return 'Communion';
-    default:
-      return role;
-  }
+function formatServiceRole(role: CalendarServiceRole): string {
+  return CALENDAR_SERVICE_ROLE_LABELS[role];
 }
 
 function notificationDetailUrl(url: string | null, notificationId: string | null): string | null {

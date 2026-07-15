@@ -33,6 +33,7 @@ type FormSelectProps = {
   onChange?: ChangeEventHandler<HTMLSelectElement> | undefined;
   required?: boolean | undefined;
   selectClassName?: string | undefined;
+  size?: 'default' | 'compact' | undefined;
   value?: string | number | readonly string[] | undefined;
   clearable?: boolean | undefined;
 };
@@ -43,83 +44,89 @@ type OptionElementProps = {
   value?: string | number | readonly string[];
 };
 
-const selectStyles: StylesConfig<SelectOption, false> = {
-  control: (base, state) => ({
-    ...base,
-    minHeight: 42,
-    borderColor: state.isFocused ? 'var(--accent)' : 'var(--line)',
-    borderRadius: 'var(--radius)',
-    backgroundColor: state.isDisabled ? 'var(--surface-subtle)' : 'var(--surface)',
-    boxShadow: 'inset 0 1px 0 rgba(208, 215, 222, 0.2)',
-    color: 'var(--foreground)',
-    cursor: state.isDisabled ? 'not-allowed' : 'pointer',
-    font: 'inherit',
-    opacity: state.isDisabled ? 0.65 : 1,
-    '&:hover': {
+function createSelectStyles(size: 'default' | 'compact'): StylesConfig<SelectOption, false> {
+  const compact = size === 'compact';
+
+  return {
+    control: (base, state) => ({
+      ...base,
+      minHeight: compact ? 32 : 42,
       borderColor: state.isFocused ? 'var(--accent)' : 'var(--line)',
-    },
-  }),
-  dropdownIndicator: (base, state) => ({
-    ...base,
-    color: state.isFocused ? 'var(--accent-strong)' : 'var(--muted)',
-    paddingInline: 10,
-    '&:hover': {
-      color: 'var(--accent-strong)',
-    },
-  }),
-  indicatorSeparator: () => ({
-    display: 'none',
-  }),
-  input: (base) => ({
-    ...base,
-    color: 'var(--foreground)',
-    margin: 0,
-    padding: 0,
-  }),
-  menu: (base) => ({
-    ...base,
-    zIndex: 60,
-    border: '1px solid var(--line)',
-    borderRadius: 'var(--radius)',
-    backgroundColor: 'var(--surface)',
-    boxShadow: '0 12px 28px rgba(31, 35, 40, 0.16)',
-    overflow: 'hidden',
-  }),
-  menuList: (base) => ({
-    ...base,
-    paddingBlock: 4,
-  }),
-  option: (base, state) => ({
-    ...base,
-    backgroundColor: state.isSelected
-      ? '#ddf4ff'
-      : state.isFocused
-        ? 'var(--surface-subtle)'
-        : 'var(--surface)',
-    color: 'var(--foreground)',
-    cursor: state.isDisabled ? 'not-allowed' : 'pointer',
-    fontWeight: state.isSelected ? 600 : 400,
-    opacity: state.isDisabled ? 0.6 : 1,
-    paddingBlock: 8,
-    paddingInline: 12,
-    '&:active': {
-      backgroundColor: state.isSelected ? '#ddf4ff' : 'var(--line-muted)',
-    },
-  }),
-  placeholder: (base) => ({
-    ...base,
-    color: 'var(--muted)',
-  }),
-  singleValue: (base) => ({
-    ...base,
-    color: 'var(--foreground)',
-  }),
-  valueContainer: (base) => ({
-    ...base,
-    paddingBlock: 0,
-    paddingInline: 12,
-  }),
-};
+      borderRadius: 'var(--radius)',
+      backgroundColor: state.isDisabled ? 'var(--surface-subtle)' : 'var(--surface)',
+      boxShadow: 'inset 0 1px 0 rgba(208, 215, 222, 0.2)',
+      color: 'var(--foreground)',
+      cursor: state.isDisabled ? 'not-allowed' : 'pointer',
+      font: 'inherit',
+      opacity: state.isDisabled ? 0.65 : 1,
+      '&:hover': {
+        borderColor: state.isFocused ? 'var(--accent)' : 'var(--line)',
+      },
+    }),
+    dropdownIndicator: (base, state) => ({
+      ...base,
+      color: state.isFocused ? 'var(--accent-strong)' : 'var(--muted)',
+      paddingInline: compact ? 6 : 10,
+      '&:hover': {
+        color: 'var(--accent-strong)',
+      },
+    }),
+    indicatorSeparator: () => ({
+      display: 'none',
+    }),
+    input: (base) => ({
+      ...base,
+      color: 'var(--foreground)',
+      margin: 0,
+      padding: 0,
+    }),
+    menu: (base) => ({
+      ...base,
+      zIndex: 60,
+      border: '1px solid var(--line)',
+      borderRadius: 'var(--radius)',
+      backgroundColor: 'var(--surface)',
+      boxShadow: '0 12px 28px rgba(31, 35, 40, 0.16)',
+      overflow: 'hidden',
+    }),
+    menuList: (base) => ({
+      ...base,
+      paddingBlock: 4,
+    }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isSelected
+        ? '#ddf4ff'
+        : state.isFocused
+          ? 'var(--surface-subtle)'
+          : 'var(--surface)',
+      color: 'var(--foreground)',
+      cursor: state.isDisabled ? 'not-allowed' : 'pointer',
+      fontWeight: state.isSelected ? 600 : 400,
+      opacity: state.isDisabled ? 0.6 : 1,
+      paddingBlock: compact ? 5 : 8,
+      paddingInline: compact ? 8 : 12,
+      '&:active': {
+        backgroundColor: state.isSelected ? '#ddf4ff' : 'var(--line-muted)',
+      },
+    }),
+    placeholder: (base) => ({
+      ...base,
+      color: 'var(--muted)',
+    }),
+    singleValue: (base) => ({
+      ...base,
+      color: 'var(--foreground)',
+    }),
+    valueContainer: (base) => ({
+      ...base,
+      paddingBlock: 0,
+      paddingInline: compact ? 8 : 12,
+    }),
+  };
+}
+
+const selectStyles = createSelectStyles('default');
 
 export function FormSelect({
   label,
@@ -135,6 +142,7 @@ export function FormSelect({
   onChange,
   required,
   selectClassName,
+  size = 'default',
   value,
 }: FormSelectProps) {
   const options = extractOptions(children);
@@ -162,7 +170,7 @@ export function FormSelect({
             menuShouldScrollIntoView={false}
             options={options}
             required={Boolean(required)}
-            styles={selectStyles}
+            styles={size === 'compact' ? createSelectStyles('compact') : selectStyles}
             value={selectedOption}
             {...(selectClassName ? { className: selectClassName } : {})}
             onBlur={() => {

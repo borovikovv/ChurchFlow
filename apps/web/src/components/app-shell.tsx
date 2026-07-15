@@ -13,6 +13,7 @@ import { APP_ROUTES } from '@/routes';
 import {
   ORGANIZATION_ROUTE_SEGMENTS,
   organizationCalendarRoute,
+  organizationBudgetRoute,
   organizationHomeRoute,
   organizationMembersRoute,
   organizationProfileRoute,
@@ -34,11 +35,13 @@ interface AppNavItem {
 export function AppShell({
   children,
   canOpenAdmin,
+  budgetOrganizationIds,
   displayName,
   websiteOrganizationIds,
 }: {
   children: ReactNode;
   canOpenAdmin: boolean;
+  budgetOrganizationIds: string[];
   displayName: string;
   websiteOrganizationIds: string[];
 }) {
@@ -49,8 +52,9 @@ export function AppShell({
 
   const dashboardOrgId = getDashboardOrgId(pathname);
   const canOpenWebsite = dashboardOrgId ? websiteOrganizationIds.includes(dashboardOrgId) : false;
+  const canOpenBudget = dashboardOrgId ? budgetOrganizationIds.includes(dashboardOrgId) : false;
   const navItems = dashboardOrgId
-    ? dashboardNavigationItems(dashboardOrgId, canOpenWebsite)
+    ? dashboardNavigationItems(dashboardOrgId, { canOpenBudget, canOpenWebsite })
     : canOpenAdmin
       ? [{ href: APP_ROUTES.organizationRequest, label: 'Create organization' }]
       : [];
@@ -198,13 +202,19 @@ function MobileAppMenu({
   );
 }
 
-function dashboardNavigationItems(organizationId: string, canOpenWebsite: boolean): AppNavItem[] {
+function dashboardNavigationItems(
+  organizationId: string,
+  access: { canOpenBudget: boolean; canOpenWebsite: boolean },
+): AppNavItem[] {
   return [
     { href: organizationHomeRoute(organizationId), label: 'Home', exact: true },
     { href: organizationMembersRoute(organizationId), label: 'Members' },
     { href: organizationCalendarRoute(organizationId), label: 'Calendar' },
+    ...(access.canOpenBudget
+      ? [{ href: organizationBudgetRoute(organizationId), label: 'Budget' }]
+      : []),
     { href: organizationProfileRoute(organizationId), label: 'Profile' },
-    ...(canOpenWebsite
+    ...(access.canOpenWebsite
       ? [{ href: organizationWebsiteRoute(organizationId), label: 'Website' }]
       : []),
   ];

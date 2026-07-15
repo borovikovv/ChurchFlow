@@ -3,7 +3,11 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Route } from 'next';
 import { useMemo } from 'react';
-import type { NotificationDetail } from '@churchflow/shared';
+import {
+  CALENDAR_SERVICE_ROLE_LABELS,
+  CalendarServiceRole,
+  type NotificationDetail,
+} from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { useNotificationDetail } from '../hooks/use-notification-detail';
 
@@ -160,17 +164,6 @@ function formatEventType(value: string): string {
     .join(' ');
 }
 
-function formatServiceRole(value: string): string {
-  switch (value) {
-    case 'PREACHER':
-      return 'Preacher';
-    case 'SERVICE_HOST':
-      return 'Host';
-    case 'WORSHIP_LEAD':
-      return 'Worship';
-    case 'COMMUNION_LEAD':
-      return 'Communion';
-    default:
-      return formatEventType(value);
-  }
+function formatServiceRole(role: CalendarServiceRole): string {
+  return CALENDAR_SERVICE_ROLE_LABELS[role];
 }

@@ -162,6 +162,28 @@ enum NotificationType {
   ORGANIZATION_ANNOUNCEMENT
 }
 
+enum BudgetGroup {
+  INCOME
+  CURRENCY_EXCHANGE
+  FACILITY
+  TABLES
+  PASTORS
+  DISCIPLESHIP
+  EVANGELISM
+  OTHER
+}
+
+enum BudgetCategoryType {
+  INCOME
+  EXPENSE
+}
+
+enum BudgetEntryField {
+  AMOUNT_UAH
+  AMOUNT_USD
+  AMOUNT_EUR
+}
+
 enum MemberMinistry {
   PREACHING
   WORSHIP
@@ -294,6 +316,8 @@ model Organization {
   serviceSongs            CalendarServiceSong[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
+  budgetCategories        BudgetCategory[]
+  budgetMonths            BudgetMonth[]
 
   @@index([status])
   @@index([slug])
@@ -823,6 +847,79 @@ model TelegramNotificationLinkToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("telegram_notification_link_tokens")
+}
+
+model BudgetCategory {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  group          BudgetGroup
+  type           BudgetCategoryType
+  name           String
+  order          Int                @default(0)
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  deletedAt      DateTime?          @map("deleted_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entries      BudgetEntry[]
+
+  @@index([organizationId, group, order])
+  @@index([organizationId, deletedAt])
+  @@map("budget_categories")
+}
+
+model BudgetMonth {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  year           Int
+  month          Int
+  rowCount       Int      @default(10) @map("row_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entries      BudgetEntry[]
+
+  @@unique([organizationId, year, month])
+  @@index([organizationId, year])
+  @@map("budget_months")
+}
+
+model BudgetEntry {
+  id         String   @id @default(uuid()) @db.Uuid
+  monthId    String   @map("month_id") @db.Uuid
+  categoryId String   @map("category_id") @db.Uuid
+  rowIndex   Int      @default(0) @map("row_index")
+  amountUah  Decimal  @default(0) @map("amount_uah") @db.Decimal(12, 2)
+  amountUsd  Decimal  @default(0) @map("amount_usd") @db.Decimal(12, 2)
+  amountEur  Decimal  @default(0) @map("amount_eur") @db.Decimal(12, 2)
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  month    BudgetMonth       @relation(fields: [monthId], references: [id], onDelete: Cascade)
+  category BudgetCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  notes    BudgetEntryNote[]
+
+  @@unique([monthId, categoryId, rowIndex])
+  @@index([categoryId])
+  @@index([monthId, rowIndex])
+  @@map("budget_entries")
+}
+
+model BudgetEntryNote {
+  id        String           @id @default(uuid()) @db.Uuid
+  entryId   String           @map("entry_id") @db.Uuid
+  field     BudgetEntryField
+  note      String
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  entry BudgetEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@unique([entryId, field])
+  @@index([entryId])
+  @@map("budget_entry_notes")
 }
 
 model ScheduledJobLock {

@@ -39,6 +39,15 @@ import type {
   updateCalendarEventSchema,
   updateCalendarPreferencesSchema,
   toggleCalendarTaskCompletionSchema,
+  budgetGroupSchema,
+  budgetCategoryTypeSchema,
+  budgetEntryFieldSchema,
+  listBudgetQuerySchema,
+  createBudgetMonthSchema,
+  createBudgetCategorySchema,
+  updateBudgetCategorySchema,
+  updateBudgetEntrySchema,
+  updateBudgetEntryNoteSchema,
   notificationTypeSchema,
   listNotificationsQuerySchema,
   notificationListItemSchema,
@@ -101,6 +110,15 @@ export type CreateCalendarEventInput = z.infer<typeof createCalendarEventSchema>
 export type UpdateCalendarEventInput = z.infer<typeof updateCalendarEventSchema>;
 export type UpdateCalendarPreferencesInput = z.infer<typeof updateCalendarPreferencesSchema>;
 export type ToggleCalendarTaskCompletionInput = z.infer<typeof toggleCalendarTaskCompletionSchema>;
+export type BudgetGroup = z.infer<typeof budgetGroupSchema>;
+export type BudgetCategoryType = z.infer<typeof budgetCategoryTypeSchema>;
+export type BudgetEntryField = z.infer<typeof budgetEntryFieldSchema>;
+export type ListBudgetQuery = z.infer<typeof listBudgetQuerySchema>;
+export type CreateBudgetMonthInput = z.infer<typeof createBudgetMonthSchema>;
+export type CreateBudgetCategoryInput = z.infer<typeof createBudgetCategorySchema>;
+export type UpdateBudgetCategoryInput = z.infer<typeof updateBudgetCategorySchema>;
+export type UpdateBudgetEntryInput = z.infer<typeof updateBudgetEntrySchema>;
+export type UpdateBudgetEntryNoteInput = z.infer<typeof updateBudgetEntryNoteSchema>;
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema>;
 export type NotificationListItem = z.infer<typeof notificationListItemSchema>;
@@ -183,6 +201,65 @@ export interface CalendarEventsPayload {
   events: CalendarEventItem[];
   preferences: CalendarPreferences;
   members: CalendarMemberOption[];
+}
+
+export interface BudgetCurrencyTotals {
+  amountUah: number;
+  amountUsd: number;
+  amountEur: number;
+}
+
+export interface BudgetTotals {
+  income: BudgetCurrencyTotals;
+  expense: BudgetCurrencyTotals;
+  balance: BudgetCurrencyTotals;
+}
+
+export interface BudgetCategory {
+  id: string;
+  group: BudgetGroup;
+  type: BudgetCategoryType;
+  name: string;
+  order: number;
+}
+
+export interface BudgetEntryNote {
+  field: BudgetEntryField;
+  note: string;
+}
+
+export interface BudgetEntry {
+  id: string;
+  categoryId: string;
+  rowIndex: number;
+  amountUah: number;
+  amountUsd: number;
+  amountEur: number;
+  notes: BudgetEntryNote[];
+}
+
+export interface BudgetMonth {
+  id: string;
+  year: number;
+  month: number;
+  rowCount: number;
+  entries: BudgetEntry[];
+  totals: BudgetTotals;
+}
+
+export interface BudgetGroupSummary {
+  group: BudgetGroup;
+  totals: BudgetTotals;
+}
+
+export interface BudgetPayload {
+  actorRole: 'OWNER' | 'ADMIN';
+  canManage: true;
+  year: number;
+  categories: BudgetCategory[];
+  months: BudgetMonth[];
+  yearTotals: BudgetTotals;
+  groupSummaries: BudgetGroupSummary[];
 }
 
 export interface OrganizationRequestStatusItem {

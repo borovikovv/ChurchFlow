@@ -5,6 +5,7 @@ import { AppShell } from '@/components/app-shell';
 import {
   getOrganizationAccessState,
   isOrganizationAdminRole,
+  type OrganizationAccessRecord,
 } from '@/features/organizations/server/access';
 import { PublicAppHeader } from '@/components/public-app-header';
 import { QueryProvider } from '@/components/query-provider';
@@ -23,6 +24,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const hasSession = await hasServerSession();
   const user = hasSession ? await getCurrentUser() : null;
   const access = user ? await getOrganizationAccessState(user) : null;
+  const adminOrganizationIds = adminOrganizationIdsFromAccess(access?.organizations);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -31,12 +33,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           {user ? (
             <AppShell
               canOpenAdmin={access?.canOpenAdmin ?? false}
+              budgetOrganizationIds={adminOrganizationIds}
               displayName={user.displayName ?? user.email ?? 'ChurchFlow user'}
-              websiteOrganizationIds={
-                access?.organizations
-                  .filter((organization) => isOrganizationAdminRole(organization.role))
-                  .map((organization) => organization.id) ?? []
-              }
+              websiteOrganizationIds={adminOrganizationIds}
             >
               {children}
             </AppShell>
@@ -52,5 +51,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         </QueryProvider>
       </body>
     </html>
+  );
+}
+
+function adminOrganizationIdsFromAccess(
+  organizations: OrganizationAccessRecord[] | undefined,
+): string[] {
+  return (
+    organizations
+      ?.filter((organization) => isOrganizationAdminRole(organization.role))
+      .map((organization) => organization.id) ?? []
   );
 }

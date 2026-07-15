@@ -6,6 +6,9 @@ import {
   CALENDAR_EVENT_TYPE,
   CALENDAR_EVENT_TYPES,
   CALENDAR_SERVICE_ROLES,
+  BUDGET_CATEGORY_TYPES,
+  BUDGET_ENTRY_FIELDS,
+  BUDGET_GROUPS,
   MEMBER_MINISTRIES,
   NOTIFICATION_TYPES,
   PUBLIC_SECTION_TYPES,
@@ -142,6 +145,50 @@ export const updateCalendarPreferencesSchema = z.object({
 });
 
 export const notificationTypeSchema = z.enum(NOTIFICATION_TYPES);
+
+export const budgetGroupSchema = z.enum(BUDGET_GROUPS);
+export const budgetCategoryTypeSchema = z.enum(BUDGET_CATEGORY_TYPES);
+export const budgetEntryFieldSchema = z.enum(BUDGET_ENTRY_FIELDS);
+const budgetAmountSchema = z.coerce.number().min(0).max(999_999_999.99);
+
+export const listBudgetQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+});
+
+export const createBudgetMonthSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100),
+  month: z.coerce.number().int().min(1).max(12),
+});
+
+export const createBudgetCategorySchema = z.object({
+  group: budgetGroupSchema,
+  type: budgetCategoryTypeSchema,
+  name: z.string().trim().min(1).max(120),
+});
+
+export const updateBudgetCategorySchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  type: budgetCategoryTypeSchema.optional(),
+  order: z.coerce.number().int().min(0).max(1000).optional(),
+});
+
+export const updateBudgetEntrySchema = z
+  .object({
+    amountUah: budgetAmountSchema.optional(),
+    amountUsd: budgetAmountSchema.optional(),
+    amountEur: budgetAmountSchema.optional(),
+  })
+  .refine(
+    (value) =>
+      value.amountUah !== undefined ||
+      value.amountUsd !== undefined ||
+      value.amountEur !== undefined,
+    { message: 'At least one budget entry field is required' },
+  );
+
+export const updateBudgetEntryNoteSchema = z.object({
+  note: z.string().trim().max(500).nullable(),
+});
 
 export const listNotificationsQuerySchema = z.object({
   cursor: uuidSchema.optional(),

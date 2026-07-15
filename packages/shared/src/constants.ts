@@ -42,6 +42,13 @@ export const CALENDAR_SERVICE_ROLE = {
   communionLead: 'COMMUNION_LEAD',
 } as const;
 
+export const CALENDAR_SERVICE_ROLE_LABELS = {
+  PREACHER: 'Preacher',
+  SERVICE_HOST: 'Host',
+  WORSHIP_LEAD: 'Worship',
+  COMMUNION_LEAD: 'Communion',
+} as const satisfies Record<(typeof CALENDAR_SERVICE_ROLES)[number], string>;
+
 export const NOTIFICATION_TYPES = [
   'TASK_ASSIGNED',
   'TASK_UPDATED',
@@ -50,6 +57,106 @@ export const NOTIFICATION_TYPES = [
   'SERVICE_REMINDER',
   'BIRTHDAY_DIGEST',
   'ORGANIZATION_ANNOUNCEMENT',
+] as const;
+
+export const BUDGET_GROUPS = [
+  'INCOME',
+  'CURRENCY_EXCHANGE',
+  'FACILITY',
+  'TABLES',
+  'PASTORS',
+  'DISCIPLESHIP',
+  'EVANGELISM',
+  'OTHER',
+] as const;
+
+export const BUDGET_GROUP = {
+  income: 'INCOME',
+  currencyExchange: 'CURRENCY_EXCHANGE',
+  facility: 'FACILITY',
+  tables: 'TABLES',
+  pastors: 'PASTORS',
+  discipleship: 'DISCIPLESHIP',
+  evangelism: 'EVANGELISM',
+  other: 'OTHER',
+} as const;
+
+export const BUDGET_CATEGORY_TYPES = ['INCOME', 'EXPENSE'] as const;
+
+export const BUDGET_CATEGORY_TYPE = {
+  income: 'INCOME',
+  expense: 'EXPENSE',
+} as const;
+
+export const BUDGET_CURRENCIES = ['UAH', 'USD', 'EUR'] as const;
+
+export const BUDGET_ENTRY_FIELDS = ['AMOUNT_UAH', 'AMOUNT_USD', 'AMOUNT_EUR'] as const;
+
+export const BUDGET_ENTRY_FIELD = {
+  amountUah: 'AMOUNT_UAH',
+  amountUsd: 'AMOUNT_USD',
+  amountEur: 'AMOUNT_EUR',
+} as const;
+
+export const DEFAULT_BUDGET_MONTH_ROW_COUNT = 10;
+
+export const BUDGET_MONTH_ROW_COUNT = DEFAULT_BUDGET_MONTH_ROW_COUNT;
+
+export const DEFAULT_BUDGET_CATEGORIES = [
+  {
+    group: BUDGET_GROUP.income,
+    type: BUDGET_CATEGORY_TYPE.income,
+    name: 'Office rent income',
+  },
+  {
+    group: BUDGET_GROUP.income,
+    type: BUDGET_CATEGORY_TYPE.income,
+    name: 'Offerings and donations',
+  },
+  { group: BUDGET_GROUP.income, type: BUDGET_CATEGORY_TYPE.income, name: 'USD income' },
+  { group: BUDGET_GROUP.income, type: BUDGET_CATEGORY_TYPE.income, name: 'EUR income' },
+  {
+    group: BUDGET_GROUP.currencyExchange,
+    type: BUDGET_CATEGORY_TYPE.income,
+    name: 'UAH from exchange',
+  },
+  {
+    group: BUDGET_GROUP.currencyExchange,
+    type: BUDGET_CATEGORY_TYPE.expense,
+    name: 'USD spent',
+  },
+  {
+    group: BUDGET_GROUP.currencyExchange,
+    type: BUDGET_CATEGORY_TYPE.expense,
+    name: 'EUR spent',
+  },
+  {
+    group: BUDGET_GROUP.facility,
+    type: BUDGET_CATEGORY_TYPE.expense,
+    name: 'Rent, utilities and cleaning',
+  },
+  { group: BUDGET_GROUP.facility, type: BUDGET_CATEGORY_TYPE.expense, name: 'Inventory' },
+  {
+    group: BUDGET_GROUP.facility,
+    type: BUDGET_CATEGORY_TYPE.expense,
+    name: 'Household supplies',
+  },
+  { group: BUDGET_GROUP.tables, type: BUDGET_CATEGORY_TYPE.expense, name: 'Sunday groceries' },
+  { group: BUDGET_GROUP.tables, type: BUDGET_CATEGORY_TYPE.expense, name: 'Holidays' },
+  {
+    group: BUDGET_GROUP.pastors,
+    type: BUDGET_CATEGORY_TYPE.expense,
+    name: 'Guest ministers expenses',
+  },
+  {
+    group: BUDGET_GROUP.pastors,
+    type: BUDGET_CATEGORY_TYPE.expense,
+    name: 'Minister support',
+  },
+  { group: BUDGET_GROUP.discipleship, type: BUDGET_CATEGORY_TYPE.expense, name: 'Groups' },
+  { group: BUDGET_GROUP.discipleship, type: BUDGET_CATEGORY_TYPE.expense, name: 'Catechesis' },
+  { group: BUDGET_GROUP.evangelism, type: BUDGET_CATEGORY_TYPE.expense, name: 'Game nights' },
+  { group: BUDGET_GROUP.other, type: BUDGET_CATEGORY_TYPE.expense, name: 'Other expenses' },
 ] as const;
 
 export const MEMBER_MINISTRIES = [

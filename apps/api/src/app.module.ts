@@ -23,6 +23,7 @@ import { CalendarEventsModule } from './modules/calendar-events/calendar-events.
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ScheduledJobsModule } from './modules/scheduled-jobs/scheduled-jobs.module';
 import { TelegramBotModule } from './modules/telegram-bot/telegram-bot.module';
+import { BudgetsModule } from './modules/budgets/budgets.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { TelegramBotModule } from './modules/telegram-bot/telegram-bot.module';
     MembershipsModule,
     MembershipClaimsModule,
     CalendarEventsModule,
+    BudgetsModule,
     ScheduledJobsModule,
     NotificationsModule,
     TelegramBotModule,
