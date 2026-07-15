@@ -168,9 +168,12 @@ function BudgetMonthTableHeader({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h2>{monthName} table</h2>
-        <CurrencyTotals totals={month.totals.balance} className="mt-1 text-sm font-semibold" />
+      <div className="flex md:flex-row flex-col justify-baseline items-start md:items-center gap-2">
+        <h2 className="md:self-end pr-3">{monthName} table:</h2>
+        <CurrencyTotals
+          totals={month.totals.balance}
+          className="mt-1 flex gap-3 text-sm font-semibold underline"
+        />
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
