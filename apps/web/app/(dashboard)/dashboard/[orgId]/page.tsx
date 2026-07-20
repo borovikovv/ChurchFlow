@@ -1,15 +1,9 @@
 import { notFound } from 'next/navigation';
 import { apiFetch } from '@/api/client';
-import { StatusBadge } from '@/components/ui/status-badge';
 import { getOrganizationAccessState } from '@/features/organizations/server/access';
-
-interface AdminOrganizationDetail {
-  id: string;
-  name: string;
-  slug: string;
-  status: string;
-  description: string | null;
-}
+import type { AuditLogsPage } from '@churchflow/shared';
+import { OrganizationHomeManager } from './_components/organization-home-manager';
+import type { OrganizationHomeApiResponse } from './types';
 
 export default async function OrganizationDashboardPage({
   params,
@@ -23,7 +17,7 @@ export default async function OrganizationDashboardPage({
   );
   const adminOrganization =
     !membershipOrganization && access.isPlatformAdmin
-      ? await apiFetch<AdminOrganizationDetail>(`/admin/organizations/${orgId}`)
+      ? await apiFetch<OrganizationHomeApiResponse>(`/admin/organizations/${orgId}`)
       : null;
 
   if (!membershipOrganization && !adminOrganization?.ok) {
@@ -38,30 +32,32 @@ export default async function OrganizationDashboardPage({
     notFound();
   }
 
+  const logoAssetId = organization.website?.logoAssetId ?? null;
+  const [logoUrlResult, auditResult] = await Promise.all([
+    logoAssetId
+      ? apiFetch<{ url: string }>(`/organizations/${organization.id}/media/${logoAssetId}/read-url`)
+      : Promise.resolve(null),
+    organizationRole === 'OWNER' || organizationRole === 'ADMIN'
+      ? apiFetch<AuditLogsPage>(`/organizations/${organization.id}/audit-logs?limit=10`)
+      : Promise.resolve(null),
+  ]);
+  const logoUrl = logoUrlResult?.ok ? logoUrlResult.data.url : null;
+  const auditPage = auditResult?.ok ? auditResult.data : { items: [], nextCursor: null };
+
   return (
-    <div className="stack">
-      <h1>Home</h1>
-      <p>Organization overview and core details.</p>
-      <dl className="details">
-        <dt>Name</dt>
-        <dd>{organization.name}</dd>
-        <dt>Slug</dt>
-        <dd>{organization.slug}</dd>
-        <dt>Status</dt>
-        <dd>
-          <StatusBadge status={organization.status} />
-        </dd>
-        <dt>Description</dt>
-        <dd>{organization.description ?? 'No description'}</dd>
-        {organizationRole ? (
-          <>
-            <dt>Your role</dt>
-            <dd>
-              <StatusBadge status={organizationRole} />
-            </dd>
-          </>
-        ) : null}
-      </dl>
-    </div>
+    <OrganizationHomeManager
+      organization={{
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        status: organization.status,
+        description: organization.description,
+        logoAssetId,
+        logoUrl,
+      }}
+      organizationRole={organizationRole}
+      auditLogs={auditPage.items}
+      auditNextCursor={auditPage.nextCursor}
+    />
   );
 }

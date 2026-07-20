@@ -1,10 +1,49 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@churchflow/db';
-import { PrismaService } from '../../prisma/prisma.service';
+import type { AuditLogsPage, ListAuditLogsQuery } from '@churchflow/shared';
+import { AuditRepository } from './repositories/audit.repository';
 
 @Injectable()
 export class AuditService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly auditRepository: AuditRepository) {}
+
+  async listForOrganization(
+    organizationId: string,
+    actorUserId: string,
+    query: ListAuditLogsQuery,
+  ): Promise<AuditLogsPage> {
+    const actorMembership = await this.auditRepository.findOrganizationManager(
+      organizationId,
+      actorUserId,
+    );
+
+    if (!actorMembership) {
+      throw new ForbiddenException('Only organization owners and admins can view audit logs');
+    }
+
+    const logs = await this.auditRepository.listForOrganization({
+      organizationId,
+      limit: query.limit,
+      ...(query.cursor ? { cursor: query.cursor } : {}),
+    });
+    const items = logs.slice(0, query.limit);
+    const next = logs.length > query.limit ? logs[query.limit] : null;
+
+    return {
+      items: items.map((log) => ({
+        id: log.id,
+        organizationId: log.organizationId,
+        actorUserId: log.actorUserId,
+        action: log.action,
+        entityType: log.entityType,
+        entityId: log.entityId,
+        metadata: this.toJsonObject(log.metadata),
+        createdAt: log.createdAt.toISOString(),
+        actor: log.actor,
+      })),
+      nextCursor: next?.id ?? null,
+    };
+  }
 
   async record(input: {
     organizationId?: string;
@@ -17,7 +56,7 @@ export class AuditService {
     const data: Prisma.AuditLogUncheckedCreateInput = {
       action: input.action,
       entityType: input.entityType,
-      metadata: input.metadata ?? {}
+      metadata: input.metadata ?? {},
     };
 
     if (input.organizationId !== undefined) {
@@ -32,8 +71,10 @@ export class AuditService {
       data.entityId = input.entityId;
     }
 
-    await this.prisma.auditLog.create({
-      data
-    });
+    await this.auditRepository.create(data);
+  }
+
+  private toJsonObject(value: Prisma.JsonValue): Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
   }
 }

@@ -1,10 +1,22 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { createOrganizationSchema, organizationStatusSchema } from '@churchflow/shared';
 import type { OrganizationStatus } from '@churchflow/db';
 import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
 import { PlatformAdminGuard } from '../../common/guards/platform-admin.guard';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { ListAdminOrganizationWorkspaceQueryDto } from './dto/list-admin-organization-workspace-query.dto';
+import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsService } from './organizations.service';
 
 @Controller()
@@ -83,6 +95,15 @@ export class OrganizationsController {
     }
 
     return this.organizationsService.create(createOrganizationSchema.parse(body), auth.sub);
+  }
+
+  @Patch('/organizations/:organizationId')
+  async update(
+    @Param('organizationId') organizationId: string,
+    @Body() body: UpdateOrganizationDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.organizationsService.update(organizationId, body, this.getActorUserId(request));
   }
 
   private getActorUserId(request: AuthenticatedRequest): string {

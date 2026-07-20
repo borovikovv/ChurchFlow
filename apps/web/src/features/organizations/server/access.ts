@@ -16,6 +16,9 @@ export interface OrganizationAccessRecord {
   description: string | null;
   createdAt: string;
   role: OrganizationMembershipRole;
+  website: {
+    logoAssetId: string | null;
+  } | null;
   _count?: {
     members: number;
     invitations: number;
@@ -61,8 +64,9 @@ export async function getOrganizationAccessState(
         )
       : Promise.resolve(currentUser);
   const organizationsPromise = apiFetch<OrganizationAccessRecord[]>('/organizations/mine');
-  const organizationRequestsPromise =
-    apiFetch<OrganizationRequestAccessRecord[]>('/organization-requests/mine');
+  const organizationRequestsPromise = apiFetch<OrganizationRequestAccessRecord[]>(
+    '/organization-requests/mine',
+  );
   const [user, organizationsResult, organizationRequestsResult] = await Promise.all([
     userPromise,
     organizationsPromise,

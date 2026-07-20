@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { OrganizationStatus, PlatformRole, Prisma } from '@churchflow/db';
 import { PrismaService } from '../../../prisma/prisma.service';
-import type { createOrganizationSchema } from '@churchflow/shared';
+import type { createOrganizationSchema, UpdateOrganizationInput } from '@churchflow/shared';
 import type { z } from 'zod';
 
 @Injectable()
@@ -25,6 +25,11 @@ export class OrganizationsRepository {
             status: true,
             description: true,
             createdAt: true,
+            website: {
+              select: {
+                logoAssetId: true,
+              },
+            },
             _count: {
               select: {
                 members: {
@@ -64,6 +69,11 @@ export class OrganizationsRepository {
             status: true,
             description: true,
             createdAt: true,
+            website: {
+              select: {
+                logoAssetId: true,
+              },
+            },
             _count: {
               select: {
                 members: {
@@ -191,6 +201,116 @@ export class OrganizationsRepository {
     return this.prisma.organization.update({
       where: { id },
       data: dataByAction[action],
+    });
+  }
+
+  findActiveById(id: string) {
+    return this.prisma.organization.findFirst({
+      where: { id, status: 'ACTIVE', deletedAt: null },
+      select: { id: true },
+    });
+  }
+
+  findOrganizationManager(organizationId: string, actorUserId: string) {
+    return this.prisma.organizationMember.findFirst({
+      where: {
+        organizationId,
+        userId: actorUserId,
+        role: { in: ['OWNER', 'ADMIN'] },
+        status: 'ACTIVE',
+        removedAt: null,
+        organization: {
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
+      },
+      select: { id: true },
+    });
+  }
+
+  async update(id: string, input: UpdateOrganizationInput, actorUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.organization.findFirst({
+        where: { id, status: 'ACTIVE', deletedAt: null },
+        select: { name: true, slug: true, description: true },
+      });
+      if (!current) throw new Error('ORGANIZATION_NOT_FOUND');
+
+      const data: Prisma.OrganizationUpdateInput = {};
+      const changedFields: string[] = [];
+      const previous: Record<string, string | null> = {};
+      const next: Record<string, string | null> = {};
+
+      if (input.name !== undefined && input.name !== current.name) {
+        data.name = input.name;
+        changedFields.push('name');
+        previous['name'] = current.name;
+        next['name'] = input.name;
+      }
+      if (input.slug !== undefined && input.slug !== current.slug) {
+        data.slug = input.slug;
+        changedFields.push('slug');
+        previous['slug'] = current.slug;
+        next['slug'] = input.slug;
+      }
+      if (input.description !== undefined && input.description !== current.description) {
+        data.description = input.description;
+        changedFields.push('description');
+        previous['description'] = current.description;
+        next['description'] = input.description;
+      }
+
+      if (changedFields.length === 0) {
+        return tx.organization.findUniqueOrThrow({
+          where: { id },
+          include: { website: true },
+        });
+      }
+
+      const organization = await tx.organization.update({
+        where: { id },
+        data,
+        include: { website: true },
+      });
+
+      await tx.websitePage.updateMany({
+        where: {
+          organizationId: id,
+          slug: 'home',
+          title: current.name,
+        },
+        data: { title: organization.name },
+      });
+
+      await tx.organizationWebsite.upsert({
+        where: { organizationId: id },
+        create: {
+          organizationId: id,
+          title: organization.name,
+          description: organization.description,
+        },
+        update: {
+          title: organization.name,
+          description: organization.description,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: id,
+          actorUserId,
+          action: 'UPDATE_ORGANIZATION_PROFILE',
+          entityType: 'Organization',
+          entityId: id,
+          metadata: {
+            changedFields,
+            previous,
+            next,
+          },
+        },
+      });
+
+      return organization;
     });
   }
 

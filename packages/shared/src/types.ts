@@ -6,8 +6,12 @@ import type {
   createManualOrganizationMemberSchema,
   createOrganizationRequestSchema,
   jwtPayloadSchema,
+  auditLogListItemSchema,
+  auditLogsPageSchema,
+  listAuditLogsQuerySchema,
   organizationSchema,
   organizationWebsiteSchema,
+  updateOrganizationSchema,
   rejectOrganizationRequestSchema,
   updateOrganizationMemberRoleSchema,
   updateOrganizationMemberProfileSchema,
@@ -64,6 +68,10 @@ export type UUID = string;
 export type JwtPayload = z.infer<typeof jwtPayloadSchema>;
 export type Organization = z.infer<typeof organizationSchema>;
 export type OrganizationWebsite = z.infer<typeof organizationWebsiteSchema>;
+export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
+export type ListAuditLogsQuery = z.infer<typeof listAuditLogsQuerySchema>;
+export type AuditLogListItem = z.infer<typeof auditLogListItemSchema>;
+export type AuditLogsPage = z.infer<typeof auditLogsPageSchema>;
 export type WebsitePage = z.infer<typeof websitePageSchema>;
 export type WebsiteSection = z.infer<typeof websiteSectionSchema>;
 export type UpdateWebsiteSettingsInput = z.infer<typeof updateWebsiteSettingsSchema>;

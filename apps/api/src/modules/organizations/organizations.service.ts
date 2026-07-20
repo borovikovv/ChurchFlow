@@ -1,10 +1,16 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, type OrganizationStatus } from '@churchflow/db';
 import type { z } from 'zod';
 import {
   createOrganizationSchema,
   type AdminOrganizationWorkspaceStatus,
   type AdminOrganizationWorkspaceView,
+  type UpdateOrganizationInput,
 } from '@churchflow/shared';
 import { AuditService } from '../audit/audit.service';
 import { OrganizationRequestsRepository } from '../organization-requests/repositories/organization-requests.repository';
@@ -145,13 +151,40 @@ export class OrganizationsService {
     return this.changeStatus(id, actorUserId, 'DELETE');
   }
 
+  async update(id: string, input: UpdateOrganizationInput, actorUserId: string) {
+    const organization = await this.organizationsRepository.findActiveById(id);
+    if (!organization) {
+      throw new NotFoundException('Organization was not found');
+    }
+
+    const actorMembership = await this.organizationsRepository.findOrganizationManager(
+      id,
+      actorUserId,
+    );
+    if (!actorMembership) {
+      throw new ForbiddenException(
+        'Only organization owners and admins can update organization details',
+      );
+    }
+
+    try {
+      return await this.organizationsRepository.update(id, input, actorUserId);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'ORGANIZATION_NOT_FOUND') {
+        throw new NotFoundException('Organization was not found');
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Organization slug is already in use');
+      }
+      throw error;
+    }
+  }
+
   private organizationRequestStaleBefore(): Date {
     return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   }
 
-  private mapOrganizationRow(
-    organization: OrganizationWorkspaceSource,
-  ): WorkspaceOrganizationRow {
+  private mapOrganizationRow(organization: OrganizationWorkspaceSource): WorkspaceOrganizationRow {
     return {
       id: organization.id,
       name: organization.name,

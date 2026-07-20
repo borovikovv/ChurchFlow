@@ -67,6 +67,32 @@ export class MediaController {
     );
   }
 
+  @Post('organization-logo/upload')
+  createOrganizationLogoUpload(
+    @Param('organizationId') organizationId: string,
+    @Body() body: CreateMemberPhotoUploadDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.mediaService.createOrganizationLogoUpload(
+      organizationId,
+      body,
+      this.actorUserId(request),
+    );
+  }
+
+  @Post('organization-logo/confirm')
+  confirmOrganizationLogo(
+    @Param('organizationId') organizationId: string,
+    @Body() body: ConfirmMemberPhotoUploadDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.mediaService.confirmOrganizationLogo(
+      organizationId,
+      body.assetId,
+      this.actorUserId(request),
+    );
+  }
+
   @Post('members/:membershipId/photo-upload')
   createPhotoUpload(
     @Param('organizationId') organizationId: string,

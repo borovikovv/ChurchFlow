@@ -506,6 +506,45 @@ export const createOrganizationSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
+export const updateOrganizationSchema = z
+  .object({
+    name: z.string().trim().min(1).max(160).optional(),
+    slug: slugSchema.optional(),
+    description: nullableTrimmedString(500),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'At least one organization field is required',
+  });
+
+export const listAuditLogsQuerySchema = z.object({
+  cursor: uuidSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+export const auditLogActorSchema = z.object({
+  id: uuidSchema,
+  displayName: z.string().nullable(),
+  email: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+});
+
+export const auditLogListItemSchema = z.object({
+  id: uuidSchema,
+  organizationId: uuidSchema.nullable(),
+  actorUserId: uuidSchema.nullable(),
+  action: z.string(),
+  entityType: z.string(),
+  entityId: uuidSchema.nullable(),
+  metadata: z.record(z.unknown()),
+  createdAt: z.string().datetime({ offset: true }),
+  actor: auditLogActorSchema.nullable(),
+});
+
+export const auditLogsPageSchema = z.object({
+  items: z.array(auditLogListItemSchema),
+  nextCursor: uuidSchema.nullable(),
+});
+
 export const createOrganizationRequestSchema = z.object({
   organizationName: z.string().trim().min(2).max(160),
   organizationSlug: optionalTrimmedString(80).refine(

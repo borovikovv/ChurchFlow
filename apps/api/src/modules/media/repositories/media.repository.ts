@@ -103,6 +103,23 @@ export class MediaRepository {
     });
   }
 
+  createPendingOrganizationLogoAsset(data: {
+    organizationId: string;
+    bucket: string;
+    objectKey: string;
+    filename: string;
+    mimeType: string;
+    byteSize: number;
+  }) {
+    return this.prisma.mediaAsset.create({
+      data: {
+        ...data,
+        byteSize: BigInt(data.byteSize),
+        metadata: { status: 'pending', purpose: 'organization-logo' },
+      },
+    });
+  }
+
   findAsset(assetId: string, organizationId: string) {
     return this.prisma.mediaAsset.findFirst({
       where: { id: assetId, organizationId, deletedAt: null },
@@ -186,6 +203,68 @@ export class MediaRepository {
           metadata: { assetId },
         },
       });
+      return { assetId };
+    });
+  }
+
+  async attachOrganizationLogo(organizationId: string, assetId: string, actorUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const currentWebsite = await tx.organizationWebsite.findUnique({
+        where: { organizationId },
+        select: {
+          logoAssetId: true,
+          organization: {
+            select: {
+              name: true,
+              description: true,
+            },
+          },
+        },
+      });
+      const organization =
+        currentWebsite?.organization ??
+        (await tx.organization.findUniqueOrThrow({
+          where: { id: organizationId },
+          select: {
+            name: true,
+            description: true,
+          },
+        }));
+      await tx.organizationWebsite.upsert({
+        where: { organizationId },
+        create: {
+          organizationId,
+          title: organization.name,
+          description: organization.description,
+          logoAssetId: assetId,
+        },
+        update: {
+          logoAssetId: assetId,
+        },
+      });
+
+      if (currentWebsite?.logoAssetId && currentWebsite.logoAssetId !== assetId) {
+        await tx.mediaAsset.update({
+          where: { id: currentWebsite.logoAssetId },
+          data: { deletedAt: new Date() },
+        });
+      }
+
+      await tx.mediaAsset.update({
+        where: { id: assetId },
+        data: { metadata: { status: 'confirmed', purpose: 'organization-logo' } },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'UPDATE_ORGANIZATION_LOGO',
+          entityType: 'Organization',
+          entityId: organizationId,
+          metadata: { assetId },
+        },
+      });
+
       return { assetId };
     });
   }
