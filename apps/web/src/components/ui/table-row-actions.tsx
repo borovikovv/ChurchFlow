@@ -4,7 +4,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -91,18 +90,8 @@ export function TableRowActions({
     };
   }, [getMenuPosition, menuOpen]);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeMenu();
-    };
-
-    document.addEventListener('keydown', closeOnEscape);
-    return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [closeMenu, menuOpen]);
-
   useCloseOnOutsideClick({
+    closeOnEscape: true,
     refs: [menuRef as RefObject<Element | null>, ...ignoreOutsideClickRefs],
     onOutsideClick: closeMenu,
     enabled: menuOpen && !outsideClickDisabled,

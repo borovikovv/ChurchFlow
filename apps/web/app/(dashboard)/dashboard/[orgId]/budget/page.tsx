@@ -10,6 +10,7 @@ import {
   updateBudgetEntryAction,
   updateBudgetEntryNoteAction,
 } from './actions';
+import { BUDGET_START_YEAR, BUDGET_YEAR_LOOKAHEAD } from './constants';
 import { BudgetManager } from './_components/budget-manager';
 
 export default async function BudgetPage({
@@ -22,8 +23,13 @@ export default async function BudgetPage({
   const { orgId } = await params;
   const { year: rawYear } = await searchParams;
   const currentYear = new Date().getFullYear();
+  const maxBudgetYear = currentYear + BUDGET_YEAR_LOOKAHEAD;
+  const defaultYear = Math.max(BUDGET_START_YEAR, Math.min(currentYear, maxBudgetYear));
   const year = Number(rawYear ?? currentYear);
-  const safeYear = Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : currentYear;
+  const safeYear =
+    Number.isInteger(year) && year >= BUDGET_START_YEAR && year <= maxBudgetYear
+      ? year
+      : defaultYear;
   const result = await apiFetch<BudgetPayload>(
     `/organizations/${orgId}/budget?${new URLSearchParams({ year: String(safeYear) })}`,
   );

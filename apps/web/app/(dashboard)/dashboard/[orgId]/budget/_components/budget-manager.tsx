@@ -2,10 +2,17 @@
 
 import { toPng } from 'html-to-image';
 import { useMemo, useRef, useState, useTransition } from 'react';
+import { flushSync } from 'react-dom';
 import type { BudgetEntryField, BudgetMonth } from '@churchflow/shared';
+import type { DateRangeValue } from '@/components/forms/date-range-input';
 import type { ActionResult } from '../types';
 import { AddMonthControls } from './add-month-controls';
 import { BudgetCharts } from './budget-charts';
+import {
+  budgetExportRangeLabel,
+  budgetMonthsInRange,
+  filterBudgetMonthsByRange,
+} from './budget-export-range';
 import type { BudgetManagerProps } from './budget-manager-types';
 import { BudgetMonthTable } from './budget-month-table';
 import { YearSummary } from './budget-summary';
@@ -31,13 +38,15 @@ export function BudgetManager({
   updateEntry,
   updateEntryNote,
 }: BudgetManagerProps) {
-  const chartRef = useRef<HTMLDivElement | null>(null);
+  const exportChartRef = useRef<HTMLDivElement | null>(null);
   const [year, setYear] = useState(payload.year);
   const [categories, setCategories] = useState(payload.categories);
   const [months, setMonths] = useState(payload.months);
   const [monthToAdd, setMonthToAdd] = useState(firstAvailableMonth(payload.months));
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exportRange, setExportRange] = useState<DateRangeValue | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
 
@@ -45,6 +54,22 @@ export function BudgetManager({
   const groupSummaries = useMemo(
     () => buildGroupSummaries(months, categories),
     [categories, months],
+  );
+  const exportMonths = useMemo(
+    () => filterBudgetMonthsByRange(months, year, exportRange),
+    [exportRange, months, year],
+  );
+  const exportGroupSummaries = useMemo(
+    () => buildGroupSummaries(exportMonths, categories),
+    [categories, exportMonths],
+  );
+  const exportDisplayMonths = useMemo(
+    () => budgetMonthsInRange(year, exportRange),
+    [exportRange, year],
+  );
+  const exportPeriodLabel = useMemo(
+    () => (exportRange ? budgetExportRangeLabel(exportRange) : String(year)),
+    [exportRange, year],
   );
 
   function runMutation<T>(
@@ -208,18 +233,32 @@ export function BudgetManager({
     );
   }
 
-  async function handleExportPng() {
-    if (!chartRef.current) return;
-    const dataUrl = await toPng(chartRef.current, { backgroundColor: '#ffffff', pixelRatio: 2 });
-    const link = document.createElement('a');
-    link.href = dataUrl;
-    link.download = `budget-${year}.png`;
-    link.click();
+  async function handleExportPng(range: DateRangeValue) {
+    try {
+      flushSync(() => {
+        setExporting(true);
+        setExportRange(range);
+      });
+      await waitForChartRender();
+
+      const target = exportChartRef.current;
+      if (!target) return;
+
+      const dataUrl = await toPng(target, { backgroundColor: '#ffffff', pixelRatio: 2 });
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `budget-${year}-${range.startDate ?? 'start'}-${range.endDate ?? 'end'}.png`;
+      link.click();
+    } finally {
+      setExporting(false);
+      setExportRange(null);
+    }
   }
 
   return (
     <div className="stack">
       <BudgetToolbar
+        isExporting={exporting}
         isPending={pending}
         isYearLoading={savingKeys.has('budget:year:load')}
         monthToAdd={monthToAdd}
@@ -235,12 +274,24 @@ export function BudgetManager({
       {message ? <p className="text-sm text-[var(--muted)]">{message}</p> : null}
 
       <YearSummary totals={yearTotals} />
-      <BudgetCharts
-        chartRef={chartRef}
-        months={months}
-        groupSummaries={groupSummaries}
-        year={year}
-      />
+      <BudgetCharts chartRef={null} months={months} groupSummaries={groupSummaries} year={year} />
+
+      {exportRange ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute left-[-10000px] top-0 w-[1200px]"
+        >
+          <BudgetCharts
+            chartRef={exportChartRef}
+            displayMonths={exportDisplayMonths ?? undefined}
+            exportMode
+            months={exportMonths}
+            groupSummaries={exportGroupSummaries}
+            periodLabel={exportPeriodLabel}
+            year={year}
+          />
+        </div>
+      ) : null}
 
       {months.length === 0 ? (
         <section className="table-empty-state grid gap-3 text-center">
@@ -284,4 +335,12 @@ export function BudgetManager({
       )}
     </div>
   );
+}
+
+function waitForChartRender(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
 }

@@ -32,6 +32,7 @@ export function NotificationBell({ organizationId }: { organizationId: string })
   const [error, setError] = useState<string | null>(null);
 
   useCloseOnOutsideClick({
+    closeOnEscape: true,
     enabled: open,
     refs: outsideClickRefs,
     onOutsideClick: useCallback(() => setOpen(false), []),
@@ -55,19 +56,6 @@ export function NotificationBell({ organizationId }: { organizationId: string })
       active = false;
     };
   }, [organizationId]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open]);
 
   const loadFirstPage = useCallback(async () => {
     if (loading) return;

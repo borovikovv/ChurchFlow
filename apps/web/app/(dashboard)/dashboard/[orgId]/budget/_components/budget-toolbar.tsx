@@ -1,13 +1,15 @@
 'use client';
 
 import { FormSelect } from '@/components/forms/form-select';
-import { Button } from '@/components/ui/button';
+import type { DateRangeValue } from '@/components/forms/date-range-input';
 import type { BudgetMonth } from '@churchflow/shared';
 import { AddMonthControls } from './add-month-controls';
 import { yearOptions } from './budget-table-helpers';
+import { ExportBudgetChartsDialog } from './export-budget-charts-dialog';
 
 export function BudgetToolbar({
   isPending,
+  isExporting,
   isYearLoading,
   monthToAdd,
   months,
@@ -18,12 +20,13 @@ export function BudgetToolbar({
   onYearChange,
 }: {
   isPending: boolean;
+  isExporting: boolean;
   isYearLoading: boolean;
   monthToAdd: number | null;
   months: BudgetMonth[];
   year: number;
   onAddMonth: () => void;
-  onExportPng: () => void;
+  onExportPng: (range: DateRangeValue) => void;
   onMonthToAddChange: (month: number | null) => void;
   onYearChange: (year: string) => void;
 }) {
@@ -51,9 +54,12 @@ export function BudgetToolbar({
           onAdd={onAddMonth}
           onMonthChange={onMonthToAddChange}
         />
-        <Button className="h-[42px]" variant="secondary" type="button" onClick={onExportPng}>
-          Export PNG
-        </Button>
+        <ExportBudgetChartsDialog
+          disabled={isPending}
+          isExporting={isExporting}
+          year={year}
+          onExport={onExportPng}
+        />
       </div>
     </div>
   );

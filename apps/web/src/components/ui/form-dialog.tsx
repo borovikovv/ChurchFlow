@@ -4,18 +4,22 @@ import { useId, useRef, type ReactNode, type RefObject } from 'react';
 import { Button, type ButtonVariant } from '@/components/ui/button';
 
 export function FormDialog({
+  footer,
   triggerLabel,
   triggerVariant = 'secondary',
   triggerClassName,
+  triggerDisabled = false,
   title,
   children,
   dialogRef: externalDialogRef,
   onOpen,
   onClose,
 }: {
+  footer?: ReactNode;
   triggerLabel: ReactNode;
   triggerVariant?: ButtonVariant;
   triggerClassName?: string;
+  triggerDisabled?: boolean;
   title: string;
   children: ReactNode;
   dialogRef?: RefObject<HTMLDialogElement | null>;
@@ -30,6 +34,7 @@ export function FormDialog({
     <>
       <Button
         className={triggerClassName}
+        disabled={triggerDisabled}
         type="button"
         variant={triggerVariant}
         onClick={() => {
@@ -62,9 +67,11 @@ export function FormDialog({
           </header>
           <div className="min-h-0 overflow-y-auto p-5">{children}</div>
           <footer className="flex justify-end border-t border-[var(--line)] p-5">
-            <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-              Cancel
-            </Button>
+            {footer ?? (
+              <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
+                Cancel
+              </Button>
+            )}
           </footer>
         </div>
       </dialog>

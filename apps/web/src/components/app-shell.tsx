@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { LogoutButton } from '@/components/logout-button';
 import { SidebarNavLink } from '@/components/sidebar-nav-link';
@@ -131,21 +131,11 @@ function MobileAppMenu({
   const close = useCallback(() => setOpen(false), []);
 
   useCloseOnOutsideClick({
+    closeOnEscape: true,
     enabled: open,
     refs: outsideClickRefs,
     onOutsideClick: close,
   });
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [close, open]);
 
   return (
     <div className="mobile-app-menu" ref={containerRef}>
@@ -208,12 +198,12 @@ function dashboardNavigationItems(
 ): AppNavItem[] {
   return [
     { href: organizationHomeRoute(organizationId), label: 'Home', exact: true },
+    { href: organizationProfileRoute(organizationId), label: 'Profile' },
     { href: organizationMembersRoute(organizationId), label: 'Members' },
     { href: organizationCalendarRoute(organizationId), label: 'Calendar' },
     ...(access.canOpenBudget
       ? [{ href: organizationBudgetRoute(organizationId), label: 'Budget' }]
       : []),
-    { href: organizationProfileRoute(organizationId), label: 'Profile' },
     ...(access.canOpenWebsite
       ? [{ href: organizationWebsiteRoute(organizationId), label: 'Website' }]
       : []),

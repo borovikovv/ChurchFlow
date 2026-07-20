@@ -9,6 +9,7 @@ import {
   type BudgetMonth,
   type BudgetTotals,
 } from '@churchflow/shared';
+import { BUDGET_START_YEAR, BUDGET_YEAR_LOOKAHEAD } from '../constants';
 
 export const GROUP_LABELS: Record<BudgetGroup, string> = {
   INCOME: 'Income',
@@ -68,9 +69,10 @@ export function formatTotalsInline(totals: BudgetCurrencyTotals): string {
 
 export function yearOptions(selectedYear: number): number[] {
   const currentYear = new Date().getFullYear();
+  const maxBudgetYear = currentYear + BUDGET_YEAR_LOOKAHEAD;
   const years = new Set<number>();
-  for (let year = currentYear - 3; year <= currentYear + 2; year += 1) years.add(year);
-  years.add(selectedYear);
+  for (let year = BUDGET_START_YEAR; year <= maxBudgetYear; year += 1) years.add(year);
+  if (selectedYear >= BUDGET_START_YEAR) years.add(selectedYear);
   return [...years].sort((a, b) => b - a);
 }
 
