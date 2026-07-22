@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { FormSelect } from '@/components/forms/form-select';
 import type { DateRangeValue } from '@/components/forms/date-range-input';
 import type { BudgetMonth } from '@churchflow/shared';
@@ -12,6 +13,7 @@ export function BudgetToolbar({
   isExporting,
   isYearLoading,
   monthToAdd,
+  monthNames,
   months,
   year,
   onAddMonth,
@@ -23,6 +25,7 @@ export function BudgetToolbar({
   isExporting: boolean;
   isYearLoading: boolean;
   monthToAdd: number | null;
+  monthNames: string[];
   months: BudgetMonth[];
   year: number;
   onAddMonth: () => void;
@@ -30,11 +33,13 @@ export function BudgetToolbar({
   onMonthToAddChange: (month: number | null) => void;
   onYearChange: (year: string) => void;
 }) {
+  const t = useTranslations('budget');
+
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="w-40">
         <FormSelect
-          label="Year"
+          label={t('year')}
           disabled={isYearLoading}
           value={year}
           onChange={(event) => onYearChange(event.currentTarget.value)}
@@ -50,6 +55,7 @@ export function BudgetToolbar({
         <AddMonthControls
           disabled={isPending}
           monthToAdd={monthToAdd}
+          monthNames={monthNames}
           months={months}
           onAdd={onAddMonth}
           onMonthChange={onMonthToAddChange}

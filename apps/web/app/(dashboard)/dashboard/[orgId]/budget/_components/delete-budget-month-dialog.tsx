@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useId, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 
@@ -12,6 +13,7 @@ export function DeleteBudgetMonthDialog({
   monthName: string;
   onConfirm: () => void;
 }) {
+  const t = useTranslations('budget');
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -24,7 +26,7 @@ export function DeleteBudgetMonthDialog({
         variant="danger"
         onClick={() => dialogRef.current?.showModal()}
       >
-        Delete month
+        {t('deleteMonth')}
       </Button>
       <dialog
         aria-labelledby={titleId}
@@ -43,9 +45,9 @@ export function DeleteBudgetMonthDialog({
           }}
         >
           <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
-            <h2 id={titleId}>Delete {monthName} budget?</h2>
+            <h2 id={titleId}>{t('deleteMonthTitle', { month: monthName })}</h2>
             <button
-              aria-label="Close"
+              aria-label={t('close')}
               className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
               type="button"
               onClick={() => dialogRef.current?.close()}
@@ -54,18 +56,15 @@ export function DeleteBudgetMonthDialog({
             </button>
           </header>
           <div className="grid gap-3 p-5 text-sm text-[var(--muted)]">
-            <p>
-              This will permanently delete the {monthName} budget and all entered income and expense
-              values for this month.
-            </p>
-            <p>This action cannot be undone.</p>
+            <p>{t('deleteMonthDescription', { month: monthName })}</p>
+            <p>{t('actionCannotBeUndone')}</p>
           </div>
           <footer className="flex flex-wrap justify-end gap-2 border-t border-[var(--line)] p-5">
             <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-              Cancel
+              {t('close')}
             </Button>
             <Button type="submit" variant="danger">
-              Delete month
+              {t('deleteMonth')}
             </Button>
           </footer>
         </form>

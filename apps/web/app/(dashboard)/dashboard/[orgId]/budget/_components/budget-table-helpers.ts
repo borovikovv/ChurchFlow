@@ -11,31 +11,14 @@ import {
 } from '@churchflow/shared';
 import { BUDGET_START_YEAR, BUDGET_YEAR_LOOKAHEAD } from '../constants';
 
-export const GROUP_LABELS: Record<BudgetGroup, string> = {
-  INCOME: 'Income',
-  CURRENCY_EXCHANGE: 'Currency exchange',
-  FACILITY: 'Facility',
-  TABLES: 'Tables',
-  PASTORS: 'Pastors',
-  DISCIPLESHIP: 'Discipleship',
-  EVANGELISM: 'Evangelism',
-  OTHER: 'Other',
+export type BudgetColumnLabels = {
+  donations: string;
+  eurIncome: string;
+  officeRent: string;
+  usdIncome: string;
 };
 
-export const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
+export type BudgetGroupLabels = Record<BudgetGroup, string>;
 
 export type BudgetAmountField = 'amountUah' | 'amountUsd' | 'amountEur';
 
@@ -117,7 +100,10 @@ export function findEntry(month: BudgetMonth, categoryId: string, rowIndex: numb
   );
 }
 
-export function spreadsheetColumns(categories: BudgetCategory[]): BudgetSpreadsheetColumn[] {
+export function spreadsheetColumns(
+  categories: BudgetCategory[],
+  labels: { columns: BudgetColumnLabels; groups: BudgetGroupLabels },
+): BudgetSpreadsheetColumn[] {
   const incomeCategories = categories
     .filter((category) => category.type === 'INCOME')
     .sort(compareCategories);
@@ -126,17 +112,22 @@ export function spreadsheetColumns(categories: BudgetCategory[]): BudgetSpreadsh
     .sort(compareCategories);
 
   return [
-    columnForIncome(incomeCategories, 'Office rent income', 'Office rent', 'amountUah'),
-    columnForIncome(incomeCategories, 'Offerings and donations', 'Donations', 'amountUah'),
-    columnForIncome(incomeCategories, 'USD income', 'USD income', 'amountUsd'),
-    columnForIncome(incomeCategories, 'EUR income', 'EUR income', 'amountEur'),
+    columnForIncome(incomeCategories, 'Office rent income', labels.columns.officeRent, 'amountUah'),
+    columnForIncome(
+      incomeCategories,
+      'Offerings and donations',
+      labels.columns.donations,
+      'amountUah',
+    ),
+    columnForIncome(incomeCategories, 'USD income', labels.columns.usdIncome, 'amountUsd'),
+    columnForIncome(incomeCategories, 'EUR income', labels.columns.eurIncome, 'amountEur'),
     ...BUDGET_GROUPS.filter((group) => group !== 'INCOME').flatMap((group) => {
       const category = expenseCategories.find((item) => item.group === group);
       return category
         ? [
             {
               id: `expense-${group}`,
-              label: GROUP_LABELS[group],
+              label: labels.groups[group],
               category,
               field: 'amountUah' as const,
               noteField: BUDGET_ENTRY_FIELD.amountUah,

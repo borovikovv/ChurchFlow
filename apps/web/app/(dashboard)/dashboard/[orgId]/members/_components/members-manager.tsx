@@ -1,12 +1,12 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
+import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import { InviteAppUserForm } from '@/components/members/invite-app-user-form';
 import { MemberActions, MemberRoleStatus } from '@/components/members/member-actions';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { DataTable } from '@/components/ui/data-table';
-import { StatusBadge } from '@/components/ui/status-badge';
 import type { MembersPayload, OrganizationMember } from '../types';
 import { CreateMemberDialog } from './create-member-dialog';
 import { MemberCsvActions } from './member-csv-actions';
@@ -17,17 +17,6 @@ import { QueryFilterSelect } from '@/components/forms/query-filter-select';
 import { useMembersQuery } from '../_hooks/use-members-query';
 
 const MEMBERS_ACTION_BUTTON_CLASS_NAME = 'h-[42px] min-h-[42px]';
-
-const MEMBER_ACCESS_FILTER_OPTIONS: Array<{
-  label: string;
-  value: OrganizationMembersAccessFilter | '';
-}> = [
-  { label: 'All members', value: '' },
-  { label: 'Telegram connected', value: 'connected' },
-  { label: 'No app access', value: 'offline' },
-  { label: 'Access requested', value: 'requested' },
-  { label: 'Suspended', value: 'suspended' },
-];
 
 type MemberActionProps = Pick<
   ComponentProps<typeof MemberActions>,
@@ -53,6 +42,7 @@ export function MembersManager({
   memberAccess: OrganizationMembersAccessFilter;
   manageInvitation: ComponentProps<typeof InviteAppUserForm>['action'];
 } & MemberActionProps) {
+  const t = useTranslations('members');
   const { data: payload, refresh: refreshMembers } = useMembersQuery({
     access: memberAccess,
     initialPayload,
@@ -65,10 +55,20 @@ export function MembersManager({
     id,
     displayName: profile.displayName,
   }));
+  const memberAccessFilterOptions: Array<{
+    label: string;
+    value: OrganizationMembersAccessFilter | '';
+  }> = [
+    { label: t('allMembers'), value: '' },
+    { label: t('telegramConnected'), value: 'connected' },
+    { label: t('noAppAccess'), value: 'offline' },
+    { label: t('accessRequested'), value: 'requested' },
+    { label: t('suspended'), value: 'suspended' },
+  ];
   const columns: Array<ColumnDef<OrganizationMember>> = [
     {
       accessorFn: (member) => member.profile.displayName,
-      header: 'Member',
+      header: t('member'),
       cell: ({ row }) => {
         const member = row.original;
 
@@ -83,21 +83,26 @@ export function MembersManager({
     {
       id: 'contact',
       accessorFn: (member) => member.profile.email ?? member.profile.phone ?? '',
-      header: 'Contact',
+      header: t('contact'),
       cell: ({ row }) => <MemberContactSummary profile={row.original.profile} />,
     },
     {
       accessorKey: 'accountState',
-      header: 'Access',
+      header: t('access'),
       cell: ({ row }) => {
         const member = row.original;
 
         return (
           <div className="grid min-w-0 gap-[3px]">
-            <StatusBadge status={member.accountState} />
+            <LocalizedStatusBadge
+              status={member.accountState}
+              label={t(`statusLabels.${member.accountState}`)}
+            />
             {member.activeClaim?.status === 'REQUESTED' ? (
               <small className="truncate text-[var(--muted)]">
-                Requested by {member.activeClaim.requestedBy?.displayName ?? 'Telegram user'}
+                {t('requestedBy', {
+                  name: member.activeClaim.requestedBy?.displayName ?? t('telegramUser'),
+                })}
               </small>
             ) : null}
           </div>
@@ -106,7 +111,7 @@ export function MembersManager({
     },
     {
       accessorKey: 'role',
-      header: 'Status',
+      header: t('status'),
       cell: ({ row }) => <MemberRoleStatus role={row.original.role} />,
     },
     {
@@ -150,9 +155,9 @@ export function MembersManager({
       <div className="flex justify-between py-2">
         <div className="filter-bar">
           <QueryFilterSelect
-            label="Access"
+            label={t('access')}
             name="access"
-            options={MEMBER_ACCESS_FILTER_OPTIONS}
+            options={memberAccessFilterOptions}
             value={memberAccess === 'all' ? '' : memberAccess}
           />
         </div>
@@ -160,12 +165,10 @@ export function MembersManager({
           <div className="flex items-start justify-end gap-2">
             <FormDialog
               triggerClassName={MEMBERS_ACTION_BUTTON_CLASS_NAME}
-              triggerLabel="Invite app user"
-              title="Invite an app user"
+              triggerLabel={t('inviteAppUser')}
+              title={t('inviteTitle')}
             >
-              <p className="-mt-4 mb-0">
-                Send an email invitation or generate a link you can share yourself.
-              </p>
+              <p className="-mt-4 mb-0">{t('inviteDescription')}</p>
               <InviteAppUserForm organizationId={organizationId} action={manageInvitation} />
             </FormDialog>
             <CreateMemberDialog
@@ -187,9 +190,14 @@ export function MembersManager({
       </div>
 
       <section className="stack">
-        <h2>Organization members</h2>
-        <DataTable columns={columns} data={members} emptyMessage="No members match this filter." />
+        <h2>{t('organizationMembers')}</h2>
+        <DataTable columns={columns} data={members} emptyMessage={t('emptyFilter')} />
       </section>
     </>
   );
+}
+
+function LocalizedStatusBadge({ status, label }: { status: string; label: string }) {
+  const normalized = status.toLowerCase().replaceAll('_', '-');
+  return <span className={`status-badge status-${normalized}`}>{label}</span>;
 }

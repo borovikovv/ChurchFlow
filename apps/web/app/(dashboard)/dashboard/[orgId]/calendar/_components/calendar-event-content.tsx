@@ -5,6 +5,8 @@ import { CALENDAR_TYPE, EVENT_TYPE_STYLES } from './calendar-constants';
 
 type CalendarEventContentOptions = {
   canManage: boolean;
+  markCompleteLabel: string;
+  markIncompleteLabel: string;
   onTaskToggle: (event: CalendarEventItem, completed: boolean) => void;
 };
 
@@ -59,7 +61,7 @@ function TaskCompletionCheckbox({
       onPointerDown={stopEventPropagation}
     >
       <input
-        aria-label={`${event.taskCompleted ? 'Mark incomplete' : 'Mark complete'}: ${event.title}`}
+        aria-label={`${event.taskCompleted ? options.markIncompleteLabel : options.markCompleteLabel}: ${event.title}`}
         checked={event.taskCompleted}
         className="peer sr-only"
         disabled={!options.canManage}

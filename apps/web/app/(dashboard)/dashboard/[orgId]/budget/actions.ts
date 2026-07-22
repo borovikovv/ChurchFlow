@@ -1,5 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import { apiFetch } from '@/api/client';
+import { getCurrentUser } from '@/auth/session';
+import { getMessages } from '@/i18n/messages';
 import {
   createBudgetMonthSchema,
   listBudgetQuerySchema,
@@ -24,8 +26,10 @@ export async function loadBudgetYearAction(
 ): Promise<ActionResult<BudgetPayload>> {
   'use server';
   const parsed = listBudgetQuerySchema.safeParse({ year });
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid budget year' };
+  if (!parsed.success) {
+    const messages = await currentBudgetMessages();
+    return { ok: false, error: messages.invalidBudgetYear };
+  }
 
   const result = await apiFetch<BudgetPayload>(
     `/organizations/${organizationId}/budget?${new URLSearchParams({
@@ -42,8 +46,10 @@ export async function createBudgetMonthAction(
 ): Promise<ActionResult<BudgetMonth>> {
   'use server';
   const parsed = createBudgetMonthSchema.safeParse(input);
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid month' };
+  if (!parsed.success) {
+    const messages = await currentBudgetMessages();
+    return { ok: false, error: messages.invalidMonth };
+  }
 
   const result = await apiFetch<BudgetMonth>(`/organizations/${organizationId}/budget/months`, {
     method: 'POST',
@@ -100,8 +106,10 @@ export async function updateBudgetEntryNoteAction(
 ): Promise<ActionResult<BudgetEntry>> {
   'use server';
   const parsed = updateBudgetEntryNoteSchema.safeParse(input);
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid note' };
+  if (!parsed.success) {
+    const messages = await currentBudgetMessages();
+    return { ok: false, error: messages.invalidNote };
+  }
 
   const result = await apiFetch<BudgetEntry>(
     `/organizations/${organizationId}/budget/months/${monthId}/rows/${rowIndex}/categories/${categoryId}/notes/${field}`,
@@ -114,6 +122,11 @@ export async function updateBudgetEntryNoteAction(
   revalidatePath(budgetPath(organizationId));
 
   return result.ok ? { ok: true, data: result.data } : { ok: false, error: result.error.message };
+}
+
+async function currentBudgetMessages() {
+  const user = await getCurrentUser();
+  return getMessages(user?.locale ?? 'en').budget;
 }
 
 export async function addBudgetMonthRowAction(

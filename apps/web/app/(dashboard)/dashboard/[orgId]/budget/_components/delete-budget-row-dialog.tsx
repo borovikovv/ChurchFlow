@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useId, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 
@@ -14,13 +15,14 @@ export function DeleteBudgetRowDialog({
   rowNumber: number;
   onConfirm: () => void;
 }) {
+  const t = useTranslations('budget');
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
   return (
     <>
       <Button
-        aria-label="Remove last row"
+        aria-label={t('removeLastRow')}
         className="h-8 w-8 px-0"
         disabled={disabled}
         type="button"
@@ -46,9 +48,9 @@ export function DeleteBudgetRowDialog({
           }}
         >
           <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
-            <h2 id={titleId}>Remove row {rowNumber}?</h2>
+            <h2 id={titleId}>{t('removeRowTitle', { row: rowNumber })}</h2>
             <button
-              aria-label="Close"
+              aria-label={t('close')}
               className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
               type="button"
               onClick={() => dialogRef.current?.close()}
@@ -57,18 +59,15 @@ export function DeleteBudgetRowDialog({
             </button>
           </header>
           <div className="grid gap-3 p-5 text-sm text-[var(--muted)]">
-            <p>
-              The last row in the {monthName} budget has values or notes. Removing it will delete
-              those cells permanently.
-            </p>
-            <p>This action cannot be undone.</p>
+            <p>{t('removeRowDescription', { month: monthName })}</p>
+            <p>{t('actionCannotBeUndone')}</p>
           </div>
           <footer className="flex flex-wrap justify-end gap-2 border-t border-[var(--line)] p-5">
             <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-              Cancel
+              {t('close')}
             </Button>
             <Button type="submit" variant="danger">
-              Remove row
+              {t('removeRow')}
             </Button>
           </footer>
         </form>

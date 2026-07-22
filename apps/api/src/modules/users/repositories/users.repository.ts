@@ -22,6 +22,7 @@ export class UsersRepository {
         ...(input.baptismChurchName !== undefined
           ? { baptismChurchName: input.baptismChurchName }
           : {}),
+        ...(input.locale !== undefined ? { locale: input.locale } : {}),
       },
     });
   }

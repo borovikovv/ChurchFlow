@@ -9,6 +9,8 @@ export function ConfirmSubmitButton({
   title,
   description,
   confirmLabel,
+  cancelLabel = 'Cancel',
+  pendingLabel = 'Working…',
   variant = 'secondary',
   confirmVariant = variant,
   name,
@@ -19,6 +21,8 @@ export function ConfirmSubmitButton({
   title: string;
   description: string;
   confirmLabel: string;
+  cancelLabel?: string;
+  pendingLabel?: string;
   variant?: ButtonVariant;
   confirmVariant?: ButtonVariant;
   name?: string;
@@ -70,7 +74,7 @@ export function ConfirmSubmitButton({
               type="button"
               variant="secondary"
             >
-              Cancel
+              {cancelLabel}
             </Button>
             <Button
               disabled={pending}
@@ -79,7 +83,7 @@ export function ConfirmSubmitButton({
               value={value}
               variant={confirmVariant}
             >
-              {pending ? 'Working…' : confirmLabel}
+              {pending ? pendingLabel : confirmLabel}
             </Button>
           </div>
         </div>

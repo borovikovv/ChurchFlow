@@ -1,6 +1,8 @@
 import type { OrganizationRequestStatusItem } from '@churchflow/shared';
+import { redirect } from 'next/navigation';
 import { apiFetch } from '@/api/client';
-import { requireServerSession } from '@/auth/session';
+import { getCurrentUser, requireServerSession } from '@/auth/session';
+import { APP_ROUTES } from '@/routes';
 import { OrganizationRequestStatusContent } from './_components/organization-request-status-content';
 
 export default async function OrganizationRequestStatusPage({
@@ -9,6 +11,12 @@ export default async function OrganizationRequestStatusPage({
   searchParams: Promise<{ submitted?: string; notification?: string }>;
 }) {
   await requireServerSession('/organization-request/status');
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect(
+      `${APP_ROUTES.login}?redirectTo=${encodeURIComponent(APP_ROUTES.organizationRequestStatus)}`,
+    );
+  }
   const result = await apiFetch<OrganizationRequestStatusItem[]>('/organization-requests/mine');
   const requests = result.ok ? result.data : [];
   const params = await searchParams;

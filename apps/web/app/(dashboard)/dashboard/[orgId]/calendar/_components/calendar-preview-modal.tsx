@@ -2,24 +2,28 @@
 
 import type { RefObject } from 'react';
 import type { CalendarEventItem } from '@churchflow/shared';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { eventImageUrl, formatMonthLabel, toDateInputValue } from './calendar-date-utils';
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
 export function CalendarPreviewModal({
   events,
+  locale,
   printableRef,
   range,
   onClose,
   onDownload,
 }: {
   events: CalendarEventItem[];
+  locale: string;
   printableRef: RefObject<HTMLDivElement | null>;
   range: { rangeStart: string; rangeEnd: string };
   onClose: () => void;
   onDownload: () => void;
 }) {
+  const t = useTranslations('calendar');
   const monthDate = monthFromRange(range);
   const monthCells = monthGridCells(monthDate);
   const previousMonth = addMonths(monthDate, -1);
@@ -33,7 +37,7 @@ export function CalendarPreviewModal({
         role="dialog"
       >
         <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
-          <h2>Calendar PNG preview</h2>
+          <h2>{t('calendarPngPreview')}</h2>
           <button
             className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
             type="button"
@@ -45,19 +49,19 @@ export function CalendarPreviewModal({
         <div className="min-h-0 overflow-auto bg-[var(--surface-subtle)] p-5">
           <div ref={printableRef} className="w-[1040px] bg-white p-4 text-[#111827]">
             <div className="mb-4 grid grid-cols-[180px_minmax(0,1fr)_180px] items-center gap-4">
-              <MiniMonth monthDate={previousMonth} />
+              <MiniMonth locale={locale} monthDate={previousMonth} />
               <h2 className="text-center font-serif text-6xl font-normal uppercase leading-none tracking-normal">
-                {formatMonthLabel(monthDate.toISOString())}
+                {formatMonthLabel(monthDate.toISOString(), locale)}
               </h2>
-              <MiniMonth monthDate={nextMonth} />
+              <MiniMonth locale={locale} monthDate={nextMonth} />
             </div>
             <div className="grid grid-cols-7 border-l border-t border-[#d0d7de]">
-              {WEEKDAYS.map((day) => (
+              {WEEKDAY_KEYS.map((day) => (
                 <div
                   key={day}
                   className="border-b border-r border-[#1f2328] p-1.5 text-center text-xs font-semibold"
                 >
-                  {day}
+                  {t(`weekdaysShort.${day}`)}
                 </div>
               ))}
               {monthCells.map((day, index) => {
@@ -109,10 +113,10 @@ export function CalendarPreviewModal({
         </div>
         <footer className="flex justify-end gap-2 border-t border-[var(--line)] p-5">
           <Button type="button" variant="secondary" onClick={onClose}>
-            Close
+            {t('close')}
           </Button>
           <Button type="button" onClick={onDownload}>
-            Download PNG
+            {t('downloadPng')}
           </Button>
         </footer>
       </div>
@@ -120,16 +124,19 @@ export function CalendarPreviewModal({
   );
 }
 
-function MiniMonth({ monthDate }: { monthDate: Date }) {
+function MiniMonth({ locale, monthDate }: { locale: string; monthDate: Date }) {
+  const t = useTranslations('calendar');
   const cells = monthGridCells(monthDate);
 
   return (
     <div className="text-center font-serif text-[10px] leading-tight text-[#111827]">
-      <div className="mb-1 text-sm font-semibold">{formatMonthLabel(monthDate.toISOString())}</div>
+      <div className="mb-1 text-sm font-semibold">
+        {formatMonthLabel(monthDate.toISOString(), locale)}
+      </div>
       <div className="grid grid-cols-7 gap-x-1">
-        {WEEKDAYS.map((day) => (
+        {WEEKDAY_KEYS.map((day) => (
           <span className="font-semibold" key={day}>
-            {day.slice(0, 1)}
+            {t(`weekdaysShort.${day}`).slice(0, 1)}
           </span>
         ))}
         {cells.map((day, index) => (

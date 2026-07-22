@@ -2,12 +2,14 @@
 
 import type { FormEventHandler } from 'react';
 import type { Control, FieldErrors, UseFormRegister } from 'react-hook-form';
-import type { UpdateCurrentUserProfileInput } from '@churchflow/shared';
+import type { AppLocale, UpdateCurrentUserProfileInput } from '@churchflow/shared';
+import { useTranslations } from 'next-intl';
 import { FormDatePicker } from '@/components/forms/form-date-picker';
 import { FormField } from '@/components/forms/form-field';
 import { Button } from '@/components/ui/button';
 
 export function ProfileEditForm({
+  appLocales,
   control,
   errors,
   register,
@@ -15,6 +17,7 @@ export function ProfileEditForm({
   onSubmit,
   onCancel,
 }: {
+  appLocales: readonly AppLocale[];
   control: Control<UpdateCurrentUserProfileInput>;
   errors: FieldErrors<UpdateCurrentUserProfileInput>;
   register: UseFormRegister<UpdateCurrentUserProfileInput>;
@@ -22,9 +25,12 @@ export function ProfileEditForm({
   onSubmit: FormEventHandler<HTMLFormElement>;
   onCancel: () => void;
 }) {
+  const t = useTranslations('profile');
+  const commonT = useTranslations('common');
+
   return (
     <form className="grid gap-4" onSubmit={onSubmit} noValidate>
-      <FormField label="Name" error={errors.displayName?.message}>
+      <FormField label={commonT('name')} error={errors.displayName?.message}>
         {({ id, errorId, invalid }) => (
           <input
             id={id}
@@ -35,7 +41,7 @@ export function ProfileEditForm({
           />
         )}
       </FormField>
-      <FormField label="Email" error={errors.email?.message}>
+      <FormField label={commonT('email')} error={errors.email?.message}>
         {({ id, errorId, invalid }) => (
           <input
             id={id}
@@ -51,10 +57,10 @@ export function ProfileEditForm({
       <FormDatePicker
         control={control}
         name="baptizedAt"
-        label="Baptism date"
+        label={t('baptismDate')}
         error={errors.baptizedAt?.message}
       />
-      <FormField label="Baptism church" error={errors.baptismChurchName?.message}>
+      <FormField label={t('baptismChurch')} error={errors.baptismChurchName?.message}>
         {({ id, errorId, invalid }) => (
           <input
             id={id}
@@ -64,12 +70,23 @@ export function ProfileEditForm({
           />
         )}
       </FormField>
+      <FormField label={commonT('language')} error={errors.locale?.message}>
+        {({ id, errorId, invalid }) => (
+          <select id={id} aria-describedby={errorId} aria-invalid={invalid} {...register('locale')}>
+            {appLocales.map((appLocale) => (
+              <option key={appLocale} value={appLocale}>
+                {commonT(`languages.${appLocale}`)}
+              </option>
+            ))}
+          </select>
+        )}
+      </FormField>
       <div className="flex flex-col-reverse gap-2 md:flex-row md:justify-end">
         <Button disabled={isSubmitting} onClick={onCancel} type="button" variant="secondary">
-          Cancel
+          {commonT('cancel')}
         </Button>
         <Button disabled={isSubmitting} type="submit">
-          {isSubmitting ? 'Saving...' : 'Save profile'}
+          {isSubmitting ? commonT('saving') : t('saveProfile')}
         </Button>
       </div>
     </form>

@@ -1,7 +1,9 @@
 import { apiFetch } from '@/api/client';
+import { getCurrentUser } from '@/auth/session';
 import { PageHeader } from '@/components/ui/page-header';
 import { serverEnv } from '@/env/server';
 import { requireWebsiteManageAccess } from '@/features/organizations/server/website-access';
+import { getMessages } from '@/i18n/messages';
 import { WebsiteManager } from './_components/website-manager';
 import type { DashboardPage, DashboardWebsite, WebsiteFeedback } from './types';
 
@@ -15,6 +17,8 @@ export default async function WebsiteDashboardPage({
   const { orgId } = await params;
   const feedback = await searchParams;
   const organization = await requireWebsiteManageAccess(orgId);
+  const user = await getCurrentUser();
+  const messages = getMessages(user?.locale ?? 'en').website;
   const slug = organization.slug;
 
   const [websiteResult, pagesResult] = await Promise.all([
@@ -23,11 +27,23 @@ export default async function WebsiteDashboardPage({
   ]);
 
   if (!websiteResult.ok) {
-    return <WebsiteLoadError message={websiteResult.error.message} />;
+    return (
+      <WebsiteLoadError
+        description={messages.loadErrorDescription}
+        message={websiteResult.error.message}
+        title={messages.title}
+      />
+    );
   }
 
   if (!pagesResult.ok) {
-    return <WebsiteLoadError message={pagesResult.error.message} />;
+    return (
+      <WebsiteLoadError
+        description={messages.loadErrorDescription}
+        message={pagesResult.error.message}
+        title={messages.title}
+      />
+    );
   }
 
   const website = websiteResult.data;
@@ -45,10 +61,18 @@ export default async function WebsiteDashboardPage({
   );
 }
 
-function WebsiteLoadError({ message }: { message: string }) {
+function WebsiteLoadError({
+  description,
+  message,
+  title,
+}: {
+  description: string;
+  message: string;
+  title: string;
+}) {
   return (
     <main className="stack">
-      <PageHeader title="Website" description="Manage your public organization website." />
+      <PageHeader title={title} description={description} />
       <p className="form-error">{message}</p>
     </main>
   );

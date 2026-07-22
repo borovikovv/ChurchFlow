@@ -2,11 +2,12 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
 import { apiFetch } from '@/api/client';
-import { requirePlatformAdmin } from '@/auth/session';
+import { getCurrentUser, requirePlatformAdmin } from '@/auth/session';
 import { ButtonLink } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
+import { getMessages } from '@/i18n/messages';
 
 interface OrganizationDetail {
   id: string;
@@ -21,14 +22,20 @@ interface OrganizationDetail {
 
 async function organizationAction(formData: FormData) {
   'use server';
+  const messages = await currentAdminMessages();
   const id = String(formData.get('id'));
   const action = String(formData.get('action'));
   const result = await apiFetch(`/admin/organizations/${id}/${action}`, { method: 'POST' });
   revalidatePath(`/admin/organizations/${id}`);
   const params = result.ok
-    ? new URLSearchParams({ message: 'Organization status updated.' })
+    ? new URLSearchParams({ message: messages.organizationDetail.statusUpdated })
     : new URLSearchParams({ error: result.error.message });
   redirect(`/admin/organizations/${id}?${params.toString()}` as Route);
+}
+
+async function currentAdminMessages() {
+  const user = await getCurrentUser();
+  return getMessages(user?.locale ?? 'en').adminPages;
 }
 
 export default async function AdminOrganizationPage({
@@ -41,6 +48,10 @@ export default async function AdminOrganizationPage({
   const { id } = await params;
   const { message, error } = await searchParams;
   await requirePlatformAdmin(`/admin/organizations/${id}`);
+  const user = await getCurrentUser();
+  const allMessages = getMessages(user?.locale ?? 'en');
+  const messages = allMessages.adminPages;
+  const commonMessages = allMessages.common;
 
   const result = await apiFetch<OrganizationDetail>(`/admin/organizations/${id}`);
 
@@ -54,10 +65,12 @@ export default async function AdminOrganizationPage({
     <main className="page-content stack">
       <PageHeader
         title={organization.name}
-        description={`Manage lifecycle and inspect tenant details for ${organization.slug}.`}
+        description={formatAdminMessage(messages.organizationDetail.description, {
+          slug: organization.slug,
+        })}
         actions={
           <ButtonLink href="/admin/organizations" variant="secondary">
-            Back to organizations
+            {messages.organizationDetail.back}
           </ButtonLink>
         }
       />
@@ -65,56 +78,78 @@ export default async function AdminOrganizationPage({
         {message ? <p>{message}</p> : null}
         {error ? <p className="form-error">{error}</p> : null}
         <dl className="details">
-          <dt>Slug</dt>
+          <dt>{messages.organizationDetail.slug}</dt>
           <dd>{organization.slug}</dd>
-          <dt>Status</dt>
+          <dt>{messages.organizationDetail.status}</dt>
           <dd>
-            <StatusBadge status={organization.status} />
+            <StatusBadge
+              label={
+                messages.statuses[organization.status as keyof typeof messages.statuses] ??
+                organization.status
+              }
+              status={organization.status}
+            />
           </dd>
-          <dt>Description</dt>
-          <dd>{organization.description ?? 'No description'}</dd>
+          <dt>{messages.organizationDetail.descriptionLabel}</dt>
+          <dd>{organization.description ?? messages.organizationDetail.noDescription}</dd>
         </dl>
         <form className="actions" action={organizationAction}>
           <input type="hidden" name="id" value={organization.id} />
           {organization.status !== 'ACTIVE' ? (
             <ConfirmSubmitButton
-              confirmLabel="Restore organization"
-              description={`Restore ${organization.name} to active status and re-enable tenant access.`}
+              cancelLabel={commonMessages.cancel}
+              confirmLabel={messages.organizationDetail.restoreConfirm}
+              description={formatAdminMessage(messages.organizationDetail.restoreDescription, {
+                name: organization.name,
+              })}
               name="action"
-              title="Restore organization?"
-              triggerLabel="Restore"
+              pendingLabel={commonMessages.saving}
+              title={messages.organizationDetail.restoreTitle}
+              triggerLabel={messages.organizationDetail.restore}
               value="restore"
               variant="primary"
             />
           ) : null}
           {organization.status !== 'SUSPENDED' && organization.status !== 'DELETED' ? (
             <ConfirmSubmitButton
-              confirmLabel="Suspend organization"
-              description={`Members of ${organization.name} will lose tenant access until the organization is restored.`}
+              cancelLabel={commonMessages.cancel}
+              confirmLabel={messages.organizationDetail.suspendConfirm}
+              description={formatAdminMessage(messages.organizationDetail.suspendDescription, {
+                name: organization.name,
+              })}
               name="action"
-              title="Suspend organization?"
-              triggerLabel="Suspend"
+              pendingLabel={commonMessages.saving}
+              title={messages.organizationDetail.suspendTitle}
+              triggerLabel={messages.organizationDetail.suspend}
               value="suspend"
             />
           ) : null}
           {organization.status !== 'ARCHIVED' && organization.status !== 'DELETED' ? (
             <ConfirmSubmitButton
-              confirmLabel="Archive organization"
-              description={`Archive ${organization.name}. Its data will be retained and the organization can be restored later.`}
+              cancelLabel={commonMessages.cancel}
+              confirmLabel={messages.organizationDetail.archiveConfirm}
+              description={formatAdminMessage(messages.organizationDetail.archiveDescription, {
+                name: organization.name,
+              })}
               name="action"
-              title="Archive organization?"
-              triggerLabel="Archive"
+              pendingLabel={commonMessages.saving}
+              title={messages.organizationDetail.archiveTitle}
+              triggerLabel={messages.organizationDetail.archive}
               value="archive"
             />
           ) : null}
           {organization.status !== 'DELETED' ? (
             <ConfirmSubmitButton
-              confirmLabel="Soft delete organization"
+              cancelLabel={commonMessages.cancel}
+              confirmLabel={messages.organizationDetail.softDeleteConfirm}
               confirmVariant="danger"
-              description={`Soft delete ${organization.name}. Tenant access will be blocked, but its data will remain stored.`}
+              description={formatAdminMessage(messages.organizationDetail.softDeleteDescription, {
+                name: organization.name,
+              })}
               name="action"
-              title="Soft delete organization?"
-              triggerLabel="Soft delete"
+              pendingLabel={commonMessages.saving}
+              title={messages.organizationDetail.softDeleteTitle}
+              triggerLabel={messages.organizationDetail.softDelete}
               value="delete-soft"
               variant="danger"
             />
@@ -122,5 +157,12 @@ export default async function AdminOrganizationPage({
         </form>
       </div>
     </main>
+  );
+}
+
+function formatAdminMessage(template: string, values: Record<string, string>): string {
+  return Object.entries(values).reduce(
+    (message, [key, value]) => message.replaceAll(`{${key}}`, value),
+    template,
   );
 }

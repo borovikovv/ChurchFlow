@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
 import { CopyField } from '@/components/copy-field';
 import { FormDialog } from '@/components/ui/form-dialog';
@@ -36,16 +37,17 @@ export function GiveMemberAccessDialog({
   onOpen,
   onClose,
 }: GiveMemberAccessDialogProps) {
+  const t = useTranslations('members');
   const [state, formAction, pending] = useActionState(manageMemberAccess, initialState);
 
   return (
     <FormDialog
-      title={`Give app access to ${memberName}`}
+      title={t('giveAppAccessTitle', { name: memberName })}
       triggerClassName={triggerClassName}
       triggerLabel={
         <>
           <AccessIcon />
-          Give app access
+          {t('giveAppAccess')}
         </>
       }
       triggerVariant="ghost"
@@ -58,7 +60,7 @@ export function GiveMemberAccessDialog({
           {state.message ? <p className="m-0 text-[var(--success)]">{state.message}</p> : null}
           {state.error ? <p className="form-error m-0">{state.error}</p> : null}
           <label>
-            Access URL
+            {t('accessUrl')}
             <CopyField value={state.claimUrl} />
           </label>
           <form action={formAction} className="flex justify-end">
@@ -66,7 +68,7 @@ export function GiveMemberAccessDialog({
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="claimId" value={state.claimId} />
             <Button disabled={pending} type="submit" variant="danger">
-              {pending ? 'Revoking…' : 'Revoke access link'}
+              {pending ? t('revoking') : t('revokeAccessLink')}
             </Button>
           </form>
         </div>
@@ -76,13 +78,15 @@ export function GiveMemberAccessDialog({
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="membershipId" value={membershipId} />
           <p className="m-0">
-            Generate a private link for <strong>{memberName}</strong>.
-            {memberEmail ? ` We will also email it to ${memberEmail}.` : null}
+            {t('generateAccessLinkDescription', { name: memberName })}
+            {memberEmail
+              ? ` ${t('generateAccessLinkEmailDescription', { email: memberEmail })}`
+              : null}
           </p>
           {state.message ? <p className="m-0 text-[var(--success)]">{state.message}</p> : null}
           {state.error ? <p className="form-error m-0">{state.error}</p> : null}
           <Button disabled={pending} type="submit">
-            {pending ? 'Generating…' : 'Generate access link'}
+            {pending ? t('generating') : t('generateAccessLink')}
           </Button>
         </form>
       )}

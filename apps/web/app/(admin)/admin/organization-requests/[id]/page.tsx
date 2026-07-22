@@ -3,11 +3,12 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
 import { apiFetch } from '@/api/client';
-import { requirePlatformAdmin } from '@/auth/session';
+import { getCurrentUser, requirePlatformAdmin } from '@/auth/session';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
+import { getMessages } from '@/i18n/messages';
 
 interface OrganizationRequestDetail {
   id: string;
@@ -95,6 +96,10 @@ export default async function AdminOrganizationRequestPage({
   const { id } = await params;
   const { approved, rejected, error, createdOrganizationId } = await searchParams;
   await requirePlatformAdmin(`/admin/organization-requests/${id}`);
+  const user = await getCurrentUser();
+  const allMessages = getMessages(user?.locale ?? 'en');
+  const messages = allMessages.adminPages;
+  const commonMessages = allMessages.common;
 
   const result = await apiFetch<OrganizationRequestDetail>(`/admin/organization-requests/${id}`);
 
@@ -108,10 +113,10 @@ export default async function AdminOrganizationRequestPage({
     <main className="page-content stack">
       <PageHeader
         title={request.organizationName}
-        description="Review requester identity and decide whether to create this tenant."
+        description={messages.organizationRequestDetail.description}
         actions={
           <ButtonLink href="/admin/organizations?view=requests" variant="secondary">
-            Back to requests
+            {messages.organizationRequestDetail.back}
           </ButtonLink>
         }
       />
@@ -119,51 +124,58 @@ export default async function AdminOrganizationRequestPage({
         {error ? <p className="text-red-600">{error}</p> : null}
         {approved && (createdOrganizationId || request.createdOrganization?.id) ? (
           <p>
-            Request approved.{' '}
+            {messages.organizationRequestDetail.approved}{' '}
             <Link
               href={
                 `/admin/organizations/${createdOrganizationId ?? request.createdOrganization?.id}` as Route
               }
             >
-              View organization
+              {messages.organizationRequestDetail.viewOrganization}
             </Link>
           </p>
         ) : null}
-        {rejected ? <p>Request rejected.</p> : null}
+        {rejected ? <p>{messages.organizationRequestDetail.rejected}</p> : null}
         <dl className="details">
-          <dt>Status</dt>
+          <dt>{messages.organizationRequestDetail.status}</dt>
           <dd>
-            <StatusBadge status={request.status} />
+            <StatusBadge
+              label={
+                messages.statuses[request.status as keyof typeof messages.statuses] ??
+                request.status
+              }
+              status={request.status}
+            />
           </dd>
-          <dt>Contact</dt>
+          <dt>{messages.organizationRequestDetail.contact}</dt>
           <dd>
-            {request.contactName} · {request.contactEmail ?? 'No email'}
+            {request.contactName} ·{' '}
+            {request.contactEmail ?? messages.organizationRequestDetail.noEmail}
           </dd>
-          <dt>Telegram</dt>
+          <dt>{messages.organizationRequestDetail.telegram}</dt>
           <dd>{request.contactTelegramUsername ?? request.contactTelegramId}</dd>
-          <dt>Phone</dt>
-          <dd>{request.contactPhone ?? 'Not provided'}</dd>
-          <dt>Message</dt>
-          <dd>{request.message ?? 'No message'}</dd>
+          <dt>{messages.organizationRequestDetail.phone}</dt>
+          <dd>{request.contactPhone ?? messages.organizationRequestDetail.notProvided}</dd>
+          <dt>{messages.organizationRequestDetail.message}</dt>
+          <dd>{request.message ?? messages.organizationRequestDetail.noMessage}</dd>
         </dl>
         {request.status === 'PENDING' ? (
           <div className="review-actions-grid">
             <form className="form-grid" action={approveRequest}>
               <input type="hidden" name="id" value={request.id} />
               <label>
-                Organization name
+                {messages.organizationRequestDetail.organizationName}
                 <input name="organizationName" defaultValue={request.organizationName} />
               </label>
               <label>
-                Slug
+                {messages.organizationRequestDetail.slug}
                 <input name="organizationSlug" defaultValue={request.organizationSlug ?? ''} />
               </label>
-              <Button type="submit">Approve</Button>
+              <Button type="submit">{messages.organizationRequestDetail.approve}</Button>
             </form>
             <form className="form-grid" action={rejectRequest}>
               <input type="hidden" name="id" value={request.id} />
               <label>
-                Rejection reason
+                {messages.organizationRequestDetail.rejectionReason}
                 <textarea
                   name="rejectionReason"
                   required
@@ -172,16 +184,28 @@ export default async function AdminOrganizationRequestPage({
                 />
               </label>
               <ConfirmSubmitButton
-                confirmLabel="Reject request"
+                cancelLabel={commonMessages.cancel}
+                confirmLabel={messages.organizationRequestDetail.rejectConfirm}
                 confirmVariant="danger"
-                description={`Reject the request for ${request.organizationName}. The requester will see the reason you entered.`}
-                title="Reject organization request?"
-                triggerLabel="Reject"
+                description={formatAdminMessage(
+                  messages.organizationRequestDetail.rejectDescription,
+                  { name: request.organizationName },
+                )}
+                pendingLabel={commonMessages.saving}
+                title={messages.organizationRequestDetail.rejectTitle}
+                triggerLabel={messages.organizationRequestDetail.reject}
               />
             </form>
           </div>
         ) : null}
       </div>
     </main>
+  );
+}
+
+function formatAdminMessage(template: string, values: Record<string, string>): string {
+  return Object.entries(values).reduce(
+    (message, [key, value]) => message.replaceAll(`{${key}}`, value),
+    template,
   );
 }

@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Route } from 'next';
+import { useTranslations } from 'next-intl';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { LogoutButton } from '@/components/logout-button';
@@ -46,6 +47,8 @@ export function AppShell({
   websiteOrganizationIds: string[];
 }) {
   const pathname = usePathname();
+  const t = useTranslations('navigation');
+  const commonT = useTranslations('common');
   if (pathname === '/o' || pathname.startsWith('/o/')) {
     return <>{children}</>;
   }
@@ -54,9 +57,20 @@ export function AppShell({
   const canOpenWebsite = dashboardOrgId ? websiteOrganizationIds.includes(dashboardOrgId) : false;
   const canOpenBudget = dashboardOrgId ? budgetOrganizationIds.includes(dashboardOrgId) : false;
   const navItems = dashboardOrgId
-    ? dashboardNavigationItems(dashboardOrgId, { canOpenBudget, canOpenWebsite })
+    ? dashboardNavigationItems(dashboardOrgId, {
+        canOpenBudget,
+        canOpenWebsite,
+        labels: {
+          budget: t('budget'),
+          calendar: t('calendar'),
+          home: t('home'),
+          members: t('members'),
+          profile: t('profile'),
+          website: t('website'),
+        },
+      })
     : canOpenAdmin
-      ? [{ href: APP_ROUTES.organizationRequest, label: 'Create organization' }]
+      ? [{ href: APP_ROUTES.organizationRequest, label: t('createOrganization') }]
       : [];
 
   return (
@@ -67,9 +81,11 @@ export function AppShell({
             <Image src="/icons/church-flow.svg" alt="ChurchFlow" width={60} height={40} priority />
           </Link>
           {canOpenAdmin || dashboardOrgId ? (
-            <nav className="site-nav desktop-site-nav" aria-label="Account navigation">
+            <nav className="site-nav desktop-site-nav" aria-label={t('accountNavigation')}>
               {dashboardOrgId ? <NotificationBell organizationId={dashboardOrgId} /> : null}
-              {canOpenAdmin ? <Link href={APP_ROUTES.adminOrganizations}>Admin</Link> : null}
+              {canOpenAdmin ? (
+                <Link href={APP_ROUTES.adminOrganizations}>{commonT('admin')}</Link>
+              ) : null}
             </nav>
           ) : null}
           {canOpenAdmin || dashboardOrgId ? (
@@ -86,7 +102,7 @@ export function AppShell({
       </header>
       <div className="app-shell">
         <aside className="app-sidebar">
-          <nav className="sidebar-navigation" aria-label="Application navigation">
+          <nav className="sidebar-navigation" aria-label={t('applicationNavigation')}>
             {navItems.map((item) => (
               <SidebarNavLink
                 {...(item.exact ? { exact: true } : {})}
@@ -99,7 +115,7 @@ export function AppShell({
           </nav>
 
           <div className="sidebar-account">
-            <span className="sidebar-account-label">Signed in as</span>
+            <span className="sidebar-account-label">{t('signedInAs')}</span>
             <div className="sidebar-account-row">
               <strong title={displayName}>{displayName}</strong>
               <LogoutButton />
@@ -124,6 +140,8 @@ function MobileAppMenu({
   navItems: AppNavItem[];
 }) {
   const pathname = usePathname();
+  const t = useTranslations('navigation');
+  const commonT = useTranslations('common');
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const outsideClickRefs = useMemo(() => [containerRef], []);
@@ -142,7 +160,7 @@ function MobileAppMenu({
       <button
         type="button"
         className="mobile-menu-button"
-        aria-label="Open navigation menu"
+        aria-label={t('openNavigationMenu')}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((current) => !current)}
@@ -153,9 +171,9 @@ function MobileAppMenu({
       </button>
 
       {open ? (
-        <section className="mobile-menu-panel" role="dialog" aria-label="Navigation menu">
+        <section className="mobile-menu-panel" role="dialog" aria-label={t('navigationMenu')}>
           {navItems.length > 0 ? (
-            <nav className="mobile-menu-nav" aria-label="Application navigation">
+            <nav className="mobile-menu-nav" aria-label={t('applicationNavigation')}>
               {navItems.map((item) => (
                 <Link
                   className={mobileMenuLinkClass(pathname, item)}
@@ -181,7 +199,7 @@ function MobileAppMenu({
                 href={APP_ROUTES.adminOrganizations}
                 onClick={close}
               >
-                Admin
+                {commonT('admin')}
               </Link>
             ) : null}
             <LogoutButton />
@@ -194,18 +212,29 @@ function MobileAppMenu({
 
 function dashboardNavigationItems(
   organizationId: string,
-  access: { canOpenBudget: boolean; canOpenWebsite: boolean },
+  access: {
+    canOpenBudget: boolean;
+    canOpenWebsite: boolean;
+    labels: {
+      budget: string;
+      calendar: string;
+      home: string;
+      members: string;
+      profile: string;
+      website: string;
+    };
+  },
 ): AppNavItem[] {
   return [
-    { href: organizationHomeRoute(organizationId), label: 'Home', exact: true },
-    { href: organizationProfileRoute(organizationId), label: 'Profile' },
-    { href: organizationMembersRoute(organizationId), label: 'Members' },
-    { href: organizationCalendarRoute(organizationId), label: 'Calendar' },
+    { href: organizationHomeRoute(organizationId), label: access.labels.home, exact: true },
+    { href: organizationProfileRoute(organizationId), label: access.labels.profile },
+    { href: organizationMembersRoute(organizationId), label: access.labels.members },
+    { href: organizationCalendarRoute(organizationId), label: access.labels.calendar },
     ...(access.canOpenBudget
-      ? [{ href: organizationBudgetRoute(organizationId), label: 'Budget' }]
+      ? [{ href: organizationBudgetRoute(organizationId), label: access.labels.budget }]
       : []),
     ...(access.canOpenWebsite
-      ? [{ href: organizationWebsiteRoute(organizationId), label: 'Website' }]
+      ? [{ href: organizationWebsiteRoute(organizationId), label: access.labels.website }]
       : []),
   ];
 }

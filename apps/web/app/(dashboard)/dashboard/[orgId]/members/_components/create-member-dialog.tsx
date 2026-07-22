@@ -3,6 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createManualOrganizationMemberSchema, MEMBER_MINISTRIES } from '@churchflow/shared';
 import type { MemberMinistry } from '@churchflow/shared';
+import { useTranslations } from 'next-intl';
 import { useId, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
@@ -35,17 +36,6 @@ interface CreatedMember {
   };
 }
 
-const MINISTRY_LABELS: Record<MemberMinistry, string> = {
-  PREACHING: 'Preaching',
-  WORSHIP: 'Worship',
-  DEACON: 'Deacon',
-  MINISTER: 'Minister',
-  TEACHER: 'Teacher',
-  MISSIONARY: 'Missionary',
-  EVANGELIST: 'Evangelist',
-  CHAPLAIN: 'Chaplain',
-};
-
 export function CreateMemberDialog({
   organizationId,
   onCreated,
@@ -55,6 +45,8 @@ export function CreateMemberDialog({
   onCreated: (member: CreatedMember) => void;
   triggerClassName?: string;
 }) {
+  const t = useTranslations('members');
+  const commonT = useTranslations('common');
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const {
@@ -77,7 +69,7 @@ export function CreateMemberDialog({
       toast.error(result.error);
       return;
     }
-    toast.success('Member created.');
+    toast.success(t('createdMember'));
     onCreated(result.member);
     reset();
     dialogRef.current?.close();
@@ -90,7 +82,7 @@ export function CreateMemberDialog({
         type="button"
         onClick={() => dialogRef.current?.showModal()}
       >
-        Add new member
+        {t('createMember')}
       </Button>
       <dialog
         ref={dialogRef}
@@ -103,9 +95,9 @@ export function CreateMemberDialog({
           noValidate
         >
           <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
-            <h2 id={titleId}>Add member manually</h2>
+            <h2 id={titleId}>{t('addMemberManually')}</h2>
             <button
-              aria-label="Close"
+              aria-label={commonT('cancel')}
               className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
               type="button"
               onClick={() => dialogRef.current?.close()}
@@ -115,28 +107,28 @@ export function CreateMemberDialog({
           </header>
           <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-5">
             <FormInput
-              label="Name"
+              label={commonT('name')}
               error={errors.displayName?.message}
               {...register('displayName')}
             />
             <FormInput
-              label="Email"
+              label={commonT('email')}
               type="email"
               error={errors.email?.message}
               {...register('email')}
             />
-            <FormInput label="Phone" error={errors.phone?.message} {...register('phone')} />
-            <FormSelect label="Role" error={errors.role?.message} {...register('role')}>
-              <option value="MEMBER">Member</option>
-              <option value="VIEWER">Viewer</option>
+            <FormInput label={t('phone')} error={errors.phone?.message} {...register('phone')} />
+            <FormSelect label={t('role')} error={errors.role?.message} {...register('role')}>
+              <option value="MEMBER">{t('roleLabels.MEMBER')}</option>
+              <option value="VIEWER">{t('roleLabels.VIEWER')}</option>
             </FormSelect>
             <fieldset className="grid gap-2 rounded-md border border-[var(--line)] p-3">
-              <legend className="px-1 font-semibold">Ministries</legend>
+              <legend className="px-1 font-semibold">{t('ministries')}</legend>
               <div className="grid gap-2 sm:grid-cols-2">
                 {MEMBER_MINISTRIES.map((ministry) => (
                   <FormCheckbox
                     key={ministry}
-                    label={MINISTRY_LABELS[ministry]}
+                    label={t(`ministry.${ministry}`)}
                     value={ministry}
                     {...register('ministries')}
                   />
@@ -146,47 +138,47 @@ export function CreateMemberDialog({
             <FormDatePicker
               control={control}
               name="memberSince"
-              label="Member since"
+              label={t('memberSince')}
               error={errors.memberSince?.message}
             />
             <FormDatePicker
               control={control}
               name="birthday"
-              label="Birthday"
+              label={t('birthday')}
               error={errors.birthday?.message}
             />
             <FormDatePicker
               control={control}
               name="anniversary"
-              label="Anniversary"
+              label={t('anniversary')}
               error={errors.anniversary?.message}
             />
             <FormTextarea
-              label="Notes"
+              label={t('notes')}
               rows={4}
               error={errors.notes?.message}
               {...register('notes')}
             />
             <FormTextarea
-              label="Biography"
+              label={t('biography')}
               rows={5}
               error={errors.biography?.message}
               {...register('biography')}
             />
             <FormTextarea
-              label="Family notes"
+              label={t('familyNotes')}
               rows={4}
               error={errors.familyNotes?.message}
               {...register('familyNotes')}
             />
-            <FormCheckbox label="Prepare app access after adding" {...register('prepareAccess')} />
+            <FormCheckbox label={t('prepareAppAccess')} {...register('prepareAccess')} />
           </div>
           <footer className="flex justify-end gap-2 border-t border-[var(--line)] p-5">
             <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-              Cancel
+              {commonT('cancel')}
             </Button>
             <Button disabled={isSubmitting} type="submit">
-              {isSubmitting ? 'Creating…' : 'Create member'}
+              {isSubmitting ? t('creating') : t('createMember')}
             </Button>
           </footer>
         </form>

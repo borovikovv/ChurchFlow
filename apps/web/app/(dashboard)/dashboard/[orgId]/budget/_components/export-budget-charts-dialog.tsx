@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useId, useRef, useState } from 'react';
 import { DateRangeInput, type DateRangeValue } from '@/components/forms/date-range-input';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ export function ExportBudgetChartsDialog({
   onExport: (range: DateRangeValue) => void;
   year: number;
 }) {
+  const t = useTranslations('budget');
   const dialogRef = useRef<HTMLDialogElement>(null);
   const formId = useId();
   const [range, setRange] = useState<DateRangeValue>(() => defaultBudgetExportRange(year));
@@ -32,17 +34,17 @@ export function ExportBudgetChartsDialog({
       footer={
         <div className="flex flex-wrap justify-end gap-2">
           <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-            Cancel
+            {t('close')}
           </Button>
           <Button disabled={!rangeComplete || isExporting} form={formId} type="submit">
-            {isExporting ? 'Exporting...' : 'Export PNG'}
+            {isExporting ? t('exporting') : t('exportPng')}
           </Button>
         </div>
       }
-      title="Export budget charts"
+      title={t('exportBudgetCharts')}
       triggerClassName="h-[42px]"
       triggerDisabled={disabled || isExporting}
-      triggerLabel="Export PNG"
+      triggerLabel={t('exportPng')}
       onOpen={resetRange}
     >
       <form
@@ -55,11 +57,8 @@ export function ExportBudgetChartsDialog({
           onExport(range);
         }}
       >
-        <p className="m-0 text-sm text-[var(--muted)]">
-          Choose the period that should appear in the exported budget charts. The page charts stay
-          unchanged; only the PNG uses this range.
-        </p>
-        <DateRangeInput label="Date range" value={range} onChange={setRange} />
+        <p className="m-0 text-sm text-[var(--muted)]">{t('exportDescription')}</p>
+        <DateRangeInput label={t('dateRange')} value={range} onChange={setRange} />
       </form>
     </FormDialog>
   );

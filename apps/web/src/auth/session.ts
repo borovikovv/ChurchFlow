@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
-import { AUTH_COOKIE_NAMES } from '@churchflow/shared';
+import { AUTH_COOKIE_NAMES, type AppLocale } from '@churchflow/shared';
 import { apiFetch } from '@/api/client';
 import {
   getOrganizationAccessState,
@@ -19,6 +19,7 @@ export interface CurrentUser {
   platformRole: PlatformRole;
   baptizedAt: string | null;
   baptismChurchName: string | null;
+  locale: AppLocale;
 }
 
 export function isPlatformAdminRole(role: PlatformRole | null | undefined): boolean {

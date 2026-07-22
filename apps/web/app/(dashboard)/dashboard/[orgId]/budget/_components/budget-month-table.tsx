@@ -1,12 +1,12 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import type { BudgetCategory, BudgetMonth } from '@churchflow/shared';
 import { BudgetCell } from './budget-cell';
 import type { BudgetEntryBlurHandler, BudgetEntryNoteSaveHandler } from './budget-manager-types';
 import { CurrencyTotals } from './budget-summary';
 import {
-  MONTH_NAMES,
   columnTotal,
   findEntry,
   formatAmount,
@@ -14,13 +14,18 @@ import {
   monthHasDataInRow,
   noteForField,
   spreadsheetColumns,
+  type BudgetColumnLabels,
+  type BudgetGroupLabels,
 } from './budget-table-helpers';
 import { DeleteBudgetMonthDialog } from './delete-budget-month-dialog';
 import { DeleteBudgetRowDialog } from './delete-budget-row-dialog';
 
 export function BudgetMonthTable({
   categories,
+  columnLabels,
+  groupLabels,
   month,
+  monthNames,
   savingKeys,
   onDeleteMonth,
   onAddRow,
@@ -29,7 +34,10 @@ export function BudgetMonthTable({
   onRemoveLastRow,
 }: {
   categories: BudgetCategory[];
+  columnLabels: BudgetColumnLabels;
+  groupLabels: BudgetGroupLabels;
   month: BudgetMonth;
+  monthNames: string[];
   savingKeys: Set<string>;
   onDeleteMonth: (monthId: string) => void;
   onAddRow: (monthId: string) => void;
@@ -37,8 +45,9 @@ export function BudgetMonthTable({
   onEntryNoteSave: BudgetEntryNoteSaveHandler;
   onRemoveLastRow: (monthId: string) => void;
 }) {
-  const columns = spreadsheetColumns(categories);
-  const monthName = MONTH_NAMES[month.month - 1] ?? `Month ${month.month}`;
+  const t = useTranslations('budget');
+  const columns = spreadsheetColumns(categories, { columns: columnLabels, groups: groupLabels });
+  const monthName = monthNames[month.month - 1] ?? String(month.month);
   const lastRowHasData = monthHasDataInRow(month, month.rowCount - 1);
   const rowMutationPending =
     savingKeys.has(`month:${month.id}:row:add`) || savingKeys.has(`month:${month.id}:row:remove`);
@@ -107,7 +116,7 @@ export function BudgetMonthTable({
             <tfoot>
               <tr>
                 <th className="sticky left-0 z-10 border border-[var(--line)] bg-[var(--surface-subtle)] px-2 py-2 text-left">
-                  Total
+                  {t('total')}
                 </th>
                 {columns.map((column) => (
                   <td
@@ -123,16 +132,22 @@ export function BudgetMonthTable({
                   className="sticky left-0 z-10 border border-[var(--line)] bg-[var(--surface-subtle)] px-2 py-2 text-left"
                   colSpan={2}
                 >
-                  Month summary
+                  {t('monthSummary')}
                 </th>
                 <td
                   className="border border-[var(--line)] bg-[var(--surface-subtle)] px-2 py-2 font-semibold"
                   colSpan={columns.length - 1}
                 >
                   <div className="flex flex-wrap gap-x-6 gap-y-2">
-                    <span>Income: {formatTotalsInline(month.totals.income)}</span>
-                    <span>Expenses: {formatTotalsInline(month.totals.expense)}</span>
-                    <span>Balance: {formatTotalsInline(month.totals.balance)}</span>
+                    <span>
+                      {t('income')}: {formatTotalsInline(month.totals.income)}
+                    </span>
+                    <span>
+                      {t('expenses')}: {formatTotalsInline(month.totals.expense)}
+                    </span>
+                    <span>
+                      {t('balance')}: {formatTotalsInline(month.totals.balance)}
+                    </span>
                   </div>
                 </td>
               </tr>
@@ -141,7 +156,7 @@ export function BudgetMonthTable({
         </div>
         {savingKeys.size > 0 ? (
           <p className="m-0 border-t border-[var(--line)] px-3 py-2 text-xs text-[var(--muted)]">
-            Saving changes...
+            {t('savingChanges')}
           </p>
         ) : null}
       </section>
@@ -166,10 +181,12 @@ function BudgetMonthTableHeader({
   onDeleteMonth: (monthId: string) => void;
   onRemoveLastRow: (monthId: string) => void;
 }) {
+  const t = useTranslations('budget');
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex md:flex-row flex-col justify-baseline items-start md:items-center gap-2">
-        <h2 className="md:self-end pr-3">{monthName} table:</h2>
+        <h2 className="pr-3 md:self-end">{t('monthTable', { month: monthName })}</h2>
         <CurrencyTotals
           totals={month.totals.balance}
           className="mt-1 flex gap-3 text-sm font-semibold underline"
@@ -178,7 +195,7 @@ function BudgetMonthTableHeader({
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
           <Button
-            aria-label="Add row"
+            aria-label={t('addRow')}
             className="h-8 w-8 px-0"
             disabled={rowMutationPending}
             type="button"
@@ -196,7 +213,7 @@ function BudgetMonthTableHeader({
             />
           ) : (
             <Button
-              aria-label="Remove last row"
+              aria-label={t('removeLastRow')}
               className="h-8 w-8 px-0"
               disabled={rowMutationPending || month.rowCount <= 1}
               type="button"

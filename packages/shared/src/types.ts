@@ -63,6 +63,7 @@ import type {
   telegramNotificationDisconnectSchema,
   telegramNotificationLinkSchema,
   updateNotificationPreferencesSchema,
+  appLocaleSchema,
 } from './schemas.js';
 
 export type UUID = string;
@@ -107,6 +108,7 @@ export type ListAdminOrganizationWorkspaceQuery = z.infer<
   typeof listAdminOrganizationWorkspaceQuerySchema
 >;
 export type UpdateCurrentUserProfileInput = z.infer<typeof updateCurrentUserProfileSchema>;
+export type AppLocale = z.infer<typeof appLocaleSchema>;
 export type CreateOrganizationMemberRelationshipInput = z.infer<
   typeof createOrganizationMemberRelationshipSchema
 >;

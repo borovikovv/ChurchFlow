@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { toast } from 'react-toastify';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -45,6 +46,12 @@ type SubmitWebsiteForm = (
 const allowedBackgroundImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const maxBackgroundImageBytes = 5 * 1024 * 1024;
 
+interface WebsiteUploadMessages {
+  backgroundImageTooLarge: string;
+  backgroundImageUploadFailed: string;
+  chooseBackgroundImage: string;
+}
+
 export function WebsiteManager({
   feedback,
   organizationId,
@@ -60,6 +67,7 @@ export function WebsiteManager({
   slug: string;
   website: DashboardWebsite;
 }) {
+  const t = useTranslations('website');
   const [currentWebsite, setCurrentWebsite] = useState(website);
   const [currentPages, setCurrentPages] = useState(pages);
   const [currentFeedback, setCurrentFeedback] = useState<WebsiteFeedback>(feedback);
@@ -68,7 +76,11 @@ export function WebsiteManager({
   const submitForm: SubmitWebsiteForm = async (action, formData, nextPendingKey) => {
     setPendingKey(nextPendingKey);
     try {
-      const uploadResult = await uploadSectionBackgroundImage(formData);
+      const uploadResult = await uploadSectionBackgroundImage(formData, {
+        backgroundImageTooLarge: t('backgroundImageTooLarge'),
+        backgroundImageUploadFailed: t('backgroundImageUploadFailed'),
+        chooseBackgroundImage: t('chooseBackgroundImage'),
+      });
       if (!uploadResult.ok) {
         setCurrentFeedback({ error: uploadResult.error });
         toast.error(uploadResult.error);
@@ -86,7 +98,7 @@ export function WebsiteManager({
       setCurrentFeedback({ message: result.message });
       toast.success(result.message);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save website changes.';
+      const message = error instanceof Error ? error.message : t('unableToSave');
       setCurrentFeedback({ error: message });
       toast.error(message);
     } finally {
@@ -97,11 +109,11 @@ export function WebsiteManager({
   return (
     <main className="stack min-w-0 content-start">
       <PageHeader
-        title="Website"
-        description="Publish and manage the public website for this organization."
+        title={t('title')}
+        description={t('description')}
         actions={
           <ButtonLink href={publicUrl} variant="secondary">
-            Open public site
+            {t('openPublicSite')}
           </ButtonLink>
         }
       />
@@ -123,10 +135,8 @@ export function WebsiteManager({
 
       <section className="stack min-w-0 content-start">
         <div>
-          <h2>Pages</h2>
-          <p className="m-0 text-sm text-[var(--muted)]">
-            Published pages are visible on the public website. The home page uses slug home.
-          </p>
+          <h2>{t('pages')}</h2>
+          <p className="m-0 text-sm text-[var(--muted)]">{t('pagesDescription')}</p>
         </div>
 
         <StarterHomePanel
@@ -166,13 +176,13 @@ function StarterHomePanel({
   organizationId: string;
   submitForm: SubmitWebsiteForm;
 }) {
+  const t = useTranslations('website');
+
   return (
     <section className="form-grid">
       <div className="grid gap-1">
-        <h3 className="m-0">Starter home page</h3>
-        <p className="m-0 text-sm text-[var(--muted)]">
-          Add the editable starter structure: hero, contact, and footer.
-        </p>
+        <h3 className="m-0">{t('starterHomePage')}</h3>
+        <p className="m-0 text-sm text-[var(--muted)]">{t('starterHomeDescription')}</p>
       </div>
       <form action={(formData) => submitForm(createStarterHome, formData, 'starter-home')}>
         <input type="hidden" name="organizationId" value={organizationId} />
@@ -188,10 +198,10 @@ function StarterHomePanel({
         ) : null}
         <Button type="submit" variant="secondary" disabled={isPending}>
           {isPending
-            ? 'Saving...'
+            ? t('saving')
             : homePage
-              ? 'Add missing starter sections to home'
-              : 'Create starter home page'}
+              ? t('addMissingStarterSections')
+              : t('createStarterHomePage')}
         </Button>
       </form>
     </section>
@@ -224,10 +234,15 @@ function WebsiteStatusPanel({
   published: boolean;
   submitForm: SubmitWebsiteForm;
 }) {
+  const t = useTranslations('website');
+
   return (
     <section className="form-grid">
       <div className="actions">
-        <StatusBadge status={published ? 'PUBLISHED' : 'DRAFT'} />
+        <StatusBadge
+          label={t(`statuses.${published ? 'PUBLISHED' : 'DRAFT'}`)}
+          status={published ? 'PUBLISHED' : 'DRAFT'}
+        />
         <span className="text-sm text-[var(--muted)]">{publicUrl}</span>
       </div>
       <form
@@ -237,7 +252,7 @@ function WebsiteStatusPanel({
         <input type="hidden" name="organizationId" value={organizationId} />
         <input type="hidden" name="published" value={published ? 'false' : 'true'} />
         <Button type="submit" variant={published ? 'secondary' : 'primary'} disabled={isPending}>
-          {isPending ? 'Saving...' : published ? 'Unpublish website' : 'Publish website'}
+          {isPending ? t('saving') : published ? t('unpublish') : t('publish')}
         </Button>
       </form>
     </section>
@@ -255,20 +270,22 @@ function WebsiteSettingsForm({
   submitForm: SubmitWebsiteForm;
   website: DashboardWebsite;
 }) {
+  const t = useTranslations('website');
+
   return (
     <section className="form-grid">
-      <h2 className="m-0">Website settings</h2>
+      <h2 className="m-0">{t('websiteSettings')}</h2>
       <form
         className="grid gap-3"
         action={(formData) => submitForm(updateSettings, formData, 'website-settings')}
       >
         <input type="hidden" name="organizationId" value={organizationId} />
         <label>
-          Title
+          {t('websiteTitle')}
           <input name="title" required maxLength={160} defaultValue={website.title} />
         </label>
         <label>
-          Description
+          {t('websiteDescription')}
           <textarea
             name="description"
             maxLength={500}
@@ -278,18 +295,18 @@ function WebsiteSettingsForm({
         </label>
         <div className="grid gap-3 sm:grid-cols-3">
           <FormSelect
-            label="Template"
+            label={t('template')}
             name="template"
             defaultValue={readString(website.settings, 'template', 'default')}
           >
-            <option value="default">Default sections</option>
+            <option value="default">{t('defaultSections')}</option>
           </FormSelect>
           <label>
-            Accent color
+            {t('accentColor')}
             <input name="accent" defaultValue={readString(website.theme, 'accent', '#1f883d')} />
           </label>
           <label>
-            Background
+            {t('background')}
             <input
               name="background"
               defaultValue={readString(website.theme, 'background', '#ffffff')}
@@ -297,7 +314,7 @@ function WebsiteSettingsForm({
           </label>
         </div>
         <Button type="submit" disabled={isPending}>
-          {isPending ? 'Saving...' : 'Save settings'}
+          {isPending ? t('saving') : t('saveSettings')}
         </Button>
       </form>
     </section>
@@ -313,6 +330,8 @@ function CreatePageForm({
   organizationId: string;
   submitForm: SubmitWebsiteForm;
 }) {
+  const t = useTranslations('website');
+
   return (
     <form
       className="form-grid compact"
@@ -320,24 +339,24 @@ function CreatePageForm({
     >
       <input type="hidden" name="organizationId" value={organizationId} />
       <label>
-        Slug
-        <input name="slug" required maxLength={80} placeholder="about" />
+        {t('slug')}
+        <input name="slug" required maxLength={80} placeholder={t('placeholders.aboutSlug')} />
       </label>
       <label>
-        Title
-        <input name="title" required maxLength={160} placeholder="About us" />
+        {t('pageTitle')}
+        <input name="title" required maxLength={160} placeholder={t('placeholders.aboutTitle')} />
       </label>
-      <FormSelect label="Status" name="status" defaultValue="DRAFT">
+      <FormSelect label={t('status')} name="status" defaultValue="DRAFT">
         {PAGE_STATUSES.map((status) => (
           <option key={status} value={status}>
-            {status}
+            {t(`statuses.${status}`)}
           </option>
         ))}
       </FormSelect>
       <input type="hidden" name="seoTitle" />
       <input type="hidden" name="seoDescription" />
       <Button type="submit" disabled={isPending}>
-        {isPending ? 'Saving...' : 'Create page'}
+        {isPending ? t('saving') : t('createPage')}
       </Button>
     </form>
   );
@@ -356,6 +375,7 @@ function PageEditor({
   slug: string;
   submitForm: SubmitWebsiteForm;
 }) {
+  const t = useTranslations('website');
   const sectionIds = page.sections.map((section) => section.id).join(',');
 
   return (
@@ -368,7 +388,7 @@ function PageEditor({
           </p>
         </div>
         <div className="actions">
-          <StatusBadge status={page.status} />
+          <StatusBadge label={t(`statuses.${page.status}`)} status={page.status} />
           <form
             action={(formData) =>
               submitForm(setPagePublished, formData, `page:${page.id}:published`)
@@ -383,10 +403,10 @@ function PageEditor({
               disabled={pendingKey === `page:${page.id}:published`}
             >
               {pendingKey === `page:${page.id}:published`
-                ? 'Saving...'
+                ? t('saving')
                 : page.publishedAt
-                  ? 'Unpublish'
-                  : 'Publish'}
+                  ? t('unpublish')
+                  : t('publish')}
             </Button>
           </form>
         </div>
@@ -400,28 +420,28 @@ function PageEditor({
         <input type="hidden" name="pageId" value={page.id} />
         <div className="grid gap-3 sm:grid-cols-3">
           <label>
-            Slug
+            {t('slug')}
             <input name="slug" required maxLength={80} defaultValue={page.slug} />
           </label>
           <label>
-            Title
+            {t('pageTitle')}
             <input name="title" required maxLength={160} defaultValue={page.title} />
           </label>
-          <FormSelect label="Status" name="status" defaultValue={page.status}>
+          <FormSelect label={t('status')} name="status" defaultValue={page.status}>
             {PAGE_STATUSES.map((status) => (
               <option key={status} value={status}>
-                {status}
+                {t(`statuses.${status}`)}
               </option>
             ))}
           </FormSelect>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <label>
-            SEO title
+            {t('seoTitle')}
             <input name="seoTitle" maxLength={160} defaultValue={readString(page.seo, 'title')} />
           </label>
           <label>
-            SEO description
+            {t('seoDescription')}
             <input
               name="seoDescription"
               maxLength={500}
@@ -434,7 +454,7 @@ function PageEditor({
           type="submit"
           disabled={pendingKey === `page:${page.id}:update`}
         >
-          {pendingKey === `page:${page.id}:update` ? 'Saving...' : 'Save page'}
+          {pendingKey === `page:${page.id}:update` ? t('saving') : t('savePage')}
         </Button>
       </form>
 
@@ -462,9 +482,11 @@ function SectionsEditor({
   sectionIds: string;
   submitForm: SubmitWebsiteForm;
 }) {
+  const t = useTranslations('website');
+
   return (
     <div className="grid min-w-0 content-start gap-3">
-      <h4 className="m-0">Sections</h4>
+      <h4 className="m-0">{t('sections')}</h4>
       <CreateSectionForm
         isPending={pendingKey === `page:${page.id}:section-create`}
         organizationId={organizationId}
@@ -498,6 +520,8 @@ function CreateSectionForm({
   page: DashboardPage;
   submitForm: SubmitWebsiteForm;
 }) {
+  const t = useTranslations('website');
+
   return (
     <form
       className="grid gap-3 sm:grid-cols-[repeat(3,minmax(0,1fr))_auto]"
@@ -508,16 +532,16 @@ function CreateSectionForm({
       <input type="hidden" name="order" value={page.sections.length} />
       <SectionPresetSelect defaultValue="hero" />
       <label>
-        Title/headline
-        <input name="title" placeholder="Welcome" />
+        {t('titleHeadline')}
+        <input name="title" placeholder={t('placeholders.welcome')} />
       </label>
       <label>
-        Body/subheading
-        <input name="body" placeholder="Short content" />
+        {t('bodySubheading')}
+        <input name="body" placeholder={t('placeholders.shortContent')} />
       </label>
       <input type="hidden" name="items" />
       <Button type="submit" disabled={isPending} className="min-h-10.5 self-end">
-        {isPending ? 'Saving...' : 'Add section'}
+        {isPending ? t('saving') : t('addSection')}
       </Button>
     </form>
   );
@@ -540,6 +564,7 @@ function SectionEditor({
   sectionIds: string;
   submitForm: SubmitWebsiteForm;
 }) {
+  const t = useTranslations('website');
   const initialPresetValue = sectionPresetValue(section);
   const [selectedPresetValue, setSelectedPresetValue] = useState<string>(initialPresetValue);
   const selectedPreset = sectionPreset(selectedPresetValue);
@@ -549,7 +574,7 @@ function SectionEditor({
   return (
     <section className="grid min-w-0 content-start gap-3 rounded-md border border-[var(--line)] bg-[var(--surface-subtle)] p-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <strong>{section.type}</strong>
+        <strong>{t(`presets.${selectedPreset.variant}`)}</strong>
         <SectionActions
           index={index}
           organizationId={organizationId}
@@ -591,7 +616,7 @@ function SectionEditor({
           variant="secondary"
           disabled={pendingKey === `section:${section.id}:update`}
         >
-          {pendingKey === `section:${section.id}:update` ? 'Saving...' : 'Save section'}
+          {pendingKey === `section:${section.id}:update` ? t('saving') : t('saveSection')}
         </Button>
       </form>
     </section>
@@ -615,12 +640,14 @@ function SectionActions({
   sectionIds: string;
   submitForm: SubmitWebsiteForm;
 }) {
+  const t = useTranslations('website');
+
   return (
     <div className="actions">
       <SectionMoveButton
         disabled={index === 0}
         fromIndex={index}
-        label="Up"
+        label={t('up')}
         organizationId={organizationId}
         pageId={page.id}
         pendingKey={pendingKey}
@@ -631,7 +658,7 @@ function SectionActions({
       <SectionMoveButton
         disabled={index === page.sections.length - 1}
         fromIndex={index}
-        label="Down"
+        label={t('down')}
         organizationId={organizationId}
         pageId={page.id}
         pendingKey={pendingKey}
@@ -649,7 +676,7 @@ function SectionActions({
           variant="danger"
           disabled={pendingKey === `section:${section.id}:delete`}
         >
-          {pendingKey === `section:${section.id}:delete` ? 'Saving...' : 'Delete'}
+          {pendingKey === `section:${section.id}:delete` ? t('saving') : t('delete')}
         </Button>
       </form>
     </div>
@@ -677,6 +704,7 @@ function SectionMoveButton({
   submitForm: SubmitWebsiteForm;
   toIndex: number;
 }) {
+  const t = useTranslations('website');
   const actionKey = `page:${pageId}:section-reorder`;
 
   return (
@@ -687,17 +715,19 @@ function SectionMoveButton({
       <input type="hidden" name="fromIndex" value={fromIndex} />
       <input type="hidden" name="toIndex" value={toIndex} />
       <Button type="submit" variant="secondary" disabled={disabled || pendingKey === actionKey}>
-        {pendingKey === actionKey ? 'Saving...' : label}
+        {pendingKey === actionKey ? t('saving') : label}
       </Button>
     </form>
   );
 }
 
 function TitleBodyFields({ section }: { section: DashboardSection }) {
+  const t = useTranslations('website');
+
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <label>
-        Title/headline
+        {t('titleHeadline')}
         <input
           name="title"
           defaultValue={
@@ -706,7 +736,7 @@ function TitleBodyFields({ section }: { section: DashboardSection }) {
         />
       </label>
       <label>
-        Body/subheading
+        {t('bodySubheading')}
         <input
           name="body"
           defaultValue={
@@ -719,10 +749,12 @@ function TitleBodyFields({ section }: { section: DashboardSection }) {
 }
 
 function ContactFields({ section }: { section: DashboardSection }) {
+  const t = useTranslations('website');
+
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <label>
-        Address
+        {t('address')}
         <input name="address" defaultValue={readString(section.content, 'address')} />
       </label>
       <label>
@@ -730,7 +762,7 @@ function ContactFields({ section }: { section: DashboardSection }) {
         <input name="email" defaultValue={readString(section.content, 'email')} />
       </label>
       <label>
-        Phone
+        {t('phone')}
         <input name="phone" defaultValue={readString(section.content, 'phone')} />
       </label>
     </div>
@@ -738,37 +770,39 @@ function ContactFields({ section }: { section: DashboardSection }) {
 }
 
 function ButtonFields({ section }: { section: DashboardSection }) {
+  const t = useTranslations('website');
+
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <label>
-        Primary button
+        {t('primaryButton')}
         <input
           name="primaryLabel"
-          placeholder="Button label"
+          placeholder={t('buttonLabel')}
           defaultValue={readString(section.content, 'primaryLabel')}
         />
       </label>
       <label>
-        Primary URL
+        {t('primaryUrl')}
         <input
           name="primaryHref"
-          placeholder="#section or https://..."
+          placeholder={t('sectionOrUrl')}
           defaultValue={readString(section.content, 'primaryHref')}
         />
       </label>
       <label>
-        Secondary button
+        {t('secondaryButton')}
         <input
           name="secondaryLabel"
-          placeholder="Button label"
+          placeholder={t('buttonLabel')}
           defaultValue={readString(section.content, 'secondaryLabel')}
         />
       </label>
       <label>
-        Secondary URL
+        {t('secondaryUrl')}
         <input
           name="secondaryHref"
-          placeholder="#section or https://..."
+          placeholder={t('sectionOrUrl')}
           defaultValue={readString(section.content, 'secondaryHref')}
         />
       </label>
@@ -777,13 +811,15 @@ function ButtonFields({ section }: { section: DashboardSection }) {
 }
 
 function ItemsField({ section }: { section: DashboardSection }) {
+  const t = useTranslations('website');
+
   return (
     <label>
-      Cards or links
+      {t('cardsOrLinks')}
       <textarea
         name="items"
         rows={4}
-        placeholder="Title | Description | Button label | URL"
+        placeholder={t('itemsPlaceholder')}
         defaultValue={formatItems(section.content['items'])}
       />
     </label>
@@ -791,15 +827,17 @@ function ItemsField({ section }: { section: DashboardSection }) {
 }
 
 function CopyrightField({ section }: { section: DashboardSection }) {
+  const t = useTranslations('website');
+
   return (
     <div className="grid gap-3">
       <label>
-        Copyright/footer text
+        {t('copyrightFooterText')}
         <input name="copyright" defaultValue={readString(section.content, 'copyright')} />
       </label>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label>
-          Meta URL
+          {t('metaUrl')}
           <input
             name="socialMetaHref"
             placeholder="https://facebook.com/..."
@@ -807,7 +845,7 @@ function CopyrightField({ section }: { section: DashboardSection }) {
           />
         </label>
         <label>
-          Instagram URL
+          {t('instagramUrl')}
           <input
             name="socialInstagramHref"
             placeholder="https://instagram.com/..."
@@ -815,7 +853,7 @@ function CopyrightField({ section }: { section: DashboardSection }) {
           />
         </label>
         <label>
-          TikTok URL
+          {t('tiktokUrl')}
           <input
             name="socialTiktokHref"
             placeholder="https://tiktok.com/@..."
@@ -823,7 +861,7 @@ function CopyrightField({ section }: { section: DashboardSection }) {
           />
         </label>
         <label>
-          X URL
+          {t('xUrl')}
           <input
             name="socialXHref"
             placeholder="https://x.com/..."
@@ -836,6 +874,7 @@ function CopyrightField({ section }: { section: DashboardSection }) {
 }
 
 function BackgroundFields({ section }: { section: DashboardSection }) {
+  const t = useTranslations('website');
   const backgroundImageAssetId = readString(section.content, 'backgroundImageAssetId');
   const backgroundImageUrl = readString(section.content, 'backgroundImageUrl');
 
@@ -843,7 +882,7 @@ function BackgroundFields({ section }: { section: DashboardSection }) {
     <>
       <div className="grid gap-3 sm:grid-cols-3">
         <label>
-          Section background color
+          {t('sectionBackgroundColor')}
           <input
             name="backgroundColor"
             placeholder="#f6f8fa"
@@ -851,11 +890,11 @@ function BackgroundFields({ section }: { section: DashboardSection }) {
           />
         </label>
         <label>
-          Section background image
+          {t('sectionBackgroundImage')}
           <input name="backgroundImageFile" accept="image/jpeg,image/png,image/webp" type="file" />
         </label>
         <Checkbox
-          label="Remove background image"
+          label={t('removeBackgroundImage')}
           labelClassName="self-end"
           name="removeBackgroundImage"
           value="true"
@@ -870,7 +909,7 @@ function BackgroundFields({ section }: { section: DashboardSection }) {
           style={{
             backgroundImage: `url(${backgroundImageUrl})`,
           }}
-          aria-label="Current section background image preview"
+          aria-label={t('backgroundPreview')}
         />
       ) : null}
     </>
@@ -884,16 +923,18 @@ function SectionPresetSelect({
   defaultValue: string;
   onChange?: (value: string) => void;
 }) {
+  const t = useTranslations('website');
+
   return (
     <FormSelect
-      label="Section"
+      label={t('section')}
       name="preset"
       defaultValue={defaultValue}
       onChange={(event) => onChange?.(event.currentTarget.value)}
     >
       {SECTION_PRESETS.map((preset) => (
         <option key={preset.variant} value={preset.variant}>
-          {preset.label}
+          {t(`presets.${preset.variant}`)}
         </option>
       ))}
     </FormSelect>
@@ -901,11 +942,13 @@ function SectionPresetSelect({
 }
 
 function SectionFontSelect({ defaultValue }: { defaultValue: string }) {
+  const t = useTranslations('website');
+
   return (
-    <FormSelect label="Font" name="fontPreset" defaultValue={defaultValue}>
+    <FormSelect label={t('font')} name="fontPreset" defaultValue={defaultValue}>
       {SECTION_FONT_PRESETS.map((preset) => (
         <option key={preset.value} value={preset.value}>
-          {preset.label}
+          {t(`fonts.${preset.value}`)}
         </option>
       ))}
     </FormSelect>
@@ -1015,6 +1058,7 @@ function sectionEditorKey(section: DashboardSection): string {
 
 async function uploadSectionBackgroundImage(
   formData: FormData,
+  messages: WebsiteUploadMessages,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const file = formData.get('backgroundImageFile');
   formData.delete('backgroundImageFile');
@@ -1024,11 +1068,11 @@ async function uploadSectionBackgroundImage(
   }
 
   if (!allowedBackgroundImageTypes.has(file.type)) {
-    return { ok: false, error: 'Choose a JPEG, PNG, or WebP background image.' };
+    return { ok: false, error: messages.chooseBackgroundImage };
   }
 
   if (file.size > maxBackgroundImageBytes) {
-    return { ok: false, error: 'The background image must not exceed 5 MB.' };
+    return { ok: false, error: messages.backgroundImageTooLarge };
   }
 
   const organizationId = String(formData.get('organizationId') ?? '');
@@ -1050,7 +1094,7 @@ async function uploadSectionBackgroundImage(
   });
 
   if (!upload.ok) {
-    return { ok: false, error: 'Background image upload failed.' };
+    return { ok: false, error: messages.backgroundImageUploadFailed };
   }
 
   const confirmed = await confirmWebsiteSectionBackgroundImageAction({

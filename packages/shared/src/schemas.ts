@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  APP_LOCALES,
   CALENDAR_EVENT_REMINDERS,
   CALENDAR_EVENT_REPEAT_PERIOD,
   CALENDAR_EVENT_REPEAT_PERIODS,
@@ -400,6 +401,8 @@ export const toggleCalendarTaskCompletionSchema = z.object({
   completed: z.boolean(),
 });
 
+export const appLocaleSchema = z.enum(APP_LOCALES);
+
 export const updateCurrentUserProfileSchema = z
   .object({
     displayName: nullableTrimmedString(160).refine(
@@ -415,6 +418,7 @@ export const updateCurrentUserProfileSchema = z
       .transform((value) => value?.toLowerCase() ?? value),
     baptizedAt: nullablePastOrTodayDate,
     baptismChurchName: nullableTrimmedString(160),
+    locale: appLocaleSchema.optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: 'At least one profile field is required',

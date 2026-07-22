@@ -1,8 +1,10 @@
 import Image from 'next/image';
+import { getMessages } from '@/i18n/messages';
+import { DEFAULT_APP_LOCALE } from '@/i18n/locales';
 import { startProviderLogin } from './actions';
 
 const providers = [
-  { id: 'telegram', label: 'Continue with Telegram', icon: '/icons/socials/telegram.svg' },
+  { id: 'telegram', translationKey: 'continueWithTelegram', icon: '/icons/socials/telegram.svg' },
 ] as const;
 
 export default async function LoginPage({
@@ -11,6 +13,7 @@ export default async function LoginPage({
   searchParams: Promise<{ redirectTo?: string; error?: string }>;
 }) {
   const { redirectTo, error } = await searchParams;
+  const messages = getMessages(DEFAULT_APP_LOCALE);
 
   return (
     <main className="section">
@@ -23,9 +26,9 @@ export default async function LoginPage({
           src="/icons/church-flow.svg"
           width={360}
         />
-        <h1 className="sr-only">Sign in to ChurchFlow</h1>
+        <h1 className="sr-only">{messages.auth.signInToChurchFlow}</h1>
         {error ? <p className="form-error">{error}</p> : null}
-        <div className="auth-provider-list" aria-label="Sign-in providers">
+        <div className="auth-provider-list" aria-label={messages.auth.signInProviders}>
           {providers.map((provider) => (
             <form key={provider.id} action={startProviderLogin}>
               <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
@@ -34,7 +37,7 @@ export default async function LoginPage({
                 <span className="auth-provider-mark">
                   <Image src={provider.icon} alt="" width={20} height={20} aria-hidden="true" />
                 </span>
-                {provider.label}
+                {messages.auth[provider.translationKey]}
               </button>
             </form>
           ))}

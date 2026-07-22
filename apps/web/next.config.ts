@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import createNextIntlPlugin from 'next-intl/plugin';
 import { fileURLToPath } from 'node:url';
 import { webEnvSchema } from '@churchflow/shared';
 
@@ -11,6 +12,7 @@ const env = webEnvSchema.parse({
 });
 const webHost = new URL(env.NEXT_PUBLIC_WEB_URL).host;
 const sharedSource = fileURLToPath(new URL('./src/shared/index.ts', import.meta.url));
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const nextConfig: NextConfig = {
   typedRoutes: true,
@@ -41,4 +43,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

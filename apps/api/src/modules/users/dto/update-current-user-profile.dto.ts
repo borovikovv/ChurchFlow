@@ -7,4 +7,5 @@ export class UpdateCurrentUserProfileDto implements UpdateCurrentUserProfileInpu
   email?: string | null;
   baptizedAt?: string | null;
   baptismChurchName?: string | null;
+  locale?: UpdateCurrentUserProfileInput['locale'];
 }

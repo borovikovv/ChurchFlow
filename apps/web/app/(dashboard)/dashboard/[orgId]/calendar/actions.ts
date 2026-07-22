@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { apiFetch } from '@/api/client';
+import { getCurrentUser } from '@/auth/session';
+import { getMessages } from '@/i18n/messages';
 import type {
   CalendarEventItem,
   CalendarEventsPayload,
@@ -24,7 +26,9 @@ export async function loadCalendarEventsAction(input: {
     types: input.types,
   });
   if (!parsedQuery.success) {
-    return { ok: false as const, error: 'Invalid calendar range or filters.' };
+    const user = await getCurrentUser();
+    const messages = getMessages(user?.locale ?? 'en');
+    return { ok: false as const, error: messages.calendar.invalidRangeOrFilters };
   }
 
   const query = new URLSearchParams({

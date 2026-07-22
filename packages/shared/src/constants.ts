@@ -3,6 +3,9 @@ export const AUTH_COOKIE_NAMES = {
   refresh: 'churchflow_refresh',
 } as const;
 
+export const APP_LOCALES = ['en', 'uk'] as const;
+export const DEFAULT_APP_LOCALE = 'en';
+
 export const ORG_PERMISSIONS = {
   membersManage: 'members.manage',
   websiteManage: 'website.manage',

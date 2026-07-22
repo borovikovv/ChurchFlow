@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import {
   useForm,
@@ -14,21 +15,22 @@ import type {
   CalendarMemberOption,
   MemberMinistry,
 } from '@churchflow/shared';
-import { MEMBER_MINISTRY } from '@churchflow/shared';
+import {
+  CALENDAR_EVENT_REPEAT_PERIODS,
+  CALENDAR_EVENT_TYPES,
+  MEMBER_MINISTRY,
+} from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FormDatePicker } from '@/components/forms/form-date-picker';
 import { FormInput } from '@/components/forms/form-input';
 import { FormSelect } from '@/components/forms/form-select';
 import { FormTextarea } from '@/components/forms/form-textarea';
-import {
-  CALENDAR_TYPE,
-  EVENT_TYPE_OPTIONS,
-  REMINDER_OPTIONS,
-  REPEAT_PERIOD_OPTIONS,
-} from './calendar-constants';
+import { CALENDAR_TYPE } from './calendar-constants';
 import type { CalendarFormState } from './calendar-types';
 import { applyFormValues, autofillMemberEvent, validateCalendarForm } from './calendar-form-utils';
+
+const REMINDER_VALUES = ['', 'ONE_HOUR', 'ONE_DAY', 'ONE_WEEK'] as const;
 
 const SERVICE_ROLE_PRIORITIES: Record<
   'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead',
@@ -63,6 +65,7 @@ export function EventModal({
   onImageUpload: (file: File) => Promise<{ assetId: string; imageUrl: string } | null>;
   onSubmit: (values: CalendarFormState) => Promise<{ ok: true } | { ok: false; error: string }>;
 }) {
+  const t = useTranslations('calendar');
   const readonly = !canManage;
   const [assigneeToAdd, setAssigneeToAdd] = useState('');
   const {
@@ -85,7 +88,19 @@ export function EventModal({
     (member) => !values.assigneeMembershipIds.includes(member.id),
   );
   const submit = handleSubmit(async (nextValues) => {
-    if (!validateCalendarForm(nextValues, setError)) return;
+    if (
+      !validateCalendarForm(nextValues, setError, {
+        assigneeRequired: t('validation.assigneeRequired'),
+        endDateAfterStart: t('validation.endDateAfterStart'),
+        servicePersonRequired: t('validation.servicePersonRequired'),
+        servicePersonSingleValue: t('validation.servicePersonSingleValue'),
+        startDateRequired: t('validation.startDateRequired'),
+        startTimeRequired: t('validation.startTimeRequired'),
+        titleRequired: t('validation.titleRequired'),
+      })
+    ) {
+      return;
+    }
     const result = await onSubmit(nextValues);
     if (!result.ok) {
       toast.error(result.error);
@@ -100,8 +115,9 @@ export function EventModal({
         role="dialog"
       >
         <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
-          <h2>{mode === 'create' ? 'New event' : (editingEvent?.title ?? 'Event')}</h2>
+          <h2>{mode === 'create' ? t('newEvent') : (editingEvent?.title ?? t('event'))}</h2>
           <button
+            aria-label={t('close')}
             className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
             type="button"
             onClick={onClose}
@@ -117,40 +133,48 @@ export function EventModal({
           <FormSelect
             disabled={readonly}
             error={errors.type?.message}
-            label="Type"
+            label={t('type')}
             value={values.type}
             {...register('type', {
               onChange: (event) => {
                 const next = autofillMemberEvent(
                   { ...values, type: event.currentTarget.value as CalendarEventType },
                   members,
+                  {
+                    anniversary: (name) => t('autofill.anniversary', { name }),
+                    birthday: (name) => t('autofill.birthday', { name }),
+                  },
                 );
                 applyFormValues(next, setValue);
               },
             })}
           >
-            {EVENT_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+            {CALENDAR_EVENT_TYPES.map((value) => (
+              <option key={value} value={value}>
+                {t(`eventTypes.${value}`)}
               </option>
             ))}
           </FormSelect>
           <FormSelect
             disabled={readonly}
             error={errors.linkedMembershipId?.message}
-            label="Linked member"
+            label={t('linkedMember')}
             value={values.linkedMembershipId}
             {...register('linkedMembershipId', {
               onChange: (event) => {
                 const next = autofillMemberEvent(
                   { ...values, linkedMembershipId: event.currentTarget.value },
                   members,
+                  {
+                    anniversary: (name) => t('autofill.anniversary', { name }),
+                    birthday: (name) => t('autofill.birthday', { name }),
+                  },
                 );
                 applyFormValues(next, setValue);
               },
             })}
           >
-            <option value="">No linked member</option>
+            <option value="">{t('noLinkedMember')}</option>
             {members.map((member) => (
               <option key={member.id} value={member.id}>
                 {member.displayName}
@@ -161,7 +185,7 @@ export function EventModal({
             <FormInput
               disabled={readonly}
               error={errors.title?.message}
-              label="Title"
+              label={t('titleField')}
               {...register('title')}
             />
           </div>
@@ -169,7 +193,7 @@ export function EventModal({
             <FormTextarea
               disabled={readonly}
               error={errors.description?.message}
-              label="Description"
+              label={t('description')}
               rows={4}
               {...register('description')}
             />
@@ -180,12 +204,12 @@ export function EventModal({
             error={errors.startDate?.message}
             maxDate={null}
             name="startDate"
-            label="Start date"
+            label={t('startDate')}
           />
           <FormInput
             disabled={readonly || values.allDay}
             error={errors.startTime?.message}
-            label="Start time"
+            label={t('startTime')}
             type="time"
             {...register('startTime')}
           />
@@ -195,37 +219,37 @@ export function EventModal({
             error={errors.endDate?.message}
             maxDate={null}
             name="endDate"
-            label="End date"
+            label={t('endDate')}
           />
           <FormInput
             disabled={readonly || values.allDay}
             error={errors.endTime?.message}
-            label="End time"
+            label={t('endTime')}
             type="time"
             {...register('endTime')}
           />
-          <Checkbox disabled={readonly} label="Full day" {...register('allDay')} />
+          <Checkbox disabled={readonly} label={t('fullDay')} {...register('allDay')} />
           <FormSelect
             disabled={readonly}
             error={errors.reminder?.message}
-            label="Reminder"
+            label={t('reminder')}
             {...register('reminder')}
           >
-            {REMINDER_OPTIONS.map((option) => (
-              <option key={option.value || 'none'} value={option.value}>
-                {option.label}
+            {REMINDER_VALUES.map((value) => (
+              <option key={value || 'none'} value={value}>
+                {value ? t(`reminders.${value}`) : t('reminders.NONE')}
               </option>
             ))}
           </FormSelect>
           <FormSelect
             disabled={readonly}
             error={errors.repeatPeriod?.message}
-            label="Repeat"
+            label={t('repeat')}
             {...register('repeatPeriod')}
           >
-            {REPEAT_PERIOD_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+            {CALENDAR_EVENT_REPEAT_PERIODS.map((value) => (
+              <option key={value} value={value}>
+                {t(`repeatPeriods.${value}`)}
               </option>
             ))}
           </FormSelect>
@@ -235,11 +259,11 @@ export function EventModal({
                 <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                   <FormSelect
                     disabled={readonly || availableAssignees.length === 0}
-                    label="Assignees"
+                    label={t('assignees')}
                     value={assigneeToAdd}
                     onChange={(event) => setAssigneeToAdd(event.currentTarget.value)}
                   >
-                    <option value="">Select member</option>
+                    <option value="">{t('selectMember')}</option>
                     {availableAssignees.map((member) => (
                       <option key={member.id} value={member.id}>
                         {member.displayName}
@@ -261,7 +285,7 @@ export function EventModal({
                       setAssigneeToAdd('');
                     }}
                   >
-                    Add
+                    {t('add')}
                   </Button>
                 </div>
                 {selectedAssignees.length > 0 ? (
@@ -273,7 +297,7 @@ export function EventModal({
                       >
                         {member.displayName}
                         <button
-                          aria-label={`Remove ${member.displayName}`}
+                          aria-label={t('removeAssignee', { name: member.displayName })}
                           className="h-5 w-5 rounded border-0 bg-transparent text-[var(--muted)] hover:bg-[var(--line-muted)] hover:text-[var(--foreground)]"
                           disabled={readonly}
                           type="button"
@@ -295,16 +319,16 @@ export function EventModal({
                   <p className="form-error m-0 text-xs">{errors.assigneeMembershipIds.message}</p>
                 ) : null}
               </div>
-              <Checkbox disabled={readonly} label="Completed" {...register('taskCompleted')} />
+              <Checkbox disabled={readonly} label={t('completed')} {...register('taskCompleted')} />
             </>
           ) : null}
           {values.type === CALENDAR_TYPE.service ? (
             <fieldset className="grid items-start gap-4 rounded-md border border-[var(--line)] p-4 sm:col-span-2 sm:grid-cols-2">
-              <legend className="px-1 font-semibold">Service details</legend>
+              <legend className="px-1 font-semibold">{t('serviceDetails')}</legend>
               <ServiceRoleField
                 disabled={readonly}
                 error={errors.serviceDetails?.preacher?.message}
-                label="Preacher"
+                label={t('preacher')}
                 members={members}
                 role="preacher"
                 values={values.serviceDetails.preacher}
@@ -315,7 +339,7 @@ export function EventModal({
               <ServiceRoleField
                 disabled={readonly}
                 error={errors.serviceDetails?.serviceHost?.message}
-                label="Service host"
+                label={t('serviceHost')}
                 members={members}
                 role="serviceHost"
                 values={values.serviceDetails.serviceHost}
@@ -326,7 +350,7 @@ export function EventModal({
               <ServiceRoleField
                 disabled={readonly}
                 error={errors.serviceDetails?.worshipLead?.message}
-                label="Worship lead"
+                label={t('worshipLead')}
                 members={members}
                 role="worshipLead"
                 values={values.serviceDetails.worshipLead}
@@ -339,14 +363,14 @@ export function EventModal({
                   disabled={readonly}
                   error={errors.serviceDetails?.biblePassage?.message}
                   className="min-h-31"
-                  label="Bible passage"
+                  label={t('biblePassage')}
                   {...register('serviceDetails.biblePassage')}
                 />
               </div>
               <div className="self-start pt-1">
                 <Checkbox
                   disabled={readonly}
-                  label="Communion"
+                  label={t('communion')}
                   {...register('serviceDetails.hasCommunion')}
                 />
               </div>
@@ -355,7 +379,7 @@ export function EventModal({
                   <ServiceRoleField
                     disabled={readonly}
                     error={errors.serviceDetails?.communionLead?.message}
-                    label="Communion lead"
+                    label={t('communionLead')}
                     members={members}
                     role="communionLead"
                     values={values.serviceDetails.communionLead}
@@ -369,9 +393,9 @@ export function EventModal({
                 <FormTextarea
                   disabled={readonly}
                   error={errors.serviceDetails?.songs?.message}
-                  label="Songs"
+                  label={t('songs')}
                   rows={4}
-                  placeholder="One song per line"
+                  placeholder={t('songsPlaceholder')}
                   {...register('serviceDetails.songs')}
                 />
               </div>
@@ -379,7 +403,7 @@ export function EventModal({
           ) : null}
           {canManage ? (
             <label className="sm:col-span-2">
-              Event image
+              {t('eventImage')}
               <input
                 accept="image/jpeg,image/png,image/webp"
                 type="file"
@@ -407,13 +431,13 @@ export function EventModal({
           <div>
             {mode === 'edit' && canManage ? (
               <Button type="button" variant="danger" onClick={onDelete}>
-                Delete
+                {t('delete')}
               </Button>
             ) : null}
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
-              Close
+              {t('close')}
             </Button>
             {canManage ? (
               <Button
@@ -421,7 +445,7 @@ export function EventModal({
                 type="button"
                 onClick={() => void submit()}
               >
-                Save
+                {t('save')}
               </Button>
             ) : null}
           </div>
@@ -452,6 +476,7 @@ function ServiceRoleField({
   setValue: UseFormSetValue<CalendarFormState>;
   clearErrors: UseFormClearErrors<CalendarFormState>;
 }) {
+  const t = useTranslations('calendar');
   const sortedMembers = sortMembersByMinistry(members, SERVICE_ROLE_PRIORITIES[role]);
   const baseName = `serviceDetails.${role}` as const;
 
@@ -476,7 +501,7 @@ function ServiceRoleField({
           clearErrors(baseName);
         }}
       >
-        <option value="">No member selected</option>
+        <option value="">{t('noMemberSelected')}</option>
         {sortedMembers.map((member) => (
           <option key={member.id} value={member.id}>
             {member.displayName}
@@ -485,8 +510,8 @@ function ServiceRoleField({
       </FormSelect>
       <FormInput
         disabled={disabled || Boolean(values.membershipId)}
-        label={`${label} guest`}
-        placeholder={values.membershipId ? 'Clear member to enter a guest name' : 'Guest name'}
+        label={t('guestLabel', { label })}
+        placeholder={values.membershipId ? t('clearMemberForGuest') : t('guestName')}
         {...register(`${baseName}.customName`, {
           onChange: (event) => {
             if (event.currentTarget.value.trim()) {

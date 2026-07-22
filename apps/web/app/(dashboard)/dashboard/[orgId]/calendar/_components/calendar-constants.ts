@@ -1,58 +1,16 @@
-import type {
-  CalendarEventReminder,
-  CalendarEventRepeatPeriod,
-  CalendarEventType,
-} from '@churchflow/shared';
-import {
-  CALENDAR_EVENT_REPEAT_PERIOD,
-  CALENDAR_EVENT_REPEAT_PERIODS,
-  CALENDAR_EVENT_TYPE,
-  CALENDAR_EVENT_TYPES,
-} from '@churchflow/shared';
+import type { CalendarEventType } from '@churchflow/shared';
+import { CALENDAR_EVENT_REPEAT_PERIOD, CALENDAR_EVENT_TYPE } from '@churchflow/shared';
 
 export const CALENDAR_TYPE = CALENDAR_EVENT_TYPE;
 export const CALENDAR_REPEAT = CALENDAR_EVENT_REPEAT_PERIOD;
 
-export const EVENT_TYPES: Array<{ value: CalendarEventType; label: string }> = [
-  { value: CALENDAR_TYPE.task, label: 'Tasks' },
-  { value: CALENDAR_TYPE.birthday, label: 'Birthdays' },
-  { value: CALENDAR_TYPE.anniversary, label: 'Anniversaries' },
-  { value: CALENDAR_TYPE.event, label: 'Events' },
-  { value: CALENDAR_TYPE.service, label: 'Services' },
+export const EVENT_TYPES: Array<{ value: CalendarEventType }> = [
+  { value: CALENDAR_TYPE.task },
+  { value: CALENDAR_TYPE.birthday },
+  { value: CALENDAR_TYPE.anniversary },
+  { value: CALENDAR_TYPE.event },
+  { value: CALENDAR_TYPE.service },
 ];
-
-export const EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
-  BIRTHDAY: 'Birthday',
-  ANNIVERSARY: 'Anniversary',
-  TASK: 'Task',
-  EVENT: 'Event',
-  SERVICE: 'Service',
-};
-
-export const EVENT_TYPE_OPTIONS = CALENDAR_EVENT_TYPES.map((value) => ({
-  value,
-  label: EVENT_TYPE_LABELS[value],
-}));
-
-export const REMINDER_OPTIONS: Array<{ value: '' | CalendarEventReminder; label: string }> = [
-  { value: '', label: 'No reminder' },
-  { value: 'ONE_HOUR', label: '1 hour before' },
-  { value: 'ONE_DAY', label: '1 day before' },
-  { value: 'ONE_WEEK', label: '1 week before' },
-];
-
-export const REPEAT_PERIOD_LABELS: Record<CalendarEventRepeatPeriod, string> = {
-  NONE: 'None',
-  DAILY: 'Daily',
-  WEEKLY: 'Weekly',
-  MONTHLY: 'Monthly',
-  YEARLY: 'Yearly',
-};
-
-export const REPEAT_PERIOD_OPTIONS = CALENDAR_EVENT_REPEAT_PERIODS.map((value) => ({
-  value,
-  label: REPEAT_PERIOD_LABELS[value],
-}));
 
 export const EVENT_TYPE_STYLES: Record<CalendarEventType, string> = {
   BIRTHDAY: 'border-l-emerald-500 bg-emerald-50 text-emerald-900',

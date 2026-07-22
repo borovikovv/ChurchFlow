@@ -1,9 +1,9 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
-import { StatusBadge } from '@/components/ui/status-badge';
 import {
   TableRowAction,
   TableRowActions,
@@ -99,17 +99,6 @@ type MemberProfileUpdate = Partial<EditableMember['profile']> & {
   ministries?: MemberMinistry[];
 };
 
-const MINISTRY_LABELS: Record<MemberMinistry, string> = {
-  PREACHING: 'Preaching',
-  WORSHIP: 'Worship',
-  DEACON: 'Deacon',
-  MINISTER: 'Minister',
-  TEACHER: 'Teacher',
-  MISSIONARY: 'Missionary',
-  EVANGELIST: 'Evangelist',
-  CHAPLAIN: 'Chaplain',
-};
-
 function MenuIcon({ children }: { children: ReactNode }) {
   return (
     <svg
@@ -149,6 +138,8 @@ function EditMemberSheet({
   onOpen: () => void;
   onClose: () => void;
 }) {
+  const t = useTranslations('members');
+  const commonT = useTranslations('common');
   const titleId = useId();
   const [photo, setPhoto] = useState<File | null>(null);
   const [savedPhotoUrl, setSavedPhotoUrl] = useState(member.profile.photoUrl);
@@ -181,7 +172,10 @@ function EditMemberSheet({
   });
 
   const submit = handleSubmit(async (values) => {
-    const currentPhotoError = validateMemberPhoto(photo);
+    const currentPhotoError = validateMemberPhoto(photo, {
+      invalidType: t('chooseImageFile'),
+      tooLarge: t('photoTooLarge'),
+    });
     setPhotoError(currentPhotoError);
     if (currentPhotoError) return;
 
@@ -197,23 +191,23 @@ function EditMemberSheet({
           byteSize: photo.size,
         });
         if (!prepared.ok || !prepared.assetId || !prepared.uploadUrl) {
-          throw new Error(prepared.error ?? 'Unable to prepare photo upload.');
+          throw new Error(prepared.error ?? t('unableToPreparePhotoUpload'));
         }
         const upload = await fetch(prepared.uploadUrl, {
           method: 'PUT',
           headers: { 'content-type': photo.type },
           body: photo,
         });
-        if (!upload.ok) throw new Error('Photo upload failed.');
+        if (!upload.ok) throw new Error(t('photoUploadFailed'));
         const confirmed = await confirmPhoto({
           organizationId,
           membershipId: member.id,
           assetId: prepared.assetId,
         });
-        if (!confirmed.ok) throw new Error(confirmed.error ?? 'Unable to confirm photo.');
+        if (!confirmed.ok) throw new Error(confirmed.error ?? t('unableToConfirmPhoto'));
         nextPhotoUrl = confirmed.photoUrl ?? nextPhotoUrl;
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Photo upload failed.');
+        toast.error(error instanceof Error ? error.message : t('photoUploadFailed'));
         return;
       } finally {
         setUploading(false);
@@ -233,7 +227,7 @@ function EditMemberSheet({
     const result = await action({ updated: false, error: null }, formData);
     if (result.error) toast.error(result.error);
     else {
-      toast.success('Member profile updated.');
+      toast.success(t('profileUpdated'));
       setSavedPhotoUrl(nextPhotoUrl);
       setPhoto(null);
       onProfileUpdated({
@@ -263,7 +257,7 @@ function EditMemberSheet({
         <MenuIcon>
           <path d="M4 20h4l11-11-4-4L4 16v4Zm9-13 4 4M13 5l2-2 4 4-2 2" />
         </MenuIcon>
-        Edit member
+        {t('editMember')}
       </TableRowAction>
       <dialog
         aria-labelledby={titleId}
@@ -278,11 +272,11 @@ function EditMemberSheet({
         >
           <header className="flex items-start justify-between gap-4 border-b border-[var(--line-muted)] p-6 [&_h2]:m-0 [&_p]:m-0">
             <div>
-              <p>Edit profile</p>
+              <p>{t('editProfile')}</p>
               <h2 id={titleId}>{member.profile.displayName}</h2>
             </div>
             <button
-              aria-label="Close edit member panel"
+              aria-label={t('closeEditMemberPanel')}
               className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
               type="button"
               onClick={() => dialogRef.current?.close()}
@@ -303,19 +297,19 @@ function EditMemberSheet({
               }}
             />
             <FormInput
-              label="Name"
+              label={commonT('name')}
               error={errors.displayName?.message}
               {...register('displayName')}
             />
             <FormInput
-              label="Email"
+              label={commonT('email')}
               type="email"
               error={errors.email?.message}
               {...register('email')}
             />
-            <FormInput label="Phone" error={errors.phone?.message} {...register('phone')} />
+            <FormInput label={t('phone')} error={errors.phone?.message} {...register('phone')} />
             <FormTextarea
-              label="Notes"
+              label={t('notes')}
               rows={5}
               error={errors.notes?.message}
               {...register('notes')}
@@ -323,40 +317,40 @@ function EditMemberSheet({
             <FormDatePicker
               control={control}
               name="memberSince"
-              label="Member since"
+              label={t('memberSince')}
               error={errors.memberSince?.message}
             />
             <FormDatePicker
               control={control}
               name="birthday"
-              label="Birthday"
+              label={t('birthday')}
               error={errors.birthday?.message}
             />
             <FormDatePicker
               control={control}
               name="anniversary"
-              label="Anniversary"
+              label={t('anniversary')}
               error={errors.anniversary?.message}
             />
             <FormTextarea
-              label="Biography"
+              label={t('biography')}
               rows={6}
               error={errors.biography?.message}
               {...register('biography')}
             />
             <FormTextarea
-              label="Family notes"
+              label={t('familyNotes')}
               rows={4}
               error={errors.familyNotes?.message}
               {...register('familyNotes')}
             />
             <fieldset className="grid gap-2 rounded-md border border-[var(--line)] p-3">
-              <legend className="px-1 font-semibold">Ministries</legend>
+              <legend className="px-1 font-semibold">{t('ministries')}</legend>
               <div className="grid gap-2 sm:grid-cols-2">
                 {MEMBER_MINISTRIES.map((ministry) => (
                   <FormCheckbox
                     key={ministry}
-                    label={MINISTRY_LABELS[ministry]}
+                    label={t(`ministry.${ministry}`)}
                     value={ministry}
                     {...register('ministries')}
                   />
@@ -364,7 +358,7 @@ function EditMemberSheet({
               </div>
             </fieldset>
             <fieldset className="grid gap-3 border-t border-[var(--line)] pt-4">
-              <legend className="font-semibold pr-2">Family relationships</legend>
+              <legend className="pr-2 font-semibold">{t('familyRelationships')}</legend>
               {relationships.map((relationship) => {
                 const other =
                   relationship.fromMembershipId === member.id
@@ -373,7 +367,8 @@ function EditMemberSheet({
                 return (
                   <div className="flex items-center justify-between gap-3" key={relationship.id}>
                     <span>
-                      {other.profile?.displayName ?? 'Member'} · {relationship.type.toLowerCase()}
+                      {other.profile?.displayName ?? t('member')} ·{' '}
+                      {t(`relationshipLabels.${relationship.type}`)}
                     </span>
                     <button
                       className="button secondary"
@@ -387,11 +382,11 @@ function EditMemberSheet({
                           setRelationships((current) =>
                             current.filter(({ id }) => id !== relationship.id),
                           );
-                          toast.success('Relationship removed.');
-                        } else toast.error(result.error ?? 'Unable to remove relationship.');
+                          toast.success(t('relationshipRemoved'));
+                        } else toast.error(result.error ?? t('unableToRemoveRelationship'));
                       }}
                     >
-                      Remove
+                      {t('remove')}
                     </button>
                     <input type="hidden" name="organizationId" value={organizationId} />
                   </div>
@@ -399,11 +394,11 @@ function EditMemberSheet({
               })}
               <div className="grid grid-cols-2 gap-2">
                 <FormSelect
-                  label="Related member"
+                  label={t('relatedMember')}
                   value={relatedMembershipId}
                   onChange={(event) => setRelatedMembershipId(event.target.value)}
                 >
-                  <option value="">Select member</option>
+                  <option value="">{t('selectMember')}</option>
                   {memberCandidates
                     .filter((candidate) => candidate.id !== member.id)
                     .map((candidate) => (
@@ -413,15 +408,15 @@ function EditMemberSheet({
                     ))}
                 </FormSelect>
                 <FormSelect
-                  label="Relationship"
+                  label={t('relationship')}
                   value={relationshipType}
                   onChange={(event) => setRelationshipType(event.target.value)}
                 >
-                  <option value="SPOUSE">Spouse</option>
-                  <option value="PARENT">Parent</option>
-                  <option value="CHILD">Child</option>
-                  <option value="SIBLING">Sibling</option>
-                  <option value="OTHER">Other</option>
+                  <option value="SPOUSE">{t('relationshipLabels.SPOUSE')}</option>
+                  <option value="PARENT">{t('relationshipLabels.PARENT')}</option>
+                  <option value="CHILD">{t('relationshipLabels.CHILD')}</option>
+                  <option value="SIBLING">{t('relationshipLabels.SIBLING')}</option>
+                  <option value="OTHER">{t('relationshipLabels.OTHER')}</option>
                 </FormSelect>
               </div>
               <button
@@ -436,21 +431,21 @@ function EditMemberSheet({
                   data.set('relationshipType', relationshipType);
                   const result = await createRelationship(data);
                   if (result.ok) {
-                    toast.success('Relationship added.');
+                    toast.success(t('relationshipAdded'));
                     setRelatedMembershipId('');
-                  } else toast.error(result.error ?? 'Unable to add relationship.');
+                  } else toast.error(result.error ?? t('unableToAddRelationship'));
                 }}
               >
-                Add relationship
+                {t('addRelationship')}
               </button>
             </fieldset>
           </div>
           <footer className="flex justify-end gap-2 border-t border-[var(--line-muted)] bg-[var(--surface)] px-6 py-4">
             <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-              Cancel
+              {commonT('cancel')}
             </Button>
             <Button disabled={isSubmitting || uploading} type="submit">
-              {uploading ? 'Uploading…' : isSubmitting ? 'Saving…' : 'Save changes'}
+              {uploading ? t('uploading') : isSubmitting ? commonT('saving') : t('saveChanges')}
             </Button>
           </footer>
         </form>
@@ -476,6 +471,8 @@ function ChangeRoleDialog({
   onOpen: () => void;
   onClose: () => void;
 }) {
+  const t = useTranslations('members');
+  const commonT = useTranslations('common');
   const titleId = useId();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -509,7 +506,7 @@ function ChangeRoleDialog({
         <MenuIcon>
           <path d="M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM5 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2M18 8h4m-2-2v4" />
         </MenuIcon>
-        Change role
+        {t('changeRole')}
       </TableRowAction>
       <dialog
         aria-labelledby={titleId}
@@ -519,28 +516,28 @@ function ChangeRoleDialog({
       >
         <form onSubmit={submit} className="grid gap-6 p-6">
           <div className="grid gap-2 [&_h2]:m-0 [&_h2]:text-xl [&_p]:m-0 [&_p]:text-[var(--muted)]">
-            <h2 id={titleId}>Change member role</h2>
-            <p>Choose the organization access level for {member.profile.displayName}.</p>
+            <h2 id={titleId}>{t('changeRoleTitle')}</h2>
+            <p>{t('changeRoleDescription', { name: member.profile.displayName })}</p>
           </div>
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="membershipId" value={member.id} />
           {error ? <p className="form-error m-0">{error}</p> : null}
-          <FormSelect label="Role" name="role" defaultValue={member.role}>
+          <FormSelect label={t('role')} name="role" defaultValue={member.role}>
             {member.accountState === 'CLAIMED' ? (
               <>
-                <option value="OWNER">Owner</option>
-                <option value="ADMIN">Admin</option>
+                <option value="OWNER">{t('roleLabels.OWNER')}</option>
+                <option value="ADMIN">{t('roleLabels.ADMIN')}</option>
               </>
             ) : null}
-            <option value="MEMBER">Member</option>
-            <option value="VIEWER">Viewer</option>
+            <option value="MEMBER">{t('roleLabels.MEMBER')}</option>
+            <option value="VIEWER">{t('roleLabels.VIEWER')}</option>
           </FormSelect>
           <div className="flex flex-col-reverse items-stretch justify-end gap-2 md:flex-row md:items-center">
             <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-              Cancel
+              {commonT('cancel')}
             </Button>
             <Button disabled={pending} type="submit">
-              {pending ? 'Updating…' : 'Update role'}
+              {pending ? t('updating') : t('updateRole')}
             </Button>
           </div>
         </form>
@@ -550,7 +547,9 @@ function ChangeRoleDialog({
 }
 
 export function MemberRoleStatus({ role }: { role: OrganizationRole }) {
-  return <StatusBadge status={role} />;
+  const t = useTranslations('members');
+
+  return <LocalizedStatusBadge status={role} label={t(`roleLabels.${role}`)} />;
 }
 
 function GiveMemberAccessAction({
@@ -617,6 +616,8 @@ export function MemberActions({
   onRoleUpdated: (role: OrganizationRole) => void;
   onRemoved: () => void;
 }) {
+  const t = useTranslations('members');
+  const commonT = useTranslations('common');
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const roleDialogRef = useRef<HTMLDialogElement>(null);
   const accessDialogRef = useRef<HTMLDialogElement>(null);
@@ -631,7 +632,7 @@ export function MemberActions({
         roleDialogRef as RefObject<Element | null>,
         accessDialogRef as RefObject<Element | null>,
       ]}
-      label={`Actions for ${member.profile.displayName}`}
+      label={t('actionsFor', { name: member.profile.displayName })}
       outsideClickDisabled={openDialog !== null}
     >
       {canManage ? (
@@ -681,7 +682,7 @@ export function MemberActions({
                 value="approve"
                 type="submit"
               >
-                Approve access
+                {t('approveAccess')}
               </button>
               <button
                 className={tableRowActionClassNameFor({ destructive: true })}
@@ -689,7 +690,7 @@ export function MemberActions({
                 value="reject"
                 type="submit"
               >
-                Reject request
+                {t('rejectRequest')}
               </button>
             </>
           ) : (
@@ -699,7 +700,7 @@ export function MemberActions({
               value="refresh"
               type="submit"
             >
-              Refresh access link
+              {t('refreshAccessLink')}
             </button>
           )}
           <button
@@ -708,7 +709,7 @@ export function MemberActions({
             value="revoke"
             type="submit"
           >
-            Revoke access link
+            {t('revokeAccessLink')}
           </button>
         </form>
       ) : null}
@@ -718,27 +719,34 @@ export function MemberActions({
           action={async (formData) => {
             const result = await removeMember(formData);
             if (result.ok) {
-              toast.success('Member removed.');
+              toast.success(t('removedMember'));
               onRemoved();
               return;
             }
 
-            toast.error(result.error ?? 'Unable to remove member.');
+            toast.error(result.error ?? t('unableToRemoveMember'));
           }}
         >
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="membershipId" value={member.id} />
           <ConfirmSubmitButton
-            confirmLabel="Remove member"
+            cancelLabel={commonT('cancel')}
+            confirmLabel={t('removeMember')}
             confirmVariant="danger"
-            description={`Remove ${member.profile.displayName} from this organization.`}
-            title="Remove member?"
+            description={t('removeMemberDescription', { name: member.profile.displayName })}
+            pendingLabel={t('confirming')}
+            title={t('removeMemberTitle')}
             triggerClassName={tableRowActionClassNameFor({ destructive: true })}
-            triggerLabel="Remove member"
+            triggerLabel={t('removeMember')}
             variant="ghost"
           />
         </form>
       ) : null}
     </TableRowActions>
   );
+}
+
+function LocalizedStatusBadge({ status, label }: { status: string; label: string }) {
+  const normalized = status.toLowerCase().replaceAll('_', '-');
+  return <span className={`status-badge status-${normalized}`}>{label}</span>;
 }

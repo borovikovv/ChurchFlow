@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import type { Route } from 'next';
+import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import type { NotificationListItem } from '@churchflow/shared';
@@ -18,6 +19,8 @@ const PAGE_SIZE = 20;
 const ISO_DATE_TIME_PATTERN = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z/g;
 
 export function NotificationBell({ organizationId }: { organizationId: string }) {
+  const locale = useLocale();
+  const t = useTranslations('notifications');
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const outsideClickRefs = useMemo(() => [containerRef], []);
@@ -49,13 +52,13 @@ export function NotificationBell({ organizationId }: { organizationId: string })
         setNextCursor(null);
       })
       .catch(() => {
-        if (active) setError('Notifications could not be loaded.');
+        if (active) setError(t('couldNotLoad'));
       });
 
     return () => {
       active = false;
     };
-  }, [organizationId]);
+  }, [organizationId, t]);
 
   const loadFirstPage = useCallback(async () => {
     if (loading) return;
@@ -69,11 +72,11 @@ export function NotificationBell({ organizationId }: { organizationId: string })
       setUnreadCount(page.unreadCount);
       setLoaded(true);
     } catch {
-      setError('Notifications could not be loaded.');
+      setError(t('couldNotLoad'));
     } finally {
       setLoading(false);
     }
-  }, [loading, organizationId]);
+  }, [loading, organizationId, t]);
 
   const loadNextPage = useCallback(async () => {
     if (loading || loadingMore || !nextCursor) return;
@@ -90,11 +93,11 @@ export function NotificationBell({ organizationId }: { organizationId: string })
       setNextCursor(page.nextCursor);
       setUnreadCount(page.unreadCount);
     } catch {
-      setError('More notifications could not be loaded.');
+      setError(t('couldNotLoadMore'));
     } finally {
       setLoadingMore(false);
     }
-  }, [loading, loadingMore, nextCursor, organizationId]);
+  }, [loading, loadingMore, nextCursor, organizationId, t]);
 
   const toggleOpen = async () => {
     const nextOpen = !open;
@@ -120,7 +123,7 @@ export function NotificationBell({ organizationId }: { organizationId: string })
         });
         setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       } catch {
-        setError('Notification could not be marked as read.');
+        setError(t('couldNotMarkRead'));
       }
     }
 
@@ -150,7 +153,7 @@ export function NotificationBell({ organizationId }: { organizationId: string })
     } catch {
       setItems(previousItems);
       setUnreadCount(previousUnreadCount);
-      setError('Notifications could not be marked as read.');
+      setError(t('couldNotMarkAllRead'));
     } finally {
       setMarkingAllRead(false);
     }
@@ -161,7 +164,11 @@ export function NotificationBell({ organizationId }: { organizationId: string })
       <button
         type="button"
         className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--foreground)] transition hover:bg-[var(--surface-subtle)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0969da]"
-        aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Open notifications'}
+        aria-label={
+          unreadCount > 0
+            ? t('unreadNotifications', { count: unreadCount })
+            : t('openNotifications')
+        }
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={toggleOpen}
@@ -175,12 +182,12 @@ export function NotificationBell({ organizationId }: { organizationId: string })
       </button>
 
       {open ? (
-        <section className="notification-bell-panel" role="dialog" aria-label="Notifications">
+        <section className="notification-bell-panel" role="dialog" aria-label={t('popupAriaLabel')}>
           <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] p-3">
             <div>
-              <h2 className="m-0 text-base font-semibold">Notifications</h2>
+              <h2 className="m-0 text-base font-semibold">{t('popupTitle')}</h2>
               <p className="m-0 text-xs text-[var(--muted)]">
-                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                {unreadCount > 0 ? t('unreadSummary', { count: unreadCount }) : t('allCaughtUp')}
               </p>
             </div>
             <Button
@@ -190,7 +197,7 @@ export function NotificationBell({ organizationId }: { organizationId: string })
               disabled={unreadCount === 0 || markingAllRead}
               onClick={handleMarkAllRead}
             >
-              Mark all as read
+              {t('markAllAsRead')}
             </Button>
           </div>
 
@@ -202,27 +209,34 @@ export function NotificationBell({ organizationId }: { organizationId: string })
 
           {loading ? (
             <p className="m-0 px-3 py-8 text-center text-sm text-[var(--muted)]">
-              Loading notifications...
+              {t('loadingNotifications')}
             </p>
           ) : items.length === 0 ? (
             <p className="m-0 px-3 py-8 text-center text-sm text-[var(--muted)]">
-              No notifications yet.
+              {t('emptyList')}
             </p>
           ) : (
-            <div className="notification-bell-list" role="menu" aria-label="Notification list">
+            <div className="notification-bell-list" role="menu" aria-label={t('notificationList')}>
               <Virtuoso
                 data={items}
                 endReached={loadNextPage}
                 computeItemKey={(_, notification) => notification.id}
                 itemContent={(_, notification) => (
                   <NotificationRow
+                    locale={locale}
                     notification={notification}
                     onSelect={() => handleNotificationClick(notification)}
+                    unreadLabel={t('unread')}
                   />
                 )}
                 components={{
                   Footer: () => (
-                    <NotificationListFooter loading={loadingMore} hasMore={Boolean(nextCursor)} />
+                    <NotificationListFooter
+                      endLabel={t('endOfList')}
+                      hasMore={Boolean(nextCursor)}
+                      loading={loadingMore}
+                      loadingLabel={t('loadingMore')}
+                    />
                   ),
                 }}
               />
@@ -235,11 +249,15 @@ export function NotificationBell({ organizationId }: { organizationId: string })
 }
 
 function NotificationRow({
+  locale,
   notification,
   onSelect,
+  unreadLabel,
 }: {
+  locale: string;
   notification: NotificationListItem;
   onSelect: () => void;
+  unreadLabel: string;
 }) {
   const unread = !notification.readAt;
 
@@ -256,28 +274,41 @@ function NotificationRow({
       <span className="flex min-w-0 items-start justify-between gap-3">
         <span className="min-w-0 font-semibold text-[var(--foreground)]">{notification.title}</span>
         {unread ? (
-          <span className="mt-1 h-2 w-2 flex-none rounded-full bg-[#0969da]" aria-label="Unread" />
+          <span
+            className="mt-1 h-2 w-2 flex-none rounded-full bg-[#0969da]"
+            aria-label={unreadLabel}
+          />
         ) : null}
       </span>
       {notification.body ? (
         <span className="line-clamp-2 text-sm text-[var(--muted)]">
-          {formatNotificationBody(notification.body)}
+          {formatNotificationBody(notification.body, locale)}
         </span>
       ) : null}
       <span className="text-xs text-[var(--muted)]">
-        {formatNotificationTime(notification.createdAt)}
+        {formatNotificationTime(notification.createdAt, locale)}
       </span>
     </button>
   );
 }
 
-function NotificationListFooter({ loading, hasMore }: { loading: boolean; hasMore: boolean }) {
+function NotificationListFooter({
+  endLabel,
+  hasMore,
+  loading,
+  loadingLabel,
+}: {
+  endLabel: string;
+  hasMore: boolean;
+  loading: boolean;
+  loadingLabel: string;
+}) {
   if (loading) {
-    return <p className="m-0 px-3 py-3 text-center text-sm text-[var(--muted)]">Loading more...</p>;
+    return <p className="m-0 px-3 py-3 text-center text-sm text-[var(--muted)]">{loadingLabel}</p>;
   }
 
   if (!hasMore) {
-    return <p className="m-0 px-3 py-3 text-center text-xs text-[var(--muted)]">End of list</p>;
+    return <p className="m-0 px-3 py-3 text-center text-xs text-[var(--muted)]">{endLabel}</p>;
   }
 
   return <div className="h-2" aria-hidden />;
@@ -291,8 +322,8 @@ function appendUniqueNotifications(
   return [...current, ...next.filter((item) => !seen.has(item.id))];
 }
 
-function formatNotificationTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+function formatNotificationTime(value: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -300,12 +331,12 @@ function formatNotificationTime(value: string): string {
   }).format(new Date(value));
 }
 
-function formatNotificationBody(value: string): string {
-  return value.replace(ISO_DATE_TIME_PATTERN, (match) => formatNotificationDateTime(match));
+function formatNotificationBody(value: string, locale: string): string {
+  return value.replace(ISO_DATE_TIME_PATTERN, (match) => formatNotificationDateTime(match, locale));
 }
 
-function formatNotificationDateTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+function formatNotificationDateTime(value: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

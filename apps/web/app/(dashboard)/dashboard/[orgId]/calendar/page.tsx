@@ -1,4 +1,6 @@
 import { apiFetch } from '@/api/client';
+import { getCurrentUser } from '@/auth/session';
+import { getMessages } from '@/i18n/messages';
 import {
   DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES,
   type CalendarEventsPayload,
@@ -36,6 +38,8 @@ export default async function CalendarDashboardPage({
   params: Promise<{ orgId: string }>;
 }) {
   const { orgId } = await params;
+  const user = await getCurrentUser();
+  const messages = getMessages(user?.locale ?? 'en');
   const now = new Date();
   const range = initialRange(now);
   const query = new URLSearchParams({
@@ -60,7 +64,7 @@ export default async function CalendarDashboardPage({
 
   return (
     <div className="stack">
-      <h1>Calendar</h1>
+      <h1>{messages.calendar.title}</h1>
       {!result.ok ? <p className="form-error">{result.error.message}</p> : null}
       <CalendarManager
         organizationId={orgId}

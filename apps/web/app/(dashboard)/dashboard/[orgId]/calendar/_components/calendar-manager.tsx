@@ -4,7 +4,9 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin, { type DateClickArg } from '@fullcalendar/interaction';
 import FullCalendar from '@fullcalendar/react';
 import type { DatesSetArg, EventClickArg, EventContentArg, EventInput } from '@fullcalendar/core';
+import ukLocale from '@fullcalendar/core/locales/uk';
 import { toPng } from 'html-to-image';
+import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'react-toastify';
 import type { CalendarEventItem, CalendarEventsPayload } from '@churchflow/shared';
@@ -14,7 +16,6 @@ import {
   CALENDAR_TYPE,
   EVENT_TYPES,
   EVENT_TYPE_DOT_STYLES,
-  EVENT_TYPE_LABELS,
   TRANSPARENT_IMAGE_PLACEHOLDER,
 } from './calendar-constants';
 import { eventForm, newEventForm, toDateInputValue } from './calendar-date-utils';
@@ -45,6 +46,9 @@ export function CalendarManager({
   initialRange: { rangeStart: string; rangeEnd: string };
   initialSelectedDate: string;
 } & CalendarManagerActions) {
+  const t = useTranslations('calendar');
+  const locale = useLocale();
+  const fullCalendarLocale = locale === 'uk' ? ukLocale : undefined;
   const [events, setEvents] = useState(initialPayload.events);
   const [members, setMembers] = useState(initialPayload.members);
   const [visibleTypes, setVisibleTypes] = useState(initialPayload.preferences.visibleEventTypes);
@@ -112,7 +116,7 @@ export function CalendarManager({
   }
 
   async function submitForm(nextForm: CalendarFormState) {
-    if (!canManage) return { ok: false as const, error: 'You cannot manage calendar events.' };
+    if (!canManage) return { ok: false as const, error: t('cannotManageEvents') };
     const payload = formPayload(nextForm);
     const result =
       modalMode === 'edit' && editingEvent
@@ -171,7 +175,7 @@ export function CalendarManager({
       body: file,
     });
     if (!upload.ok) {
-      toast.error('Image upload failed.');
+      toast.error(t('imageUploadFailed'));
       return null;
     }
     const confirmed = await confirmImage({ organizationId, assetId: prepared.assetId });
@@ -216,9 +220,7 @@ export function CalendarManager({
       link.click();
       setError(null);
     } catch (downloadError) {
-      setError(
-        downloadError instanceof Error ? downloadError.message : 'Calendar PNG export failed.',
-      );
+      setError(downloadError instanceof Error ? downloadError.message : t('pngExportFailed'));
     }
   }
 
@@ -251,6 +253,8 @@ export function CalendarManager({
   function handleEventContent(arg: EventContentArg) {
     return renderEventContent(arg, {
       canManage,
+      markCompleteLabel: t('markComplete'),
+      markIncompleteLabel: t('markIncomplete'),
       onTaskToggle: handleTaskToggle,
     });
   }
@@ -271,9 +275,11 @@ export function CalendarManager({
       <section className="min-w-0 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            {canManage ? <Button onClick={() => openCreate(selectedDate)}>New event</Button> : null}
+            {canManage ? (
+              <Button onClick={() => openCreate(selectedDate)}>{t('newEvent')}</Button>
+            ) : null}
             <Button type="button" variant="secondary" onClick={() => setPreviewOpen(true)}>
-              Preview PNG
+              {t('previewPng')}
             </Button>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
@@ -286,11 +292,11 @@ export function CalendarManager({
                   aria-hidden="true"
                   className={`h-2.5 w-2.5 rounded-full ${EVENT_TYPE_DOT_STYLES[type.value]}`}
                 />
-                {EVENT_TYPE_LABELS[type.value]}
+                {t(`eventTypes.${type.value}`)}
               </span>
             ))}
             {isPending ? (
-              <span className="text-sm text-[var(--muted)]">Updating calendar</span>
+              <span className="text-sm text-[var(--muted)]">{t('updatingCalendar')}</span>
             ) : null}
           </div>
         </div>
@@ -308,9 +314,11 @@ export function CalendarManager({
               center: 'title',
               right: '',
             }}
+            buttonText={{ today: t('today') }}
             dayMaxEvents={4}
             height="auto"
             initialView="dayGridMonth"
+            {...(fullCalendarLocale ? { locale: fullCalendarLocale } : {})}
             moreLinkClick="popover"
             plugins={[dayGridPlugin, interactionPlugin]}
           />
@@ -335,6 +343,7 @@ export function CalendarManager({
       {previewOpen ? (
         <CalendarPreviewModal
           events={events}
+          locale={locale}
           printableRef={printRef}
           range={range}
           onClose={() => setPreviewOpen(false)}

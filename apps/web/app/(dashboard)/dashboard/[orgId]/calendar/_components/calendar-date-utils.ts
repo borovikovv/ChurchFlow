@@ -95,16 +95,16 @@ export function toTimeInputValue(date: Date): string {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-export function formatDateLabel(value: string): string {
-  return new Intl.DateTimeFormat('en-US', {
+export function formatDateLabel(value: string, locale = 'en-US'): string {
+  return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(`${value}T12:00`));
 }
 
-export function formatMonthLabel(value: string): string {
-  return new Intl.DateTimeFormat('en-US', {
+export function formatMonthLabel(value: string, locale = 'en-US'): string {
+  return new Intl.DateTimeFormat(locale, {
     month: 'long',
     year: 'numeric',
   }).format(new Date(value));

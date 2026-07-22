@@ -1,4 +1,6 @@
 import { apiFetch } from '@/api/client';
+import { getCurrentUser } from '@/auth/session';
+import { getMessages } from '@/i18n/messages';
 import { PageHeader } from '@/components/ui/page-header';
 import type { BudgetPayload } from '@churchflow/shared';
 import {
@@ -21,6 +23,8 @@ export default async function BudgetPage({
   searchParams: Promise<{ year?: string }>;
 }) {
   const { orgId } = await params;
+  const user = await getCurrentUser();
+  const messages = getMessages(user?.locale ?? 'en');
   const { year: rawYear } = await searchParams;
   const currentYear = new Date().getFullYear();
   const maxBudgetYear = currentYear + BUDGET_YEAR_LOOKAHEAD;
@@ -36,10 +40,7 @@ export default async function BudgetPage({
 
   return (
     <div className="stack">
-      <PageHeader
-        title="Budget"
-        description="Track monthly income, expenses, and yearly totals by fixed ministry groups."
-      />
+      <PageHeader title={messages.budget.title} description={messages.budget.description} />
       {!result.ok ? (
         <p className="form-error">{result.error.message}</p>
       ) : (

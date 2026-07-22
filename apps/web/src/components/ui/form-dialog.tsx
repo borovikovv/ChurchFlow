@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useId, useRef, type ReactNode, type RefObject } from 'react';
 import { Button, type ButtonVariant } from '@/components/ui/button';
 
@@ -26,6 +27,7 @@ export function FormDialog({
   onOpen?: () => void;
   onClose?: () => void;
 }) {
+  const t = useTranslations('common');
   const internalDialogRef = useRef<HTMLDialogElement>(null);
   const dialogRef = externalDialogRef ?? internalDialogRef;
   const titleId = useId();
@@ -57,7 +59,7 @@ export function FormDialog({
           <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
             <h2 id={titleId}>{title}</h2>
             <button
-              aria-label="Close"
+              aria-label={t('close')}
               className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
               type="button"
               onClick={() => dialogRef.current?.close()}
@@ -69,7 +71,7 @@ export function FormDialog({
           <footer className="flex justify-end border-t border-[var(--line)] p-5">
             {footer ?? (
               <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-                Cancel
+                {t('cancel')}
               </Button>
             )}
           </footer>

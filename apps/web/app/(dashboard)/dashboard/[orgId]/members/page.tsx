@@ -2,9 +2,11 @@ import { revalidatePath } from 'next/cache';
 import type { Route } from 'next';
 import { redirect } from 'next/navigation';
 import { apiFetch } from '@/api/client';
+import { getCurrentUser } from '@/auth/session';
 import { CopyField } from '@/components/copy-field';
 import type { InlineInvitationState } from '@/components/members/invite-app-user-form';
 import type { RoleUpdateState } from '@/components/members/member-actions';
+import { getMessages } from '@/i18n/messages';
 import { MembersManager } from './_components/members-manager';
 import {
   confirmMemberPhotoAction,
@@ -33,6 +35,7 @@ async function manageInlineInvitation(
   formData: FormData,
 ): Promise<InlineInvitationState> {
   'use server';
+  const messages = await getCurrentUserMessages();
   const organizationId = String(formData.get('organizationId'));
 
   if (formData.get('intent') === 'revoke') {
@@ -46,7 +49,7 @@ async function manageInlineInvitation(
       ? {
           invitationId: null,
           inviteUrl: null,
-          message: 'Invitation revoked.',
+          message: messages.members.invitationRevoked,
           error: null,
         }
       : { ...previousState, error: result.error.message };
@@ -69,7 +72,9 @@ async function manageInlineInvitation(
     ? {
         invitationId: result.data.invitation.id,
         inviteUrl: result.data.acceptUrl,
-        message: result.data.emailSent ? 'Invitation created and emailed.' : 'Invitation created.',
+        message: result.data.emailSent
+          ? messages.members.invitationCreatedAndEmailed
+          : messages.members.invitationCreated,
         error: null,
       }
     : { ...previousState, error: result.error.message };
@@ -77,6 +82,7 @@ async function manageInlineInvitation(
 
 async function claimAction(formData: FormData) {
   'use server';
+  const messages = await getCurrentUserMessages();
   const organizationId = String(formData.get('organizationId'));
   const claimId = String(formData.get('claimId'));
   const action = String(formData.get('action'));
@@ -90,11 +96,15 @@ async function claimAction(formData: FormData) {
     redirect(
       membersUrl(organizationId, {
         claimLink: result.data.claimUrl,
-        message: 'Access link refreshed.',
+        message: messages.members.accessLinkRefreshed,
       }),
     );
   }
-  redirect(membersUrl(organizationId, { message: `Claim ${action} completed.` }));
+  redirect(
+    membersUrl(organizationId, {
+      message: messages.members.claimActionCompleted.replace('{action}', action),
+    }),
+  );
 }
 
 async function removeMember(formData: FormData) {
@@ -172,6 +182,8 @@ export default async function MembersDashboardPage({
 }) {
   const { orgId } = await params;
   const { claimLink, message, error, access = 'all' } = await searchParams;
+  const user = await getCurrentUser();
+  const messages = getMessages(user?.locale ?? 'en');
   const parsedAccess = organizationMembersAccessFilterSchema.safeParse(access);
   const memberAccess: OrganizationMembersAccessFilter = parsedAccess.success
     ? parsedAccess.data
@@ -183,8 +195,15 @@ export default async function MembersDashboardPage({
 
   return (
     <div className="stack">
-      <h1>Members</h1>
-      <p>Your role: {payload.actorRole ?? 'Platform administrator'}</p>
+      <h1>{messages.members.title}</h1>
+      <p>
+        {messages.members.yourRole.replace(
+          '{role}',
+          payload.actorRole
+            ? messages.members.roleLabels[payload.actorRole]
+            : messages.members.platformAdministrator,
+        )}
+      </p>
       {!membersResult.ok ? <p className="form-error">{membersResult.error}</p> : null}
       {error ? <p className="form-error">{error}</p> : null}
       {message ? <p>{message}</p> : null}
@@ -207,4 +226,9 @@ export default async function MembersDashboardPage({
       />
     </div>
   );
+}
+
+async function getCurrentUserMessages() {
+  const user = await getCurrentUser();
+  return getMessages(user?.locale ?? 'en');
 }

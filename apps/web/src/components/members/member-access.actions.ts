@@ -2,6 +2,8 @@
 
 import type { MembershipClaimMutationResult } from '@churchflow/shared';
 import { apiFetch } from '@/api/client';
+import { getCurrentUser } from '@/auth/session';
+import { getMessages } from '@/i18n/messages';
 import type { MemberAccessActionState } from './member-access.types';
 
 export async function manageMemberAccess(
@@ -9,6 +11,8 @@ export async function manageMemberAccess(
   formData: FormData,
 ): Promise<MemberAccessActionState> {
   const organizationId = String(formData.get('organizationId'));
+  const user = await getCurrentUser();
+  const messages = getMessages(user?.locale ?? 'en');
 
   if (formData.get('intent') === 'revoke') {
     const claimId = String(formData.get('claimId') || previousState.claimId);
@@ -21,7 +25,7 @@ export async function manageMemberAccess(
       ? {
           claimId: null,
           claimUrl: null,
-          message: 'App access link revoked.',
+          message: messages.members.accessLinkRevoked,
           error: null,
         }
       : { ...previousState, error: result.error.message };
@@ -38,8 +42,8 @@ export async function manageMemberAccess(
         claimId: result.data.claim.id,
         claimUrl: result.data.claimUrl,
         message: result.data.emailSent
-          ? 'Access link created and emailed to this member.'
-          : 'Access link created. Copy and share it with this member.',
+          ? messages.members.accessLinkCreatedAndEmailed
+          : messages.members.accessLinkCreated,
         error: null,
       }
     : { ...previousState, error: result.error.message };

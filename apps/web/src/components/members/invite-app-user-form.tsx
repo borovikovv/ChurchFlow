@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
 import { CopyField } from '@/components/copy-field';
 import { FormSelect } from '@/components/forms/form-select';
@@ -31,6 +32,8 @@ export function InviteAppUserForm({
   organizationId: string;
   action: InvitationAction;
 }) {
+  const t = useTranslations('members');
+  const commonT = useTranslations('common');
   const [state, formAction, pending] = useActionState(action, initialState);
 
   if (state.invitationId && state.inviteUrl) {
@@ -39,7 +42,7 @@ export function InviteAppUserForm({
         {state.message ? <p className="m-0 text-[var(--success)]">{state.message}</p> : null}
         {state.error ? <p className="form-error m-0">{state.error}</p> : null}
         <label>
-          Invitation URL
+          {t('invitationUrl')}
           <CopyField value={state.inviteUrl} />
         </label>
         <form action={formAction} className="flex justify-end">
@@ -47,7 +50,7 @@ export function InviteAppUserForm({
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="invitationId" value={state.invitationId} />
           <Button disabled={pending} type="submit" variant="danger">
-            {pending ? 'Revoking…' : 'Revoke invitation'}
+            {pending ? t('revoking') : t('revokeInvitation')}
           </Button>
         </form>
       </div>
@@ -61,16 +64,16 @@ export function InviteAppUserForm({
       {state.message ? <p className="m-0 text-[var(--success)]">{state.message}</p> : null}
       {state.error ? <p className="form-error m-0">{state.error}</p> : null}
       <label>
-        Email
-        <span className="text-xs font-normal text-[var(--muted)]">Optional</span>
+        {commonT('email')}
+        <span className="text-xs font-normal text-[var(--muted)]">{t('emailOptional')}</span>
         <input name="notificationEmail" type="email" placeholder="member@example.com" />
       </label>
-      <FormSelect label="Role" name="role" defaultValue="MEMBER">
-        <option value="MEMBER">Member</option>
-        <option value="VIEWER">Viewer</option>
+      <FormSelect label={t('role')} name="role" defaultValue="MEMBER">
+        <option value="MEMBER">{t('member')}</option>
+        <option value="VIEWER">{t('viewer')}</option>
       </FormSelect>
       <Button disabled={pending} type="submit">
-        {pending ? 'Creating…' : 'Create invitation'}
+        {pending ? t('creating') : t('createInvitation')}
       </Button>
     </form>
   );

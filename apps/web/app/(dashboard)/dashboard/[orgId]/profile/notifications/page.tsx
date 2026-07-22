@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser, requireServerSession } from '@/auth/session';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs } from '@/components/ui/tabs';
+import { getMessages } from '@/i18n/messages';
 import {
   organizationProfileNotificationsRoute,
   organizationProfileRoute,
@@ -24,19 +25,20 @@ export default async function OrganizationNotificationPreferencesPage({
   if (!user) {
     redirect('/login');
   }
+  const messages = getMessages(user.locale);
 
   return (
     <main className="stack">
       <PageHeader
-        title="Profile"
-        description="Your identity and notification preferences in ChurchFlow."
+        title={messages.profile.title}
+        description={messages.notifications.pageDescription}
       />
       <Tabs
-        label="Profile settings"
+        label={messages.profile.settings}
         items={[
-          { label: 'Profile', href: organizationProfileRoute(orgId) },
+          { label: messages.profile.title, href: organizationProfileRoute(orgId) },
           {
-            label: 'Notifications',
+            label: messages.profile.notifications,
             href: organizationProfileNotificationsRoute(orgId),
           },
         ]}
@@ -49,7 +51,7 @@ export default async function OrganizationNotificationPreferencesPage({
         />
       ) : (
         <section className="stack max-w-2xl rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-6 shadow-[var(--shadow)]">
-          <h2 className="m-0 text-2xl">Notification preferences unavailable</h2>
+          <h2 className="m-0 text-2xl">{messages.notifications.unavailableTitle}</h2>
           <p className="m-0 text-[var(--muted)]">{preferencesResult.error.message}</p>
         </section>
       )}

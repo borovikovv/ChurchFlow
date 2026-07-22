@@ -1,5 +1,5 @@
 import { apiFetch } from '@/api/client';
-import { requireServerSession } from '@/auth/session';
+import { getCurrentUser, requireServerSession } from '@/auth/session';
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,12 @@ export default async function OrganizationRequestPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   await requireServerSession(APP_ROUTES.organizationRequest);
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect(
+      `${APP_ROUTES.login}?redirectTo=${encodeURIComponent(APP_ROUTES.organizationRequest)}` as Route,
+    );
+  }
   const { error } = await searchParams;
 
   return (

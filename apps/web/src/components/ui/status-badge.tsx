@@ -1,4 +1,4 @@
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ label, status }: { label?: string; status: string }) {
   const normalized = status.toLowerCase().replaceAll('_', '-');
-  return <span className={`status-badge status-${normalized}`}>{status}</span>;
+  return <span className={`status-badge status-${normalized}`}>{label ?? status}</span>;
 }

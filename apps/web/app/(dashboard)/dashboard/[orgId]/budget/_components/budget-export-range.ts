@@ -9,13 +9,16 @@ export function defaultBudgetExportRange(year: number): DateRangeValue {
   };
 }
 
-export function budgetExportRangeLabel(range: DateRangeValue): string {
+export function budgetExportRangeLabel(
+  range: DateRangeValue,
+  labels: { locale: string; selectedPeriod: string },
+): string {
   const startDate = parseCalendarDate(range.startDate);
   const endDate = parseCalendarDate(range.endDate);
 
-  if (!startDate || !endDate) return 'selected period';
+  if (!startDate || !endDate) return labels.selectedPeriod;
 
-  return `${formatRangeDate(startDate)} - ${formatRangeDate(endDate)}`;
+  return `${formatRangeDate(startDate, labels.locale)} - ${formatRangeDate(endDate, labels.locale)}`;
 }
 
 export function filterBudgetMonthsByRange(
@@ -53,8 +56,8 @@ export function budgetMonthsInRange(year: number, range: DateRangeValue | null):
   return Array.from({ length: lastMonth - firstMonth + 1 }, (_, index) => firstMonth + index);
 }
 
-function formatRangeDate(date: Date): string {
-  return new Intl.DateTimeFormat('en-US', {
+function formatRangeDate(date: Date, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

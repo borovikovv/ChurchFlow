@@ -29,22 +29,23 @@ export function formPayload(form: CalendarFormState): CreateCalendarEventInput {
 export function validateCalendarForm(
   form: CalendarFormState,
   setError: UseFormSetError<CalendarFormState>,
+  messages: CalendarValidationMessages,
 ): boolean {
   let valid = true;
   const title = form.title.trim();
 
   if (!title) {
-    setError('title', { message: 'Title is required.' });
+    setError('title', { message: messages.titleRequired });
     valid = false;
   }
 
   if (!form.startDate) {
-    setError('startDate', { message: 'Start date is required.' });
+    setError('startDate', { message: messages.startDateRequired });
     valid = false;
   }
 
   if (!form.allDay && !form.startTime) {
-    setError('startTime', { message: 'Start time is required.' });
+    setError('startTime', { message: messages.startTimeRequired });
     valid = false;
   }
 
@@ -54,37 +55,44 @@ export function validateCalendarForm(
       `${form.endDate}T${form.allDay ? '23:59' : form.endTime || form.startTime}`,
     );
     if (startsAt > endsAt) {
-      setError('endDate', { message: 'End date must be after the start date.' });
+      setError('endDate', { message: messages.endDateAfterStart });
       valid = false;
     }
   }
 
   if (form.type === CALENDAR_TYPE.task && form.assigneeMembershipIds.length === 0) {
-    setError('assigneeMembershipIds', { message: 'Add at least one assignee.' });
+    setError('assigneeMembershipIds', { message: messages.assigneeRequired });
     valid = false;
   }
 
   if (form.type === CALENDAR_TYPE.service) {
     valid =
-      validateServicePerson(form.serviceDetails.preacher, 'serviceDetails.preacher', setError) &&
-      valid;
+      validateServicePerson(
+        form.serviceDetails.preacher,
+        'serviceDetails.preacher',
+        setError,
+        messages,
+      ) && valid;
     valid =
       validateOptionalServicePerson(
         form.serviceDetails.serviceHost,
         'serviceDetails.serviceHost',
         setError,
+        messages,
       ) && valid;
     valid =
       validateServicePerson(
         form.serviceDetails.worshipLead,
         'serviceDetails.worshipLead',
         setError,
+        messages,
       ) && valid;
     if (form.serviceDetails.hasCommunion) {
       const communionLeadValid = validateServicePerson(
         form.serviceDetails.communionLead,
         'serviceDetails.communionLead',
         setError,
+        messages,
       );
       valid = valid && communionLeadValid;
     }
@@ -96,13 +104,14 @@ export function validateCalendarForm(
 export function autofillMemberEvent(
   form: CalendarFormState,
   members: CalendarMemberOption[],
+  labels?: { anniversary: (name: string) => string; birthday: (name: string) => string },
 ): CalendarFormState {
   const member = members.find((item) => item.id === form.linkedMembershipId);
   if (!member) return form;
   if (form.type === CALENDAR_TYPE.birthday && member.birthday) {
     return {
       ...form,
-      title: `${member.displayName} birthday`,
+      title: labels?.birthday(member.displayName) ?? `${member.displayName} birthday`,
       startDate: member.birthday,
       allDay: true,
       repeatPeriod: CALENDAR_REPEAT.yearly,
@@ -111,7 +120,7 @@ export function autofillMemberEvent(
   if (form.type === CALENDAR_TYPE.anniversary && member.anniversary) {
     return {
       ...form,
-      title: `${member.displayName} anniversary`,
+      title: labels?.anniversary(member.displayName) ?? `${member.displayName} anniversary`,
       startDate: member.anniversary,
       allDay: true,
       repeatPeriod: CALENDAR_REPEAT.yearly,
@@ -151,11 +160,12 @@ function validateServicePerson(
   person: CalendarFormState['serviceDetails']['preacher'],
   path: `serviceDetails.${'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead'}`,
   setError: UseFormSetError<CalendarFormState>,
+  messages: CalendarValidationMessages,
 ): boolean {
   const hasMember = Boolean(person.membershipId);
   const hasGuest = Boolean(person.customName.trim());
   if (hasMember === hasGuest) {
-    setError(path, { message: 'Select a member or enter a guest name.' });
+    setError(path, { message: messages.servicePersonRequired });
     return false;
   }
   return true;
@@ -165,14 +175,25 @@ function validateOptionalServicePerson(
   person: CalendarFormState['serviceDetails']['preacher'],
   path: `serviceDetails.${'serviceHost'}`,
   setError: UseFormSetError<CalendarFormState>,
+  messages: CalendarValidationMessages,
 ): boolean {
   const hasMember = Boolean(person.membershipId);
   const hasGuest = Boolean(person.customName.trim());
   if (hasMember && hasGuest) {
-    setError(path, { message: 'Select a member or enter a guest name, not both.' });
+    setError(path, { message: messages.servicePersonSingleValue });
     return false;
   }
   return true;
+}
+
+export interface CalendarValidationMessages {
+  assigneeRequired: string;
+  endDateAfterStart: string;
+  servicePersonRequired: string;
+  servicePersonSingleValue: string;
+  startDateRequired: string;
+  startTimeRequired: string;
+  titleRequired: string;
 }
 
 export function applyFormValues(

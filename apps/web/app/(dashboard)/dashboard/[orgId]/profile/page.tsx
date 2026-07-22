@@ -3,6 +3,7 @@ import { getCurrentUser, requireServerSession } from '@/auth/session';
 import { ProfileForm } from '@/features/profile/components/profile-form';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs } from '@/components/ui/tabs';
+import { getMessages } from '@/i18n/messages';
 import {
   organizationProfileNotificationsRoute,
   organizationProfileRoute,
@@ -20,15 +21,19 @@ export default async function OrganizationProfilePage({
   if (!user) {
     redirect('/login');
   }
+  const messages = getMessages(user.locale);
 
   return (
     <main className="stack">
-      <PageHeader title="Profile" description="Your identity and platform access in ChurchFlow." />
+      <PageHeader title={messages.profile.title} description={messages.profile.description} />
       <Tabs
-        label="Profile settings"
+        label={messages.profile.settings}
         items={[
-          { label: 'Profile', href: organizationProfileRoute(orgId) },
-          { label: 'Notifications', href: organizationProfileNotificationsRoute(orgId) },
+          { label: messages.profile.title, href: organizationProfileRoute(orgId) },
+          {
+            label: messages.profile.notifications,
+            href: organizationProfileNotificationsRoute(orgId),
+          },
         ]}
       />
       <div className="stack max-w-xl">
@@ -38,6 +43,7 @@ export default async function OrganizationProfilePage({
           platformRole={user.platformRole}
           baptizedAt={user.baptizedAt?.slice(0, 10) ?? null}
           baptismChurchName={user.baptismChurchName}
+          locale={user.locale}
         />
       </div>
     </main>

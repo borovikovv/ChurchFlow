@@ -6,13 +6,13 @@ import {
   type UpdateNotificationPreferencesInput,
 } from '@churchflow/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
-import { StatusBadge } from '@/components/ui/status-badge';
 import {
   createTelegramNotificationLink,
   disconnectTelegramNotifications,
@@ -28,6 +28,7 @@ export function NotificationPreferencesForm({
   preferences: NotificationPreferences;
   userEmail: string | null;
 }) {
+  const t = useTranslations('notifications');
   const [savedPreferences, setSavedPreferences] = useState(preferences);
   const [telegramActionPending, setTelegramActionPending] = useState(false);
   const {
@@ -56,7 +57,7 @@ export function NotificationPreferencesForm({
       const nextPreferences = result.data;
       setSavedPreferences(nextPreferences);
       reset(toFormValues(nextPreferences, userEmail));
-      toast.success('Notification preferences updated.');
+      toast.success(t('saved'));
       return;
     }
 
@@ -75,7 +76,7 @@ export function NotificationPreferencesForm({
       }
 
       window.open(result.data.url, '_blank', 'noopener,noreferrer');
-      toast.info('Finish connecting Telegram in the bot chat.');
+      toast.info(t('finishTelegram'));
     } finally {
       setTelegramActionPending(false);
     }
@@ -99,7 +100,7 @@ export function NotificationPreferencesForm({
       };
       setSavedPreferences(nextPreferences);
       reset(toFormValues(nextPreferences, userEmail));
-      toast.success('Telegram notifications disconnected.');
+      toast.success(t('telegramDisconnected'));
     } finally {
       setTelegramActionPending(false);
     }
@@ -109,42 +110,52 @@ export function NotificationPreferencesForm({
     <form className="stack max-w-2xl" onSubmit={submit}>
       <section className="stack rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-6 shadow-[var(--shadow)]">
         <div className="stack gap-1">
-          <h2 className="m-0 text-2xl">Delivery channels</h2>
-          <p className="m-0 text-[var(--muted)]">
-            Choose where ChurchFlow should send notifications for this organization.
-          </p>
+          <h2 className="m-0 text-2xl">{t('deliveryChannels')}</h2>
+          <p className="m-0 text-[var(--muted)]">{t('deliveryChannelsDescription')}</p>
         </div>
 
         <div className="grid gap-4">
           <PreferenceRow
-            title="In-app"
-            description="Show notifications in the header inbox."
+            offLabel={t('off')}
+            onLabel={t('on')}
+            title={t('inApp')}
+            description={t('inAppDescription')}
             checked={values.inAppEnabled}
           >
-            <Checkbox label="Enabled" {...register('inAppEnabled')} />
+            <Checkbox label={t('enabled')} {...register('inAppEnabled')} />
           </PreferenceRow>
 
           <PreferenceRow
-            title="Email"
+            offLabel={t('off')}
+            onLabel={t('on')}
+            title={t('email')}
             description={
               canUseEmail
-                ? `Send notification emails to ${userEmail}.`
-                : 'Add an email address in your profile before enabling email notifications.'
+                ? t('emailDescription', { email: userEmail ?? '' })
+                : t('emailMissingDescription')
             }
             checked={values.emailEnabled && canUseEmail}
           >
-            <Checkbox disabled={!canUseEmail} label="Enabled" {...register('emailEnabled')} />
+            <Checkbox disabled={!canUseEmail} label={t('enabled')} {...register('emailEnabled')} />
           </PreferenceRow>
 
           <PreferenceRow
-            title="Telegram"
-            description={telegramDescription(savedPreferences.telegram)}
+            offLabel={t('off')}
+            onLabel={t('on')}
+            title={t('telegram')}
+            description={telegramDescription(savedPreferences.telegram, {
+              blocked: t('telegramBlocked'),
+              connectFirst: t('telegramConnectFirst'),
+              connected: t('telegramConnected'),
+              revoked: t('telegramRevoked'),
+              username: (username) => t('telegramUsername', { username }),
+            })}
             checked={values.telegramEnabled && canUseTelegram}
           >
             <div className="flex flex-wrap items-center gap-2">
               <Checkbox
                 disabled={!canUseTelegram}
-                label="Enabled"
+                label={t('enabled')}
                 {...register('telegramEnabled')}
               />
               {savedPreferences.telegram.enabled ? (
@@ -155,7 +166,7 @@ export function NotificationPreferencesForm({
                   variant="secondary"
                   className="min-h-8 px-2 py-1 text-xs"
                 >
-                  {telegramActionPending ? 'Disconnecting...' : 'Disconnect'}
+                  {telegramActionPending ? t('disconnecting') : t('disconnect')}
                 </Button>
               ) : (
                 <Button
@@ -165,7 +176,7 @@ export function NotificationPreferencesForm({
                   variant="secondary"
                   className="min-h-8 px-2 py-1 text-xs"
                 >
-                  {telegramActionPending ? 'Opening...' : 'Connect bot'}
+                  {telegramActionPending ? t('opening') : t('connectBot')}
                 </Button>
               )}
             </div>
@@ -175,40 +186,46 @@ export function NotificationPreferencesForm({
 
       <section className="stack rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-6 shadow-[var(--shadow)]">
         <div className="stack gap-1">
-          <h2 className="m-0 text-2xl">Notification types</h2>
-          <p className="m-0 text-[var(--muted)]">
-            Pick which organization activity should create notifications.
-          </p>
+          <h2 className="m-0 text-2xl">{t('typesTitle')}</h2>
+          <p className="m-0 text-[var(--muted)]">{t('typesDescription')}</p>
         </div>
 
         <div className="grid gap-3">
           <PreferenceRow
-            title="Task assignments"
-            description="Notify members when they are assigned to a task."
+            offLabel={t('off')}
+            onLabel={t('on')}
+            title={t('taskAssignments')}
+            description={t('taskAssignmentsDescription')}
             checked={values.taskAssignedEnabled}
           >
-            <Checkbox label="Enabled" {...register('taskAssignedEnabled')} />
+            <Checkbox label={t('enabled')} {...register('taskAssignedEnabled')} />
           </PreferenceRow>
           <PreferenceRow
-            title="Service assignments"
-            description="Notify members when they are assigned to a service."
+            offLabel={t('off')}
+            onLabel={t('on')}
+            title={t('serviceAssignments')}
+            description={t('serviceAssignmentsDescription')}
             checked={values.serviceAssignedEnabled}
           >
-            <Checkbox label="Enabled" {...register('serviceAssignedEnabled')} />
+            <Checkbox label={t('enabled')} {...register('serviceAssignedEnabled')} />
           </PreferenceRow>
           <PreferenceRow
-            title="Reminders"
-            description="Notify members before upcoming calendar items."
+            offLabel={t('off')}
+            onLabel={t('on')}
+            title={t('reminders')}
+            description={t('remindersDescription')}
             checked={values.remindersEnabled}
           >
-            <Checkbox label="Enabled" {...register('remindersEnabled')} />
+            <Checkbox label={t('enabled')} {...register('remindersEnabled')} />
           </PreferenceRow>
           <PreferenceRow
-            title="Birthday digest"
-            description="Notify owners and admins about member birthdays today."
+            offLabel={t('off')}
+            onLabel={t('on')}
+            title={t('birthdayDigest')}
+            description={t('birthdayDigestDescription')}
             checked={values.birthdayDigestEnabled}
           >
-            <Checkbox label="Enabled" {...register('birthdayDigestEnabled')} />
+            <Checkbox label={t('enabled')} {...register('birthdayDigestEnabled')} />
           </PreferenceRow>
         </div>
       </section>
@@ -220,10 +237,10 @@ export function NotificationPreferencesForm({
           type="button"
           variant="secondary"
         >
-          Reset
+          {t('reset')}
         </Button>
         <Button disabled={isSubmitting} type="submit">
-          {isSubmitting ? 'Saving...' : 'Save preferences'}
+          {isSubmitting ? t('saving') : t('savePreferences')}
         </Button>
       </div>
     </form>
@@ -234,11 +251,15 @@ function PreferenceRow({
   title,
   description,
   checked,
+  offLabel,
+  onLabel,
   children,
 }: {
   title: string;
   description: string;
   checked: boolean;
+  offLabel: string;
+  onLabel: string;
   children: ReactNode;
 }) {
   return (
@@ -246,7 +267,9 @@ function PreferenceRow({
       <div className="stack gap-1">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="m-0 text-base">{title}</h3>
-          <StatusBadge status={checked ? 'ON' : 'OFF'} />
+          <span className={`status-badge status-${checked ? 'on' : 'off'}`}>
+            {checked ? onLabel : offLabel}
+          </span>
         </div>
         <p className="m-0 text-sm text-[var(--muted)]">{description}</p>
       </div>
@@ -255,18 +278,23 @@ function PreferenceRow({
   );
 }
 
-function telegramDescription(preferences: NotificationPreferences['telegram']): string {
-  if (preferences.blockedAt)
-    return 'Telegram is blocked. Open the bot and unblock it to reconnect.';
-  if (preferences.revokedAt)
-    return 'Telegram access was disconnected. Reconnect the bot to use it.';
+function telegramDescription(
+  preferences: NotificationPreferences['telegram'],
+  labels: {
+    blocked: string;
+    connected: string;
+    connectFirst: string;
+    revoked: string;
+    username: (username: string) => string;
+  },
+): string {
+  if (preferences.blockedAt) return labels.blocked;
+  if (preferences.revokedAt) return labels.revoked;
   if (preferences.enabled) {
-    return preferences.username
-      ? `Send Telegram messages to @${preferences.username}.`
-      : 'Send Telegram messages through the connected bot chat.';
+    return preferences.username ? labels.username(preferences.username) : labels.connected;
   }
 
-  return 'Connect the Telegram bot before enabling Telegram notifications.';
+  return labels.connectFirst;
 }
 
 function toFormValues(

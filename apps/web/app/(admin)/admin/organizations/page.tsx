@@ -7,18 +7,15 @@ import {
   ADMIN_ORGANIZATION_REQUEST_STATUS_FILTERS,
   ADMIN_ORGANIZATION_STATUS_FILTERS,
 } from '@/admin/constants';
-import { requireAdminOrganizationsAccess } from '@/auth/session';
+import { getCurrentUser, requireAdminOrganizationsAccess } from '@/auth/session';
 import { getOrganizationAccessState } from '@/features/organizations/server/access';
+import { getMessages } from '@/i18n/messages';
 
 type WorkspaceView = 'all' | 'mine';
 
 const ADMIN_WORKSPACE_STATUS_FILTERS = [
   ...ADMIN_ORGANIZATION_STATUS_FILTERS,
   ...ADMIN_ORGANIZATION_REQUEST_STATUS_FILTERS,
-];
-const ADMIN_WORKSPACE_STATUS_OPTIONS = [
-  { label: 'All statuses', value: '' },
-  ...ADMIN_WORKSPACE_STATUS_FILTERS.map((item) => ({ label: item, value: item })),
 ];
 
 function adminOrganizationsUrl(view: WorkspaceView, status?: string): string {
@@ -40,13 +37,22 @@ export default async function AdminOrganizationsPage({
   searchParams: Promise<{ view?: string; status?: string }>;
 }) {
   const { view: rawView, status } = await searchParams;
-  const access = await getOrganizationAccessState();
+  const [access, user] = await Promise.all([getOrganizationAccessState(), getCurrentUser()]);
+  const messages = getMessages(user?.locale ?? 'en').adminPages;
   const defaultView: WorkspaceView = access.isPlatformAdmin ? 'all' : 'mine';
   const requestedView: WorkspaceView =
     rawView === 'mine' || rawView === 'all' ? rawView : defaultView;
   const view: WorkspaceView = access.isPlatformAdmin ? requestedView : 'mine';
   const pageUrl = adminOrganizationsUrl(view, status);
   await requireAdminOrganizationsAccess(pageUrl);
+  const statusOptions = [
+    { label: messages.organizations.allStatuses, value: '' },
+    ...ADMIN_WORKSPACE_STATUS_FILTERS.map((item) => ({
+      label: messages.statuses[item],
+      value: item,
+    })),
+  ];
+
   const result = await apiFetch<OrganizationTableRow[]>(
     `/admin/organizations/workspace?${new URLSearchParams({
       view,
@@ -56,19 +62,22 @@ export default async function AdminOrganizationsPage({
 
   return (
     <main className="page-content stack">
-      <PageHeader title="Organizations" description="Open organizations you administer." />
+      <PageHeader
+        title={messages.organizations.title}
+        description={messages.organizations.description}
+      />
 
       {access.isPlatformAdmin ? (
         <Tabs
-          label="Organization workspace"
+          label={messages.organizations.workspaceLabel}
           items={[
             {
-              label: 'All organizations',
+              label: messages.organizations.allOrganizations,
               href: adminOrganizationsUrl('all', status),
               active: view === 'all',
             },
             {
-              label: 'My organizations',
+              label: messages.organizations.myOrganizations,
               href: adminOrganizationsUrl('mine', status),
               active: view === 'mine',
             },
@@ -78,9 +87,9 @@ export default async function AdminOrganizationsPage({
 
       <div className="filter-bar">
         <QueryFilterSelect
-          label="Status"
+          label={messages.organizations.status}
           name="status"
-          options={ADMIN_WORKSPACE_STATUS_OPTIONS}
+          options={statusOptions}
           value={status ?? ''}
           {...(view === 'mine' ? { preserveParams: { view: 'mine' } } : {})}
         />

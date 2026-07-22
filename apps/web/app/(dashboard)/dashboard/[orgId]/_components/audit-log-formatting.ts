@@ -1,6 +1,40 @@
 import type { AuditLogListItem } from '@churchflow/shared';
 
-const auditActionLabels: Record<string, string> = {
+export const AUDIT_ACTION_KEYS = [
+  'ACCEPT',
+  'APPROVE',
+  'APPROVE_MEMBERSHIP_CLAIM',
+  'ARCHIVE',
+  'CHANGE_MEMBER_ROLE',
+  'CONFIRM_CALENDAR_EVENT_IMAGE',
+  'CONFIRM_WEBSITE_SECTION_BACKGROUND',
+  'CREATE',
+  'CREATE_CALENDAR_EVENT',
+  'CREATE_MANUAL_MEMBER',
+  'CREATE_MEMBER_RELATIONSHIP',
+  'DELETE',
+  'DELETE_CALENDAR_EVENT',
+  'DELETE_MEMBER_RELATIONSHIP',
+  'INVITE',
+  'MEMBERSHIP_CLAIM_CONFLICT',
+  'PROMOTE_PLATFORM_ADMIN',
+  'REJECT',
+  'REJECTED',
+  'REMOVE_MEMBER',
+  'RESEND',
+  'RESTORE',
+  'REVOKE',
+  'REVOKED',
+  'REQUEST_MEMBERSHIP_CLAIM',
+  'SUSPEND',
+  'UPDATE_CALENDAR_EVENT',
+  'UPDATE_MEMBER_PHOTO',
+  'UPDATE_MEMBER_PROFILE',
+  'UPDATE_ORGANIZATION_LOGO',
+  'UPDATE_ORGANIZATION_PROFILE',
+] as const;
+
+const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   ACCEPT: 'Invitation accepted',
   APPROVE: 'Request approved',
   APPROVE_MEMBERSHIP_CLAIM: 'Membership claim approved',
@@ -34,41 +68,59 @@ const auditActionLabels: Record<string, string> = {
   UPDATE_ORGANIZATION_PROFILE: 'Organization details updated',
 };
 
-export const auditDateFormatter = new Intl.DateTimeFormat('en-US', {
-  month: '2-digit',
-  day: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  timeZone: 'UTC',
-  timeZoneName: 'short',
-});
+export function createAuditDateFormatter(locale: string) {
+  return new Intl.DateTimeFormat(locale === 'uk' ? 'uk-UA' : 'en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  });
+}
 
-export function auditActorName(log: AuditLogListItem): string {
+export function auditActorName(
+  log: AuditLogListItem,
+  labels: { system: string; unknownActor: string },
+): string {
   return (
-    log.actor?.displayName ?? log.actor?.email ?? (log.actorUserId ? 'Unknown actor' : 'System')
+    log.actor?.displayName ??
+    log.actor?.email ??
+    (log.actorUserId ? labels.unknownActor : labels.system)
   );
 }
 
-export function auditActionLabel(action: string): string {
-  return auditActionLabels[action] ?? action.toLowerCase().replaceAll('_', ' ');
+export function auditActionLabel(action: string, labels: Record<string, string>): string {
+  return (
+    labels[action] ??
+    auditActionLabels[action as keyof typeof auditActionLabels] ??
+    action.toLowerCase().replaceAll('_', ' ')
+  );
 }
 
-export function auditMetadataSummary(log: AuditLogListItem): string {
+export function auditMetadataSummary(
+  log: AuditLogListItem,
+  labels: {
+    changedFields: (fields: string) => string;
+    metadataRole: (role: string) => string;
+    metadataStatus: (status: string) => string;
+  },
+): string {
   const changedFields = log.metadata['changedFields'];
   if (Array.isArray(changedFields) && changedFields.length > 0) {
-    return `Changed ${changedFields.map(String).join(', ')}`;
+    return labels.changedFields(changedFields.map(String).join(', '));
   }
 
   const role = log.metadata['role'];
   if (typeof role === 'string') {
-    return `Role: ${role}`;
+    return labels.metadataRole(role);
   }
 
   const status = log.metadata['status'];
   if (typeof status === 'string') {
-    return `Status: ${status}`;
+    return labels.metadataStatus(status);
   }
 
   return log.entityType;

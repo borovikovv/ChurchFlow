@@ -1,6 +1,7 @@
 'use client';
 
 import { MEMBER_CSV_TEMPLATE_COLUMNS } from '@churchflow/shared';
+import { useTranslations } from 'next-intl';
 import { useRef, useTransition } from 'react';
 import { toast } from 'react-toastify';
 import { ActionMenuButton } from '@/components/ui/action-menu-button';
@@ -13,12 +14,13 @@ export function MemberCsvActions({
   organizationId: string;
   onImported: () => void;
 }) {
+  const t = useTranslations('members');
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
 
   const importFile = (file: File) => {
     if (!file.name.toLowerCase().endsWith('.csv')) {
-      toast.error('Choose a .csv file.');
+      toast.error(t('chooseCsvFile'));
       return;
     }
 
@@ -39,10 +41,13 @@ export function MemberCsvActions({
 
       if (importResult.result.failedCount > 0) {
         toast.warning(
-          `Imported ${importResult.result.createdCount} members. ${importResult.result.failedCount} rows need fixes.`,
+          t('importedMembersWithFailures', {
+            created: importResult.result.createdCount,
+            failed: importResult.result.failedCount,
+          }),
         );
       } else {
-        toast.success(`Imported ${importResult.result.createdCount} members.`);
+        toast.success(t('importedMembers', { created: importResult.result.createdCount }));
       }
     });
   };
@@ -63,17 +68,17 @@ export function MemberCsvActions({
       />
       <ActionMenuButton
         icon={<PlusIcon />}
-        label={isPending ? 'Importing...' : 'Add members'}
+        label={isPending ? t('importing') : t('addMembers')}
         size="full"
         items={[
           {
             icon: <DownloadIcon />,
-            label: 'Download CSV template',
+            label: t('downloadCsvTemplate'),
             onSelect: downloadTemplate,
           },
           {
             icon: <UploadIcon />,
-            label: 'Import from CSV',
+            label: t('importFromCsv'),
             onSelect: () => inputRef.current?.click(),
           },
         ]}

@@ -202,6 +202,7 @@ model User {
   avatarUrl         String?
   baptizedAt        DateTime?    @map("baptized_at") @db.Date
   baptismChurchName String?      @map("baptism_church_name")
+  locale            String       @default("en") @db.VarChar(5)
   emailVerified     DateTime?
   platformRole      PlatformRole @default(USER) @map("platform_role")
   createdAt         DateTime     @default(now()) @map("created_at")

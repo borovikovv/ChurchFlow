@@ -1,14 +1,17 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import type { BudgetCurrencyTotals, BudgetTotals } from '@churchflow/shared';
 import { formatMoney } from './budget-table-helpers';
 
 export function YearSummary({ totals }: { totals: BudgetTotals }) {
+  const t = useTranslations('budget');
+
   return (
     <section className="grid gap-3 sm:grid-cols-3">
-      <SummaryCard label="Year income" totals={totals.income} />
-      <SummaryCard label="Year expenses" totals={totals.expense} />
-      <SummaryCard label="Year balance" totals={totals.balance} />
+      <SummaryCard label={t('yearIncome')} totals={totals.income} />
+      <SummaryCard label={t('yearExpenses')} totals={totals.expense} />
+      <SummaryCard label={t('yearBalance')} totals={totals.balance} />
     </section>
   );
 }

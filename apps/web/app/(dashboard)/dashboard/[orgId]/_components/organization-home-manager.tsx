@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import type { AuditLogListItem } from '@churchflow/shared';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -21,6 +22,7 @@ export function OrganizationHomeManager({
   auditLogs,
   auditNextCursor,
 }: OrganizationHomeManagerProps) {
+  const t = useTranslations('home');
   const [currentOrganization, setCurrentOrganization] = useState(organization);
   const canManage = organizationRole === 'OWNER' || organizationRole === 'ADMIN';
 
@@ -31,8 +33,8 @@ export function OrganizationHomeManager({
           <div className="flex min-w-0 items-center gap-4">
             <OrganizationLogo name={currentOrganization.name} url={currentOrganization.logoUrl} />
             <div className="min-w-0">
-              <h1 className="m-0">Home</h1>
-              <p className="m-0 text-[var(--muted)]">Organization overview and core details.</p>
+              <h1 className="m-0">{t('title')}</h1>
+              <p className="m-0 text-[var(--muted)]">{t('description')}</p>
             </div>
           </div>
           {canManage ? (
@@ -43,19 +45,19 @@ export function OrganizationHomeManager({
           ) : null}
         </div>
         <dl className="details">
-          <dt>Name</dt>
+          <dt>{t('name')}</dt>
           <dd>{currentOrganization.name}</dd>
-          <dt>Slug</dt>
+          <dt>{t('slug')}</dt>
           <dd>{currentOrganization.slug}</dd>
-          <dt>Status</dt>
+          <dt>{t('status')}</dt>
           <dd>
             <StatusBadge status={currentOrganization.status} />
           </dd>
-          <dt>Description</dt>
-          <dd>{currentOrganization.description ?? 'No description'}</dd>
+          <dt>{t('organizationDescription')}</dt>
+          <dd>{currentOrganization.description ?? t('noDescription')}</dd>
           {organizationRole ? (
             <>
-              <dt>Your role</dt>
+              <dt>{t('yourRole')}</dt>
               <dd>
                 <StatusBadge status={organizationRole} />
               </dd>

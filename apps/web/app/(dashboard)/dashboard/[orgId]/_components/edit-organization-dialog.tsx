@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useId, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { updateOrganizationSchema } from '@churchflow/shared';
@@ -25,6 +26,7 @@ export function EditOrganizationDialog({
   organization: HomeOrganization;
   onUpdated: (organization: HomeOrganization) => void;
 }) {
+  const t = useTranslations('home');
   const titleId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [logo, setLogo] = useState<File | null>(null);
@@ -56,11 +58,15 @@ export function EditOrganizationDialog({
     if (logo) {
       setUploading(true);
       try {
-        const uploadedLogo = await uploadLogo(organization.id, logo);
+        const uploadedLogo = await uploadLogo(organization.id, logo, {
+          logoUploadFailed: t('logoUploadFailed'),
+          unableToConfirmLogo: t('unableToConfirmLogo'),
+          unableToPrepareLogoUpload: t('unableToPrepareLogoUpload'),
+        });
         nextLogoUrl = uploadedLogo.logoUrl ?? nextLogoUrl;
         nextLogoAssetId = uploadedLogo.assetId ?? nextLogoAssetId;
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Logo upload failed.');
+        toast.error(error instanceof Error ? error.message : t('logoUploadFailed'));
         return;
       } finally {
         setUploading(false);
@@ -88,14 +94,14 @@ export function EditOrganizationDialog({
     setSavedLogoUrl(nextLogoUrl);
     setLogo(null);
     onUpdated(nextOrganization);
-    toast.success('Organization details updated.');
+    toast.success(t('organizationUpdated'));
     dialogRef.current?.close();
   });
 
   return (
     <>
       <Button type="button" variant="secondary" onClick={() => dialogRef.current?.showModal()}>
-        Edit
+        {t('edit')}
       </Button>
       <dialog
         aria-labelledby={titleId}
@@ -109,11 +115,11 @@ export function EditOrganizationDialog({
         >
           <header className="flex items-start justify-between gap-4 border-b border-[var(--line-muted)] p-6 [&_h2]:m-0 [&_p]:m-0">
             <div>
-              <p>Edit organization</p>
+              <p>{t('editOrganization')}</p>
               <h2 id={titleId}>{organization.name}</h2>
             </div>
             <button
-              aria-label="Close edit organization panel"
+              aria-label={t('closeEditOrganizationPanel')}
               className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
               type="button"
               onClick={() => dialogRef.current?.close()}
@@ -132,10 +138,10 @@ export function EditOrganizationDialog({
                 setLogoError(nextError);
               }}
             />
-            <FormInput label="Name" error={errors.name?.message} {...register('name')} />
-            <FormInput label="Slug" error={errors.slug?.message} {...register('slug')} />
+            <FormInput label={t('name')} error={errors.name?.message} {...register('name')} />
+            <FormInput label={t('slug')} error={errors.slug?.message} {...register('slug')} />
             <FormTextarea
-              label="Description"
+              label={t('organizationDescription')}
               rows={5}
               error={errors.description?.message}
               {...register('description')}
@@ -143,10 +149,10 @@ export function EditOrganizationDialog({
           </div>
           <footer className="flex justify-end gap-2 border-t border-[var(--line-muted)] bg-[var(--surface)] px-6 py-4">
             <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-              Cancel
+              {t('cancel')}
             </Button>
             <Button disabled={isSubmitting || uploading} type="submit">
-              {uploading ? 'Uploading…' : isSubmitting ? 'Saving…' : 'Save changes'}
+              {uploading ? t('uploading') : isSubmitting ? t('saving') : t('saveChanges')}
             </Button>
           </footer>
         </form>
@@ -158,6 +164,11 @@ export function EditOrganizationDialog({
 async function uploadLogo(
   organizationId: string,
   logo: File,
+  messages: {
+    logoUploadFailed: string;
+    unableToConfirmLogo: string;
+    unableToPrepareLogoUpload: string;
+  },
 ): Promise<{ assetId?: string; logoUrl?: string }> {
   const prepared = await prepareOrganizationLogoAction({
     organizationId,
@@ -166,7 +177,7 @@ async function uploadLogo(
     byteSize: logo.size,
   });
   if (!prepared.ok || !prepared.assetId || !prepared.uploadUrl) {
-    throw new Error(prepared.error ?? 'Unable to prepare logo upload.');
+    throw new Error(prepared.error ?? messages.unableToPrepareLogoUpload);
   }
 
   const upload = await fetch(prepared.uploadUrl, {
@@ -174,13 +185,13 @@ async function uploadLogo(
     headers: { 'content-type': logo.type },
     body: logo,
   });
-  if (!upload.ok) throw new Error('Logo upload failed.');
+  if (!upload.ok) throw new Error(messages.logoUploadFailed);
 
   const confirmed = await confirmOrganizationLogoAction({
     organizationId,
     assetId: prepared.assetId,
   });
-  if (!confirmed.ok) throw new Error(confirmed.error ?? 'Unable to confirm logo.');
+  if (!confirmed.ok) throw new Error(confirmed.error ?? messages.unableToConfirmLogo);
 
   return confirmed;
 }

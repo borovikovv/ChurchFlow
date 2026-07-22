@@ -1,14 +1,16 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { AuditLogListItem, AuditLogsPage } from '@churchflow/shared';
 import { toast } from 'react-toastify';
 import { Button } from '@/components/ui/button';
 import { loadAuditLogsAction } from '../actions';
 import {
+  AUDIT_ACTION_KEYS,
   auditActionLabel,
   auditActorName,
-  auditDateFormatter,
+  createAuditDateFormatter,
   auditMetadataSummary,
 } from './audit-log-formatting';
 
@@ -21,6 +23,12 @@ export function AuditLogsSection({
   initialItems: AuditLogListItem[];
   initialNextCursor: string | null;
 }) {
+  const locale = useLocale();
+  const t = useTranslations('home');
+  const auditActionLabels = Object.fromEntries(
+    AUDIT_ACTION_KEYS.map((action) => [action, t(`auditActions.${action}`)]),
+  );
+  const auditDateFormatter = createAuditDateFormatter(locale);
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ['audit-logs', organizationId],
     queryFn: async ({ pageParam }) => {
@@ -52,8 +60,8 @@ export function AuditLogsSection({
   return (
     <section className="grid gap-4">
       <div className="grid gap-1">
-        <h2 className="m-0 text-xl">Audit Logs</h2>
-        <p className="m-0 text-[var(--muted)]">View recent updates to this organization.</p>
+        <h2 className="m-0 text-xl">{t('auditLogs')}</h2>
+        <p className="m-0 text-[var(--muted)]">{t('auditLogsDescription')}</p>
       </div>
       {items.length > 0 ? (
         <ol className="grid gap-0 md:grid-cols-2 md:gap-x-12">
@@ -65,24 +73,35 @@ export function AuditLogsSection({
               </div>
               <div className="grid gap-1">
                 <p className="m-0 text-sm">
-                  {auditActionLabel(log.action)} by{' '}
-                  <strong className="text-[var(--accent)]">{auditActorName(log)}</strong>
+                  {auditActionLabel(log.action, auditActionLabels)} {t('by')}{' '}
+                  <strong className="text-[var(--accent)]">
+                    {auditActorName(log, {
+                      system: t('system'),
+                      unknownActor: t('unknownActor'),
+                    })}
+                  </strong>
                 </p>
                 <p className="m-0 text-xs text-[var(--muted)]">
                   {auditDateFormatter.format(new Date(log.createdAt))}
                 </p>
-                <p className="m-0 text-xs text-[var(--muted)]">{auditMetadataSummary(log)}</p>
+                <p className="m-0 text-xs text-[var(--muted)]">
+                  {auditMetadataSummary(log, {
+                    changedFields: (fields) => t('changedFields', { fields }),
+                    metadataRole: (role) => t('metadataRole', { role }),
+                    metadataStatus: (status) => t('metadataStatus', { status }),
+                  })}
+                </p>
               </div>
             </li>
           ))}
         </ol>
       ) : (
-        <p className="m-0 text-[var(--muted)]">No audit logs yet.</p>
+        <p className="m-0 text-[var(--muted)]">{t('noAuditLogs')}</p>
       )}
       {hasNextPage ? (
         <div>
           <Button type="button" onClick={loadMore} disabled={isFetchingNextPage}>
-            {isFetchingNextPage ? 'Loading…' : 'Load More'}
+            {isFetchingNextPage ? t('loading') : t('loadMore')}
           </Button>
         </div>
       ) : null}

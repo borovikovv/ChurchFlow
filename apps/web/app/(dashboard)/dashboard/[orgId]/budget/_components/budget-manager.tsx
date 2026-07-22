@@ -1,6 +1,7 @@
 'use client';
 
 import { toPng } from 'html-to-image';
+import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { flushSync } from 'react-dom';
 import type { BudgetEntryField, BudgetMonth } from '@churchflow/shared';
@@ -21,6 +22,8 @@ import {
   buildGroupSummaries,
   emptyEntry,
   firstAvailableMonth,
+  type BudgetColumnLabels,
+  type BudgetGroupLabels,
   recalculateMonth,
   sumTotals,
   upsertEntry,
@@ -38,6 +41,8 @@ export function BudgetManager({
   updateEntry,
   updateEntryNote,
 }: BudgetManagerProps) {
+  const t = useTranslations('budget');
+  const locale = useLocale();
   const exportChartRef = useRef<HTMLDivElement | null>(null);
   const [year, setYear] = useState(payload.year);
   const [categories, setCategories] = useState(payload.categories);
@@ -55,6 +60,32 @@ export function BudgetManager({
     () => buildGroupSummaries(months, categories),
     [categories, months],
   );
+  const columnLabels = useMemo<BudgetColumnLabels>(
+    () => ({
+      donations: t('columns.DONATIONS'),
+      eurIncome: t('columns.EUR_INCOME'),
+      officeRent: t('columns.OFFICE_RENT'),
+      usdIncome: t('columns.USD_INCOME'),
+    }),
+    [t],
+  );
+  const groupLabels = useMemo<BudgetGroupLabels>(
+    () => ({
+      CURRENCY_EXCHANGE: t('groups.CURRENCY_EXCHANGE'),
+      DISCIPLESHIP: t('groups.DISCIPLESHIP'),
+      EVANGELISM: t('groups.EVANGELISM'),
+      FACILITY: t('groups.FACILITY'),
+      INCOME: t('groups.INCOME'),
+      OTHER: t('groups.OTHER'),
+      PASTORS: t('groups.PASTORS'),
+      TABLES: t('groups.TABLES'),
+    }),
+    [t],
+  );
+  const monthNames = useMemo(
+    () => Array.from({ length: 12 }, (_, index) => t(`months.${index + 1}`)),
+    [t],
+  );
   const exportMonths = useMemo(
     () => filterBudgetMonthsByRange(months, year, exportRange),
     [exportRange, months, year],
@@ -68,8 +99,11 @@ export function BudgetManager({
     [exportRange, year],
   );
   const exportPeriodLabel = useMemo(
-    () => (exportRange ? budgetExportRangeLabel(exportRange) : String(year)),
-    [exportRange, year],
+    () =>
+      exportRange
+        ? budgetExportRangeLabel(exportRange, { locale, selectedPeriod: t('selectedPeriod') })
+        : String(year),
+    [exportRange, locale, t, year],
   );
 
   function runMutation<T>(
@@ -91,7 +125,7 @@ export function BudgetManager({
         return;
       }
       onSuccess(result.data);
-      setMessage('Saved');
+      setMessage(t('saved'));
     });
   }
 
@@ -247,7 +281,7 @@ export function BudgetManager({
       const dataUrl = await toPng(target, { backgroundColor: '#ffffff', pixelRatio: 2 });
       const link = document.createElement('a');
       link.href = dataUrl;
-      link.download = `budget-${year}-${range.startDate ?? 'start'}-${range.endDate ?? 'end'}.png`;
+      link.download = `budget-${year}-${range.startDate ?? t('downloadStart')}-${range.endDate ?? t('downloadEnd')}.png`;
       link.click();
     } finally {
       setExporting(false);
@@ -262,6 +296,7 @@ export function BudgetManager({
         isPending={pending}
         isYearLoading={savingKeys.has('budget:year:load')}
         monthToAdd={monthToAdd}
+        monthNames={monthNames}
         months={months}
         year={year}
         onAddMonth={handleAddMonth}
@@ -274,7 +309,14 @@ export function BudgetManager({
       {message ? <p className="text-sm text-[var(--muted)]">{message}</p> : null}
 
       <YearSummary totals={yearTotals} />
-      <BudgetCharts chartRef={null} months={months} groupSummaries={groupSummaries} year={year} />
+      <BudgetCharts
+        chartRef={null}
+        groupLabels={groupLabels}
+        groupSummaries={groupSummaries}
+        monthNames={monthNames}
+        months={months}
+        year={year}
+      />
 
       {exportRange ? (
         <div
@@ -285,8 +327,10 @@ export function BudgetManager({
             chartRef={exportChartRef}
             displayMonths={exportDisplayMonths ?? undefined}
             exportMode
-            months={exportMonths}
+            groupLabels={groupLabels}
             groupSummaries={exportGroupSummaries}
+            monthNames={monthNames}
+            months={exportMonths}
             periodLabel={exportPeriodLabel}
             year={year}
           />
@@ -295,13 +339,14 @@ export function BudgetManager({
 
       {months.length === 0 ? (
         <section className="table-empty-state grid gap-3 text-center">
-          <strong>No budget months for {year} yet.</strong>
-          <span>Create the first month to start tracking income and expenses.</span>
+          <strong>{t('noBudgetMonths', { year })}</strong>
+          <span>{t('createFirstMonth')}</span>
           <div className="mx-auto flex flex-wrap items-end justify-center gap-2">
             <AddMonthControls
               disabled={pending}
               monthToAdd={monthToAdd}
               months={months}
+              monthNames={monthNames}
               onAdd={handleAddMonth}
               onMonthChange={setMonthToAdd}
             />
@@ -312,8 +357,11 @@ export function BudgetManager({
           {months.map((month) => (
             <BudgetMonthTable
               categories={categories}
+              columnLabels={columnLabels}
+              groupLabels={groupLabels}
               key={month.id}
               month={month}
+              monthNames={monthNames}
               savingKeys={savingKeys}
               onDeleteMonth={handleDeleteMonth}
               onAddRow={handleAddMonthRow}
@@ -327,6 +375,7 @@ export function BudgetManager({
               disabled={pending}
               monthToAdd={monthToAdd}
               months={months}
+              monthNames={monthNames}
               onAdd={handleAddMonth}
               onMonthChange={setMonthToAdd}
             />
