@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { OrganizationRole, Prisma } from '@churchflow/db';
 import type {
   CreateManualOrganizationMemberInput,
+  MemberMinistry,
   OrganizationMembersAccessFilter,
   UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
@@ -172,6 +173,110 @@ export class MembershipsRepository {
             createdAt: new Date(),
           })) ?? [],
       };
+    });
+  }
+
+  async importManualMembers(
+    organizationId: string,
+    rows: CreateManualOrganizationMemberInput[],
+    actorUserId: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.findFirst({
+        where: { id: organizationId, status: 'ACTIVE', deletedAt: null },
+        select: { id: true },
+      });
+      if (!organization) throw new Error('ORGANIZATION_NOT_ACTIVE');
+
+      const actor = await tx.organizationMember.findFirst({
+        where: {
+          organizationId,
+          userId: actorUserId,
+          role: { in: ['OWNER', 'ADMIN'] },
+          status: 'ACTIVE',
+          removedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!actor) throw new Error('ACTOR_CANNOT_MANAGE_MEMBERS');
+
+      const created: Array<{
+        id: string;
+        role: string;
+        source: string;
+        ministries: MemberMinistry[];
+        profile: {
+          displayName: string;
+          email: string | null;
+          phone: string | null;
+          birthday: Date | null;
+          anniversary: Date | null;
+        };
+      }> = [];
+
+      for (const row of rows) {
+        const membership = await tx.organizationMember.create({
+          data: {
+            organizationId,
+            userId: null,
+            role: row.role,
+            status: 'ACTIVE',
+            source: 'MANUAL',
+            createdByUserId: actorUserId,
+            profile: {
+              create: {
+                displayName: row.displayName,
+                email: row.email ?? null,
+                phone: row.phone ?? null,
+                notes: row.notes ?? null,
+                memberSince: row.memberSince ? new Date(`${row.memberSince}T00:00:00.000Z`) : null,
+                birthday: row.birthday ? new Date(`${row.birthday}T00:00:00.000Z`) : null,
+                anniversary: row.anniversary ? new Date(`${row.anniversary}T00:00:00.000Z`) : null,
+                biography: row.biography ?? null,
+                familyNotes: row.familyNotes ?? null,
+              },
+            },
+          },
+          include: { profile: true },
+        });
+
+        if (row.ministries && row.ministries.length > 0) {
+          await tx.organizationMemberMinistry.createMany({
+            data: row.ministries.map((ministry) => ({
+              organizationId,
+              membershipId: membership.id,
+              ministry,
+            })),
+          });
+        }
+
+        await tx.auditLog.create({
+          data: {
+            organizationId,
+            actorUserId,
+            action: 'IMPORT_MANUAL_MEMBERS',
+            entityType: 'OrganizationMember',
+            entityId: membership.id,
+            metadata: { role: row.role, source: 'MANUAL' },
+          },
+        });
+
+        created.push({
+          id: membership.id,
+          role: membership.role,
+          source: membership.source,
+          ministries: row.ministries ?? [],
+          profile: {
+            displayName: membership.profile?.displayName ?? row.displayName,
+            email: membership.profile?.email ?? null,
+            phone: membership.profile?.phone ?? null,
+            birthday: membership.profile?.birthday ?? null,
+            anniversary: membership.profile?.anniversary ?? null,
+          },
+        });
+      }
+
+      return created;
     });
   }
 

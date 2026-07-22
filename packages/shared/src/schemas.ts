@@ -10,6 +10,7 @@ import {
   BUDGET_ENTRY_FIELDS,
   BUDGET_GROUPS,
   MEMBER_MINISTRIES,
+  MEMBER_CSV_TEMPLATE_COLUMNS,
   NOTIFICATION_TYPES,
   PUBLIC_SECTION_TYPES,
 } from './constants.js';
@@ -463,6 +464,34 @@ export const createManualOrganizationMemberSchema = z.object({
   familyNotes: nullableTrimmedString(3000),
   role: z.enum(['MEMBER', 'VIEWER']).default('MEMBER'),
   ministries: memberMinistriesSchema.optional(),
+});
+
+export const importOrganizationMembersCsvResultSchema = z.object({
+  createdCount: z.number().int().min(0),
+  failedCount: z.number().int().min(0),
+  totalRows: z.number().int().min(0),
+  errors: z.array(
+    z.object({
+      row: z.number().int().min(1),
+      field: z.enum(MEMBER_CSV_TEMPLATE_COLUMNS).nullable(),
+      message: z.string(),
+    }),
+  ),
+  members: z.array(
+    z.object({
+      id: uuidSchema,
+      role: organizationRoleSchema,
+      source: membershipSourceSchema,
+      ministries: memberMinistriesSchema,
+      profile: z.object({
+        displayName: z.string(),
+        email: z.string().nullable(),
+        phone: z.string().nullable(),
+        birthday: z.string().nullable(),
+        anniversary: z.string().nullable(),
+      }),
+    }),
+  ),
 });
 
 export const updateOrganizationMemberProfileSchema = z

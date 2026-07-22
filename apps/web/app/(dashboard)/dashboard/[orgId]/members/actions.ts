@@ -1,8 +1,50 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { apiFetch } from '@/api/client';
-import type { CreateManualOrganizationMemberInput, MemberMinistry } from '@churchflow/shared';
+import type {
+  CreateManualOrganizationMemberInput,
+  ImportOrganizationMembersCsvResult,
+  MemberMinistry,
+  OrganizationMembersAccessFilter,
+} from '@churchflow/shared';
 import type { ProfileUpdateState } from '@/components/members/member-actions';
+import type { MemberRelationship, MembersPayload } from './types';
+
+export async function loadMembersAction(input: {
+  organizationId: string;
+  access: OrganizationMembersAccessFilter;
+}) {
+  const result = await apiFetch<MembersPayload>(
+    `/organizations/${input.organizationId}/memberships?${new URLSearchParams({ access: input.access })}`,
+  );
+  if (!result.ok) return { ok: false as const, error: result.error.message };
+
+  const payload = result.data;
+  await Promise.all(
+    payload.members.map(async (member) => {
+      if (!member.profile.profilePhotoAssetId) return;
+      const photo = await apiFetch<{ url: string }>(
+        `/organizations/${input.organizationId}/media/${member.profile.profilePhotoAssetId}/read-url`,
+      );
+      if (photo.ok) member.profile.photoUrl = photo.data.url;
+    }),
+  );
+
+  const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
+  if (canManage) {
+    await Promise.all(
+      payload.members.map(async (member) => {
+        const relationships = await apiFetch<MemberRelationship[]>(
+          `/organizations/${input.organizationId}/memberships/${member.id}/relationships`,
+        );
+        member.relationships = relationships.ok ? relationships.data : [];
+      }),
+    );
+  }
+
+  return { ok: true as const, payload };
+}
 
 export async function createMemberAction(input: {
   organizationId: string;
@@ -41,6 +83,31 @@ export async function createMemberAction(input: {
     }
   }
   return { ok: true as const, member: created.data };
+}
+
+export async function importMembersCsvAction(formData: FormData) {
+  const organizationId = String(formData.get('organizationId'));
+  const file = formData.get('file');
+
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false as const, error: 'Choose a CSV file to import.' };
+  }
+
+  const upload = new FormData();
+  upload.append('file', file);
+
+  const result = await apiFetch<ImportOrganizationMembersCsvResult>(
+    `/organizations/${organizationId}/memberships/import-csv`,
+    {
+      method: 'POST',
+      body: upload,
+    },
+  );
+
+  if (!result.ok) return { ok: false as const, error: result.error.message };
+
+  revalidatePath(`/dashboard/${organizationId}/members`);
+  return { ok: true as const, result: result.data };
 }
 
 export async function updateMemberProfileAction(

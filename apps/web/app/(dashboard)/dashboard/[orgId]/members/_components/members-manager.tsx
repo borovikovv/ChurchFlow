@@ -1,18 +1,22 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { useState, type ComponentProps } from 'react';
+import type { ComponentProps } from 'react';
 import { InviteAppUserForm } from '@/components/members/invite-app-user-form';
 import { MemberActions, MemberRoleStatus } from '@/components/members/member-actions';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
-import type { OrganizationMember, OrganizationRole } from '../types';
+import type { MembersPayload, OrganizationMember } from '../types';
 import { CreateMemberDialog } from './create-member-dialog';
+import { MemberCsvActions } from './member-csv-actions';
 import { MemberAvatar } from './member-avatar';
 import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
-import { OrganizationMembersAccessFilter } from '@churchflow/shared';
+import type { OrganizationMembersAccessFilter } from '@churchflow/shared';
 import { QueryFilterSelect } from '@/components/forms/query-filter-select';
+import { useMembersQuery } from '../_hooks/use-members-query';
+
+const MEMBERS_ACTION_BUTTON_CLASS_NAME = 'h-[42px] min-h-[42px]';
 
 const MEMBER_ACCESS_FILTER_OPTIONS: Array<{
   label: string;
@@ -39,23 +43,24 @@ type MemberActionProps = Pick<
 
 export function MembersManager({
   organizationId,
-  initialMembers,
-  actorMembershipId,
-  actorRole,
+  initialPayload,
   memberAccess,
   manageInvitation,
   ...actions
 }: {
   organizationId: string;
-  initialMembers: OrganizationMember[];
-  actorMembershipId: string | null;
-  actorRole: OrganizationRole | null;
-  memberAccess: string;
+  initialPayload: MembersPayload;
+  memberAccess: OrganizationMembersAccessFilter;
   manageInvitation: ComponentProps<typeof InviteAppUserForm>['action'];
 } & MemberActionProps) {
-  const [members, setMembers] = useState(initialMembers);
-  const canManage = actorRole === 'OWNER' || actorRole === 'ADMIN';
-  const isOwner = actorRole === 'OWNER';
+  const { data: payload, refresh: refreshMembers } = useMembersQuery({
+    access: memberAccess,
+    initialPayload,
+    organizationId,
+  });
+  const members = payload.members;
+  const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
+  const isOwner = payload.actorRole === 'OWNER';
   const memberCandidates = members.map(({ id, profile }) => ({
     id,
     displayName: profile.displayName,
@@ -117,26 +122,18 @@ export function MembersManager({
             organizationId={organizationId}
             canManage={canManage}
             isOwner={isOwner}
-            isCurrentMember={member.id === actorMembershipId}
+            isCurrentMember={member.id === payload.actorMembershipId}
             memberCandidates={memberCandidates}
             onProfileUpdated={(updates) => {
-              const { ministries, ...profile } = updates;
-              setMembers((current) =>
-                current.map((item) =>
-                  item.id === member.id
-                    ? {
-                        ...item,
-                        ...(ministries !== undefined ? { ministries } : {}),
-                        profile: { ...item.profile, ...profile },
-                      }
-                    : item,
-                ),
-              );
+              void updates;
+              refreshMembers();
             }}
             onRoleUpdated={(role) => {
-              setMembers((current) =>
-                current.map((item) => (item.id === member.id ? { ...item, role } : item)),
-              );
+              void role;
+              refreshMembers();
+            }}
+            onRemoved={() => {
+              refreshMembers();
             }}
           />
         );
@@ -160,8 +157,12 @@ export function MembersManager({
           />
         </div>
         {canManage ? (
-          <div className="flex justify-end gap-2">
-            <FormDialog triggerLabel="Invite app user" title="Invite an app user">
+          <div className="flex items-start justify-end gap-2">
+            <FormDialog
+              triggerClassName={MEMBERS_ACTION_BUTTON_CLASS_NAME}
+              triggerLabel="Invite app user"
+              title="Invite an app user"
+            >
               <p className="-mt-4 mb-0">
                 Send an email invitation or generate a link you can share yourself.
               </p>
@@ -169,32 +170,16 @@ export function MembersManager({
             </FormDialog>
             <CreateMemberDialog
               organizationId={organizationId}
+              triggerClassName={MEMBERS_ACTION_BUTTON_CLASS_NAME}
               onCreated={(created) => {
-                setMembers((current) => [
-                  {
-                    ...created,
-                    role: created.role as OrganizationRole,
-                    status: 'ACTIVE',
-                    ministries: created.ministries,
-                    accountState: 'UNCLAIMED',
-                    claimedAt: null,
-                    profile: {
-                      ...created.profile,
-                      notes: null,
-                      memberSince: null,
-                      birthday: null,
-                      anniversary: null,
-                      biography: null,
-                      familyNotes: null,
-                      profilePhotoAssetId: null,
-                      photoUrl: null,
-                    },
-                    user: null,
-                    activeClaim: null,
-                    relationships: [],
-                  },
-                  ...current,
-                ]);
+                void created;
+                refreshMembers();
+              }}
+            />
+            <MemberCsvActions
+              organizationId={organizationId}
+              onImported={() => {
+                refreshMembers();
               }}
             />
           </div>

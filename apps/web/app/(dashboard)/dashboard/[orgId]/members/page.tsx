@@ -8,13 +8,13 @@ import type { RoleUpdateState } from '@/components/members/member-actions';
 import { MembersManager } from './_components/members-manager';
 import {
   confirmMemberPhotoAction,
+  loadMembersAction,
   prepareMemberPhotoAction,
   updateMemberProfileAction,
 } from './actions';
 import type {
   ClaimMutationResult,
   InvitationMutationResult,
-  MemberRelationship,
   MembersPayload,
   PendingInvitation,
 } from './types';
@@ -75,22 +75,6 @@ async function manageInlineInvitation(
     : { ...previousState, error: result.error.message };
 }
 
-async function mutateAndRedirect(
-  organizationId: string,
-  path: string,
-  init: RequestInit,
-  successMessage: string,
-) {
-  const result = await apiFetch(path, init);
-  revalidatePath(`/dashboard/${organizationId}/members`);
-  redirect(
-    membersUrl(
-      organizationId,
-      result.ok ? { message: successMessage } : { error: result.error.message },
-    ),
-  );
-}
-
 async function claimAction(formData: FormData) {
   'use server';
   const organizationId = String(formData.get('organizationId'));
@@ -117,12 +101,16 @@ async function removeMember(formData: FormData) {
   'use server';
   const organizationId = String(formData.get('organizationId'));
   const membershipId = String(formData.get('membershipId'));
-  await mutateAndRedirect(
-    organizationId,
+  const result = await apiFetch(
     `/organizations/${organizationId}/memberships/${membershipId}/remove`,
     { method: 'POST' },
-    'Member removed.',
   );
+  if (result.ok) {
+    revalidatePath(`/dashboard/${organizationId}/members`);
+    return { ok: true as const };
+  }
+
+  return { ok: false as const, error: result.error.message };
 }
 
 async function createRelationship(formData: FormData) {
@@ -188,40 +176,16 @@ export default async function MembersDashboardPage({
   const memberAccess: OrganizationMembersAccessFilter = parsedAccess.success
     ? parsedAccess.data
     : 'all';
-  const result = await apiFetch<MembersPayload>(
-    `/organizations/${orgId}/memberships?${new URLSearchParams({ access: memberAccess })}`,
-  );
-  const payload: MembersPayload = result.ok
-    ? result.data
+  const membersResult = await loadMembersAction({ organizationId: orgId, access: memberAccess });
+  const payload: MembersPayload = membersResult.ok
+    ? membersResult.payload
     : { actorRole: null, actorMembershipId: null, members: [], pendingInvitations: [] };
-  if (result.ok) {
-    await Promise.all(
-      payload.members.map(async (member) => {
-        if (!member.profile.profilePhotoAssetId) return;
-        const photo = await apiFetch<{ url: string }>(
-          `/organizations/${orgId}/media/${member.profile.profilePhotoAssetId}/read-url`,
-        );
-        if (photo.ok) member.profile.photoUrl = photo.data.url;
-      }),
-    );
-  }
-  const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
-  if (canManage) {
-    await Promise.all(
-      payload.members.map(async (member) => {
-        const relationships = await apiFetch<MemberRelationship[]>(
-          `/organizations/${orgId}/memberships/${member.id}/relationships`,
-        );
-        member.relationships = relationships.ok ? relationships.data : [];
-      }),
-    );
-  }
 
   return (
     <div className="stack">
       <h1>Members</h1>
       <p>Your role: {payload.actorRole ?? 'Platform administrator'}</p>
-      {!result.ok ? <p className="form-error">{result.error.message}</p> : null}
+      {!membersResult.ok ? <p className="form-error">{membersResult.error}</p> : null}
       {error ? <p className="form-error">{error}</p> : null}
       {message ? <p>{message}</p> : null}
       {claimLink ? <CopyField value={claimLink} /> : null}
@@ -230,9 +194,7 @@ export default async function MembersDashboardPage({
         key={memberAccess}
         memberAccess={memberAccess}
         organizationId={orgId}
-        initialMembers={payload.members}
-        actorMembershipId={payload.actorMembershipId}
-        actorRole={payload.actorRole}
+        initialPayload={payload}
         manageInvitation={manageInlineInvitation}
         updateProfile={updateMemberProfileAction}
         updateRole={updateMemberRole}

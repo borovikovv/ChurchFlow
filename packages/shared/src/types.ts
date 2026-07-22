@@ -4,6 +4,7 @@ import type {
   approveOrganizationRequestSchema,
   createOrganizationInvitationSchema,
   createManualOrganizationMemberSchema,
+  importOrganizationMembersCsvResultSchema,
   createOrganizationRequestSchema,
   jwtPayloadSchema,
   auditLogListItemSchema,
@@ -88,6 +89,9 @@ export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
 export type UpdateOrganizationMemberRoleInput = z.infer<typeof updateOrganizationMemberRoleSchema>;
 export type CreateManualOrganizationMemberInput = z.infer<
   typeof createManualOrganizationMemberSchema
+>;
+export type ImportOrganizationMembersCsvResult = z.infer<
+  typeof importOrganizationMembersCsvResultSchema
 >;
 export type UpdateOrganizationMemberProfileInput = z.infer<
   typeof updateOrganizationMemberProfileSchema

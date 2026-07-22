@@ -28,6 +28,7 @@ import { FormCheckbox } from '@/components/forms/form-checkbox';
 
 type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 type FormAction = (formData: FormData) => void | Promise<void>;
+type RemoveMemberAction = (formData: FormData) => Promise<{ ok: boolean; error?: string }>;
 type RelationshipAction = (formData: FormData) => Promise<{ ok: boolean; error?: string }>;
 
 export interface ProfileUpdateState {
@@ -596,6 +597,7 @@ export function MemberActions({
   confirmPhoto,
   onProfileUpdated,
   onRoleUpdated,
+  onRemoved,
 }: {
   member: EditableMember;
   organizationId: string;
@@ -604,7 +606,7 @@ export function MemberActions({
   isCurrentMember: boolean;
   updateProfile: ProfileUpdateAction;
   updateRole: RoleUpdateAction;
-  removeMember: FormAction;
+  removeMember: RemoveMemberAction;
   claimAction: FormAction;
   memberCandidates: Array<{ id: string; displayName: string }>;
   createRelationship: RelationshipAction;
@@ -613,6 +615,7 @@ export function MemberActions({
   confirmPhoto: ConfirmMemberPhotoAction;
   onProfileUpdated: (profile: MemberProfileUpdate) => void;
   onRoleUpdated: (role: OrganizationRole) => void;
+  onRemoved: () => void;
 }) {
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const roleDialogRef = useRef<HTMLDialogElement>(null);
@@ -710,7 +713,19 @@ export function MemberActions({
         </form>
       ) : null}
       {isOwner && !isCurrentMember ? (
-        <form className="contents" action={removeMember}>
+        <form
+          className="contents"
+          action={async (formData) => {
+            const result = await removeMember(formData);
+            if (result.ok) {
+              toast.success('Member removed.');
+              onRemoved();
+              return;
+            }
+
+            toast.error(result.error ?? 'Unable to remove member.');
+          }}
+        >
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="membershipId" value={member.id} />
           <ConfirmSubmitButton

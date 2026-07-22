@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -11,7 +12,9 @@ import type {
   OrganizationMembersAccessFilter,
   UpdateOrganizationMemberProfileInput,
   CreateOrganizationMemberRelationshipInput,
+  ImportOrganizationMembersCsvResult,
 } from '@churchflow/shared';
+import { parseMembersCsv } from './member-csv-import';
 import { MembershipsRepository } from './repositories/memberships.repository';
 
 @Injectable()
@@ -174,6 +177,58 @@ export class MembershipsService {
       }
       if (error instanceof Error && error.message === 'ACTOR_CANNOT_MANAGE_MEMBERS') {
         throw new ForbiddenException('Only organization owners and admins can create members');
+      }
+      throw error;
+    }
+  }
+
+  async importMembersCsv(
+    organizationId: string,
+    csv: string,
+    actorUserId: string,
+  ): Promise<ImportOrganizationMembersCsvResult> {
+    const parsed = parseMembersCsv(csv);
+    if (parsed.totalRows === 0 && parsed.errors.length > 0) {
+      const firstError = parsed.errors[0];
+      throw new BadRequestException({
+        code: 'CSV_IMPORT_INVALID',
+        message: firstError?.message ?? 'CSV import failed',
+        errors: parsed.errors,
+      });
+    }
+
+    try {
+      const members =
+        parsed.rows.length > 0
+          ? await this.membershipsRepository.importManualMembers(
+              organizationId,
+              parsed.rows,
+              actorUserId,
+            )
+          : [];
+
+      return {
+        createdCount: members.length,
+        failedCount: new Set(parsed.errors.map((error) => error.row)).size,
+        totalRows: parsed.totalRows,
+        errors: parsed.errors,
+        members: members.map((member) => ({
+          ...member,
+          role: member.role as 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER',
+          source: member.source as 'EXISTING' | 'MANUAL' | 'INVITATION' | 'ORGANIZATION_APPROVAL',
+          profile: {
+            ...member.profile,
+            birthday: member.profile.birthday?.toISOString() ?? null,
+            anniversary: member.profile.anniversary?.toISOString() ?? null,
+          },
+        })),
+      };
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'ORGANIZATION_NOT_ACTIVE') {
+        throw new NotFoundException('Active organization was not found');
+      }
+      if (error instanceof Error && error.message === 'ACTOR_CANNOT_MANAGE_MEMBERS') {
+        throw new ForbiddenException('Only organization owners and admins can import members');
       }
       throw error;
     }

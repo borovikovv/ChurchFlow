@@ -181,6 +181,20 @@ export const MEMBER_MINISTRY = {
   chaplain: 'CHAPLAIN',
 } as const;
 
+export const MEMBER_CSV_TEMPLATE_COLUMNS = [
+  'displayName',
+  'email',
+  'phone',
+  'role',
+  'ministries',
+  'memberSince',
+  'birthday',
+  'anniversary',
+  'notes',
+  'biography',
+  'familyNotes',
+] as const;
+
 export const CALENDAR_EVENT_REMINDERS = ['ONE_HOUR', 'ONE_DAY', 'ONE_WEEK'] as const;
 
 export const CALENDAR_EVENT_REPEAT_PERIODS = [

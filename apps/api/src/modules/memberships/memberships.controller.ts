@@ -1,4 +1,19 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import { MembershipsService } from './memberships.service';
@@ -7,7 +22,12 @@ import { CreateManualMemberDto } from './dto/create-manual-member.dto';
 import { UpdateMemberProfileDto } from './dto/update-member-profile.dto';
 import { ListMembershipsQueryDto } from './dto/list-memberships-query.dto';
 import { CreateMemberRelationshipDto } from './dto/create-member-relationship.dto';
-import { Delete } from '@nestjs/common';
+
+interface UploadedCsvFile {
+  originalname: string;
+  mimetype: string;
+  buffer: Buffer;
+}
 
 @Controller('organizations/:organizationId/memberships')
 @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
@@ -36,6 +56,28 @@ export class MembershipsController {
     return this.membershipsService.createManualMember(
       organizationId,
       body,
+      this.getActorUserId(request),
+    );
+  }
+
+  @Post('import-csv')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 1024 * 1024 } }))
+  async importCsv(
+    @Param('organizationId') organizationId: string,
+    @UploadedFile() file: UploadedCsvFile | undefined,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    if (!file) {
+      throw new BadRequestException('CSV file is required');
+    }
+
+    if (!isCsvFile(file)) {
+      throw new BadRequestException('Upload a .csv file');
+    }
+
+    return this.membershipsService.importMembersCsv(
+      organizationId,
+      file.buffer.toString('utf8'),
       this.getActorUserId(request),
     );
   }
@@ -132,4 +174,13 @@ export class MembershipsController {
 
     return userId;
   }
+}
+
+function isCsvFile(file: UploadedCsvFile): boolean {
+  const filename = file.originalname.toLowerCase();
+  return (
+    filename.endsWith('.csv') ||
+    file.mimetype === 'text/csv' ||
+    file.mimetype === 'application/vnd.ms-excel'
+  );
 }

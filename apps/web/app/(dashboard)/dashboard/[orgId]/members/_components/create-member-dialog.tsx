@@ -49,9 +49,11 @@ const MINISTRY_LABELS: Record<MemberMinistry, string> = {
 export function CreateMemberDialog({
   organizationId,
   onCreated,
+  triggerClassName,
 }: {
   organizationId: string;
   onCreated: (member: CreatedMember) => void;
+  triggerClassName?: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -83,7 +85,11 @@ export function CreateMemberDialog({
 
   return (
     <>
-      <Button type="button" onClick={() => dialogRef.current?.showModal()}>
+      <Button
+        className={triggerClassName}
+        type="button"
+        onClick={() => dialogRef.current?.showModal()}
+      >
         Add new member
       </Button>
       <dialog
