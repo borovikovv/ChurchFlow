@@ -27,6 +27,19 @@ COPY packages packages
 RUN pnpm --filter @churchflow/api... build
 RUN pnpm --filter @churchflow/api --prod deploy /runtime/api
 
+FROM dependencies AS migrator
+
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+COPY packages/db/prisma packages/db/prisma
+COPY packages/db/prisma.config.ts packages/db/prisma.config.ts
+
+WORKDIR /app/packages/db
+
+CMD ["pnpm", "db:migrate:deploy"]
+
 FROM node:22-bookworm-slim AS runner
 
 ENV NODE_ENV=production
@@ -44,4 +57,3 @@ USER churchflow
 EXPOSE 4000
 
 CMD ["node", "dist/main.js"]
-
