@@ -9,8 +9,8 @@ export async function isAccessTokenFresh(
   }
 
   try {
-    const decodedHeader = JSON.parse(base64UrlDecode(header)) as unknown;
-    const decoded = JSON.parse(base64UrlDecode(payload)) as unknown;
+    const decodedHeader = JSON.parse(base64UrlDecode(header, true)) as unknown;
+    const decoded = JSON.parse(base64UrlDecode(payload, true)) as unknown;
     if (
       !isRecord(decodedHeader) ||
       decodedHeader['alg'] !== 'RS256' ||
@@ -32,7 +32,7 @@ export async function isAccessTokenFresh(
     return crypto.subtle.verify(
       'RSASSA-PKCS1-v1_5',
       publicKey,
-      base64UrlBytes(signature),
+      base64UrlBytes(signature, true),
       new TextEncoder().encode(`${header}.${payload}`),
     );
   } catch {
@@ -65,12 +65,20 @@ export function internalRedirectTarget(pathname: string, search: string): string
   return `${safePathname}${safeSearch}`;
 }
 
-function base64UrlDecode(value: string): string {
-  return new TextDecoder().decode(base64UrlBytes(value));
+function base64UrlDecode(value: string, requireCanonical = false): string {
+  return new TextDecoder().decode(base64UrlBytes(value, requireCanonical));
 }
 
-function base64UrlBytes(value: string): Uint8Array<ArrayBuffer> {
+function base64UrlBytes(value: string, requireCanonical = false): Uint8Array<ArrayBuffer> {
+  if (requireCanonical && !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new Error('Invalid base64url encoding');
+  }
+
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  if (base64.length % 4 === 1) {
+    throw new Error('Invalid base64url length');
+  }
+
   const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
   const decoded = atob(padded);
   const bytes = new Uint8Array(decoded.length);
@@ -78,7 +86,20 @@ function base64UrlBytes(value: string): Uint8Array<ArrayBuffer> {
     bytes[index] = decoded.charCodeAt(index);
   }
 
+  if (requireCanonical && canonicalBase64Url(bytes) !== value) {
+    throw new Error('Non-canonical base64url encoding');
+  }
+
   return bytes;
+}
+
+function canonicalBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
 function pemPublicKeyBytes(value: string): Uint8Array<ArrayBuffer> {
