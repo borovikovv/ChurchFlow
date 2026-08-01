@@ -23,9 +23,7 @@ jobs:
     environment: stage
     env:
       DEPLOY_DIR: /opt/churchflow/stage
-      API_IMAGE: ghcr.io/${{ github.repository_owner }}/churchflow-api:${{ inputs.image_tag }}
-      MIGRATOR_IMAGE: ghcr.io/${{ github.repository_owner }}/churchflow-api-migrator:${{ inputs.image_tag }}
-      WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/churchflow-web:${{ inputs.image_tag }}
+      INTERNAL_NETWORK: churchflow-internal
       GHCR_USERNAME: ${{ github.actor }}
       GHCR_TOKEN: ${{ secrets.STAGE_GHCR_TOKEN || github.token }}
     steps:
@@ -33,17 +31,28 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate selected tag
+        id: tag
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ inputs.image_tag }}" == "latest" ]]; then
-            echo "Refusing to deploy mutable tag: latest"
+          raw_tag="${{ inputs.image_tag }}"
+          if [[ ! "$raw_tag" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "image_tag must be a full 40-character Git commit SHA."
             exit 1
           fi
-          if [[ -z "${{ inputs.image_tag }}" ]]; then
-            echo "image_tag is required"
-            exit 1
-          fi
+          image_tag="$(printf '%s' "$raw_tag" | tr '[:upper:]' '[:lower:]')"
+          {
+            echo "image_tag=$image_tag"
+            echo "api_image=ghcr.io/${{ github.repository_owner }}/churchflow-api:$image_tag"
+            echo "migrator_image=ghcr.io/${{ github.repository_owner }}/churchflow-api-migrator:$image_tag"
+            echo "web_image=ghcr.io/${{ github.repository_owner }}/churchflow-web:$image_tag"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "IMAGE_TAG=$image_tag"
+            echo "API_IMAGE=ghcr.io/${{ github.repository_owner }}/churchflow-api:$image_tag"
+            echo "MIGRATOR_IMAGE=ghcr.io/${{ github.repository_owner }}/churchflow-api-migrator:$image_tag"
+            echo "WEB_IMAGE=ghcr.io/${{ github.repository_owner }}/churchflow-web:$image_tag"
+          } >> "$GITHUB_ENV"
 
       - name: Log in to GHCR for image verification
         uses: docker/login-action@v3
@@ -104,29 +113,38 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          env_file="$(mktemp)"
+          compose_env_file="$(mktemp)"
+          api_env_file="$(mktemp)"
           append_env() {
-            local key="$1"
+            local file="$1"
+            local key="$2"
             local value="${!key-}"
             value="${value//\\/\\\\}"
             value="${value//$'\n'/\\n}"
             value="${value//\"/\\\"}"
-            printf '%s="%s"\n' "$key" "$value" >> "$env_file"
+            printf '%s="%s"\n' "$key" "$value" >> "$file"
           }
 
           for key in \
             API_IMAGE MIGRATOR_IMAGE WEB_IMAGE \
+            NEXT_PUBLIC_WEB_URL NEXT_PUBLIC_API_URL API_INTERNAL_URL COOKIE_DOMAIN JWT_ACCESS_PUBLIC_KEY; do
+            append_env "$compose_env_file" "$key"
+          done
+
+          for key in \
             DATABASE_URL WEB_APP_URL COOKIE_DOMAIN PLATFORM_ADMIN_EMAIL \
             TELEGRAM_CLIENT_ID TELEGRAM_CLIENT_SECRET TELEGRAM_REDIRECT_URI \
             TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME TELEGRAM_WEBHOOK_SECRET TELEGRAM_WEBHOOK_URL \
             EMAIL_PROVIDER EMAIL_FROM RESEND_API_KEY SMTP_HOST SMTP_PORT \
             JWT_ACCESS_PUBLIC_KEY JWT_ACCESS_PRIVATE_KEY JWT_REFRESH_PUBLIC_KEY JWT_REFRESH_PRIVATE_KEY \
-            S3_ENDPOINT S3_REGION S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY \
-            NEXT_PUBLIC_WEB_URL NEXT_PUBLIC_API_URL API_INTERNAL_URL; do
-            append_env "$key"
+            S3_ENDPOINT S3_REGION S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+            append_env "$api_env_file" "$key"
           done
 
-          echo "env_file=$env_file" >> "$GITHUB_ENV"
+          {
+            echo "compose_env_file=$compose_env_file"
+            echo "api_env_file=$api_env_file"
+          } >> "$GITHUB_ENV"
 
       - name: Create remote deployment directory
         shell: bash
@@ -150,8 +168,11 @@ jobs:
             deploy/stage/compose.yaml \
             "$STAGE_SSH_USER@$STAGE_SSH_HOST:$DEPLOY_DIR/compose.yaml"
           scp -i ~/.ssh/churchflow_stage -o StrictHostKeyChecking=accept-new \
-            "$env_file" \
+            "$compose_env_file" \
             "$STAGE_SSH_USER@$STAGE_SSH_HOST:$DEPLOY_DIR/.env"
+          scp -i ~/.ssh/churchflow_stage -o StrictHostKeyChecking=accept-new \
+            "$api_env_file" \
+            "$STAGE_SSH_USER@$STAGE_SSH_HOST:$DEPLOY_DIR/api.env"
           ghcr_token_file="$(mktemp)"
           chmod 600 "$ghcr_token_file"
           printf '%s' "$GHCR_TOKEN" > "$ghcr_token_file"
@@ -168,28 +189,47 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/churchflow_stage -o StrictHostKeyChecking=accept-new \
             "$STAGE_SSH_USER@$STAGE_SSH_HOST" \
-            "DEPLOY_DIR='$DEPLOY_DIR' GHCR_USERNAME='$GHCR_USERNAME' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' bash -s" <<'REMOTE'
+            "DEPLOY_DIR='$DEPLOY_DIR' GHCR_USERNAME='$GHCR_USERNAME' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' INTERNAL_NETWORK='$INTERNAL_NETWORK' bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_DIR"
           docker_config="$(mktemp -d)"
           trap 'rm -f .ghcr-token; rm -rf "$docker_config"' EXIT
           export DOCKER_CONFIG="$docker_config"
           chmod 600 .env
+          chmod 600 api.env
           chmod 600 .ghcr-token
 
           docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin < .ghcr-token >/dev/null
+
+          docker network inspect "$INTERNAL_NETWORK" >/dev/null 2>&1 \
+            || docker network create "$INTERNAL_NETWORK" >/dev/null
+
+          if ! docker inspect churchflow-postgres >/dev/null 2>&1; then
+            echo "Required container churchflow-postgres was not found."
+            docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Networks}}'
+            exit 1
+          fi
+
+          if ! docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' "$INTERNAL_NETWORK" | grep -Fxq churchflow-postgres; then
+            docker network connect "$INTERNAL_NETWORK" churchflow-postgres
+          fi
 
           docker compose --env-file .env -f compose.yaml config >/dev/null
           docker compose --env-file .env -f compose.yaml pull
           docker pull "$MIGRATOR_IMAGE" >/dev/null
 
-          docker run --rm \
+          if ! docker run --rm \
             --init \
-            --add-host host.docker.internal:host-gateway \
+            --network "$INTERNAL_NETWORK" \
             --cap-drop ALL \
             --security-opt no-new-privileges:true \
-            --env-file .env \
-            "$MIGRATOR_IMAGE"
+            --env-file api.env \
+            "$MIGRATOR_IMAGE"; then
+            echo "Database migrations failed."
+            docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' "$INTERNAL_NETWORK" || true
+            docker exec churchflow-postgres pg_isready -U churchflow -d churchflow || true
+            exit 1
+          fi
 
           docker compose --env-file .env -f compose.yaml up -d
 
@@ -214,6 +254,7 @@ jobs:
           if ! wait_for_healthy churchflow-stage-api || ! wait_for_healthy churchflow-stage-web; then
             docker compose --env-file .env -f compose.yaml ps
             docker compose --env-file .env -f compose.yaml logs --tail=120 api web
+            docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' "$INTERNAL_NETWORK" || true
             exit 1
           fi
 

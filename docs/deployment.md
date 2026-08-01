@@ -37,7 +37,7 @@ Stage is deployed manually from GitHub Actions to a single Hetzner host. The wor
 - `https://stage.mychurchflow.org` -> `127.0.0.1:3000`
 - `https://api-stage.mychurchflow.org` -> `127.0.0.1:4000`
 
-PostgreSQL is not managed by the stage Compose project. The existing `churchflow-postgres` container must keep publishing PostgreSQL on `127.0.0.1:5432`. Stage containers reach that host binding through Docker's Linux `host-gateway` alias as `host.docker.internal`.
+PostgreSQL is not managed by the stage Compose project. The existing `churchflow-postgres` container must keep publishing PostgreSQL on `127.0.0.1:5432`. Stage API and migration containers reach PostgreSQL through the external Docker network `churchflow-internal` using the hostname `churchflow-postgres`.
 
 ### One-Time Server Setup
 
@@ -47,10 +47,11 @@ Run these once on the Hetzner server as the deployment user:
 sudo install -d -m 700 -o "$USER" -g "$USER" /opt/churchflow/stage
 docker compose version
 docker ps --filter name=churchflow-postgres
-curl --fail http://127.0.0.1:5432 || true
+docker network inspect churchflow-internal >/dev/null 2>&1 || docker network create churchflow-internal
+docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' churchflow-internal | grep -Fxq churchflow-postgres || docker network connect churchflow-internal churchflow-postgres
 ```
 
-The final `curl` is only a quick port sanity check and may print a PostgreSQL protocol error. Do not change `/opt/churchflow/postgres`, stop `churchflow-postgres`, or prune Docker images as part of stage setup.
+The deploy workflow also runs the network setup idempotently before migrations. Do not change `/opt/churchflow/postgres`, stop `churchflow-postgres`, publish PostgreSQL on `0.0.0.0`, or prune Docker images as part of stage setup.
 
 ### GitHub Environment `stage`
 
@@ -62,7 +63,7 @@ Required secrets:
 - `STAGE_SSH_USER`
 - `STAGE_SSH_PRIVATE_KEY`
 - `STAGE_GHCR_TOKEN` only when the default workflow token cannot pull GHCR packages from the server
-- `STAGE_DATABASE_URL`, using `host.docker.internal:5432`, for example `postgresql://churchflow:<password>@host.docker.internal:5432/churchflow?schema=public`
+- `STAGE_DATABASE_URL`, using the external Docker network hostname, for example `postgresql://churchflow:<password>@churchflow-postgres:5432/churchflow?schema=public`
 - `JWT_ACCESS_PUBLIC_KEY`
 - `JWT_ACCESS_PRIVATE_KEY`
 - `JWT_REFRESH_PUBLIC_KEY`
@@ -94,7 +95,7 @@ Required variables:
 - `S3_REGION=auto`
 - `S3_BUCKET=churchflow-stage`
 
-`NEXT_PUBLIC_*` values are embedded into the Next.js image at build time, so build the image with the `stage` environment before deploying it to stage.
+`NEXT_PUBLIC_*` values are embedded into the Next.js image at build time, so build the image with the `stage` environment before deploying it to stage. The web service receives only `NODE_ENV`, `PORT`, `HOSTNAME`, `API_INTERNAL_URL`, `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, `JWT_ACCESS_PUBLIC_KEY`, and `COOKIE_DOMAIN` at runtime. API secrets are written to `/opt/churchflow/stage/api.env` and are not passed to the web service.
 
 ### First Deployment
 
@@ -102,9 +103,9 @@ Required variables:
 2. Use `git_ref=stage`.
 3. Use `environment=stage`.
 4. Copy the resolved commit SHA from the workflow output or image tags.
-5. Run the `Deploy stage` workflow with `image_tag=<commit-sha>`.
+5. Run the `Deploy stage` workflow with `image_tag=<40-character-commit-sha>`.
 
-The deployment workflow verifies the API, web, and migrator images exist in GHCR, uploads only `deploy/stage/compose.yaml` and a generated `.env` to `/opt/churchflow/stage`, logs in to GHCR on the server through stdin, runs Prisma migrations with `churchflow-api-migrator:<tag>`, starts the API and web services, and fails if either container does not become healthy.
+The deployment workflow accepts only full Git commit SHA tags, verifies the API, web, and migrator images exist in GHCR, uploads only `deploy/stage/compose.yaml`, a generated `.env`, and a generated `api.env` to `/opt/churchflow/stage`, logs in to GHCR on the server through stdin, creates `churchflow-internal` if needed, attaches `churchflow-postgres` if needed, runs Prisma migrations with `churchflow-api-migrator:<sha>`, starts the API and web services, and fails if either container does not become healthy.
 
 ### Repeat Deployment
 
@@ -117,6 +118,7 @@ On the server:
 ```bash
 cd /opt/churchflow/stage
 docker compose --env-file .env -f compose.yaml ps
+docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' churchflow-internal
 curl --fail http://127.0.0.1:4000/v1/health
 curl --fail http://127.0.0.1:3000/
 ```
@@ -141,6 +143,8 @@ docker compose --env-file .env -f compose.yaml ps
 docker compose --env-file .env -f compose.yaml logs --tail=120 api web
 docker inspect --format='{{json .State.Health}}' churchflow-stage-api
 docker inspect --format='{{json .State.Health}}' churchflow-stage-web
+docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' churchflow-internal
+docker exec churchflow-postgres pg_isready -U churchflow -d churchflow
 docker image ls 'ghcr.io/*/churchflow-*'
 ```
 

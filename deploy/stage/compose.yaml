@@ -13,8 +13,6 @@ x-common: &common
     options:
       max-size: 10m
       max-file: '5'
-  extra_hosts:
-    - host.docker.internal:host-gateway
 
 services:
   api:
@@ -22,10 +20,12 @@ services:
     container_name: churchflow-stage-api
     image: ${API_IMAGE:?Set API_IMAGE to an immutable API image tag}
     env_file:
-      - .env
+      - api.env
     environment:
       NODE_ENV: production
       PORT: '4000'
+    networks:
+      - churchflow-internal
     ports:
       - 127.0.0.1:4000:4000
     healthcheck:
@@ -41,12 +41,17 @@ services:
     <<: *common
     container_name: churchflow-stage-web
     image: ${WEB_IMAGE:?Set WEB_IMAGE to an immutable Web image tag}
-    env_file:
-      - .env
     environment:
+      API_INTERNAL_URL: ${API_INTERNAL_URL:?Set API_INTERNAL_URL}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      JWT_ACCESS_PUBLIC_KEY: ${JWT_ACCESS_PUBLIC_KEY:?Set JWT_ACCESS_PUBLIC_KEY}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:?Set NEXT_PUBLIC_WEB_URL}
       NODE_ENV: production
       PORT: '3000'
       HOSTNAME: 0.0.0.0
+    networks:
+      - churchflow-internal
     ports:
       - 127.0.0.1:3000:3000
     depends_on:
@@ -60,3 +65,8 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+networks:
+  churchflow-internal:
+    external: true
+    name: churchflow-internal

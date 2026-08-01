@@ -17,6 +17,7 @@
     "admin:bootstrap": "pnpm --filter @churchflow/api admin:bootstrap",
     "db:generate": "pnpm --filter @churchflow/db db:generate",
     "db:migrate": "pnpm --filter @churchflow/db db:migrate",
+    "db:migrate:deploy": "pnpm --filter @churchflow/db db:migrate:deploy",
     "db:studio": "pnpm --filter @churchflow/db db:studio"
   },
   "devDependencies": {
