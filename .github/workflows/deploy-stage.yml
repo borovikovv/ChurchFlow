@@ -1,0 +1,223 @@
+name: Deploy stage
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Immutable image tag to deploy, usually a commit SHA built by build-images.yml
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-stage
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy stage to Hetzner
+    runs-on: ubuntu-latest
+    environment: stage
+    env:
+      DEPLOY_DIR: /opt/churchflow/stage
+      API_IMAGE: ghcr.io/${{ github.repository_owner }}/churchflow-api:${{ inputs.image_tag }}
+      MIGRATOR_IMAGE: ghcr.io/${{ github.repository_owner }}/churchflow-api-migrator:${{ inputs.image_tag }}
+      WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/churchflow-web:${{ inputs.image_tag }}
+      GHCR_USERNAME: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.STAGE_GHCR_TOKEN || github.token }}
+    steps:
+      - name: Check out deployment files
+        uses: actions/checkout@v4
+
+      - name: Validate selected tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.image_tag }}" == "latest" ]]; then
+            echo "Refusing to deploy mutable tag: latest"
+            exit 1
+          fi
+          if [[ -z "${{ inputs.image_tag }}" ]]; then
+            echo "image_tag is required"
+            exit 1
+          fi
+
+      - name: Log in to GHCR for image verification
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ env.GHCR_USERNAME }}
+          password: ${{ env.GHCR_TOKEN }}
+
+      - name: Verify images exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          for image in "$API_IMAGE" "$MIGRATOR_IMAGE" "$WEB_IMAGE"; do
+            docker buildx imagetools inspect "$image" >/dev/null
+          done
+
+      - name: Prepare SSH key
+        shell: bash
+        env:
+          STAGE_SSH_PRIVATE_KEY: ${{ secrets.STAGE_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$STAGE_SSH_PRIVATE_KEY" > ~/.ssh/churchflow_stage
+          chmod 600 ~/.ssh/churchflow_stage
+
+      - name: Render stage environment file
+        shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.STAGE_DATABASE_URL }}
+          WEB_APP_URL: ${{ vars.WEB_APP_URL }}
+          COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+          PLATFORM_ADMIN_EMAIL: ${{ vars.PLATFORM_ADMIN_EMAIL }}
+          TELEGRAM_CLIENT_ID: ${{ secrets.TELEGRAM_CLIENT_ID }}
+          TELEGRAM_CLIENT_SECRET: ${{ secrets.TELEGRAM_CLIENT_SECRET }}
+          TELEGRAM_REDIRECT_URI: ${{ vars.TELEGRAM_REDIRECT_URI }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_BOT_USERNAME: ${{ vars.TELEGRAM_BOT_USERNAME }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+          TELEGRAM_WEBHOOK_URL: ${{ vars.TELEGRAM_WEBHOOK_URL }}
+          EMAIL_PROVIDER: ${{ vars.EMAIL_PROVIDER }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          JWT_ACCESS_PUBLIC_KEY: ${{ secrets.JWT_ACCESS_PUBLIC_KEY }}
+          JWT_ACCESS_PRIVATE_KEY: ${{ secrets.JWT_ACCESS_PRIVATE_KEY }}
+          JWT_REFRESH_PUBLIC_KEY: ${{ secrets.JWT_REFRESH_PUBLIC_KEY }}
+          JWT_REFRESH_PRIVATE_KEY: ${{ secrets.JWT_REFRESH_PRIVATE_KEY }}
+          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+          S3_REGION: ${{ vars.S3_REGION }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          NEXT_PUBLIC_WEB_URL: ${{ vars.NEXT_PUBLIC_WEB_URL }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          API_INTERNAL_URL: ${{ vars.API_INTERNAL_URL }}
+        run: |
+          set -euo pipefail
+          umask 077
+          env_file="$(mktemp)"
+          append_env() {
+            local key="$1"
+            local value="${!key-}"
+            value="${value//\\/\\\\}"
+            value="${value//$'\n'/\\n}"
+            value="${value//\"/\\\"}"
+            printf '%s="%s"\n' "$key" "$value" >> "$env_file"
+          }
+
+          for key in \
+            API_IMAGE MIGRATOR_IMAGE WEB_IMAGE \
+            DATABASE_URL WEB_APP_URL COOKIE_DOMAIN PLATFORM_ADMIN_EMAIL \
+            TELEGRAM_CLIENT_ID TELEGRAM_CLIENT_SECRET TELEGRAM_REDIRECT_URI \
+            TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME TELEGRAM_WEBHOOK_SECRET TELEGRAM_WEBHOOK_URL \
+            EMAIL_PROVIDER EMAIL_FROM RESEND_API_KEY SMTP_HOST SMTP_PORT \
+            JWT_ACCESS_PUBLIC_KEY JWT_ACCESS_PRIVATE_KEY JWT_REFRESH_PUBLIC_KEY JWT_REFRESH_PRIVATE_KEY \
+            S3_ENDPOINT S3_REGION S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY \
+            NEXT_PUBLIC_WEB_URL NEXT_PUBLIC_API_URL API_INTERNAL_URL; do
+            append_env "$key"
+          done
+
+          echo "env_file=$env_file" >> "$GITHUB_ENV"
+
+      - name: Create remote deployment directory
+        shell: bash
+        env:
+          STAGE_SSH_HOST: ${{ secrets.STAGE_SSH_HOST }}
+          STAGE_SSH_USER: ${{ secrets.STAGE_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/churchflow_stage -o StrictHostKeyChecking=accept-new \
+            "$STAGE_SSH_USER@$STAGE_SSH_HOST" \
+            "install -d -m 700 '$DEPLOY_DIR'"
+
+      - name: Upload deployment files
+        shell: bash
+        env:
+          STAGE_SSH_HOST: ${{ secrets.STAGE_SSH_HOST }}
+          STAGE_SSH_USER: ${{ secrets.STAGE_SSH_USER }}
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/churchflow_stage -o StrictHostKeyChecking=accept-new \
+            deploy/stage/compose.yaml \
+            "$STAGE_SSH_USER@$STAGE_SSH_HOST:$DEPLOY_DIR/compose.yaml"
+          scp -i ~/.ssh/churchflow_stage -o StrictHostKeyChecking=accept-new \
+            "$env_file" \
+            "$STAGE_SSH_USER@$STAGE_SSH_HOST:$DEPLOY_DIR/.env"
+          ghcr_token_file="$(mktemp)"
+          chmod 600 "$ghcr_token_file"
+          printf '%s' "$GHCR_TOKEN" > "$ghcr_token_file"
+          scp -i ~/.ssh/churchflow_stage -o StrictHostKeyChecking=accept-new \
+            "$ghcr_token_file" \
+            "$STAGE_SSH_USER@$STAGE_SSH_HOST:$DEPLOY_DIR/.ghcr-token"
+
+      - name: Deploy over SSH
+        shell: bash
+        env:
+          STAGE_SSH_HOST: ${{ secrets.STAGE_SSH_HOST }}
+          STAGE_SSH_USER: ${{ secrets.STAGE_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/churchflow_stage -o StrictHostKeyChecking=accept-new \
+            "$STAGE_SSH_USER@$STAGE_SSH_HOST" \
+            "DEPLOY_DIR='$DEPLOY_DIR' GHCR_USERNAME='$GHCR_USERNAME' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_DIR"
+          docker_config="$(mktemp -d)"
+          trap 'rm -f .ghcr-token; rm -rf "$docker_config"' EXIT
+          export DOCKER_CONFIG="$docker_config"
+          chmod 600 .env
+          chmod 600 .ghcr-token
+
+          docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin < .ghcr-token >/dev/null
+
+          docker compose --env-file .env -f compose.yaml config >/dev/null
+          docker compose --env-file .env -f compose.yaml pull
+          docker pull "$MIGRATOR_IMAGE" >/dev/null
+
+          docker run --rm \
+            --init \
+            --add-host host.docker.internal:host-gateway \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --env-file .env \
+            "$MIGRATOR_IMAGE"
+
+          docker compose --env-file .env -f compose.yaml up -d
+
+          wait_for_healthy() {
+            local container="$1"
+            local deadline=$((SECONDS + 180))
+
+            while (( SECONDS < deadline )); do
+              status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true)"
+              if [[ "$status" == "healthy" ]]; then
+                return 0
+              fi
+              if [[ "$status" == "unhealthy" || "$status" == "exited" || "$status" == "dead" ]]; then
+                return 1
+              fi
+              sleep 5
+            done
+
+            return 1
+          }
+
+          if ! wait_for_healthy churchflow-stage-api || ! wait_for_healthy churchflow-stage-web; then
+            docker compose --env-file .env -f compose.yaml ps
+            docker compose --env-file .env -f compose.yaml logs --tail=120 api web
+            exit 1
+          fi
+
+          curl --fail --silent --show-error http://127.0.0.1:4000/v1/health >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:3000/ >/dev/null
+          docker compose --env-file .env -f compose.yaml ps
+          REMOTE
