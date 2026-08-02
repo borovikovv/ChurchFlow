@@ -23,18 +23,18 @@ FROM dependencies AS builder
 ARG NEXT_PUBLIC_WEB_URL
 ARG NEXT_PUBLIC_API_URL
 ARG API_INTERNAL_URL
+ARG JWT_ACCESS_PUBLIC_KEY
 
 ENV NODE_ENV=production
 ENV NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV API_INTERNAL_URL=$API_INTERNAL_URL
+ENV JWT_ACCESS_PUBLIC_KEY=$JWT_ACCESS_PUBLIC_KEY
 
 COPY apps/web apps/web
 COPY packages packages
 
-RUN --mount=type=secret,id=jwt_access_public_key \
-  JWT_ACCESS_PUBLIC_KEY="$(cat /run/secrets/jwt_access_public_key)" \
-  pnpm --filter @churchflow/web... build
+RUN pnpm --filter @churchflow/web... build
 
 FROM node:22-bookworm-slim AS runner
 

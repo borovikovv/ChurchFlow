@@ -54,7 +54,8 @@ jobs:
     name: Build ${{ matrix.application }}
     needs: resolve
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment:
+      name: ${{ inputs.environment }}
     strategy:
       fail-fast: false
       matrix:
@@ -96,6 +97,11 @@ jobs:
             local value="${!key-}"
             if [[ -z "$value" ]]; then
               echo "$key is required for the Web image build."
+              invalid=1
+              return
+            fi
+            if [[ "$value" =~ [[:space:]] ]]; then
+              echo "$key must be a valid URL without whitespace."
               invalid=1
               return
             fi
@@ -170,8 +176,6 @@ jobs:
       - name: Build and publish Web image
         if: matrix.application == 'web'
         uses: docker/build-push-action@v6
-        env:
-          JWT_ACCESS_PUBLIC_KEY: ${{ secrets.JWT_ACCESS_PUBLIC_KEY }}
         with:
           context: .
           file: apps/web/Dockerfile
@@ -181,7 +185,6 @@ jobs:
             NEXT_PUBLIC_WEB_URL=${{ vars.NEXT_PUBLIC_WEB_URL }}
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
             API_INTERNAL_URL=${{ vars.API_INTERNAL_URL }}
-          secret-envs: |
-            jwt_access_public_key=JWT_ACCESS_PUBLIC_KEY
+            JWT_ACCESS_PUBLIC_KEY=${{ secrets.JWT_ACCESS_PUBLIC_KEY }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
