@@ -15,7 +15,7 @@ import {
   type JsonWebKey,
 } from 'node:crypto';
 import { z } from 'zod';
-import { jwtPayloadSchema } from '@churchflow/shared';
+import { jwtPayloadSchema, normalizePem } from '@churchflow/shared';
 import { AuthRepository } from './auth.repository';
 import type { providerLoginSchema } from './dto/provider-login.dto';
 
@@ -810,16 +810,12 @@ export class AuthService {
     });
   }
 
-  private normalizePem(value: string): string {
-    return value.replace(/\\n/g, '\n');
-  }
-
   private get privateKey(): string {
-    return this.normalizePem(this.config.getOrThrow<string>('JWT_ACCESS_PRIVATE_KEY'));
+    return normalizePem(this.config.getOrThrow<string>('JWT_ACCESS_PRIVATE_KEY'));
   }
 
   private get publicKey(): string {
-    return this.normalizePem(this.config.getOrThrow<string>('JWT_ACCESS_PUBLIC_KEY'));
+    return normalizePem(this.config.getOrThrow<string>('JWT_ACCESS_PUBLIC_KEY'));
   }
 
   private get telegramClientId(): string {

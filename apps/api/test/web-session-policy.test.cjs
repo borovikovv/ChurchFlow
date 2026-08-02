@@ -36,6 +36,13 @@ function signedAccessToken(exp) {
   return `${header}.${payload}.${signature.toString('base64url')}`;
 }
 
+function tamperedSignatureToken(token) {
+  const [header, payload, signature] = token.split('.');
+  const replacement = signature.startsWith('A') ? 'B' : 'A';
+
+  return `${header}.${payload}.${replacement}${signature.slice(1)}`;
+}
+
 test('route policy explicitly allows public pages and defaults new pages to protected', () => {
   for (const pathname of [
     '/',
@@ -83,7 +90,7 @@ test('route policy excludes Next internals, API paths and static assets', () => 
 
 test('session helpers verify signature and safely replace the current request cookie', async () => {
   const validToken = signedAccessToken(1_100);
-  const modifiedToken = `${validToken.slice(0, -1)}${validToken.endsWith('a') ? 'b' : 'a'}`;
+  const modifiedToken = tamperedSignatureToken(validToken);
 
   assert.equal(await sessionHelpers.isAccessTokenFresh(validToken, webPublicKeyPem, 1_000), true);
   assert.equal(
@@ -173,7 +180,7 @@ test('middleware injects refreshed access into current request and response cook
 
   try {
     const validToken = signedAccessToken(Math.floor(Date.now() / 1000) + 900);
-    const modifiedToken = `${validToken.slice(0, -1)}${validToken.endsWith('a') ? 'b' : 'a'}`;
+    const modifiedToken = tamperedSignatureToken(validToken);
     const response = await middlewareModule.middleware(
       requestFor('https://churchflow.test/dashboard/org', {
         churchflow_access: modifiedToken,

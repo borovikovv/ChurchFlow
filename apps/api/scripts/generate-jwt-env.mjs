@@ -18,15 +18,17 @@ function generateRsaPair() {
 }
 
 function envValue(value) {
-  return JSON.stringify(value.replace(/\n/g, '\\n'));
+  return value.replace(/\n/g, '\\n');
 }
 
 const access = generateRsaPair();
 const refresh = generateRsaPair();
 
-console.log([
-  `JWT_ACCESS_PUBLIC_KEY=${envValue(access.publicKey)}`,
-  `JWT_ACCESS_PRIVATE_KEY=${envValue(access.privateKey)}`,
-  `JWT_REFRESH_PUBLIC_KEY=${envValue(refresh.publicKey)}`,
-  `JWT_REFRESH_PRIVATE_KEY=${envValue(refresh.privateKey)}`,
-].join('\n'));
+console.log(
+  [
+    `JWT_ACCESS_PUBLIC_KEY=${envValue(access.publicKey)}`,
+    `JWT_ACCESS_PRIVATE_KEY=${envValue(access.privateKey)}`,
+    `JWT_REFRESH_PUBLIC_KEY=${envValue(refresh.publicKey)}`,
+    `JWT_REFRESH_PRIVATE_KEY=${envValue(refresh.privateKey)}`,
+  ].join('\n'),
+);

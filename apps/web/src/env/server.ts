@@ -1,6 +1,6 @@
-import { webEnvSchema } from '@churchflow/shared';
+import { parseEnv, webEnvSchema } from '../../../../packages/shared/src/env';
 
-export const serverEnv = webEnvSchema.parse({
+export const serverEnv = parseEnv('Web runtime', webEnvSchema, {
   NODE_ENV: process.env['NODE_ENV'],
   NEXT_PUBLIC_WEB_URL: process.env['NEXT_PUBLIC_WEB_URL'],
   NEXT_PUBLIC_API_URL: process.env['NEXT_PUBLIC_API_URL'],

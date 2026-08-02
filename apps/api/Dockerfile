@@ -26,6 +26,8 @@ RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS builder
 
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public"
+
 COPY apps/api apps/api
 COPY packages packages
 
