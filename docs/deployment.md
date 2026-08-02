@@ -1,82 +1,130 @@
 # Deployment
 
-## Services
+ChurchFlow deploys to a single Hetzner host with Docker Compose. Caddy runs on the host as a systemd service and terminates TLS outside Docker.
 
-- Deploy `apps/web` as a Next.js application.
-- Deploy `apps/api` as a Node.js service.
-- Use managed PostgreSQL. Apply the RLS foundation when testing or enabling database-level tenant policies.
-- Use S3-compatible object storage such as Cloudflare R2 or AWS S3.
+The deployment flow is intentionally manual:
 
-## Required Secrets
+1. Run `Build deployment images`.
+2. Copy the exact commit SHA from the workflow summary.
+3. Run `Deploy` with the target GitHub Environment and that SHA.
 
-- API: `DATABASE_URL`, `WEB_APP_URL`, Telegram OIDC credentials, email credentials, and S3/R2 credentials
-- Web build/runtime: `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, and `API_INTERNAL_URL`
-- JWT access key pair
-- JWT refresh key pair env vars are currently required by config, but refresh tokens are opaque random strings stored as hashes rather than signed JWTs
-- S3/R2 endpoint, bucket, region, access key, and secret
-- Cookie domain when Web and API need a shared parent-domain cookie
+Images are always deployed by immutable commit SHA tags. Do not deploy `latest`.
 
-## Production Checklist
+## Runtime Shape
 
-- Replace all placeholder keys.
-- Enforce TLS.
-- Configure secure, httpOnly, SameSite cookies.
-- Apply generated Prisma migrations.
-- Apply RLS SQL and verify policies with least-privileged DB roles before relying on database-level enforcement.
-- Configure structured logging and request ids.
-- Configure rate limits for auth and public contact flows.
-- Create the first platform admin with `pnpm admin:bootstrap` from a protected interactive shell. The generated claim is single-use, short-lived, Telegram-verified, and disabled after the first active `SUPER_ADMIN` exists. The CLI refuses CI execution to avoid leaking the URL into job logs.
-- Build Web separately for each environment because `NEXT_PUBLIC_*` values are embedded at build time.
+- `apps/api` runs as `churchflow-<environment>-api` on container port `4000`.
+- `apps/web` runs as `churchflow-<environment>-web` on container port `3000`.
+- `churchflow-api-migrator` is a one-shot container that runs `prisma migrate deploy` before API/Web are updated.
+- PostgreSQL is managed separately and must already run as `churchflow-postgres`.
+- API, Web, migrator, and `churchflow-postgres` share the external Docker network `churchflow-internal`.
+- PostgreSQL is not published by the app Compose file.
 
-See `docs/environment.md` for exact environment ownership and deployment requirements.
+Caddy should proxy to host-local ports:
 
-## Stage Deployment On Hetzner
+| Environment  | Web upstream     | API upstream     |
+| ------------ | ---------------- | ---------------- |
+| `stage`      | `127.0.0.1:3000` | `127.0.0.1:4000` |
+| `production` | `127.0.0.1:3100` | `127.0.0.1:4100` |
 
-Stage is deployed manually from GitHub Actions to a single Hetzner host. The workflow never deploys on push. Caddy runs on the host OS and must proxy these public domains to localhost:
+The Compose file binds only to `127.0.0.1`, so no app container port is exposed directly to the internet.
 
-- `https://stage.mychurchflow.org` -> `127.0.0.1:3000`
-- `https://api-stage.mychurchflow.org` -> `127.0.0.1:4000`
+## Compose Files
 
-PostgreSQL is not managed by the stage Compose project. The existing `churchflow-postgres` container must keep publishing PostgreSQL on `127.0.0.1:5432`. Stage API and migration containers reach PostgreSQL through the external Docker network `churchflow-internal` using the hostname `churchflow-postgres`.
+Repository files:
 
-### One-Time Server Setup
+- `deploy/compose.yaml`
+- `deploy/.env.example`
+- `deploy/api.env.example`
+- `deploy/web.env.example`
 
-Run these once on the Hetzner server as the deployment user:
+The GitHub deployment workflow uploads `deploy/compose.yaml` and renders these runtime files on the server:
+
+- `/opt/churchflow/<environment>/.env`
+- `/opt/churchflow/<environment>/api.env`
+- `/opt/churchflow/<environment>/web.env`
+
+Do not commit real `.env`, `api.env`, or `web.env` files.
+
+## Server Bootstrap
+
+Run once on the Hetzner host as the deployment user:
 
 ```bash
 sudo install -d -m 700 -o "$USER" -g "$USER" /opt/churchflow/stage
+sudo install -d -m 700 -o "$USER" -g "$USER" /opt/churchflow/production
 docker compose version
 docker ps --filter name=churchflow-postgres
 docker network inspect churchflow-internal >/dev/null 2>&1 || docker network create churchflow-internal
 docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' churchflow-internal | grep -Fxq churchflow-postgres || docker network connect churchflow-internal churchflow-postgres
 ```
 
-The deploy workflow also runs the network setup idempotently before migrations. Do not change `/opt/churchflow/postgres`, stop `churchflow-postgres`, publish PostgreSQL on `0.0.0.0`, or prune Docker images as part of stage setup.
+The deploy workflow repeats the network creation and `churchflow-postgres` attachment idempotently before migrations. It does not stop PostgreSQL and does not touch PostgreSQL volumes.
 
-### GitHub Environment `stage`
+To keep the network attachment after the PostgreSQL container is recreated, update `/opt/churchflow/postgres/compose.yaml` to join the same external network:
 
-Create a protected GitHub Environment named `stage`.
+```yaml
+services:
+  postgres:
+    container_name: churchflow-postgres
+    networks:
+      - default
+      - churchflow-internal
 
-Required secrets:
+networks:
+  churchflow-internal:
+    external: true
+    name: churchflow-internal
+```
 
-- `STAGE_SSH_HOST`
-- `STAGE_SSH_USER`
-- `STAGE_SSH_PRIVATE_KEY`
-- `STAGE_GHCR_TOKEN` only when the default workflow token cannot pull GHCR packages from the server
-- `STAGE_DATABASE_URL`, using the external Docker network hostname, for example `postgresql://churchflow:<password>@churchflow-postgres:5432/churchflow?schema=public`
-- `JWT_ACCESS_PUBLIC_KEY`
-- `JWT_ACCESS_PRIVATE_KEY`
-- `JWT_REFRESH_PUBLIC_KEY`
-- `JWT_REFRESH_PRIVATE_KEY`
-- `TELEGRAM_CLIENT_ID`
-- `TELEGRAM_CLIENT_SECRET`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_WEBHOOK_SECRET`
-- `RESEND_API_KEY` when `EMAIL_PROVIDER=resend`
-- `S3_ACCESS_KEY_ID`
-- `S3_SECRET_ACCESS_KEY`
+Keep the existing volume definitions unchanged.
 
-Required variables:
+## Build Images
+
+Run the `Build deployment images` workflow manually.
+
+Inputs:
+
+- `git_ref`: branch, tag, or commit SHA to build.
+- `environment`: `stage` or `production`.
+
+Production builds are restricted to `main` or `v*` tags. The workflow publishes:
+
+- `ghcr.io/<owner>/churchflow-api:<commit-sha>`
+- `ghcr.io/<owner>/churchflow-api-migrator:<commit-sha>`
+- `ghcr.io/<owner>/churchflow-web:<commit-sha>`
+
+The Web image embeds `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, `API_INTERNAL_URL`, and `JWT_ACCESS_PUBLIC_KEY` at `next build` time. Build the Web image separately for each environment.
+
+## Deploy
+
+Run the `Deploy` workflow manually.
+
+Inputs:
+
+- `environment`: `stage` or `production`.
+- `image_tag`: the full 40-character commit SHA from `Build deployment images`.
+
+Production deploys accept only a SHA reachable from `main` or exactly matching a `v*` release tag.
+
+The workflow:
+
+- verifies the API, migrator, and Web images exist in GHCR;
+- uploads the Compose file and generated env files to `/opt/churchflow/<environment>`;
+- logs in to GHCR on the server through stdin;
+- creates `churchflow-internal` if needed;
+- connects `churchflow-postgres` to that network if needed;
+- runs `docker compose run --rm migrator`;
+- stops if migrations fail;
+- runs `docker compose up -d --remove-orphans api web`;
+- waits for container healthchecks;
+- checks `http://127.0.0.1:<api-port>/v1/health` and `http://127.0.0.1:<web-port>/`;
+- prints `docker compose ps`.
+
+## GitHub Environment Variables
+
+Create protected GitHub Environments named `stage` and `production`. Use the same variable names in both; values differ by environment.
+
+Required variables for `stage`:
 
 - `NEXT_PUBLIC_WEB_URL=https://stage.mychurchflow.org`
 - `NEXT_PUBLIC_API_URL=https://api-stage.mychurchflow.org/v1`
@@ -86,66 +134,162 @@ Required variables:
 - `PLATFORM_ADMIN_EMAIL=<admin email>`
 - `TELEGRAM_REDIRECT_URI=https://api-stage.mychurchflow.org/v1/auth/telegram/callback`
 - `TELEGRAM_BOT_USERNAME=<bot username>`
-- `TELEGRAM_WEBHOOK_URL=https://api-stage.mychurchflow.org/v1/telegram/webhook/<webhook secret or route token>`
+- `TELEGRAM_WEBHOOK_URL=https://api-stage.mychurchflow.org/v1/telegram/webhook/<route-token>`
 - `EMAIL_PROVIDER=resend`
 - `EMAIL_FROM=ChurchFlow <no-reply@mychurchflow.org>`
-- `SMTP_HOST=` when not using SMTP
-- `SMTP_PORT=` when not using SMTP
+- `SMTP_HOST=`
+- `SMTP_PORT=`
 - `S3_ENDPOINT=<S3-compatible endpoint URL>`
 - `S3_REGION=auto`
 - `S3_BUCKET=churchflow-stage`
 
-`NEXT_PUBLIC_*` values are embedded into the Next.js image at build time, so build the image with the `stage` environment before deploying it to stage. The web service receives only `NODE_ENV`, `PORT`, `HOSTNAME`, `API_INTERNAL_URL`, `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, `JWT_ACCESS_PUBLIC_KEY`, and `COOKIE_DOMAIN` at runtime. API secrets are written to `/opt/churchflow/stage/api.env` and are not passed to the web service.
+Required variables for `production` use the production domains and ports:
 
-### First Deployment
+- `NEXT_PUBLIC_WEB_URL=https://mychurchflow.org`
+- `NEXT_PUBLIC_API_URL=https://api.mychurchflow.org/v1`
+- `API_INTERNAL_URL=http://churchflow-production-api:4000/v1`
+- `WEB_APP_URL=https://mychurchflow.org`
+- `COOKIE_DOMAIN=.mychurchflow.org`
+- the production equivalents of the remaining variables above.
 
-1. Run the `Build deployment images` workflow.
-2. Use `git_ref=stage`.
-3. Use `environment=stage`.
-4. Copy the resolved commit SHA from the workflow output or image tags.
-5. Run the `Deploy stage` workflow with `image_tag=<40-character-commit-sha>`.
+`API_INTERNAL_URL` is a Docker-network URL used by Next.js server code and rewrites. Do not use `localhost` for it inside containers.
 
-The deployment workflow accepts only full Git commit SHA tags, verifies the API, web, and migrator images exist in GHCR, uploads only `deploy/stage/compose.yaml`, a generated `.env`, and a generated `api.env` to `/opt/churchflow/stage`, logs in to GHCR on the server through stdin, creates `churchflow-internal` if needed, attaches `churchflow-postgres` if needed, runs Prisma migrations with `churchflow-api-migrator:<sha>`, starts the API and web services, and fails if either container does not become healthy.
+## GitHub Environment Secrets
 
-### Repeat Deployment
+Use Environment-scoped secrets with the same names for `stage` and `production`.
 
-Build images for the new commit with the `stage` environment, then run `Deploy stage` with the new commit SHA. There is no automatic deployment after push.
+Required deployment secrets:
 
-### Health Checks
+- `SSH_HOST`
+- `SSH_USER`
+- `SSH_PRIVATE_KEY`
+- `GHCR_TOKEN` when the default workflow token cannot pull GHCR packages from the server
+
+Required API/runtime secrets:
+
+- `DATABASE_URL`, using the Docker network hostname, for example `postgresql://churchflow:<password>@churchflow-postgres:5432/churchflow?schema=public`
+- `JWT_ACCESS_PUBLIC_KEY`
+- `JWT_ACCESS_PRIVATE_KEY`
+- `JWT_REFRESH_PUBLIC_KEY`
+- `JWT_REFRESH_PRIVATE_KEY`
+- `TELEGRAM_CLIENT_ID`
+- `TELEGRAM_CLIENT_SECRET`
+- `S3_ACCESS_KEY_ID`
+- `S3_SECRET_ACCESS_KEY`
+
+Optional Telegram bot secrets, required when bot notifications or webhooks are enabled:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+
+Required when `EMAIL_PROVIDER=resend`:
+
+- `RESEND_API_KEY`
+
+Required when `EMAIL_PROVIDER=smtp`:
+
+- set variables `SMTP_HOST` and `SMTP_PORT`.
+
+JWT PEM secrets may be stored with real newlines, escaped `\n`, or double-escaped `\\n`; the shared env schema normalizes all supported forms. The workflow writes PEM values into env files with escaped newlines so Compose does not need multiline env syntax.
+
+Do not pass private JWT keys, database credentials, Telegram credentials, Resend API keys, or S3/R2 credentials to Docker builds. Only runtime env files receive them.
+
+## First Stage Deployment
+
+1. Confirm Caddy proxies:
+   - `stage.mychurchflow.org` -> `127.0.0.1:3000`
+   - `api-stage.mychurchflow.org` -> `127.0.0.1:4000`
+2. Confirm `churchflow-postgres` is running:
+   ```bash
+   docker ps --filter name=churchflow-postgres
+   ```
+3. Confirm the shared network:
+   ```bash
+   docker network inspect churchflow-internal >/dev/null 2>&1 || docker network create churchflow-internal
+   docker network connect churchflow-internal churchflow-postgres || true
+   ```
+   The second command may report that the endpoint already exists; that is fine.
+4. Run `Build deployment images` with:
+   - `git_ref=stage`
+   - `environment=stage`
+5. Copy the commit SHA from the build summary.
+6. Run `Deploy` with:
+   - `environment=stage`
+   - `image_tag=<commit-sha>`
+7. Verify from the server:
+   ```bash
+   cd /opt/churchflow/stage
+   docker compose --env-file .env -f compose.yaml ps
+   curl --fail http://127.0.0.1:4000/v1/health
+   curl --fail http://127.0.0.1:3000/
+   ```
+8. Verify externally:
+   ```bash
+   curl --fail https://api-stage.mychurchflow.org/v1/health
+   curl --fail https://stage.mychurchflow.org/
+   ```
+
+## Production Deployment
+
+1. Build from `main` or a `v*` release tag with `environment=production`.
+2. Run `Deploy` with `environment=production` and the resulting SHA.
+3. Verify Caddy proxies:
+   - production Web -> `127.0.0.1:3100`
+   - production API -> `127.0.0.1:4100`
+
+Stage and production can share `churchflow-internal` because their service aliases are environment-specific: `churchflow-stage-api` and `churchflow-production-api`.
+
+## Health Checks
+
+API healthcheck:
+
+```bash
+curl --fail http://127.0.0.1:4000/v1/health
+```
+
+Web healthcheck:
+
+```bash
+curl --fail http://127.0.0.1:3000/
+```
+
+Use ports `4100` and `3100` for production.
+
+The Next.js standalone runner is configured with `HOSTNAME=0.0.0.0` and `PORT=3000`. The Nest API listens on `PORT=4000`; Nest binds to all interfaces unless a host is explicitly supplied, and this app does not supply one.
+
+## Rollback
+
+Run `Deploy` again with the previous known-good commit SHA. The workflow pulls that immutable image set and restarts API/Web after running idempotent Prisma deploy migrations.
+
+Rollback cannot undo a migration that has already changed the database. If a migration is not backward-compatible, restore from a database backup or deploy a forward-fix migration.
+
+## Failed Migration Recovery
+
+If the migrator fails, the workflow stops before `docker compose up -d`. The currently running API/Web containers remain on the previous image tag.
 
 On the server:
 
 ```bash
-cd /opt/churchflow/stage
+cd /opt/churchflow/<environment>
 docker compose --env-file .env -f compose.yaml ps
-docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' churchflow-internal
-curl --fail http://127.0.0.1:4000/v1/health
-curl --fail http://127.0.0.1:3000/
+docker compose --env-file .env -f compose.yaml --profile migrations run --rm --no-deps migrator
+docker exec churchflow-postgres pg_isready -U churchflow -d churchflow
 ```
 
-From outside the server:
+Inspect the failed migration and fix it with a new commit. Do not manually edit Prisma migration history unless you have a tested recovery plan and a database backup.
+
+## Safe Diagnostics
 
 ```bash
-curl --fail https://api-stage.mychurchflow.org/v1/health
-curl --fail https://stage.mychurchflow.org/
-```
-
-### Rollback
-
-Run `Deploy stage` again with the previous known-good image tag. The workflow reuses the same Compose file, pulls that immutable API/web/migrator image set, runs idempotent Prisma deploy migrations, and restarts the two stage services.
-
-### Safe Diagnostics
-
-```bash
-cd /opt/churchflow/stage
+cd /opt/churchflow/<environment>
 docker compose --env-file .env -f compose.yaml config
 docker compose --env-file .env -f compose.yaml ps
 docker compose --env-file .env -f compose.yaml logs --tail=120 api web
-docker inspect --format='{{json .State.Health}}' churchflow-stage-api
-docker inspect --format='{{json .State.Health}}' churchflow-stage-web
+docker inspect --format='{{json .State.Health}}' churchflow-<environment>-api
+docker inspect --format='{{json .State.Health}}' churchflow-<environment>-web
 docker network inspect --format '{{range .Containers}}{{.Name}}{{"\n"}}{{end}}' churchflow-internal
 docker exec churchflow-postgres pg_isready -U churchflow -d churchflow
 docker image ls 'ghcr.io/*/churchflow-*'
 ```
 
-Avoid `docker system prune`, deleting PostgreSQL volumes, stopping `churchflow-postgres`, or modifying `/opt/churchflow/postgres` during stage diagnostics.
+Avoid `docker system prune`, deleting PostgreSQL volumes, stopping `churchflow-postgres`, publishing PostgreSQL on `0.0.0.0`, or changing Caddy during app deployment diagnostics.

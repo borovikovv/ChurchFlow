@@ -188,3 +188,22 @@ jobs:
             JWT_ACCESS_PUBLIC_KEY=${{ secrets.JWT_ACCESS_PUBLIC_KEY }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+
+  summary:
+    name: Build summary
+    needs:
+      - resolve
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish image tags
+        shell: bash
+        run: |
+          {
+            echo "### Deployment image tags"
+            echo ""
+            echo "- Commit SHA: \`${{ needs.resolve.outputs.commit_sha }}\`"
+            echo "- API: \`ghcr.io/${{ github.repository_owner }}/churchflow-api:${{ needs.resolve.outputs.commit_sha }}\`"
+            echo "- API migrator: \`ghcr.io/${{ github.repository_owner }}/churchflow-api-migrator:${{ needs.resolve.outputs.commit_sha }}\`"
+            echo "- Web: \`ghcr.io/${{ github.repository_owner }}/churchflow-web:${{ needs.resolve.outputs.commit_sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
