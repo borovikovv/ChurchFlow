@@ -60,8 +60,11 @@ WORKDIR /app
 COPY packages/db/prisma packages/db/prisma
 COPY packages/db/prisma.config.ts packages/db/prisma.config.ts
 
-RUN pnpm --filter @churchflow/db db:generate \
-  && pnpm --filter @churchflow/db exec node -e "const db = require('@prisma/client/default'); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');"
+RUN set -eux; \
+  pnpm --filter @churchflow/db db:generate; \
+  generated_client="$(find node_modules/.pnpm -path '*/node_modules/.prisma/client/default.js' -print -quit)"; \
+  test -n "$generated_client"; \
+  node -e "const db = require(process.argv[1]); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');" "$generated_client"
 
 RUN groupadd --system --gid 1001 churchflow \
   && useradd --system --uid 1001 --gid churchflow churchflow
