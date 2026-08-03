@@ -1,0 +1,89 @@
+name: churchflow-${DEPLOY_ENV:?Set DEPLOY_ENV}
+
+x-common: &common
+  init: true
+  stop_grace_period: 30s
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '5'
+
+services:
+  migrator:
+    <<: *common
+    image: ${MIGRATOR_IMAGE:?Set MIGRATOR_IMAGE to an immutable migrator image tag}
+    env_file:
+      - api.env
+    environment:
+      NODE_ENV: production
+    networks:
+      app:
+        aliases:
+          - ${MIGRATOR_NETWORK_ALIAS:?Set MIGRATOR_NETWORK_ALIAS}
+    restart: 'no'
+    profiles:
+      - migrations
+
+  api:
+    <<: *common
+    container_name: ${API_CONTAINER_NAME:?Set API_CONTAINER_NAME}
+    image: ${API_IMAGE:?Set API_IMAGE to an immutable API image tag}
+    env_file:
+      - api.env
+    environment:
+      NODE_ENV: production
+      PORT: '4000'
+    networks:
+      app:
+        aliases:
+          - ${API_NETWORK_ALIAS:?Set API_NETWORK_ALIAS}
+    ports:
+      - ${BIND_ADDRESS:-127.0.0.1}:${API_HOST_PORT:?Set API_HOST_PORT}:4000
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'node -e "fetch(''http://127.0.0.1:4000/v1/health'').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"'
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  web:
+    <<: *common
+    container_name: ${WEB_CONTAINER_NAME:?Set WEB_CONTAINER_NAME}
+    image: ${WEB_IMAGE:?Set WEB_IMAGE to an immutable Web image tag}
+    env_file:
+      - web.env
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      HOSTNAME: 0.0.0.0
+    networks:
+      app:
+        aliases:
+          - ${WEB_NETWORK_ALIAS:?Set WEB_NETWORK_ALIAS}
+    ports:
+      - ${BIND_ADDRESS:-127.0.0.1}:${WEB_HOST_PORT:?Set WEB_HOST_PORT}:3000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'node -e "fetch(''http://127.0.0.1:3000/'').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"'
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+networks:
+  app:
+    external: true
+    name: ${INTERNAL_NETWORK:-churchflow-internal}

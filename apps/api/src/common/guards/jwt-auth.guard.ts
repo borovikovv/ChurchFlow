@@ -2,7 +2,12 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { ConfigService } from '@nestjs/config';
 import { verify } from 'node:crypto';
 import type { Request } from 'express';
-import { AUTH_COOKIE_NAMES, jwtPayloadSchema, type JwtPayload } from '@churchflow/shared';
+import {
+  AUTH_COOKIE_NAMES,
+  jwtPayloadSchema,
+  normalizePem,
+  type JwtPayload,
+} from '@churchflow/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface AuthenticatedRequest extends Request {
@@ -58,15 +63,13 @@ export class JwtAuthGuard implements CanActivate {
       return {};
     }
 
-    return Object.fromEntries(
-      cookieHeader
-        .split(';')
-        .map((cookie) => {
-          const [name, ...value] = cookie.trim().split('=');
-          return [name, decodeURIComponent(value.join('='))];
-        })
-        .filter(([name]) => Boolean(name)),
-    );
+    return cookieHeader.split(';').reduce<Record<string, string>>((cookies, cookie) => {
+      const [name, ...value] = cookie.trim().split('=');
+      if (name) {
+        cookies[name] = decodeURIComponent(value.join('='));
+      }
+      return cookies;
+    }, {});
   }
 
   private verifyAccessToken(token: string): JwtPayload {
@@ -107,11 +110,7 @@ export class JwtAuthGuard implements CanActivate {
     return payload.data;
   }
 
-  private normalizePem(value: string): string {
-    return value.replace(/\\n/g, '\n');
-  }
-
   private get publicKey(): string {
-    return this.normalizePem(this.config.getOrThrow<string>('JWT_ACCESS_PUBLIC_KEY'));
+    return normalizePem(this.config.getOrThrow<string>('JWT_ACCESS_PUBLIC_KEY'));
   }
 }

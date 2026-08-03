@@ -2,9 +2,9 @@ import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { webEnvSchema } from '@churchflow/shared';
+import { parseEnv, webEnvSchema } from '@churchflow/shared';
 
-const env = webEnvSchema.parse({
+const env = parseEnv('Web build', webEnvSchema, {
   NODE_ENV: process.env['NODE_ENV'],
   NEXT_PUBLIC_WEB_URL: process.env['NEXT_PUBLIC_WEB_URL'],
   NEXT_PUBLIC_API_URL: process.env['NEXT_PUBLIC_API_URL'],

@@ -1,3 +1,5 @@
+import { normalizePem } from '@churchflow/shared';
+
 export async function isAccessTokenFresh(
   token: string,
   publicKeyPem: string | undefined,
@@ -103,8 +105,7 @@ function canonicalBase64Url(bytes: Uint8Array): string {
 }
 
 function pemPublicKeyBytes(value: string): Uint8Array<ArrayBuffer> {
-  const base64 = value
-    .replace(/\\n/g, '\n')
+  const base64 = normalizePem(value)
     .replace('-----BEGIN PUBLIC KEY-----', '')
     .replace('-----END PUBLIC KEY-----', '')
     .replace(/\s/g, '');

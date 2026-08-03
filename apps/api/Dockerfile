@@ -5,7 +5,12 @@ FROM node:22-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
-RUN corepack enable
+RUN corepack enable \
+  && corepack prepare pnpm@9.15.0 --activate
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -21,6 +26,8 @@ RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS builder
 
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public"
+
 COPY apps/api apps/api
 COPY packages packages
 
@@ -30,15 +37,21 @@ RUN pnpm --filter @churchflow/api --prod deploy /runtime/api
 FROM dependencies AS migrator
 
 ENV NODE_ENV=production
+ENV HOME=/tmp
 
 WORKDIR /app
 
 COPY packages/db/prisma packages/db/prisma
 COPY packages/db/prisma.config.ts packages/db/prisma.config.ts
 
+RUN groupadd --system --gid 1001 churchflow \
+  && useradd --system --uid 1001 --gid churchflow churchflow
+
+USER churchflow
+
 WORKDIR /app/packages/db
 
-CMD ["pnpm", "db:migrate:deploy"]
+CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]
 
 FROM node:22-bookworm-slim AS runner
 

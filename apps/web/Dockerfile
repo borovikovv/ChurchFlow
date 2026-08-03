@@ -56,4 +56,3 @@ USER churchflow
 EXPOSE 3000
 
 CMD ["node", "apps/web/server.js"]
-

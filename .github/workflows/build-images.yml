@@ -54,12 +54,14 @@ jobs:
     name: Build ${{ matrix.application }}
     needs: resolve
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment:
+      name: ${{ inputs.environment }}
     strategy:
       fail-fast: false
       matrix:
         application:
           - api
+          - api-migrator
           - web
     steps:
       - name: Check out exact commit
@@ -77,6 +79,77 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Validate Web build environment
+        if: matrix.application == 'web'
+        shell: bash
+        env:
+          NEXT_PUBLIC_WEB_URL: ${{ vars.NEXT_PUBLIC_WEB_URL }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          API_INTERNAL_URL: ${{ vars.API_INTERNAL_URL }}
+          JWT_ACCESS_PUBLIC_KEY: ${{ secrets.JWT_ACCESS_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+
+          invalid=0
+
+          require_url() {
+            local key="$1"
+            local value="${!key-}"
+            if [[ -z "$value" ]]; then
+              echo "$key is required for the Web image build."
+              invalid=1
+              return
+            fi
+            if [[ "$value" =~ [[:space:]] ]]; then
+              echo "$key must be a valid URL without whitespace."
+              invalid=1
+              return
+            fi
+            if ! KEY="$key" VALUE="$value" node -e "new URL(process.env.VALUE)" >/dev/null 2>&1; then
+              echo "$key must be a valid URL."
+              invalid=1
+            fi
+          }
+
+          require_url NEXT_PUBLIC_WEB_URL
+          require_url NEXT_PUBLIC_API_URL
+          require_url API_INTERNAL_URL
+
+          if ! node <<'NODE'; then
+          const { createPublicKey } = require('node:crypto');
+
+          function normalizePem(value) {
+            let normalized = value.trim();
+            const quote = normalized[0];
+            if ((quote === '"' || quote === "'") && normalized.endsWith(quote)) {
+              normalized = normalized.slice(1, -1).trim();
+            }
+            normalized = normalized.replace(/\\+n/g, '\n').replace(/\r\n?/g, '\n').trim();
+            return `${normalized}\n`;
+          }
+
+          const value = process.env.JWT_ACCESS_PUBLIC_KEY || '';
+          if (!value) {
+            console.error('JWT_ACCESS_PUBLIC_KEY is required for the Web image build.');
+            process.exit(1);
+          }
+
+          try {
+            const normalized = normalizePem(value);
+            if (!normalized.includes('-----BEGIN PUBLIC KEY-----')) {
+              throw new Error('missing public key header');
+            }
+            createPublicKey(normalized);
+          } catch {
+            console.error('JWT_ACCESS_PUBLIC_KEY must be an importable PEM public key.');
+            process.exit(1);
+          }
+          NODE
+            invalid=1
+          fi
+
+          exit "$invalid"
+
       - name: Build and publish API image
         if: matrix.application == 'api'
         uses: docker/build-push-action@v6
@@ -87,6 +160,18 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/churchflow-api:${{ needs.resolve.outputs.commit_sha }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
+
+      - name: Build and publish API migrator image
+        if: matrix.application == 'api-migrator'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          target: migrator
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/churchflow-api-migrator:${{ needs.resolve.outputs.commit_sha }}
+          cache-from: type=gha,scope=api-migrator
+          cache-to: type=gha,mode=max,scope=api-migrator
 
       - name: Build and publish Web image
         if: matrix.application == 'web'
@@ -103,3 +188,22 @@ jobs:
             JWT_ACCESS_PUBLIC_KEY=${{ secrets.JWT_ACCESS_PUBLIC_KEY }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+
+  summary:
+    name: Build summary
+    needs:
+      - resolve
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish image tags
+        shell: bash
+        run: |
+          {
+            echo "### Deployment image tags"
+            echo ""
+            echo "- Commit SHA: \`${{ needs.resolve.outputs.commit_sha }}\`"
+            echo "- API: \`ghcr.io/${{ github.repository_owner }}/churchflow-api:${{ needs.resolve.outputs.commit_sha }}\`"
+            echo "- API migrator: \`ghcr.io/${{ github.repository_owner }}/churchflow-api-migrator:${{ needs.resolve.outputs.commit_sha }}\`"
+            echo "- Web: \`ghcr.io/${{ github.repository_owner }}/churchflow-web:${{ needs.resolve.outputs.commit_sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

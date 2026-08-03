@@ -1,4 +1,6 @@
+import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { z } from 'zod';
+import { normalizePem } from './pem.js';
 
 export const nodeEnvSchema = z.enum(['development', 'test', 'production']).default('development');
 
@@ -16,8 +18,12 @@ const pemKeySchema = (label: string, keyType: 'PUBLIC' | 'PRIVATE') =>
   z
     .string()
     .min(1)
-    .refine((value) => value.replace(/\\n/g, '\n').includes(`-----BEGIN ${keyType} KEY-----`), {
+    .transform(normalizePem)
+    .refine((value) => value.includes(`-----BEGIN ${keyType} KEY-----`), {
       message: `${label} must be a PEM ${keyType.toLowerCase()} key`,
+    })
+    .refine((value) => canImportPemKey(value, keyType), {
+      message: `${label} must be an importable PEM ${keyType.toLowerCase()} key`,
     });
 
 export const apiEnvSchema = z
@@ -139,3 +145,43 @@ export const webEnvSchema = z
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;
 export type WebEnv = z.infer<typeof webEnvSchema>;
+
+export function formatEnvValidationError(label: string, error: unknown): string {
+  if (!(error instanceof z.ZodError)) {
+    return `${label} environment validation failed`;
+  }
+
+  const details = error.issues
+    .map((issue) => {
+      const path = issue.path.join('.') || 'environment';
+      return `- ${path}: ${issue.message}`;
+    })
+    .join('\n');
+
+  return `${label} environment validation failed:\n${details}`;
+}
+
+export function parseEnv<Output, Def extends z.ZodTypeDef, Input>(
+  label: string,
+  schema: z.ZodType<Output, Def, Input>,
+  env: unknown,
+): Output {
+  try {
+    return schema.parse(env);
+  } catch (error) {
+    throw new Error(formatEnvValidationError(label, error));
+  }
+}
+
+function canImportPemKey(value: string, keyType: 'PUBLIC' | 'PRIVATE'): boolean {
+  try {
+    if (keyType === 'PUBLIC') {
+      createPublicKey(value);
+    } else {
+      createPrivateKey(value);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
