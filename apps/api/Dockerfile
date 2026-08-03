@@ -62,7 +62,7 @@ COPY packages/db/prisma.config.ts packages/db/prisma.config.ts
 
 RUN set -eux; \
   pnpm --filter @churchflow/db db:generate; \
-  generated_client="$(find node_modules/.pnpm -path '*/node_modules/.prisma/client/default.js' -print -quit)"; \
+  generated_client="$(find /app -path '*/node_modules/.prisma/client/default.js' -print -quit)"; \
   test -n "$generated_client"; \
   node -e "const db = require(process.argv[1]); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');" "$generated_client"
 
