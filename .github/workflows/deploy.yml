@@ -11,10 +11,6 @@ on:
         options:
           - stage
           - production
-      image_tag:
-        description: Immutable image tag to deploy, must be a full commit SHA built by build-images.yml
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -46,13 +42,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          raw_tag="${{ inputs.image_tag }}"
+          raw_tag="${{ github.sha }}"
           if [[ ! "$raw_tag" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "image_tag must be a full 40-character Git commit SHA."
+            echo "github.sha must be a full 40-character Git commit SHA."
             exit 1
           fi
 
-          image_tag="$(printf '%s' "$raw_tag" | tr '[:upper:]' '[:lower:]')"
+          commit_sha="$(printf '%s' "$raw_tag" | tr '[:upper:]' '[:lower:]')"
           owner="$(printf '%s' "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
 
           case "${{ inputs.environment }}" in
@@ -75,14 +71,14 @@ jobs:
           deploy_env="${{ inputs.environment }}"
 
           {
-            echo "IMAGE_TAG=$image_tag"
+            echo "IMAGE_TAG=$commit_sha"
             echo "DEPLOY_ENV=$deploy_env"
             echo "DEPLOY_DIR=$deploy_dir"
             echo "API_HOST_PORT=$api_host_port"
             echo "WEB_HOST_PORT=$web_host_port"
-            echo "API_IMAGE=ghcr.io/$owner/churchflow-api:$image_tag"
-            echo "MIGRATOR_IMAGE=ghcr.io/$owner/churchflow-api-migrator:$image_tag"
-            echo "WEB_IMAGE=ghcr.io/$owner/churchflow-web:$image_tag"
+            echo "API_IMAGE=ghcr.io/$owner/churchflow-api:$commit_sha"
+            echo "MIGRATOR_IMAGE=ghcr.io/$owner/churchflow-api-migrator:$commit_sha"
+            echo "WEB_IMAGE=ghcr.io/$owner/churchflow-web:$commit_sha"
             echo "API_CONTAINER_NAME=churchflow-$deploy_env-api"
             echo "WEB_CONTAINER_NAME=churchflow-$deploy_env-web"
             echo "API_NETWORK_ALIAS=churchflow-$deploy_env-api"
@@ -91,7 +87,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
           {
-            echo "image_tag=$image_tag"
+            echo "commit_sha=$commit_sha"
             echo "deploy_env=$deploy_env"
             echo "deploy_dir=$deploy_dir"
           } >> "$GITHUB_OUTPUT"
@@ -114,7 +110,7 @@ jobs:
             exit 0
           fi
 
-          echo "Production deploys require an image_tag reachable from main or matching a v* release tag."
+          echo "Production deploys require github.sha to be reachable from main or matching a v* release tag."
           exit 1
 
       - name: Set up Docker Buildx
@@ -131,9 +127,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          missing=0
+
           for image in "$API_IMAGE" "$MIGRATOR_IMAGE" "$WEB_IMAGE"; do
-            docker buildx imagetools inspect "$image" >/dev/null
+            if docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+              echo "Found image: $image"
+            else
+              echo "Required image was not found in GHCR: $image"
+              missing=1
+            fi
           done
+
+          if [[ "$missing" -ne 0 ]]; then
+            echo "One or more required GHCR images for commit ${IMAGE_TAG} are missing. Run build-images.yml for this commit before deploying."
+            exit 1
+          fi
 
       - name: Validate deployment environment
         shell: bash
