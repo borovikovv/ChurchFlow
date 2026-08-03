@@ -31,18 +31,37 @@ ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public"
 COPY apps/api apps/api
 COPY packages packages
 
+RUN pnpm --filter @churchflow/db db:generate
 RUN pnpm --filter @churchflow/api... build
 RUN pnpm --filter @churchflow/api --prod deploy /runtime/api
+RUN set -eux; \
+  generated_client="$(find node_modules/.pnpm -path '*/node_modules/.prisma/client/default.js' -print -quit)"; \
+  test -n "$generated_client"; \
+  generated_client_dir="$(dirname "$generated_client")"; \
+  deployed_clients="$(find /runtime/api/node_modules/.pnpm -path '*/node_modules/@prisma/client/default.js' -print)"; \
+  test -n "$deployed_clients"; \
+  for prisma_client_default in $deployed_clients; do \
+    deployed_node_modules="$(dirname "$(dirname "$(dirname "$prisma_client_default")")")"; \
+    rm -rf "$deployed_node_modules/.prisma/client"; \
+    mkdir -p "$deployed_node_modules/.prisma"; \
+    cp -a "$generated_client_dir" "$deployed_node_modules/.prisma/client"; \
+  done; \
+  cd /runtime/api; \
+  node -e "const db = require('@churchflow/db'); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');"
 
 FROM dependencies AS migrator
 
 ENV NODE_ENV=production
 ENV HOME=/tmp
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public"
 
 WORKDIR /app
 
 COPY packages/db/prisma packages/db/prisma
 COPY packages/db/prisma.config.ts packages/db/prisma.config.ts
+
+RUN pnpm --filter @churchflow/db db:generate \
+  && pnpm --filter @churchflow/db exec node -e "const db = require('@prisma/client/default'); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');"
 
 RUN groupadd --system --gid 1001 churchflow \
   && useradd --system --uid 1001 --gid churchflow churchflow
@@ -64,6 +83,8 @@ RUN groupadd --system --gid 1001 churchflow \
   && useradd --system --uid 1001 --gid churchflow churchflow
 
 COPY --from=builder --chown=churchflow:churchflow /runtime/api ./
+
+RUN node -e "const db = require('@churchflow/db'); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');"
 
 USER churchflow
 

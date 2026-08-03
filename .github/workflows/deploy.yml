@@ -573,6 +573,21 @@ jobs:
 
           IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env -f compose.yaml up -d --remove-orphans api web
 
+          require_running_container() {
+            local container="$1"
+            if ! docker inspect "$container" >/dev/null 2>&1; then
+              echo "Required container $container was not created."
+              return 1
+            fi
+
+            local state
+            state="$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null || true)"
+            if [[ "$state" != "running" ]]; then
+              echo "Required container $container is not running. Current state: ${state:-unknown}."
+              return 1
+            fi
+          }
+
           wait_for_healthy() {
             local container="$1"
             local deadline=$((SECONDS + 180))
@@ -595,6 +610,11 @@ jobs:
             docker compose --env-file .env -f compose.yaml ps
             docker compose --env-file .env -f compose.yaml logs --tail=120 api web
           }
+
+          if ! require_running_container "$API_CONTAINER_NAME" || ! require_running_container "$WEB_CONTAINER_NAME"; then
+            show_safe_diagnostics
+            exit 1
+          fi
 
           if ! wait_for_healthy "$API_CONTAINER_NAME" || ! wait_for_healthy "$WEB_CONTAINER_NAME"; then
             show_safe_diagnostics
