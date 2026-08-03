@@ -38,6 +38,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: '4000'
+      TELEGRAM_CLIENT_ID: ${TELEGRAM_CLIENT_ID:?Set TELEGRAM_CLIENT_ID}
     networks:
       app:
         aliases:
