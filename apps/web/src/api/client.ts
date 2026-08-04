@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
-import type { ApiResult } from '@churchflow/shared';
+import { AUTH_COOKIE_NAMES, type ApiResult } from '@churchflow/shared';
+import { setCookieHeader } from '@/auth/middleware-session';
 import { serverEnv } from '@/env/server';
 
 type ApiError = Extract<ApiResult<unknown>, { ok: false }>['error'];
@@ -19,20 +20,25 @@ export async function apiFetch<T>(
   init: RequestInit & { useInternalUrl?: boolean } = {},
 ): Promise<ApiResult<T>> {
   const cookieStore = await cookies();
+  const cookieHeader = cookieStore.toString();
   const baseUrl =
     init.useInternalUrl === false ? serverEnv.NEXT_PUBLIC_API_URL : serverEnv.API_INTERNAL_URL;
   let response: Response;
 
   try {
-    response = await fetch(`${baseUrl}${path}`, {
-      ...init,
-      headers: {
-        accept: 'application/json',
-        cookie: cookieStore.toString(),
-        ...init.headers,
-      },
-      cache: init.cache ?? 'no-store',
-    });
+    response = await sendApiRequest(baseUrl, path, init, cookieHeader);
+
+    if (response.status === 401) {
+      const refreshed = await refreshAccessToken(cookieHeader);
+      if (refreshed) {
+        response = await sendApiRequest(
+          baseUrl,
+          path,
+          init,
+          setCookieHeader(cookieHeader, AUTH_COOKIE_NAMES.access, refreshed.accessToken),
+        );
+      }
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'API request failed';
 
@@ -84,4 +90,49 @@ export async function apiFetch<T>(
     ok: true,
     data: (await readJsonBody<T>(response)) as T,
   };
+}
+
+function sendApiRequest(
+  baseUrl: string,
+  path: string,
+  init: RequestInit & { useInternalUrl?: boolean },
+  cookieHeader: string,
+): Promise<Response> {
+  return fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers: {
+      accept: 'application/json',
+      cookie: cookieHeader,
+      ...init.headers,
+    },
+    cache: init.cache ?? 'no-store',
+  });
+}
+
+async function refreshAccessToken(
+  cookieHeader: string,
+): Promise<{ accessToken: string } | undefined> {
+  const response = await fetch(`${serverEnv.API_INTERNAL_URL}/auth/refresh`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      cookie: cookieHeader,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    return undefined;
+  }
+
+  const body = (await response.json()) as unknown;
+  if (isRecord(body) && typeof body['accessToken'] === 'string') {
+    return { accessToken: body['accessToken'] };
+  }
+
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
