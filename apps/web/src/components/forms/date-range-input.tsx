@@ -43,6 +43,7 @@ export function DateRangeInput({
           disabled={disabled}
           endDate={endDate}
           placeholderText="MM/DD/YYYY - MM/DD/YYYY"
+          popperPlacement="bottom-start"
           popperClassName={styles['popper'] ?? ''}
           popperProps={{ strategy: 'fixed' }}
           selected={startDate}

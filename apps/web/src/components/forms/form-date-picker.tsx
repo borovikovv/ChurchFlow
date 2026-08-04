@@ -41,6 +41,7 @@ export function FormDatePicker<
               dateFormat="MM/dd/yyyy"
               disabled={disabled}
               placeholderText="MM/DD/YYYY"
+              popperPlacement="bottom-start"
               popperClassName={styles['popper'] ?? ''}
               popperProps={{ strategy: 'fixed' }}
               selected={parseCalendarDate(field.value as string | null | undefined)}

@@ -8,9 +8,11 @@ import { ActionMenuButton } from '@/components/ui/action-menu-button';
 import { importMembersCsvAction } from '../actions';
 
 export function MemberCsvActions({
+  triggerClassName,
   organizationId,
   onImported,
 }: {
+  triggerClassName?: string | undefined;
   organizationId: string;
   onImported: () => void;
 }) {
@@ -67,6 +69,7 @@ export function MemberCsvActions({
         type="file"
       />
       <ActionMenuButton
+        className={triggerClassName}
         icon={<PlusIcon />}
         label={isPending ? t('importing') : t('addMembers')}
         size="full"

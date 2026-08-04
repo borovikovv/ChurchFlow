@@ -261,7 +261,7 @@ function EditMemberSheet({
       </TableRowAction>
       <dialog
         aria-labelledby={titleId}
-        className="fixed left-1/2 top-1/2 h-fit max-h-[min(800px,80dvh)] w-[min(560px,calc(100%-32px))] max-w-none -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
+        className="fixed inset-0 m-auto h-fit max-h-[min(800px,80dvh)] w-[min(560px,calc(100%-32px))] max-w-none overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
         onClose={onClose}
         ref={dialogRef}
       >
@@ -392,7 +392,7 @@ function EditMemberSheet({
                   </div>
                 );
               })}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <FormSelect
                   label={t('relatedMember')}
                   value={relatedMembershipId}

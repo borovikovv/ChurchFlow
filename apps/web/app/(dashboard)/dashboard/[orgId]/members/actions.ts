@@ -1,15 +1,31 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import type { Route } from 'next';
+import { redirect } from 'next/navigation';
 import { apiFetch } from '@/api/client';
+import { getCurrentUser } from '@/auth/session';
+import type { InlineInvitationState } from '@/components/members/invite-app-user-form';
 import type {
   CreateManualOrganizationMemberInput,
   ImportOrganizationMembersCsvResult,
   MemberMinistry,
   OrganizationMembersAccessFilter,
 } from '@churchflow/shared';
-import type { ProfileUpdateState } from '@/components/members/member-actions';
-import type { MemberRelationship, MembersPayload } from './types';
+import type { ProfileUpdateState, RoleUpdateState } from '@/components/members/member-actions';
+import { getMessages } from '@/i18n/messages';
+import type {
+  ClaimMutationResult,
+  InvitationMutationResult,
+  MemberRelationship,
+  MembersPayload,
+  PendingInvitation,
+} from './types';
+
+function membersUrl(organizationId: string, params?: Record<string, string>): Route {
+  const query = params ? `?${new URLSearchParams(params).toString()}` : '';
+  return `/dashboard/${organizationId}/members${query}` as Route;
+}
 
 export async function loadMembersAction(input: {
   organizationId: string;
@@ -44,6 +60,55 @@ export async function loadMembersAction(input: {
   }
 
   return { ok: true as const, payload };
+}
+
+export async function manageInlineInvitationAction(
+  previousState: InlineInvitationState,
+  formData: FormData,
+): Promise<InlineInvitationState> {
+  const messages = await getCurrentUserMessages();
+  const organizationId = String(formData.get('organizationId'));
+
+  if (formData.get('intent') === 'revoke') {
+    const invitationId = String(formData.get('invitationId') || previousState.invitationId);
+    const result = await apiFetch<PendingInvitation>(
+      `/organizations/${organizationId}/invitations/${invitationId}/revoke`,
+      { method: 'POST' },
+    );
+
+    return result.ok
+      ? {
+          invitationId: null,
+          inviteUrl: null,
+          message: messages.members.invitationRevoked,
+          error: null,
+        }
+      : { ...previousState, error: result.error.message };
+  }
+
+  const result = await apiFetch<InvitationMutationResult>(
+    `/organizations/${organizationId}/invitations`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'claimable_link',
+        email: formData.get('notificationEmail') || undefined,
+        role: formData.get('role'),
+      }),
+    },
+  );
+
+  return result.ok
+    ? {
+        invitationId: result.data.invitation.id,
+        inviteUrl: result.data.acceptUrl,
+        message: result.data.emailSent
+          ? messages.members.invitationCreatedAndEmailed
+          : messages.members.invitationCreated,
+        error: null,
+      }
+    : { ...previousState, error: result.error.message };
 }
 
 export async function createMemberAction(input: {
@@ -110,6 +175,47 @@ export async function importMembersCsvAction(formData: FormData) {
   return { ok: true as const, result: result.data };
 }
 
+export async function claimAction(formData: FormData) {
+  const messages = await getCurrentUserMessages();
+  const organizationId = String(formData.get('organizationId'));
+  const claimId = String(formData.get('claimId'));
+  const action = String(formData.get('action'));
+  const result = await apiFetch<ClaimMutationResult | { status: string }>(
+    `/organizations/${organizationId}/membership-claims/${claimId}/${action}`,
+    { method: 'POST' },
+  );
+  revalidatePath(`/dashboard/${organizationId}/members`);
+  if (!result.ok) redirect(membersUrl(organizationId, { error: result.error.message }));
+  if ('claimUrl' in result.data) {
+    redirect(
+      membersUrl(organizationId, {
+        claimLink: result.data.claimUrl,
+        message: messages.members.accessLinkRefreshed,
+      }),
+    );
+  }
+  redirect(
+    membersUrl(organizationId, {
+      message: messages.members.claimActionCompleted.replace('{action}', action),
+    }),
+  );
+}
+
+export async function removeMemberAction(formData: FormData) {
+  const organizationId = String(formData.get('organizationId'));
+  const membershipId = String(formData.get('membershipId'));
+  const result = await apiFetch(
+    `/organizations/${organizationId}/memberships/${membershipId}/remove`,
+    { method: 'POST' },
+  );
+  if (result.ok) {
+    revalidatePath(`/dashboard/${organizationId}/members`);
+    return { ok: true as const };
+  }
+
+  return { ok: false as const, error: result.error.message };
+}
+
 export async function updateMemberProfileAction(
   _previousState: ProfileUpdateState,
   formData: FormData,
@@ -138,6 +244,53 @@ export async function updateMemberProfileAction(
   return result.ok
     ? { updated: true, error: null }
     : { updated: false, error: result.error.message };
+}
+
+export async function updateMemberRoleAction(
+  previousState: RoleUpdateState,
+  formData: FormData,
+): Promise<RoleUpdateState> {
+  const organizationId = String(formData.get('organizationId'));
+  const membershipId = String(formData.get('membershipId'));
+  const role = String(formData.get('role')) as RoleUpdateState['role'];
+  const result = await apiFetch(
+    `/organizations/${organizationId}/memberships/${membershipId}/role`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ role }),
+    },
+  );
+
+  return result.ok
+    ? { role, updated: true, version: previousState.version + 1, error: null }
+    : { ...previousState, updated: false, error: result.error.message };
+}
+
+export async function createRelationshipAction(formData: FormData) {
+  const organizationId = String(formData.get('organizationId'));
+  const membershipId = String(formData.get('membershipId'));
+  const result = await apiFetch(
+    `/organizations/${organizationId}/memberships/${membershipId}/relationships`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        relatedMembershipId: formData.get('relatedMembershipId'),
+        type: formData.get('relationshipType'),
+      }),
+    },
+  );
+  return result.ok ? { ok: true as const } : { ok: false as const, error: result.error.message };
+}
+
+export async function deleteRelationshipAction(formData: FormData) {
+  const organizationId = String(formData.get('organizationId'));
+  const result = await apiFetch(
+    `/organizations/${organizationId}/memberships/relationships/${String(formData.get('relationshipId'))}`,
+    { method: 'DELETE' },
+  );
+  return result.ok ? { ok: true as const } : { ok: false as const, error: result.error.message };
 }
 
 export async function prepareMemberPhotoAction(input: {
@@ -178,4 +331,9 @@ export async function confirmMemberPhotoAction(input: {
   return readUrl.ok
     ? { ok: true, assetId: input.assetId, photoUrl: readUrl.data.url }
     : { ok: false, error: readUrl.error.message };
+}
+
+async function getCurrentUserMessages() {
+  const user = await getCurrentUser();
+  return getMessages(user?.locale ?? 'en');
 }

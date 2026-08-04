@@ -27,6 +27,11 @@
 
 .popper {
   z-index: 2000;
+  max-width: calc(100vw - 32px);
+}
+
+.popper :global(.react-datepicker__triangle) {
+  transform: translateX(24px) !important;
 }
 
 .calendar :global(.react-datepicker__header) {

@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import { useTranslations } from 'next-intl';
-import type { ComponentProps } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { InviteAppUserForm } from '@/components/members/invite-app-user-form';
 import { MemberActions, MemberRoleStatus } from '@/components/members/member-actions';
 import { FormDialog } from '@/components/ui/form-dialog';
@@ -16,7 +16,8 @@ import type { OrganizationMembersAccessFilter } from '@churchflow/shared';
 import { QueryFilterSelect } from '@/components/forms/query-filter-select';
 import { useMembersQuery } from '../_hooks/use-members-query';
 
-const MEMBERS_ACTION_BUTTON_CLASS_NAME = 'h-[42px] min-h-[42px]';
+const MEMBERS_ACTION_BUTTON_CLASS_NAME =
+  'h-auto min-h-[42px] max-w-full shrink-0 whitespace-normal px-3 text-center leading-5 md:h-[42px] md:whitespace-nowrap';
 
 type MemberActionProps = Pick<
   ComponentProps<typeof MemberActions>,
@@ -43,6 +44,7 @@ export function MembersManager({
   manageInvitation: ComponentProps<typeof InviteAppUserForm>['action'];
 } & MemberActionProps) {
   const t = useTranslations('members');
+  const [inviteFormKey, setInviteFormKey] = useState(0);
   const { data: payload, refresh: refreshMembers } = useMembersQuery({
     access: memberAccess,
     initialPayload,
@@ -152,8 +154,8 @@ export function MembersManager({
 
   return (
     <>
-      <div className="flex justify-between py-2">
-        <div className="filter-bar">
+      <div className="grid justify-items-start gap-3 py-2 md:flex md:items-start md:justify-between">
+        <div className="filter-bar !flex-row !items-center !justify-start">
           <QueryFilterSelect
             label={t('access')}
             name="access"
@@ -162,14 +164,19 @@ export function MembersManager({
           />
         </div>
         {canManage ? (
-          <div className="flex items-start justify-end gap-2">
+          <div className="flex min-w-0 flex-wrap items-start justify-start gap-2 md:flex-nowrap md:justify-end">
             <FormDialog
               triggerClassName={MEMBERS_ACTION_BUTTON_CLASS_NAME}
               triggerLabel={t('inviteAppUser')}
               title={t('inviteTitle')}
+              onOpen={() => setInviteFormKey((current) => current + 1)}
             >
               <p className="-mt-4 mb-0">{t('inviteDescription')}</p>
-              <InviteAppUserForm organizationId={organizationId} action={manageInvitation} />
+              <InviteAppUserForm
+                key={inviteFormKey}
+                organizationId={organizationId}
+                action={manageInvitation}
+              />
             </FormDialog>
             <CreateMemberDialog
               organizationId={organizationId}
@@ -181,6 +188,7 @@ export function MembersManager({
             />
             <MemberCsvActions
               organizationId={organizationId}
+              triggerClassName={MEMBERS_ACTION_BUTTON_CLASS_NAME}
               onImported={() => {
                 refreshMembers();
               }}
@@ -191,7 +199,12 @@ export function MembersManager({
 
       <section className="stack">
         <h2>{t('organizationMembers')}</h2>
-        <DataTable columns={columns} data={members} emptyMessage={t('emptyFilter')} />
+        <DataTable
+          columns={columns}
+          data={members}
+          emptyMessage={t('emptyFilter')}
+          tableClassName="min-w-[860px]"
+        />
       </section>
     </>
   );

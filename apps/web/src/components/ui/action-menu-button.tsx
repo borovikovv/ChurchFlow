@@ -20,11 +20,13 @@ export interface ActionMenuButtonItem {
 }
 
 export function ActionMenuButton({
+  className,
   icon,
   items,
   label,
   size,
 }: {
+  className?: string | undefined;
   icon?: ReactNode;
   items: ActionMenuButtonItem[];
   label: string;
@@ -91,7 +93,7 @@ export function ActionMenuButton({
       ref={menuRef}
     >
       <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        <span className={actionMenuButtonClassName({ size })}>
+        <span className={actionMenuButtonClassName({ className, size })}>
           {icon}
           {label}
           <ChevronIcon />
