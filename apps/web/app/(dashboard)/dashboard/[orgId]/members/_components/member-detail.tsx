@@ -37,6 +37,8 @@ export function MemberDetail({
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const [member, setMember] = useState(initialMember);
   const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
+  const canEditProfile = canManage || member.id === payload.actorMembershipId;
+  const canEditRelationships = canManage || member.id === payload.actorMembershipId;
   const memberCandidates = payload.members.map(({ id, profile }) => ({
     id,
     displayName: profile.displayName,
@@ -77,7 +79,7 @@ export function MemberDetail({
         >
           {t('backToMembers')}
         </ButtonLink>
-        {canManage ? (
+        {canEditProfile ? (
           <EditMemberDialog
             {...actions}
             member={member}
@@ -85,6 +87,7 @@ export function MemberDetail({
             memberCandidates={memberCandidates}
             onProfileUpdated={updateProfile}
             onRelationshipsChanged={updateRelationships}
+            canManageRelationships={canEditRelationships}
             dialogRef={editDialogRef}
             onOpen={() => undefined}
             onClose={() => undefined}

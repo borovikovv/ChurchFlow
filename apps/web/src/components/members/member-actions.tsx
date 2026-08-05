@@ -133,6 +133,7 @@ export function EditMemberDialog({
   confirmPhoto,
   onProfileUpdated,
   onRelationshipsChanged,
+  canManageRelationships,
   dialogRef,
   onOpen,
   onClose,
@@ -148,6 +149,7 @@ export function EditMemberDialog({
   confirmPhoto: ConfirmMemberPhotoAction;
   onProfileUpdated: (profile: MemberProfileUpdate) => void;
   onRelationshipsChanged?: ((relationships?: MemberRelationship[]) => void) | undefined;
+  canManageRelationships: boolean;
   dialogRef: RefObject<HTMLDialogElement | null>;
   onOpen: () => void;
   onClose: () => void;
@@ -422,111 +424,113 @@ export function EditMemberDialog({
                 ))}
               </div>
             </fieldset>
-            <fieldset className="flex flex-col gap-3 border-t border-[var(--line)] pt-4">
-              <legend className="pr-2 font-semibold">{t('familyRelationships')}</legend>
-              {relationships.map((relationship) => {
-                const other =
-                  relationship.fromMembershipId === member.id
-                    ? relationship.toMembership
-                    : relationship.fromMembership;
-                return (
-                  <div className="flex items-center justify-between gap-3" key={relationship.id}>
-                    <span>
-                      {other.profile?.displayName ?? t('member')} ·{' '}
-                      {t(`relationshipLabels.${relationship.type}`)}
-                    </span>
-                    <button
-                      className="button secondary"
-                      type="button"
-                      onClick={() => {
-                        const nextRelationships = relationships.filter(
-                          ({ id }) => id !== relationship.id,
-                        );
-                        setRelationships(nextRelationships);
-                        if (relationship.id.startsWith('draft:')) {
-                          setPendingRelationshipCreates((current) =>
-                            current.filter(
-                              (pending) =>
-                                !relationshipMatchesPending(member.id, relationship, pending),
-                            ),
+            {canManageRelationships ? (
+              <fieldset className="flex flex-col gap-3 border-t border-[var(--line)] pt-4">
+                <legend className="pr-2 font-semibold">{t('familyRelationships')}</legend>
+                {relationships.map((relationship) => {
+                  const other =
+                    relationship.fromMembershipId === member.id
+                      ? relationship.toMembership
+                      : relationship.fromMembership;
+                  return (
+                    <div className="flex items-center justify-between gap-3" key={relationship.id}>
+                      <span>
+                        {other.profile?.displayName ?? t('member')} ·{' '}
+                        {t(`relationshipLabels.${relationship.type}`)}
+                      </span>
+                      <button
+                        className="button secondary"
+                        type="button"
+                        onClick={() => {
+                          const nextRelationships = relationships.filter(
+                            ({ id }) => id !== relationship.id,
                           );
-                          return;
-                        }
-                        setPendingRelationshipDeleteIds((current) =>
-                          current.includes(relationship.id)
-                            ? current
-                            : [...current, relationship.id],
-                        );
-                      }}
-                    >
-                      {t('remove')}
-                    </button>
-                    <input type="hidden" name="organizationId" value={organizationId} />
-                  </div>
-                );
-              })}
-              <div className="grid gap-2 sm:grid-cols-2">
-                <FormSelect
-                  label={t('relatedMember')}
-                  value={relatedMembershipId}
-                  onChange={(event) => setRelatedMembershipId(event.target.value)}
-                >
-                  <option value="">{t('selectMember')}</option>
-                  {memberCandidates
-                    .filter((candidate) => candidate.id !== member.id)
-                    .map((candidate) => (
-                      <option key={candidate.id} value={candidate.id}>
-                        {candidate.displayName}
-                      </option>
-                    ))}
-                </FormSelect>
-                <FormSelect
-                  label={t('relationship')}
-                  value={relationshipType}
-                  onChange={(event) =>
-                    setRelationshipType(event.target.value as MemberRelationship['type'])
-                  }
-                >
-                  <option value="SPOUSE">{t('relationshipLabels.SPOUSE')}</option>
-                  <option value="PARENT">{t('relationshipLabels.PARENT')}</option>
-                  <option value="CHILD">{t('relationshipLabels.CHILD')}</option>
-                  <option value="SIBLING">{t('relationshipLabels.SIBLING')}</option>
-                  <option value="OTHER">{t('relationshipLabels.OTHER')}</option>
-                </FormSelect>
-              </div>
-              <button
-                className="button secondary"
-                type="button"
-                disabled={!relatedMembershipId || relationshipAlreadySelected}
-                onClick={() => {
-                  const relatedMember = memberCandidates.find(
-                    ({ id }) => id === relatedMembershipId,
+                          setRelationships(nextRelationships);
+                          if (relationship.id.startsWith('draft:')) {
+                            setPendingRelationshipCreates((current) =>
+                              current.filter(
+                                (pending) =>
+                                  !relationshipMatchesPending(member.id, relationship, pending),
+                              ),
+                            );
+                            return;
+                          }
+                          setPendingRelationshipDeleteIds((current) =>
+                            current.includes(relationship.id)
+                              ? current
+                              : [...current, relationship.id],
+                          );
+                        }}
+                      >
+                        {t('remove')}
+                      </button>
+                      <input type="hidden" name="organizationId" value={organizationId} />
+                    </div>
                   );
-                  if (!relatedMember) return;
+                })}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <FormSelect
+                    label={t('relatedMember')}
+                    value={relatedMembershipId}
+                    onChange={(event) => setRelatedMembershipId(event.target.value)}
+                  >
+                    <option value="">{t('selectMember')}</option>
+                    {memberCandidates
+                      .filter((candidate) => candidate.id !== member.id)
+                      .map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>
+                          {candidate.displayName}
+                        </option>
+                      ))}
+                  </FormSelect>
+                  <FormSelect
+                    label={t('relationship')}
+                    value={relationshipType}
+                    onChange={(event) =>
+                      setRelationshipType(event.target.value as MemberRelationship['type'])
+                    }
+                  >
+                    <option value="SPOUSE">{t('relationshipLabels.SPOUSE')}</option>
+                    <option value="PARENT">{t('relationshipLabels.PARENT')}</option>
+                    <option value="CHILD">{t('relationshipLabels.CHILD')}</option>
+                    <option value="SIBLING">{t('relationshipLabels.SIBLING')}</option>
+                    <option value="OTHER">{t('relationshipLabels.OTHER')}</option>
+                  </FormSelect>
+                </div>
+                <button
+                  className="button secondary"
+                  type="button"
+                  disabled={!relatedMembershipId || relationshipAlreadySelected}
+                  onClick={() => {
+                    const relatedMember = memberCandidates.find(
+                      ({ id }) => id === relatedMembershipId,
+                    );
+                    if (!relatedMember) return;
 
-                  const pendingRelationship = {
-                    relatedMembershipId,
-                    type: relationshipType,
-                  };
-                  const draftRelationship = createDraftRelationship({
-                    currentMemberId: member.id,
-                    currentMemberName: member.profile.displayName,
-                    relatedMemberId: relatedMembershipId,
-                    relatedMemberName: relatedMember.displayName,
-                    type: relationshipType,
-                  });
+                    const pendingRelationship = {
+                      relatedMembershipId,
+                      type: relationshipType,
+                    };
+                    const draftRelationship = createDraftRelationship({
+                      currentMemberId: member.id,
+                      currentMemberName: member.profile.displayName,
+                      relatedMemberId: relatedMembershipId,
+                      relatedMemberName: relatedMember.displayName,
+                      type: relationshipType,
+                    });
 
-                  setRelationships((current) => [...current, draftRelationship]);
-                  setPendingRelationshipCreates((current) => [...current, pendingRelationship]);
-                  setPendingRelationshipDeleteIds((current) =>
-                    current.filter((relationshipId) => relationshipId !== draftRelationship.id),
-                  );
-                  setRelatedMembershipId('');
-                }}
-              >
-                {t('addRelationship')}
-              </button>
-            </fieldset>
+                    setRelationships((current) => [...current, draftRelationship]);
+                    setPendingRelationshipCreates((current) => [...current, pendingRelationship]);
+                    setPendingRelationshipDeleteIds((current) =>
+                      current.filter((relationshipId) => relationshipId !== draftRelationship.id),
+                    );
+                    setRelatedMembershipId('');
+                  }}
+                >
+                  {t('addRelationship')}
+                </button>
+              </fieldset>
+            ) : null}
           </div>
           <footer className="flex justify-end gap-2 border-t border-[var(--line-muted)] bg-[var(--surface)] px-6 py-4">
             <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
@@ -801,7 +805,10 @@ export function MemberActions({
   const accessDialogRef = useRef<HTMLDialogElement>(null);
   const [openDialog, setOpenDialog] = useState<'edit' | 'role' | 'access' | null>(null);
 
-  if (!canManage && !isOwner && !viewHref) return null;
+  const canEditProfile = canManage || isCurrentMember;
+  const canEditRelationships = canManage || isCurrentMember;
+
+  if (!canEditProfile && !isOwner && !viewHref) return null;
 
   return (
     <TableRowActions
@@ -822,7 +829,7 @@ export function MemberActions({
           {t('viewMember')}
         </TableRowAction>
       ) : null}
-      {canManage ? (
+      {canEditProfile ? (
         <EditMemberDialog
           member={member}
           organizationId={organizationId}
@@ -834,6 +841,7 @@ export function MemberActions({
           confirmPhoto={confirmPhoto}
           onProfileUpdated={onProfileUpdated}
           onRelationshipsChanged={onRelationshipsChanged}
+          canManageRelationships={canEditRelationships}
           dialogRef={editDialogRef}
           onOpen={() => setOpenDialog('edit')}
           onClose={() => setOpenDialog(null)}

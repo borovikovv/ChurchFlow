@@ -53,6 +53,9 @@ export class MembershipsService {
               ? 'CLAIM_PENDING'
               : 'UNCLAIMED';
 
+        const canViewProfile =
+          canManageProfiles || (actorMembership ? actorMembership.id === member.id : false);
+
         return {
           id: member.id,
           role: member.role,
@@ -64,9 +67,9 @@ export class MembershipsService {
           profile: member.profile
             ? {
                 ...member.profile,
-                notes: canManageProfiles ? member.profile.notes : null,
-                biography: canManageProfiles ? member.profile.biography : null,
-                familyNotes: canManageProfiles ? member.profile.familyNotes : null,
+                notes: canViewProfile ? member.profile.notes : null,
+                biography: canViewProfile ? member.profile.biography : null,
+                familyNotes: canViewProfile ? member.profile.familyNotes : null,
                 photoUrl: member.user?.avatarUrl ?? null,
               }
             : {
@@ -75,6 +78,8 @@ export class MembershipsService {
                 phone: null,
                 notes: null,
                 memberSince: null,
+                birthday: null,
+                anniversary: null,
                 biography: null,
                 familyNotes: null,
                 profilePhotoAssetId: null,
@@ -107,9 +112,9 @@ export class MembershipsService {
       organizationId,
       actorUserId,
     );
-    if (!actor || !['OWNER', 'ADMIN'].includes(actor.role))
+    if (!actor || (!['OWNER', 'ADMIN'].includes(actor.role) && actor.id !== membershipId))
       throw new ForbiddenException(
-        'Only organization owners and admins can view member relationships',
+        'Only organization owners, admins, and the member can view member relationships',
       );
     return this.membershipsRepository.listRelationships(organizationId, membershipId);
   }
@@ -131,7 +136,7 @@ export class MembershipsService {
       const code = error instanceof Error ? error.message : '';
       if (code === 'ACTOR_CANNOT_MANAGE_MEMBERS')
         throw new ForbiddenException(
-          'Only organization owners and admins can manage relationships',
+          'Only organization owners, admins, and the member can manage relationships',
         );
       if (code === 'MEMBERSHIP_NOT_FOUND')
         throw new NotFoundException('Organization member was not found');
@@ -155,7 +160,7 @@ export class MembershipsService {
     } catch (error) {
       if (error instanceof Error && error.message === 'ACTOR_CANNOT_MANAGE_MEMBERS')
         throw new ForbiddenException(
-          'Only organization owners and admins can manage relationships',
+          'Only organization owners, admins, and the member can manage relationships',
         );
       if (error instanceof Error && error.message === 'RELATIONSHIP_NOT_FOUND')
         throw new NotFoundException('Relationship was not found');
@@ -253,7 +258,7 @@ export class MembershipsService {
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'ACTOR_CANNOT_MANAGE_MEMBERS') {
         throw new ForbiddenException(
-          'Only organization owners and admins can edit member profiles',
+          'Only organization owners, admins, and the member can edit member profiles',
         );
       }
       if (error instanceof Error && error.message === 'MEMBERSHIP_NOT_FOUND') {

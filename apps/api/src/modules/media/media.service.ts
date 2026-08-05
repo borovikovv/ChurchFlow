@@ -46,9 +46,15 @@ export class MediaService {
     actorUserId: string,
   ) {
     if (
-      !(await this.mediaRepository.findManageableMember(organizationId, membershipId, actorUserId))
+      !(await this.mediaRepository.findPhotoUpdatableMember(
+        organizationId,
+        membershipId,
+        actorUserId,
+      ))
     )
-      throw new ForbiddenException('Only organization owners and admins can update member photos');
+      throw new ForbiddenException(
+        'Only organization owners, admins, and the member can update member photos',
+      );
     const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[
       input.mimeType
     ];
@@ -172,9 +178,15 @@ export class MediaService {
     actorUserId: string,
   ) {
     if (
-      !(await this.mediaRepository.findManageableMember(organizationId, membershipId, actorUserId))
+      !(await this.mediaRepository.findPhotoUpdatableMember(
+        organizationId,
+        membershipId,
+        actorUserId,
+      ))
     )
-      throw new ForbiddenException('Only organization owners and admins can update member photos');
+      throw new ForbiddenException(
+        'Only organization owners, admins, and the member can update member photos',
+      );
     const asset = await this.mediaRepository.findAsset(assetId, organizationId);
     if (!asset || (asset.metadata as { membershipId?: string }).membershipId !== membershipId)
       throw new NotFoundException('Pending photo asset was not found');

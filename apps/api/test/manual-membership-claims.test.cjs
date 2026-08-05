@@ -84,6 +84,99 @@ test('member profile update is tenant-scoped and stores only changed field names
   assert.equal(audit, undefined);
 });
 
+test('ordinary members can update their own member profile', async () => {
+  let profileUpdate;
+  let audit;
+  const repository = new MembershipsRepository({
+    $transaction: async (callback) =>
+      callback({
+        organizationMember: {
+          findFirst: async ({ where }) =>
+            where.userId ? { id: 'self-membership', role: 'VIEWER' } : { id: 'self-membership' },
+        },
+        organizationMemberProfile: {
+          upsert: async ({ update }) => {
+            profileUpdate = update;
+            return { id: 'profile', membershipId: 'self-membership', ...update };
+          },
+        },
+        auditLog: { create: async ({ data }) => (audit = data) },
+      }),
+  });
+
+  const profile = await repository.updateProfile(
+    'organization',
+    'self-membership',
+    { displayName: 'Self Updated' },
+    'viewer-user',
+  );
+
+  assert.equal(profile.displayName, 'Self Updated');
+  assert.deepEqual(profileUpdate, { displayName: 'Self Updated' });
+  assert.equal(audit.action, 'UPDATE_MEMBER_PROFILE');
+  assert.equal(audit.entityId, 'self-membership');
+});
+
+test('ordinary members can create relationships for their own membership', async () => {
+  let relationshipData;
+  let audit;
+  const repository = new MembershipsRepository({
+    $transaction: async (callback) =>
+      callback({
+        organizationMember: {
+          findFirst: async () => ({ id: 'self-membership', role: 'MEMBER' }),
+          findMany: async () => [{ id: 'self-membership' }, { id: 'related-membership' }],
+        },
+        organizationMemberRelationship: {
+          findFirst: async () => null,
+          create: async ({ data }) => {
+            relationshipData = data;
+            return { id: 'relationship', ...data };
+          },
+        },
+        auditLog: { create: async ({ data }) => (audit = data) },
+      }),
+  });
+
+  const relationship = await repository.createRelationship({
+    organizationId: 'organization',
+    membershipId: 'self-membership',
+    relatedMembershipId: 'related-membership',
+    type: 'SIBLING',
+    actorUserId: 'member-user',
+  });
+
+  assert.equal(relationship.id, 'relationship');
+  assert.equal(relationshipData.fromMembershipId, 'related-membership');
+  assert.equal(relationshipData.toMembershipId, 'self-membership');
+  assert.equal(audit.action, 'CREATE_MEMBER_RELATIONSHIP');
+});
+
+test('ordinary members cannot delete relationships that do not include their membership', async () => {
+  const repository = new MembershipsRepository({
+    $transaction: async (callback) =>
+      callback({
+        organizationMember: {
+          findFirst: async () => ({ id: 'self-membership', role: 'VIEWER' }),
+        },
+        organizationMemberRelationship: {
+          findFirst: async () => ({
+            id: 'relationship',
+            fromMembershipId: 'other-membership',
+            toMembershipId: 'related-membership',
+          }),
+          delete: async () => assert.fail('must not delete relationship'),
+        },
+        auditLog: { create: async () => assert.fail('must not audit relationship delete') },
+      }),
+  });
+
+  await assert.rejects(
+    repository.deleteRelationship('organization', 'relationship', 'viewer-user'),
+    /ACTOR_CANNOT_MANAGE_MEMBERS/,
+  );
+});
+
 test('audit failure aborts manual member creation', async () => {
   const repository = new MembershipsRepository({
     $transaction: async (callback) =>

@@ -48,16 +48,15 @@ export async function loadMembersAction(input: {
   );
 
   const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
-  if (canManage) {
-    await Promise.all(
-      payload.members.map(async (member) => {
-        const relationships = await apiFetch<MemberRelationship[]>(
-          `/organizations/${input.organizationId}/memberships/${member.id}/relationships`,
-        );
-        member.relationships = relationships.ok ? relationships.data : [];
-      }),
-    );
-  }
+  await Promise.all(
+    payload.members.map(async (member) => {
+      if (!canManage && member.id !== payload.actorMembershipId) return;
+      const relationships = await apiFetch<MemberRelationship[]>(
+        `/organizations/${input.organizationId}/memberships/${member.id}/relationships`,
+      );
+      member.relationships = relationships.ok ? relationships.data : [];
+    }),
+  );
 
   return { ok: true as const, payload };
 }

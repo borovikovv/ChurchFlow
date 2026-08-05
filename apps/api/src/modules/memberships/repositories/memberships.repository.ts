@@ -294,12 +294,11 @@ export class MembershipsRepository {
         where: {
           organizationId,
           userId: actorUserId,
-          role: { in: ['OWNER', 'ADMIN'] },
           status: 'ACTIVE',
           removedAt: null,
           organization: { status: 'ACTIVE', deletedAt: null },
         },
-        select: { id: true },
+        select: { id: true, role: true },
       });
       if (!actor) throw new Error('ACTOR_CANNOT_MANAGE_MEMBERS');
 
@@ -308,6 +307,9 @@ export class MembershipsRepository {
         select: { id: true },
       });
       if (!membership) throw new Error('MEMBERSHIP_NOT_FOUND');
+      if (!['OWNER', 'ADMIN'].includes(actor.role) && actor.id !== membership.id) {
+        throw new Error('ACTOR_CANNOT_MANAGE_MEMBERS');
+      }
 
       const profile = await tx.organizationMemberProfile.upsert({
         where: { membershipId },
@@ -407,13 +409,16 @@ export class MembershipsRepository {
         where: {
           organizationId: input.organizationId,
           userId: input.actorUserId,
-          role: { in: ['OWNER', 'ADMIN'] },
           status: 'ACTIVE',
           removedAt: null,
           organization: { status: 'ACTIVE', deletedAt: null },
         },
+        select: { id: true, role: true },
       });
       if (!actor) throw new Error('ACTOR_CANNOT_MANAGE_MEMBERS');
+      if (!['OWNER', 'ADMIN'].includes(actor.role) && actor.id !== input.membershipId) {
+        throw new Error('ACTOR_CANNOT_MANAGE_MEMBERS');
+      }
       const members = await tx.organizationMember.findMany({
         where: {
           organizationId: input.organizationId,
@@ -467,16 +472,24 @@ export class MembershipsRepository {
         where: {
           organizationId,
           userId: actorUserId,
-          role: { in: ['OWNER', 'ADMIN'] },
           status: 'ACTIVE',
           removedAt: null,
+          organization: { status: 'ACTIVE', deletedAt: null },
         },
+        select: { id: true, role: true },
       });
       if (!actor) throw new Error('ACTOR_CANNOT_MANAGE_MEMBERS');
       const relationship = await tx.organizationMemberRelationship.findFirst({
         where: { id: relationshipId, organizationId },
       });
       if (!relationship) throw new Error('RELATIONSHIP_NOT_FOUND');
+      if (
+        !['OWNER', 'ADMIN'].includes(actor.role) &&
+        relationship.fromMembershipId !== actor.id &&
+        relationship.toMembershipId !== actor.id
+      ) {
+        throw new Error('ACTOR_CANNOT_MANAGE_MEMBERS');
+      }
       await tx.organizationMemberRelationship.delete({ where: { id: relationshipId } });
       await tx.auditLog.create({
         data: {

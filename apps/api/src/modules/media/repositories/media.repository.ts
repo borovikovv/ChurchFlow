@@ -12,23 +12,22 @@ export class MediaRepository {
     });
   }
 
-  findManageableMember(organizationId: string, membershipId: string, actorUserId: string) {
+  findPhotoUpdatableMember(organizationId: string, membershipId: string, actorUserId: string) {
     return this.prisma.organizationMember.findFirst({
       where: {
         id: membershipId,
         organizationId,
         status: { not: 'REMOVED' },
         removedAt: null,
-        organization: { status: 'ACTIVE', deletedAt: null },
-        AND: {
-          organization: {
-            members: {
-              some: {
-                userId: actorUserId,
-                role: { in: ['OWNER', 'ADMIN'] },
-                status: 'ACTIVE',
-                removedAt: null,
-              },
+        organization: {
+          status: 'ACTIVE',
+          deletedAt: null,
+          members: {
+            some: {
+              userId: actorUserId,
+              status: 'ACTIVE',
+              removedAt: null,
+              OR: [{ role: { in: ['OWNER', 'ADMIN'] } }, { id: membershipId }],
             },
           },
         },
