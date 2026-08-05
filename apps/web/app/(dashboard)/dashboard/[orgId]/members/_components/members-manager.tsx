@@ -14,10 +14,14 @@ import { MemberAvatar } from './member-avatar';
 import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
 import type { OrganizationMembersAccessFilter } from '@churchflow/shared';
 import { QueryFilterSelect } from '@/components/forms/query-filter-select';
+import { organizationMemberRoute } from '@/features/organizations/routes';
 import { useMembersQuery } from '../_hooks/use-members-query';
 
 const MEMBERS_ACTION_BUTTON_CLASS_NAME =
-  'h-auto min-h-[42px] max-w-full shrink-0 whitespace-normal px-3 text-center leading-5 md:h-[42px] md:whitespace-nowrap';
+  'h-8 min-h-8 max-w-full shrink-0 whitespace-normal px-3 text-center text-sm leading-5 md:whitespace-nowrap';
+
+const MEMBERS_MENU_BUTTON_CLASS_NAME =
+  '!h-8 !min-h-8 max-w-full shrink-0 justify-center whitespace-normal px-3 text-center text-sm leading-5 md:whitespace-nowrap';
 
 type MemberActionProps = Pick<
   ComponentProps<typeof MemberActions>,
@@ -127,6 +131,7 @@ export function MembersManager({
             {...actions}
             member={member}
             organizationId={organizationId}
+            viewHref={organizationMemberRoute(organizationId, member.id)}
             canManage={canManage}
             isOwner={isOwner}
             isCurrentMember={member.id === payload.actorMembershipId}
@@ -154,19 +159,20 @@ export function MembersManager({
 
   return (
     <>
-      <div className="grid justify-items-start gap-3 py-2 md:flex md:items-start md:justify-between">
-        <div className="filter-bar !flex-row !items-center !justify-start">
+      <div className="flex flex-col md:flex-row justify-between gap-3">
+        <div className="filter-bar min-w-0">
           <QueryFilterSelect
             label={t('access')}
             name="access"
             options={memberAccessFilterOptions}
+            size="medium"
             value={memberAccess === 'all' ? '' : memberAccess}
           />
         </div>
         {canManage ? (
-          <div className="flex min-w-0 flex-wrap items-start justify-start gap-2 md:flex-nowrap md:justify-end">
+          <div className="contents md:flex md:min-w-0 md:flex-nowrap md:items-start md:justify-end md:gap-2">
             <FormDialog
-              triggerClassName={MEMBERS_ACTION_BUTTON_CLASS_NAME}
+              triggerClassName={`${MEMBERS_ACTION_BUTTON_CLASS_NAME} col-start-1 row-start-2 w-full md:w-auto`}
               triggerLabel={t('inviteAppUser')}
               title={t('inviteTitle')}
               onOpen={() => setInviteFormKey((current) => current + 1)}
@@ -180,7 +186,7 @@ export function MembersManager({
             </FormDialog>
             <CreateMemberDialog
               organizationId={organizationId}
-              triggerClassName={MEMBERS_ACTION_BUTTON_CLASS_NAME}
+              triggerClassName={`${MEMBERS_ACTION_BUTTON_CLASS_NAME} col-start-2 row-start-2 w-full md:w-auto`}
               onCreated={(created) => {
                 void created;
                 refreshMembers();
@@ -188,7 +194,8 @@ export function MembersManager({
             />
             <MemberCsvActions
               organizationId={organizationId}
-              triggerClassName={MEMBERS_ACTION_BUTTON_CLASS_NAME}
+              triggerClassName={`${MEMBERS_MENU_BUTTON_CLASS_NAME} w-full md:w-auto`}
+              wrapperClassName="flex w-full md:w-auto"
               onImported={() => {
                 refreshMembers();
               }}
@@ -203,6 +210,7 @@ export function MembersManager({
           columns={columns}
           data={members}
           emptyMessage={t('emptyFilter')}
+          getRowHref={(member) => organizationMemberRoute(organizationId, member.id)}
           tableClassName="min-w-[860px]"
         />
       </section>

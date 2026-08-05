@@ -9,10 +9,12 @@ import { importMembersCsvAction } from '../actions';
 
 export function MemberCsvActions({
   triggerClassName,
+  wrapperClassName,
   organizationId,
   onImported,
 }: {
   triggerClassName?: string | undefined;
+  wrapperClassName?: string | undefined;
   organizationId: string;
   onImported: () => void;
 }) {
@@ -55,7 +57,9 @@ export function MemberCsvActions({
   };
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div
+      className={['flex flex-col md:items-end gap-2', wrapperClassName].filter(Boolean).join(' ')}
+    >
       <input
         accept=".csv,text/csv"
         className="sr-only"
@@ -72,7 +76,7 @@ export function MemberCsvActions({
         className={triggerClassName}
         icon={<PlusIcon />}
         label={isPending ? t('importing') : t('addMembers')}
-        size="full"
+        size="medium"
         items={[
           {
             icon: <DownloadIcon />,

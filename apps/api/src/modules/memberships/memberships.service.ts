@@ -85,6 +85,9 @@ export class MembershipsService {
                 id: member.user.id,
                 displayName: member.user.displayName,
                 email: member.user.email,
+                baptizedAt: member.user.baptizedAt,
+                baptismChurchName: member.user.baptismChurchName,
+                platformRole: member.user.platformRole,
               }
             : null,
           activeClaim: activeClaim

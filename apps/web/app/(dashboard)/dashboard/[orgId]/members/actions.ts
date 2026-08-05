@@ -62,6 +62,24 @@ export async function loadMembersAction(input: {
   return { ok: true as const, payload };
 }
 
+export async function loadMemberDetailsAction(input: {
+  organizationId: string;
+  membershipId: string;
+}) {
+  const membersResult = await loadMembersAction({
+    organizationId: input.organizationId,
+    access: 'all',
+  });
+  if (!membersResult.ok) return membersResult;
+
+  const member = membersResult.payload.members.find(({ id }) => id === input.membershipId);
+  if (!member) {
+    return { ok: false as const, error: 'Organization member was not found.' };
+  }
+
+  return { ok: true as const, payload: membersResult.payload, member };
+}
+
 export async function manageInlineInvitationAction(
   previousState: InlineInvitationState,
   formData: FormData,
@@ -281,7 +299,15 @@ export async function createRelationshipAction(formData: FormData) {
       }),
     },
   );
-  return result.ok ? { ok: true as const } : { ok: false as const, error: result.error.message };
+  if (!result.ok) return { ok: false as const, error: result.error.message };
+
+  const relationships = await apiFetch<MemberRelationship[]>(
+    `/organizations/${organizationId}/memberships/${membershipId}/relationships`,
+  );
+
+  return relationships.ok
+    ? { ok: true as const, relationships: relationships.data }
+    : { ok: false as const, error: relationships.error.message };
 }
 
 export async function deleteRelationshipAction(formData: FormData) {

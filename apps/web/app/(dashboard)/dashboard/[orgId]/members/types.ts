@@ -38,7 +38,14 @@ export interface OrganizationMember {
     profilePhotoAssetId: string | null;
     photoUrl: string | null;
   };
-  user: { id: string; email: string | null; displayName: string | null } | null;
+  user: {
+    id: string;
+    email: string | null;
+    displayName: string | null;
+    baptizedAt: string | null;
+    baptismChurchName: string | null;
+    platformRole: string;
+  } | null;
   activeClaim: {
     id: string;
     status: 'PENDING' | 'REQUESTED';

@@ -61,6 +61,9 @@ export class MembershipsRepository {
             email: true,
             displayName: true,
             avatarUrl: true,
+            baptizedAt: true,
+            baptismChurchName: true,
+            platformRole: true,
             accounts: {
               where: { provider: 'telegram', deletedAt: null },
               select: { id: true },

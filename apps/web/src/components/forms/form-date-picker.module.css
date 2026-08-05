@@ -45,6 +45,14 @@
   font-size: 20px;
 }
 
+.calendar :global(.react-datepicker__month-select),
+.calendar :global(.react-datepicker__year-select) {
+  min-height: 32px;
+  height: 32px;
+  padding: 4px 32px 4px 10px;
+  line-height: 20px;
+}
+
 .calendar :global(.react-datepicker__day-name),
 .calendar :global(.react-datepicker__day) {
   width: 38px;

@@ -1,6 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import type { Route } from 'next';
+import { useRouter } from 'next/navigation';
 import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
@@ -29,7 +31,6 @@ import { FormCheckbox } from '@/components/forms/form-checkbox';
 type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 type FormAction = (formData: FormData) => void | Promise<void>;
 type RemoveMemberAction = (formData: FormData) => Promise<{ ok: boolean; error?: string }>;
-type RelationshipAction = (formData: FormData) => Promise<{ ok: boolean; error?: string }>;
 
 export interface ProfileUpdateState {
   updated: boolean;
@@ -95,7 +96,17 @@ interface EditableMember {
   }>;
 }
 
-type MemberProfileUpdate = Partial<EditableMember['profile']> & {
+type MemberRelationship = NonNullable<EditableMember['relationships']>[number];
+type PendingRelationship = {
+  relatedMembershipId: string;
+  type: MemberRelationship['type'];
+};
+type CreateRelationshipAction = (
+  formData: FormData,
+) => Promise<{ ok: true; relationships: MemberRelationship[] } | { ok: false; error?: string }>;
+type DeleteRelationshipAction = (formData: FormData) => Promise<{ ok: boolean; error?: string }>;
+
+export type MemberProfileUpdate = Partial<EditableMember['profile']> & {
   ministries?: MemberMinistry[];
 };
 
@@ -111,7 +122,7 @@ function MenuIcon({ children }: { children: ReactNode }) {
   );
 }
 
-function EditMemberSheet({
+export function EditMemberDialog({
   member,
   organizationId,
   action,
@@ -121,22 +132,26 @@ function EditMemberSheet({
   preparePhoto,
   confirmPhoto,
   onProfileUpdated,
+  onRelationshipsChanged,
   dialogRef,
   onOpen,
   onClose,
+  renderTrigger,
 }: {
   member: EditableMember;
   organizationId: string;
   action: ProfileUpdateAction;
   memberCandidates: Array<{ id: string; displayName: string }>;
-  createRelationship: RelationshipAction;
-  deleteRelationship: RelationshipAction;
+  createRelationship: CreateRelationshipAction;
+  deleteRelationship: DeleteRelationshipAction;
   preparePhoto: PrepareMemberPhotoAction;
   confirmPhoto: ConfirmMemberPhotoAction;
   onProfileUpdated: (profile: MemberProfileUpdate) => void;
+  onRelationshipsChanged?: ((relationships?: MemberRelationship[]) => void) | undefined;
   dialogRef: RefObject<HTMLDialogElement | null>;
   onOpen: () => void;
   onClose: () => void;
+  renderTrigger?: ((openDialog: () => void) => ReactNode) | undefined;
 }) {
   const t = useTranslations('members');
   const commonT = useTranslations('common');
@@ -146,8 +161,12 @@ function EditMemberSheet({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [relatedMembershipId, setRelatedMembershipId] = useState('');
-  const [relationshipType, setRelationshipType] = useState('SPOUSE');
+  const [relationshipType, setRelationshipType] = useState<MemberRelationship['type']>('SPOUSE');
   const [relationships, setRelationships] = useState(member.relationships ?? []);
+  const [pendingRelationshipCreates, setPendingRelationshipCreates] = useState<
+    PendingRelationship[]
+  >([]);
+  const [pendingRelationshipDeleteIds, setPendingRelationshipDeleteIds] = useState<string[]>([]);
   const {
     register,
     control,
@@ -170,6 +189,14 @@ function EditMemberSheet({
       ministries: member.ministries,
     },
   });
+  const relationshipAlreadySelected = relatedMembershipId
+    ? relationships.some((relationship) =>
+        relationshipMatchesSelection(member.id, relationship, {
+          relatedMembershipId,
+          type: relationshipType,
+        }),
+      )
+    : false;
 
   const submit = handleSubmit(async (values) => {
     const currentPhotoError = validateMemberPhoto(photo, {
@@ -227,9 +254,38 @@ function EditMemberSheet({
     const result = await action({ updated: false, error: null }, formData);
     if (result.error) toast.error(result.error);
     else {
+      let savedRelationships = relationships;
+      for (const relationshipId of pendingRelationshipDeleteIds) {
+        const relationshipFormData = new FormData();
+        relationshipFormData.set('organizationId', organizationId);
+        relationshipFormData.set('relationshipId', relationshipId);
+        const deleteResult = await deleteRelationship(relationshipFormData);
+        if (!deleteResult.ok) {
+          toast.error(deleteResult.error ?? t('unableToRemoveRelationship'));
+          return;
+        }
+      }
+
+      for (const relationship of pendingRelationshipCreates) {
+        const relationshipFormData = new FormData();
+        relationshipFormData.set('organizationId', organizationId);
+        relationshipFormData.set('membershipId', member.id);
+        relationshipFormData.set('relatedMembershipId', relationship.relatedMembershipId);
+        relationshipFormData.set('relationshipType', relationship.type);
+        const createResult = await createRelationship(relationshipFormData);
+        if (!createResult.ok) {
+          toast.error(createResult.error ?? t('unableToAddRelationship'));
+          return;
+        }
+        savedRelationships = createResult.relationships;
+      }
+
       toast.success(t('profileUpdated'));
       setSavedPhotoUrl(nextPhotoUrl);
       setPhoto(null);
+      setRelationships(savedRelationships);
+      setPendingRelationshipCreates([]);
+      setPendingRelationshipDeleteIds([]);
       onProfileUpdated({
         ...(values.displayName !== undefined ? { displayName: values.displayName } : {}),
         ...(values.email !== undefined ? { email: values.email } : {}),
@@ -243,33 +299,42 @@ function EditMemberSheet({
         ...(values.ministries !== undefined ? { ministries: values.ministries } : {}),
         photoUrl: nextPhotoUrl,
       });
+      onRelationshipsChanged?.(savedRelationships);
+      dialogRef.current?.close();
     }
   });
+  const resetRelationshipDraft = () => {
+    setRelationships(member.relationships ?? []);
+    setPendingRelationshipCreates([]);
+    setPendingRelationshipDeleteIds([]);
+    setRelatedMembershipId('');
+    setRelationshipType('SPOUSE');
+  };
+  const openDialog = () => {
+    resetRelationshipDraft();
+    onOpen();
+    dialogRef.current?.showModal();
+  };
 
   return (
     <>
-      <TableRowAction
-        onClick={() => {
-          onOpen();
-          dialogRef.current?.showModal();
-        }}
-      >
-        <MenuIcon>
-          <path d="M4 20h4l11-11-4-4L4 16v4Zm9-13 4 4M13 5l2-2 4 4-2 2" />
-        </MenuIcon>
-        {t('editMember')}
-      </TableRowAction>
+      {renderTrigger ? (
+        renderTrigger(openDialog)
+      ) : (
+        <TableRowAction onClick={openDialog}>
+          <MenuIcon>
+            <path d="M4 20h4l11-11-4-4L4 16v4Zm9-13 4 4M13 5l2-2 4 4-2 2" />
+          </MenuIcon>
+          {t('editMember')}
+        </TableRowAction>
+      )}
       <dialog
         aria-labelledby={titleId}
         className="fixed inset-0 m-auto h-fit max-h-[min(800px,80dvh)] w-[min(560px,calc(100%-32px))] max-w-none overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
         onClose={onClose}
         ref={dialogRef}
       >
-        <form
-          onSubmit={submit}
-          className="grid max-h-[min(800px,80dvh)] grid-rows-[auto_minmax(0,1fr)_auto]"
-          noValidate
-        >
+        <form onSubmit={submit} className="flex max-h-[min(800px,80dvh)] flex-col" noValidate>
           <header className="flex items-start justify-between gap-4 border-b border-[var(--line-muted)] p-6 [&_h2]:m-0 [&_p]:m-0">
             <div>
               <p>{t('editProfile')}</p>
@@ -284,7 +349,7 @@ function EditMemberSheet({
               ×
             </button>
           </header>
-          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-6">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="membershipId" value={member.id} />
             <MemberPhotoField
@@ -344,7 +409,7 @@ function EditMemberSheet({
               error={errors.familyNotes?.message}
               {...register('familyNotes')}
             />
-            <fieldset className="grid gap-2 rounded-md border border-[var(--line)] p-3">
+            <fieldset className="flex flex-col gap-2 rounded-md border border-[var(--line)] p-3">
               <legend className="px-1 font-semibold">{t('ministries')}</legend>
               <div className="grid gap-2 sm:grid-cols-2">
                 {MEMBER_MINISTRIES.map((ministry) => (
@@ -357,7 +422,7 @@ function EditMemberSheet({
                 ))}
               </div>
             </fieldset>
-            <fieldset className="grid gap-3 border-t border-[var(--line)] pt-4">
+            <fieldset className="flex flex-col gap-3 border-t border-[var(--line)] pt-4">
               <legend className="pr-2 font-semibold">{t('familyRelationships')}</legend>
               {relationships.map((relationship) => {
                 const other =
@@ -373,17 +438,25 @@ function EditMemberSheet({
                     <button
                       className="button secondary"
                       type="button"
-                      onClick={async () => {
-                        const data = new FormData();
-                        data.set('organizationId', organizationId);
-                        data.set('relationshipId', relationship.id);
-                        const result = await deleteRelationship(data);
-                        if (result.ok) {
-                          setRelationships((current) =>
-                            current.filter(({ id }) => id !== relationship.id),
+                      onClick={() => {
+                        const nextRelationships = relationships.filter(
+                          ({ id }) => id !== relationship.id,
+                        );
+                        setRelationships(nextRelationships);
+                        if (relationship.id.startsWith('draft:')) {
+                          setPendingRelationshipCreates((current) =>
+                            current.filter(
+                              (pending) =>
+                                !relationshipMatchesPending(member.id, relationship, pending),
+                            ),
                           );
-                          toast.success(t('relationshipRemoved'));
-                        } else toast.error(result.error ?? t('unableToRemoveRelationship'));
+                          return;
+                        }
+                        setPendingRelationshipDeleteIds((current) =>
+                          current.includes(relationship.id)
+                            ? current
+                            : [...current, relationship.id],
+                        );
                       }}
                     >
                       {t('remove')}
@@ -410,7 +483,9 @@ function EditMemberSheet({
                 <FormSelect
                   label={t('relationship')}
                   value={relationshipType}
-                  onChange={(event) => setRelationshipType(event.target.value)}
+                  onChange={(event) =>
+                    setRelationshipType(event.target.value as MemberRelationship['type'])
+                  }
                 >
                   <option value="SPOUSE">{t('relationshipLabels.SPOUSE')}</option>
                   <option value="PARENT">{t('relationshipLabels.PARENT')}</option>
@@ -422,18 +497,31 @@ function EditMemberSheet({
               <button
                 className="button secondary"
                 type="button"
-                disabled={!relatedMembershipId}
-                onClick={async () => {
-                  const data = new FormData();
-                  data.set('organizationId', organizationId);
-                  data.set('membershipId', member.id);
-                  data.set('relatedMembershipId', relatedMembershipId);
-                  data.set('relationshipType', relationshipType);
-                  const result = await createRelationship(data);
-                  if (result.ok) {
-                    toast.success(t('relationshipAdded'));
-                    setRelatedMembershipId('');
-                  } else toast.error(result.error ?? t('unableToAddRelationship'));
+                disabled={!relatedMembershipId || relationshipAlreadySelected}
+                onClick={() => {
+                  const relatedMember = memberCandidates.find(
+                    ({ id }) => id === relatedMembershipId,
+                  );
+                  if (!relatedMember) return;
+
+                  const pendingRelationship = {
+                    relatedMembershipId,
+                    type: relationshipType,
+                  };
+                  const draftRelationship = createDraftRelationship({
+                    currentMemberId: member.id,
+                    currentMemberName: member.profile.displayName,
+                    relatedMemberId: relatedMembershipId,
+                    relatedMemberName: relatedMember.displayName,
+                    type: relationshipType,
+                  });
+
+                  setRelationships((current) => [...current, draftRelationship]);
+                  setPendingRelationshipCreates((current) => [...current, pendingRelationship]);
+                  setPendingRelationshipDeleteIds((current) =>
+                    current.filter((relationshipId) => relationshipId !== draftRelationship.id),
+                  );
+                  setRelatedMembershipId('');
                 }}
               >
                 {t('addRelationship')}
@@ -452,6 +540,91 @@ function EditMemberSheet({
       </dialog>
     </>
   );
+}
+
+function normalizeRelationship(input: {
+  currentMemberId: string;
+  relatedMemberId: string;
+  type: MemberRelationship['type'];
+}) {
+  let fromMembershipId = input.currentMemberId;
+  let toMembershipId = input.relatedMemberId;
+  let type = input.type;
+
+  if (type === 'CHILD') {
+    fromMembershipId = input.relatedMemberId;
+    toMembershipId = input.currentMemberId;
+    type = 'PARENT';
+  }
+
+  if (type !== 'PARENT' && fromMembershipId > toMembershipId) {
+    [fromMembershipId, toMembershipId] = [toMembershipId, fromMembershipId];
+  }
+
+  return { fromMembershipId, toMembershipId, type };
+}
+
+function createDraftRelationship({
+  currentMemberId,
+  currentMemberName,
+  relatedMemberId,
+  relatedMemberName,
+  type,
+}: {
+  currentMemberId: string;
+  currentMemberName: string;
+  relatedMemberId: string;
+  relatedMemberName: string;
+  type: MemberRelationship['type'];
+}): MemberRelationship {
+  const normalized = normalizeRelationship({ currentMemberId, relatedMemberId, type });
+
+  return {
+    id: `draft:${normalized.fromMembershipId}:${normalized.toMembershipId}:${normalized.type}`,
+    type: normalized.type,
+    fromMembershipId: normalized.fromMembershipId,
+    toMembershipId: normalized.toMembershipId,
+    fromMembership: {
+      id: normalized.fromMembershipId,
+      profile: {
+        displayName:
+          normalized.fromMembershipId === currentMemberId ? currentMemberName : relatedMemberName,
+      },
+    },
+    toMembership: {
+      id: normalized.toMembershipId,
+      profile: {
+        displayName:
+          normalized.toMembershipId === currentMemberId ? currentMemberName : relatedMemberName,
+      },
+    },
+  };
+}
+
+function relationshipMatchesSelection(
+  currentMemberId: string,
+  relationship: MemberRelationship,
+  selection: PendingRelationship,
+) {
+  const normalized = normalizeRelationship({
+    currentMemberId,
+    relatedMemberId: selection.relatedMembershipId,
+    type: selection.type,
+  });
+
+  return (
+    relationship.fromMembershipId === normalized.fromMembershipId &&
+    relationship.toMembershipId === normalized.toMembershipId &&
+    relationship.type === normalized.type
+  );
+}
+
+function relationshipMatchesPending(
+  currentMemberId: string,
+  relationship: MemberRelationship,
+  pendingRelationship: PendingRelationship,
+) {
+  return relationshipMatchesSelection(currentMemberId, relationship, pendingRelationship);
 }
 
 function ChangeRoleDialog({
@@ -590,11 +763,13 @@ export function MemberActions({
   removeMember,
   claimAction,
   memberCandidates,
+  viewHref,
   createRelationship,
   deleteRelationship,
   preparePhoto,
   confirmPhoto,
   onProfileUpdated,
+  onRelationshipsChanged,
   onRoleUpdated,
   onRemoved,
 }: {
@@ -608,22 +783,25 @@ export function MemberActions({
   removeMember: RemoveMemberAction;
   claimAction: FormAction;
   memberCandidates: Array<{ id: string; displayName: string }>;
-  createRelationship: RelationshipAction;
-  deleteRelationship: RelationshipAction;
+  viewHref?: Route | undefined;
+  createRelationship: CreateRelationshipAction;
+  deleteRelationship: DeleteRelationshipAction;
   preparePhoto: PrepareMemberPhotoAction;
   confirmPhoto: ConfirmMemberPhotoAction;
   onProfileUpdated: (profile: MemberProfileUpdate) => void;
+  onRelationshipsChanged?: ((relationships?: MemberRelationship[]) => void) | undefined;
   onRoleUpdated: (role: OrganizationRole) => void;
   onRemoved: () => void;
 }) {
   const t = useTranslations('members');
   const commonT = useTranslations('common');
+  const router = useRouter();
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const roleDialogRef = useRef<HTMLDialogElement>(null);
   const accessDialogRef = useRef<HTMLDialogElement>(null);
   const [openDialog, setOpenDialog] = useState<'edit' | 'role' | 'access' | null>(null);
 
-  if (!canManage && !isOwner) return null;
+  if (!canManage && !isOwner && !viewHref) return null;
 
   return (
     <TableRowActions
@@ -635,8 +813,17 @@ export function MemberActions({
       label={t('actionsFor', { name: member.profile.displayName })}
       outsideClickDisabled={openDialog !== null}
     >
+      {viewHref ? (
+        <TableRowAction onSelect={() => router.push(viewHref)}>
+          <MenuIcon>
+            <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+            <path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />
+          </MenuIcon>
+          {t('viewMember')}
+        </TableRowAction>
+      ) : null}
       {canManage ? (
-        <EditMemberSheet
+        <EditMemberDialog
           member={member}
           organizationId={organizationId}
           action={updateProfile}
@@ -646,6 +833,7 @@ export function MemberActions({
           preparePhoto={preparePhoto}
           confirmPhoto={confirmPhoto}
           onProfileUpdated={onProfileUpdated}
+          onRelationshipsChanged={onRelationshipsChanged}
           dialogRef={editDialogRef}
           onOpen={() => setOpenDialog('edit')}
           onClose={() => setOpenDialog(null)}

@@ -98,10 +98,18 @@ export function DataTable<TData>({
                       : rowClassName
                 }
                 key={row.id}
-                onClick={href ? () => router.push(href as Route) : undefined}
+                onClick={
+                  href
+                    ? (event) => {
+                        if (isInteractiveTableTarget(event.target)) return;
+                        router.push(href as Route);
+                      }
+                    : undefined
+                }
                 onKeyDown={
                   href
                     ? (event) => {
+                        if (isInteractiveTableTarget(event.target)) return;
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
                           router.push(href as Route);
@@ -128,4 +136,10 @@ export function DataTable<TData>({
       </table>
     </div>
   );
+}
+
+function isInteractiveTableTarget(target: EventTarget | null): boolean {
+  return target instanceof Element
+    ? Boolean(target.closest('a, button, input, select, textarea, summary, details'))
+    : false;
 }

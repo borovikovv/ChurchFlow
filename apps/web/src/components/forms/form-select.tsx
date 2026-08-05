@@ -20,6 +20,8 @@ interface SelectOption {
   value: string;
 }
 
+type SelectSize = 'default' | 'medium';
+
 type FormSelectProps = {
   children: ReactNode;
   className?: string | undefined;
@@ -33,7 +35,7 @@ type FormSelectProps = {
   onChange?: ChangeEventHandler<HTMLSelectElement> | undefined;
   required?: boolean | undefined;
   selectClassName?: string | undefined;
-  size?: 'default' | 'compact' | undefined;
+  size?: SelectSize | undefined;
   value?: string | number | readonly string[] | undefined;
   clearable?: boolean | undefined;
 };
@@ -44,13 +46,16 @@ type OptionElementProps = {
   value?: string | number | readonly string[];
 };
 
-function createSelectStyles(size: 'default' | 'compact'): StylesConfig<SelectOption, false> {
-  const compact = size === 'compact';
+function createSelectStyles(size: SelectSize): StylesConfig<SelectOption, false> {
+  const medium = size === 'medium';
+  const controlHeight = medium ? 32 : 42;
 
   return {
     control: (base, state) => ({
       ...base,
-      minHeight: compact ? 32 : 42,
+      alignItems: 'center',
+      minHeight: controlHeight,
+      height: controlHeight,
       borderColor: state.isFocused ? 'var(--accent)' : 'var(--line)',
       borderRadius: 'var(--radius)',
       backgroundColor: state.isDisabled ? 'var(--surface-subtle)' : 'var(--surface)',
@@ -65,8 +70,15 @@ function createSelectStyles(size: 'default' | 'compact'): StylesConfig<SelectOpt
     }),
     dropdownIndicator: (base, state) => ({
       ...base,
+      alignItems: 'center',
       color: state.isFocused ? 'var(--accent-strong)' : 'var(--muted)',
-      paddingInline: compact ? 6 : 10,
+      display: 'flex',
+      height: '100%',
+      minHeight: 0,
+      paddingBottom: 0,
+      paddingLeft: medium ? 6 : 10,
+      paddingRight: medium ? 6 : 10,
+      paddingTop: 0,
       '&:hover': {
         color: 'var(--accent-strong)',
       },
@@ -74,11 +86,22 @@ function createSelectStyles(size: 'default' | 'compact'): StylesConfig<SelectOpt
     indicatorSeparator: () => ({
       display: 'none',
     }),
+    indicatorsContainer: (base) => ({
+      ...base,
+      alignItems: 'center',
+      height: '100%',
+    }),
     input: (base) => ({
       ...base,
       color: 'var(--foreground)',
-      margin: 0,
+      alignSelf: 'center',
+      lineHeight: medium ? 'normal' : base.lineHeight,
+      marginBottom: 0,
+      marginLeft: 0,
+      marginRight: 0,
+      marginTop: 0,
       padding: 0,
+      maxHeight: medium ? controlHeight : base.maxHeight,
     }),
     menu: (base) => ({
       ...base,
@@ -104,24 +127,46 @@ function createSelectStyles(size: 'default' | 'compact'): StylesConfig<SelectOpt
       cursor: state.isDisabled ? 'not-allowed' : 'pointer',
       fontWeight: state.isSelected ? 600 : 400,
       opacity: state.isDisabled ? 0.6 : 1,
-      paddingBlock: compact ? 5 : 8,
-      paddingInline: compact ? 8 : 12,
+      paddingBlock: medium ? 5 : 8,
+      paddingInline: medium ? 8 : 12,
       '&:active': {
         backgroundColor: state.isSelected ? '#ddf4ff' : 'var(--line-muted)',
       },
     }),
     placeholder: (base) => ({
       ...base,
+      alignSelf: 'center',
       color: 'var(--muted)',
+      height: 'auto',
+      lineHeight: medium ? 'normal' : base.lineHeight,
+      marginBottom: 0,
+      marginLeft: 0,
+      marginRight: 0,
+      marginTop: 0,
+      maxHeight: medium ? controlHeight : base.maxHeight,
     }),
     singleValue: (base) => ({
       ...base,
+      alignSelf: 'center',
       color: 'var(--foreground)',
+      height: 'auto',
+      lineHeight: medium ? 'normal' : base.lineHeight,
+      marginBottom: 0,
+      marginLeft: 0,
+      marginRight: 0,
+      marginTop: 0,
+      maxHeight: medium ? controlHeight : base.maxHeight,
     }),
     valueContainer: (base) => ({
       ...base,
-      paddingBlock: 0,
-      paddingInline: compact ? 8 : 12,
+      alignItems: 'center',
+      display: 'grid',
+      height: '100%',
+      minHeight: 0,
+      paddingBottom: 0,
+      paddingLeft: medium ? 8 : 12,
+      paddingRight: medium ? 8 : 12,
+      paddingTop: 0,
     }),
   };
 }
@@ -170,7 +215,7 @@ export function FormSelect({
             menuShouldScrollIntoView={false}
             options={options}
             required={Boolean(required)}
-            styles={size === 'compact' ? createSelectStyles('compact') : selectStyles}
+            styles={size === 'medium' ? createSelectStyles('medium') : selectStyles}
             value={selectedOption}
             {...(selectClassName ? { className: selectClassName } : {})}
             onBlur={() => {

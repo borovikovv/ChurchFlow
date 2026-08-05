@@ -14,12 +14,14 @@ export function QueryFilterSelect({
   label,
   name,
   options,
+  size,
   value,
   preserveParams,
 }: {
   label: string;
   name: string;
   options: QueryFilterSelectOption[];
+  size?: 'default' | 'medium';
   value: string;
   preserveParams?: Record<string, string | undefined>;
 }) {
@@ -47,7 +49,8 @@ export function QueryFilterSelect({
       label={label}
       labelClassName="filter-label"
       name={name}
-      selectClassName="min-w-40"
+      selectClassName="md:w-60 w-full max-w-full"
+      size={size}
       value={value}
       onChange={updateFilter}
     >
