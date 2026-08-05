@@ -53,6 +53,29 @@ jobs:
 
           echo "Building immutable images for commit $IMAGE_TAG."
 
+      - name: Validate deployment branch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${{ inputs.environment }}" in
+            stage)
+              expected_branch="stage"
+              ;;
+            prod)
+              expected_branch="main"
+              ;;
+            *)
+              echo "Unsupported environment."
+              exit 1
+              ;;
+          esac
+
+          if [[ "$GITHUB_REF_TYPE" != "branch" || "$GITHUB_REF_NAME" != "$expected_branch" ]]; then
+            echo "::error::${{ inputs.environment }} deploys must be dispatched from the $expected_branch branch. Current ref: $GITHUB_REF_TYPE/$GITHUB_REF_NAME."
+            exit 1
+          fi
+
       - name: Validate Telegram environment variables
         shell: bash
         run: |
@@ -227,8 +250,8 @@ jobs:
               web_host_port="3000"
               ;;
             prod)
-              deploy_env="production"
-              deploy_dir="/opt/churchflow/production"
+              deploy_env="prod"
+              deploy_dir="/opt/churchflow/prod"
               api_host_port="4100"
               web_host_port="3100"
               ;;
@@ -256,26 +279,28 @@ jobs:
             echo "deploy_dir=$deploy_dir"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Restrict prod deployments
-        if: inputs.environment == 'prod'
+      - name: Restrict deployments to matching branches
         shell: bash
         run: |
           set -euo pipefail
 
-          git fetch --force origin main:refs/remotes/origin/main
-          git fetch --force origin 'refs/tags/v*:refs/tags/v*'
+          case "${{ inputs.environment }}" in
+            stage)
+              expected_branch="stage"
+              ;;
+            prod)
+              expected_branch="main"
+              ;;
+            *)
+              echo "Unsupported environment."
+              exit 1
+              ;;
+          esac
 
-          if git merge-base --is-ancestor "$IMAGE_TAG" refs/remotes/origin/main; then
-            exit 0
+          if [[ "$GITHUB_REF_TYPE" != "branch" || "$GITHUB_REF_NAME" != "$expected_branch" ]]; then
+            echo "::error::${{ inputs.environment }} deploys must be dispatched from the $expected_branch branch. Current ref: $GITHUB_REF_TYPE/$GITHUB_REF_NAME."
+            exit 1
           fi
-
-          if git for-each-ref --format='%(refname:short) %(objectname) %(*objectname)' refs/tags/v* \
-            | awk -v sha="$IMAGE_TAG" '$2 == sha || $3 == sha { found = 1 } END { exit found ? 0 : 1 }'; then
-            exit 0
-          fi
-
-          echo "Prod deploys require github.sha to be reachable from main or matching a v* release tag."
-          exit 1
 
       - name: Validate deployment environment
         shell: bash
@@ -537,8 +562,8 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/churchflow_deploy -o StrictHostKeyChecking=accept-new \
             "$SSH_USER@$SSH_HOST" \
-            "DEPLOY_DIR='$DEPLOY_DIR' GHCR_USERNAME='$GHCR_USERNAME' IMAGE_TAG='$IMAGE_TAG' INTERNAL_NETWORK='$INTERNAL_NETWORK' API_CONTAINER_NAME='$API_CONTAINER_NAME' WEB_CONTAINER_NAME='$WEB_CONTAINER_NAME' API_HOST_PORT='$API_HOST_PORT' WEB_HOST_PORT='$WEB_HOST_PORT' bash -s" <<'REMOTE'
-          set -euo pipefail
+            "DEPLOY_DIR='$DEPLOY_DIR' DEPLOY_ENV='$DEPLOY_ENV' GHCR_USERNAME='$GHCR_USERNAME' IMAGE_TAG='$IMAGE_TAG' INTERNAL_NETWORK='$INTERNAL_NETWORK' API_CONTAINER_NAME='$API_CONTAINER_NAME' WEB_CONTAINER_NAME='$WEB_CONTAINER_NAME' API_HOST_PORT='$API_HOST_PORT' WEB_HOST_PORT='$WEB_HOST_PORT' GITHUB_REF_NAME='$GITHUB_REF_NAME' GITHUB_REF_TYPE='$GITHUB_REF_TYPE' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
           cd "$DEPLOY_DIR"
 
           docker_config="$(mktemp -d)"
@@ -563,15 +588,15 @@ jobs:
           fi
 
           docker compose --env-file .env -f compose.yaml config >/dev/null
-          IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env -f compose.yaml pull api web migrator
+          docker compose --env-file .env -f compose.yaml pull api web migrator
 
-          if ! IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env -f compose.yaml --profile migrations run --rm --no-deps migrator; then
+          if ! docker compose --env-file .env -f compose.yaml --profile migrations run --rm --no-deps migrator; then
             echo "Database migrations failed."
             docker exec churchflow-postgres pg_isready -U churchflow -d churchflow || true
             exit 1
           fi
 
-          IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env -f compose.yaml up -d --remove-orphans api web
+          docker compose --env-file .env -f compose.yaml up -d --remove-orphans --force-recreate api web
 
           require_running_container() {
             local container="$1"
@@ -591,6 +616,7 @@ jobs:
           wait_for_healthy() {
             local container="$1"
             local deadline=$((SECONDS + 180))
+            local status
 
             while (( SECONDS < deadline )); do
               status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true)"
@@ -611,6 +637,30 @@ jobs:
             docker compose --env-file .env -f compose.yaml logs --tail=120 api web
           }
 
+          get_health_status() {
+            local container="$1"
+            docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container"
+          }
+
+          get_expected_image() {
+            local service="$1"
+            docker compose --env-file .env -f compose.yaml config \
+              | awk -v service="$service" '
+                  $0 == "  " service ":" {
+                    in_service = 1
+                    next
+                  }
+                  in_service && /^  [A-Za-z0-9_-]+:/ {
+                    in_service = 0
+                  }
+                  in_service && /^    image:/ {
+                    sub(/^    image:[[:space:]]*/, "")
+                    print
+                    exit
+                  }
+                '
+          }
+
           if ! require_running_container "$API_CONTAINER_NAME" || ! require_running_container "$WEB_CONTAINER_NAME"; then
             show_safe_diagnostics
             exit 1
@@ -620,6 +670,9 @@ jobs:
             show_safe_diagnostics
             exit 1
           fi
+
+          API_HEALTH_STATUS="$(get_health_status "$API_CONTAINER_NAME")"
+          WEB_HEALTH_STATUS="$(get_health_status "$WEB_CONTAINER_NAME")"
 
           if ! curl --fail --silent --show-error "http://127.0.0.1:$API_HOST_PORT/v1/health" >/dev/null; then
             echo "API health endpoint failed."
@@ -633,8 +686,58 @@ jobs:
             exit 1
           fi
 
+          EXPECTED_API_IMAGE="$(get_expected_image api)"
+          EXPECTED_WEB_IMAGE="$(get_expected_image web)"
+          RUNNING_API_IMAGE="$(
+            docker inspect "$API_CONTAINER_NAME" --format '{{.Config.Image}}'
+          )"
+          RUNNING_WEB_IMAGE="$(
+            docker inspect "$WEB_CONTAINER_NAME" --format '{{.Config.Image}}'
+          )"
+
+          if [[ -z "$EXPECTED_API_IMAGE" || -z "$EXPECTED_WEB_IMAGE" ]]; then
+            echo "Could not resolve expected deployment images from Docker Compose configuration."
+            show_safe_diagnostics
+            exit 1
+          fi
+
+          if [[ "$RUNNING_API_IMAGE" != "$EXPECTED_API_IMAGE" || "$RUNNING_WEB_IMAGE" != "$EXPECTED_WEB_IMAGE" ]]; then
+            echo "Deployment image verification failed."
+            printf 'Expected API image: %s\n' "$EXPECTED_API_IMAGE"
+            printf 'Running API image:  %s\n' "$RUNNING_API_IMAGE"
+            printf 'Expected Web image: %s\n' "$EXPECTED_WEB_IMAGE"
+            printf 'Running Web image:  %s\n' "$RUNNING_WEB_IMAGE"
+            show_safe_diagnostics
+            exit 1
+          fi
+
+          {
+            echo "### Remote deployment verification"
+            echo ""
+            echo "- Environment: \`$DEPLOY_ENV\`"
+            echo "- Branch/ref: \`$GITHUB_REF_TYPE/$GITHUB_REF_NAME\`"
+            echo "- Commit SHA: \`$IMAGE_TAG\`"
+            echo "- Remote directory: \`$DEPLOY_DIR\`"
+            echo "- Expected API image: \`$EXPECTED_API_IMAGE\`"
+            echo "- Running API image: \`$RUNNING_API_IMAGE\`"
+            echo "- Expected Web image: \`$EXPECTED_WEB_IMAGE\`"
+            echo "- Running Web image: \`$RUNNING_WEB_IMAGE\`"
+            echo "- Healthcheck: \`api=$API_HEALTH_STATUS web=$WEB_HEALTH_STATUS\`"
+          } > deployment-summary.md
+
           docker compose --env-file .env -f compose.yaml ps
           REMOTE
+
+      - name: Download remote deployment summary
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/churchflow_deploy -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$SSH_HOST:$DEPLOY_DIR/deployment-summary.md" \
+            deployment-summary.md
 
       - name: Deployment summary
         shell: bash
@@ -649,4 +752,6 @@ jobs:
             echo "- Migrator image: \`${MIGRATOR_IMAGE}\`"
             echo "- Web image: \`${WEB_IMAGE}\`"
             echo "- Remote directory: \`${DEPLOY_DIR}\`"
+            echo ""
+            cat deployment-summary.md
           } >> "$GITHUB_STEP_SUMMARY"
