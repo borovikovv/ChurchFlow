@@ -18,6 +18,7 @@ import {
   organizationMembersAccessFilterSchema,
   type OrganizationMembersAccessFilter,
 } from '@churchflow/shared';
+import { CopyField } from '@/components/copy-field';
 
 type MembersSearchParams = {
   access?: string;
@@ -41,7 +42,7 @@ export default async function MembersDashboardPage({
   searchParams: Promise<MembersSearchParams>;
 }) {
   const { orgId } = await params;
-  const { message, error, access = 'all' } = await searchParams;
+  const { claimLink, message, error, access = 'all' } = await searchParams;
   const user = await getCurrentUser();
   const messages = getMessages(user?.locale ?? 'en');
   const memberAccess = parseMemberAccess(access);
@@ -62,6 +63,7 @@ export default async function MembersDashboardPage({
       {!membersResult.ok ? <p className="form-error">{membersResult.error}</p> : null}
       {error ? <p className="form-error">{error}</p> : null}
       {message ? <p>{message}</p> : null}
+      {claimLink ? <CopyField value={claimLink} /> : null}
 
       <MembersManager
         key={memberAccess}
