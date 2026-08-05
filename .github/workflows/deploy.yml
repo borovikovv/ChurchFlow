@@ -560,9 +560,10 @@ jobs:
           SSH_USER: ${{ secrets.SSH_USER }}
         run: |
           set -euo pipefail
+          remote_output="$(mktemp)"
           ssh -i ~/.ssh/churchflow_deploy -o StrictHostKeyChecking=accept-new \
             "$SSH_USER@$SSH_HOST" \
-            "DEPLOY_DIR='$DEPLOY_DIR' DEPLOY_ENV='$DEPLOY_ENV' GHCR_USERNAME='$GHCR_USERNAME' IMAGE_TAG='$IMAGE_TAG' INTERNAL_NETWORK='$INTERNAL_NETWORK' API_CONTAINER_NAME='$API_CONTAINER_NAME' WEB_CONTAINER_NAME='$WEB_CONTAINER_NAME' API_HOST_PORT='$API_HOST_PORT' WEB_HOST_PORT='$WEB_HOST_PORT' GITHUB_REF_NAME='$GITHUB_REF_NAME' GITHUB_REF_TYPE='$GITHUB_REF_TYPE' bash -s" <<'REMOTE'
+            "DEPLOY_DIR='$DEPLOY_DIR' DEPLOY_ENV='$DEPLOY_ENV' GHCR_USERNAME='$GHCR_USERNAME' IMAGE_TAG='$IMAGE_TAG' INTERNAL_NETWORK='$INTERNAL_NETWORK' API_CONTAINER_NAME='$API_CONTAINER_NAME' WEB_CONTAINER_NAME='$WEB_CONTAINER_NAME' API_HOST_PORT='$API_HOST_PORT' WEB_HOST_PORT='$WEB_HOST_PORT' GITHUB_REF_NAME='$GITHUB_REF_NAME' GITHUB_REF_TYPE='$GITHUB_REF_TYPE' bash -s" <<'REMOTE' | tee "$remote_output"
           set -Eeuo pipefail
           cd "$DEPLOY_DIR"
 
@@ -711,6 +712,7 @@ jobs:
             exit 1
           fi
 
+          echo "__CHURCHFLOW_DEPLOYMENT_SUMMARY_BEGIN__"
           {
             echo "### Remote deployment verification"
             echo ""
@@ -723,21 +725,30 @@ jobs:
             echo "- Expected Web image: \`$EXPECTED_WEB_IMAGE\`"
             echo "- Running Web image: \`$RUNNING_WEB_IMAGE\`"
             echo "- Healthcheck: \`api=$API_HEALTH_STATUS web=$WEB_HEALTH_STATUS\`"
-          } > deployment-summary.md
+          }
+          echo "__CHURCHFLOW_DEPLOYMENT_SUMMARY_END__"
 
           docker compose --env-file .env -f compose.yaml ps
           REMOTE
 
-      - name: Download remote deployment summary
-        shell: bash
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-        run: |
-          set -euo pipefail
-          scp -i ~/.ssh/churchflow_deploy -o StrictHostKeyChecking=accept-new \
-            "$SSH_USER@$SSH_HOST:$DEPLOY_DIR/deployment-summary.md" \
-            deployment-summary.md
+          awk '
+            /^__CHURCHFLOW_DEPLOYMENT_SUMMARY_BEGIN__$/ {
+              capture = 1
+              next
+            }
+            /^__CHURCHFLOW_DEPLOYMENT_SUMMARY_END__$/ {
+              capture = 0
+              next
+            }
+            capture {
+              print
+            }
+          ' "$remote_output" > deployment-summary.md
+
+          if [[ ! -s deployment-summary.md ]]; then
+            echo "Remote deployment summary was not produced."
+            exit 1
+          fi
 
       - name: Deployment summary
         shell: bash
