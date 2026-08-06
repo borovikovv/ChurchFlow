@@ -270,7 +270,10 @@ export class TelegramBotService {
   }
 
   private botUsername(): string | undefined {
-    return this.configService.get<string>('TELEGRAM_BOT_USERNAME');
+    const username = this.configService.get<string>('TELEGRAM_BOT_USERNAME')?.trim();
+    if (!username) return undefined;
+
+    return username.startsWith('@') ? username.slice(1) : username;
   }
 
   private formatNotificationDelivery(delivery: TelegramNotificationDelivery): string {

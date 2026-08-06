@@ -63,8 +63,15 @@ export class TelegramBotRepository {
         data: { consumedAt: now },
       });
 
+      await tx.telegramNotificationBinding.deleteMany({
+        where: {
+          userId: token.userId,
+          telegramUserId: { not: input.telegramUserId },
+        },
+      });
+
       return tx.telegramNotificationBinding.upsert({
-        where: { userId: token.userId },
+        where: { telegramUserId: input.telegramUserId },
         create: {
           userId: token.userId,
           telegramUserId: input.telegramUserId,
@@ -77,6 +84,7 @@ export class TelegramBotRepository {
           blockedAt: null,
         },
         update: {
+          userId: token.userId,
           telegramUserId: input.telegramUserId,
           telegramChatId: input.telegramChatId,
           username: input.username,

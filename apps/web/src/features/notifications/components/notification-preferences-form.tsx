@@ -67,15 +67,22 @@ export function NotificationPreferencesForm({
   const connectTelegram = async () => {
     if (telegramActionPending) return;
     setTelegramActionPending(true);
+    const telegramWindow = window.open('about:blank', '_blank');
 
     try {
       const result = await createTelegramNotificationLink(organizationId);
       if (!result.ok) {
+        telegramWindow?.close();
         toast.error(result.error);
         return;
       }
 
-      window.open(result.data.url, '_blank', 'noopener,noreferrer');
+      if (telegramWindow) {
+        telegramWindow.opener = null;
+        telegramWindow.location.href = result.data.url;
+      } else {
+        window.location.assign(result.data.url);
+      }
       toast.info(t('finishTelegram'));
     } finally {
       setTelegramActionPending(false);
