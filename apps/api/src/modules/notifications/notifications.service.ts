@@ -256,19 +256,30 @@ export class NotificationsService {
           const recipients = result.deliveryRecipients.filter(
             (recipient) => recipient.emailEnabled && recipient.email,
           );
-          await Promise.all(
-            recipients.map((recipient) =>
-              this.emailService.sendNotificationEmail({
-                email: recipient.email ?? '',
-                organizationName: organization.name,
-                title: input.title,
-                body: input.body,
-                url: input.url,
-              }),
-            ),
+          const deliveryResults = await Promise.all(
+            recipients.map(async (recipient) => {
+              try {
+                await this.emailService.sendNotificationEmail({
+                  email: recipient.email ?? '',
+                  organizationName: organization.name,
+                  title: input.title,
+                  body: input.body,
+                  url: input.url,
+                });
+                return true;
+              } catch (error: unknown) {
+                this.logger.warn({
+                  event: 'Notification email delivery skipped',
+                  organizationId: input.organizationId,
+                  recipientUserId: recipient.userId,
+                  error: error instanceof Error ? error.message : String(error),
+                });
+                return false;
+              }
+            }),
           );
 
-          return recipients.length;
+          return deliveryResults.filter(Boolean).length;
         },
       },
       {

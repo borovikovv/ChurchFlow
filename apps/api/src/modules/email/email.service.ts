@@ -145,6 +145,7 @@ export class EmailService {
       to: input.email,
       subject: `[${input.organizationName}] ${input.title}`,
       text: [input.title, input.body, url ? `Open: ${url}` : null].filter(Boolean).join('\n'),
+      suppressFailureLog: true,
     });
   }
 

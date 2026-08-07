@@ -9,6 +9,7 @@ export interface EmailProviderSendInput {
   subject: string;
   text: string;
   html?: string;
+  suppressFailureLog?: boolean;
 }
 
 export interface EmailProvider {
@@ -55,13 +56,15 @@ export class ResendEmailProvider implements EmailProvider {
     if (!response.ok) {
       const body = await response.text();
       const providerMessage = this.parseProviderMessage(body);
-      this.logger.error({
-        event: 'Email delivery failed',
-        recipient: input.to,
-        subject: input.subject,
-        status: response.status,
-        body,
-      });
+      if (!input.suppressFailureLog) {
+        this.logger.error({
+          event: 'Email delivery failed',
+          recipient: input.to,
+          subject: input.subject,
+          status: response.status,
+          body,
+        });
+      }
       throw new BadGatewayException(`Email delivery failed: ${providerMessage}`);
     }
   }
@@ -119,14 +122,16 @@ export class SmtpEmailProvider implements EmailProvider {
       await this.sendCommand(socket, `${message}\r\n.`, 250);
       await this.sendCommand(socket, 'QUIT', 221);
     } catch (error: unknown) {
-      this.logger.error({
-        event: 'SMTP email delivery failed',
-        recipient: input.to,
-        subject: input.subject,
-        host: this.smtpHost,
-        port: this.smtpPort,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      if (!input.suppressFailureLog) {
+        this.logger.error({
+          event: 'SMTP email delivery failed',
+          recipient: input.to,
+          subject: input.subject,
+          host: this.smtpHost,
+          port: this.smtpPort,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       throw new BadGatewayException(
         error instanceof Error ? error.message : 'SMTP email delivery failed',
       );
