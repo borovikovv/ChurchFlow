@@ -265,6 +265,7 @@ export class NotificationsService {
                   title: input.title,
                   body: input.body,
                   url: input.url,
+                  notificationId: recipient.notificationId,
                 });
                 return true;
               } catch (error: unknown) {

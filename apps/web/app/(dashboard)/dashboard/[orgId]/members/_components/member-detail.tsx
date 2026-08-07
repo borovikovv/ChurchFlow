@@ -102,7 +102,11 @@ export function MemberDetail({
 
       <header className="flex min-w-0 flex-col gap-4 border-b border-[var(--line-muted)] pb-5 sm:flex-row sm:items-center">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-          <MemberAvatar displayName={member.profile.displayName} url={member.profile.photoUrl} />
+          <MemberAvatar
+            displayName={member.profile.displayName}
+            url={member.profile.photoUrl}
+            size="lg"
+          />
           <div className="min-w-0 flex-1">
             <p className="mb-1 text-sm font-semibold text-[var(--muted)]">{t('memberDetails')}</p>
             <h1 className="mb-0 break-words text-3xl sm:text-4xl">{member.profile.displayName}</h1>

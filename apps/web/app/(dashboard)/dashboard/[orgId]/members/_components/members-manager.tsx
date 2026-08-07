@@ -80,7 +80,11 @@ export function MembersManager({
 
         return (
           <div className="flex min-w-0 items-center gap-3">
-            <MemberAvatar displayName={member.profile.displayName} url={member.profile.photoUrl} />
+            <MemberAvatar
+              displayName={member.profile.displayName}
+              url={member.profile.photoUrl}
+              size="md"
+            />
             <MemberIdentitySummary source={member.source} profile={member.profile} />
           </div>
         );

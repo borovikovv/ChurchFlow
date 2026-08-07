@@ -46,6 +46,7 @@ export interface NotificationEmailInput {
   title: string;
   body?: string | null;
   url?: string | null;
+  notificationId?: string | null;
 }
 
 @Injectable()
@@ -140,7 +141,9 @@ export class EmailService {
   }
 
   async sendNotificationEmail(input: NotificationEmailInput): Promise<void> {
-    const url = input.url ? `${this.webAppUrl}${input.url}` : null;
+    const url = input.url
+      ? new URL(notificationDetailUrl(input.url, input.notificationId), this.webAppUrl).toString()
+      : null;
     await this.emailProvider.send({
       to: input.email,
       subject: `[${input.organizationName}] ${input.title}`,
@@ -156,4 +159,11 @@ export class EmailService {
   private get platformAdminEmail(): string {
     return this.config.getOrThrow<string>('PLATFORM_ADMIN_EMAIL');
   }
+}
+
+function notificationDetailUrl(url: string, notificationId: string | null | undefined): string {
+  if (!notificationId) return url;
+  const separator = url.includes('?') ? '&' : '?';
+
+  return `${url}${separator}notificationId=${encodeURIComponent(notificationId)}`;
 }
