@@ -10,16 +10,22 @@ import type {
 } from '@churchflow/shared';
 import {
   NotificationsRepository,
+  type CreateNotificationsForMembershipsInput,
   type ServiceAssignedNotificationInput,
+  type NotificationCreationResult,
   type NotificationCalendarEventDetailRecord,
   type NotificationDetailRecord,
+  type NotificationPreferenceKey,
   type NotificationPreferenceRecord,
   type NotificationRecord,
   type TaskAssignedNotificationInput,
   type TelegramNotificationBindingRecord,
 } from './repositories/notifications.repository';
+import { EmailService } from '../email/email.service';
 import { TelegramBotRepository } from '../telegram-bot/repositories/telegram-bot.repository';
 import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
+
+type NotificationDeliveryServiceName = 'email' | 'telegram';
 
 @Injectable()
 export class NotificationsService {
@@ -29,6 +35,7 @@ export class NotificationsService {
     private readonly notificationsRepository: NotificationsRepository,
     private readonly telegramBotRepository: TelegramBotRepository,
     private readonly telegramBotService: TelegramBotService,
+    private readonly emailService: EmailService,
   ) {}
 
   async listForOrganization(
@@ -147,38 +154,41 @@ export class NotificationsService {
 
   async createTaskAssignedNotifications(input: TaskAssignedNotificationInput) {
     const result = await this.notificationsRepository.createTaskAssignedNotifications(input);
-    const deliveries = await this.telegramBotRepository.getTaskAssignedTelegramDeliveries({
-      organizationId: input.organizationId,
-      recipientUserIds: result.telegramRecipientUserIds,
-      notificationByRecipientUserId: result.notificationByRecipientUserId,
-      title: input.title,
-      body: input.body,
-      url: input.url,
-    });
+    const sentCounts = await this.dispatchToEnabledServices(input, result, 'taskAssignedEnabled');
 
-    await Promise.all(
-      deliveries.map((delivery) => this.telegramBotService.deliverNotification(delivery)),
-    );
-
-    return { createdCount: result.createdCount, telegramSentCount: deliveries.length };
+    return { createdCount: result.createdCount, ...sentCounts };
   }
 
   async createServiceAssignedNotifications(input: ServiceAssignedNotificationInput) {
     const result = await this.notificationsRepository.createServiceAssignedNotifications(input);
-    const deliveries = await this.telegramBotRepository.getServiceAssignedTelegramDeliveries({
-      organizationId: input.organizationId,
-      recipientUserIds: result.telegramRecipientUserIds,
-      notificationByRecipientUserId: result.notificationByRecipientUserId,
-      title: input.title,
-      body: input.body,
-      url: input.url,
-    });
-
-    await Promise.all(
-      deliveries.map((delivery) => this.telegramBotService.deliverNotification(delivery)),
+    const sentCounts = await this.dispatchToEnabledServices(
+      input,
+      result,
+      'serviceAssignedEnabled',
     );
 
-    return { createdCount: result.createdCount, telegramSentCount: deliveries.length };
+    return { createdCount: result.createdCount, ...sentCounts };
+  }
+
+  async createCalendarLinkedNotifications(input: CreateNotificationsForMembershipsInput) {
+    const result = await this.notificationsRepository.createNotificationsForMemberships(input);
+    const sentCounts = await this.dispatchToEnabledServices(input, result, input.preferenceKey);
+
+    return { createdCount: result.createdCount, ...sentCounts };
+  }
+
+  async createCalendarReminderNotifications(input: CreateNotificationsForMembershipsInput) {
+    const result = await this.notificationsRepository.createNotificationsForMemberships(input);
+    const sentCounts = await this.dispatchToEnabledServices(input, result, input.preferenceKey);
+
+    return { createdCount: result.createdCount, ...sentCounts };
+  }
+
+  async createAdminMembershipChangeNotifications(input: CreateNotificationsForMembershipsInput) {
+    const result = await this.notificationsRepository.createNotificationsForMemberships(input);
+    const sentCounts = await this.dispatchToEnabledServices(input, result, input.preferenceKey);
+
+    return { createdCount: result.createdCount, ...sentCounts };
   }
 
   async createBirthdayDigestNotifications(now = new Date()) {
@@ -200,19 +210,17 @@ export class NotificationsService {
       });
       createdCount += result.createdCount;
 
-      const deliveries = await this.telegramBotRepository.getBirthdayDigestTelegramDeliveries({
-        organizationId: group.organizationId,
-        recipientUserIds: result.telegramRecipientUserIds,
-        notificationByRecipientUserId: result.notificationByRecipientUserId,
-        title,
-        body,
-        url: `/dashboard/${group.organizationId}/calendar`,
-      });
-      telegramSentCount += deliveries.length;
-
-      await Promise.all(
-        deliveries.map((delivery) => this.telegramBotService.deliverNotification(delivery)),
+      const sentCounts = await this.dispatchToEnabledServices(
+        {
+          organizationId: group.organizationId,
+          title,
+          body,
+          url: `/dashboard/${group.organizationId}/calendar`,
+        },
+        result,
+        'birthdayDigestEnabled',
       );
+      telegramSentCount += sentCounts.telegramSentCount;
     }
 
     this.logger.log({
@@ -224,6 +232,89 @@ export class NotificationsService {
     });
 
     return { organizationsCount: groups.length, createdCount, telegramSentCount };
+  }
+
+  private async dispatchToEnabledServices(
+    input: {
+      organizationId: string;
+      title: string;
+      body: string | null;
+      url: string | null;
+    },
+    result: NotificationCreationResult,
+    preferenceKey: NotificationPreferenceKey,
+  ): Promise<Record<`${NotificationDeliveryServiceName}SentCount`, number>> {
+    const deliveryServices = [
+      {
+        name: 'email' as const,
+        deliver: async () => {
+          const organization = await this.notificationsRepository.findOrganizationName(
+            input.organizationId,
+          );
+          if (!organization) return 0;
+
+          const recipients = result.deliveryRecipients.filter(
+            (recipient) => recipient.emailEnabled && recipient.email,
+          );
+          await Promise.all(
+            recipients.map((recipient) =>
+              this.emailService.sendNotificationEmail({
+                email: recipient.email ?? '',
+                organizationName: organization.name,
+                title: input.title,
+                body: input.body,
+                url: input.url,
+              }),
+            ),
+          );
+
+          return recipients.length;
+        },
+      },
+      {
+        name: 'telegram' as const,
+        deliver: async () => {
+          const deliveries = await this.telegramBotRepository.getNotificationTelegramDeliveries({
+            organizationId: input.organizationId,
+            recipientUserIds: result.deliveryRecipients
+              .filter((recipient) => recipient.telegramEnabled)
+              .map((recipient) => recipient.userId),
+            notificationByRecipientUserId: result.notificationByRecipientUserId,
+            title: input.title,
+            body: input.body,
+            url: input.url,
+            preferenceKey,
+          });
+
+          await Promise.all(
+            deliveries.map((delivery) => this.telegramBotService.deliverNotification(delivery)),
+          );
+
+          return deliveries.length;
+        },
+      },
+    ];
+
+    const entries = await Promise.all(
+      deliveryServices.map(async (service) => {
+        try {
+          return [`${service.name}SentCount`, await service.deliver()] as const;
+        } catch (error: unknown) {
+          this.logger.error({
+            event: 'Notification delivery failed',
+            service: service.name,
+            organizationId: input.organizationId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return [`${service.name}SentCount`, 0] as const;
+        }
+      }),
+    );
+
+    return Object.fromEntries(entries) as Record<
+      `${NotificationDeliveryServiceName}SentCount`,
+      number
+    >;
   }
 
   async markRead(organizationId: string, notificationId: string, actorUserId: string) {
@@ -272,6 +363,7 @@ function preferencesToResponse(
     serviceAssignedEnabled: preferences.serviceAssignedEnabled,
     remindersEnabled: preferences.remindersEnabled,
     birthdayDigestEnabled: preferences.birthdayDigestEnabled,
+    organizationUpdatesEnabled: preferences.organizationUpdatesEnabled,
     telegram: {
       connected: Boolean(telegramBinding),
       enabled: isActiveTelegramBinding(telegramBinding),

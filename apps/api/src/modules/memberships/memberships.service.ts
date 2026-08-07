@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InvitationsRepository } from '../invitations/repositories/invitations.repository';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { OrganizationRole } from '@churchflow/db';
 import type {
   CreateManualOrganizationMemberInput,
@@ -22,6 +23,7 @@ export class MembershipsService {
   constructor(
     private readonly membershipsRepository: MembershipsRepository,
     private readonly invitationsRepository: InvitationsRepository,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async listForOrganization(
@@ -174,11 +176,21 @@ export class MembershipsService {
     actorUserId: string,
   ) {
     try {
-      return await this.membershipsRepository.createManualMember(
+      const member = await this.membershipsRepository.createManualMember(
         organizationId,
         input,
         actorUserId,
       );
+      await this.tryCreateAdminMembershipChangeNotifications({
+        organizationId,
+        actorUserId,
+        type: 'MEMBER_ADDED',
+        title: 'Member added',
+        body: `${memberDisplayName(member)} was added to the organization.`,
+        entityId: member.id,
+      });
+
+      return member;
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'ORGANIZATION_NOT_ACTIVE') {
         throw new NotFoundException('Active organization was not found');
@@ -214,6 +226,17 @@ export class MembershipsService {
               actorUserId,
             )
           : [];
+      if (members.length > 0) {
+        await this.tryCreateAdminMembershipChangeNotifications({
+          organizationId,
+          actorUserId,
+          type: 'MEMBER_ADDED',
+          title: 'Members imported',
+          body: `${String(members.length)} members were imported to the organization.`,
+          entityId: members[0]?.id ?? null,
+          dedupeKey: `members-import:${actorUserId}:${String(Date.now())}`,
+        });
+      }
 
       return {
         createdCount: members.length,
@@ -320,11 +343,23 @@ export class MembershipsService {
     }
 
     try {
-      return await this.membershipsRepository.removeMembership({
+      const removed = await this.membershipsRepository.removeMembership({
         organizationId,
         membershipId,
         actorUserId,
       });
+      if (removed) {
+        await this.tryCreateAdminMembershipChangeNotifications({
+          organizationId,
+          actorUserId,
+          type: 'MEMBER_REMOVED',
+          title: 'Member removed',
+          body: `${memberDisplayName(targetMembership)} was removed from the organization.`,
+          entityId: removed.id,
+        });
+      }
+
+      return removed;
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'ACTOR_NOT_OWNER') {
         throw new ForbiddenException('Only organization owners can remove members');
@@ -336,4 +371,44 @@ export class MembershipsService {
       throw error;
     }
   }
+
+  private async tryCreateAdminMembershipChangeNotifications(input: {
+    organizationId: string;
+    actorUserId: string;
+    type: 'MEMBER_ADDED' | 'MEMBER_REMOVED';
+    title: string;
+    body: string;
+    entityId: string | null;
+    dedupeKey?: string;
+  }) {
+    try {
+      const recipientMembershipIds = await this.membershipsRepository.listAdminMembershipIds(
+        input.organizationId,
+        input.actorUserId,
+      );
+      await this.notificationsService.createAdminMembershipChangeNotifications({
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        recipientMembershipIds,
+        type: input.type,
+        preferenceKey: 'organizationUpdatesEnabled',
+        title: input.title,
+        body: input.body,
+        url: `/dashboard/${input.organizationId}/members`,
+        entityType: 'OrganizationMember',
+        entityId: input.entityId,
+        ...(input.dedupeKey ? { dedupeKey: input.dedupeKey } : {}),
+        adminOnly: true,
+      });
+    } catch {
+      return;
+    }
+  }
+}
+
+function memberDisplayName(member: {
+  profile?: { displayName: string } | null;
+  user?: { displayName: string | null; email: string | null } | null;
+}) {
+  return member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? 'Member';
 }

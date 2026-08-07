@@ -24,4 +24,5 @@ export class UpdateNotificationPreferencesDto implements UpdateNotificationPrefe
   serviceAssignedEnabled!: boolean;
   remindersEnabled!: boolean;
   birthdayDigestEnabled!: boolean;
+  organizationUpdatesEnabled!: boolean;
 }

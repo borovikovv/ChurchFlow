@@ -40,6 +40,14 @@ export interface MembershipClaimEmailInput {
   expiresAt: Date;
 }
 
+export interface NotificationEmailInput {
+  email: string;
+  organizationName: string;
+  title: string;
+  body?: string | null;
+  url?: string | null;
+}
+
 @Injectable()
 export class EmailService {
   constructor(
@@ -128,6 +136,15 @@ export class EmailService {
         'You are its owner.',
         `Open dashboard: ${dashboardUrl}`,
       ].join('\n'),
+    });
+  }
+
+  async sendNotificationEmail(input: NotificationEmailInput): Promise<void> {
+    const url = input.url ? `${this.webAppUrl}${input.url}` : null;
+    await this.emailProvider.send({
+      to: input.email,
+      subject: `[${input.organizationName}] ${input.title}`,
+      text: [input.title, input.body, url ? `Open: ${url}` : null].filter(Boolean).join('\n'),
     });
   }
 

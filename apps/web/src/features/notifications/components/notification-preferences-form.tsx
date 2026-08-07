@@ -234,6 +234,15 @@ export function NotificationPreferencesForm({
           >
             <Checkbox label={t('enabled')} {...register('birthdayDigestEnabled')} />
           </PreferenceRow>
+          <PreferenceRow
+            offLabel={t('off')}
+            onLabel={t('on')}
+            title={t('organizationUpdates')}
+            description={t('organizationUpdatesDescription')}
+            checked={values.organizationUpdatesEnabled}
+          >
+            <Checkbox label={t('enabled')} {...register('organizationUpdatesEnabled')} />
+          </PreferenceRow>
         </div>
       </section>
 
@@ -316,5 +325,6 @@ function toFormValues(
     serviceAssignedEnabled: preferences.serviceAssignedEnabled,
     remindersEnabled: preferences.remindersEnabled,
     birthdayDigestEnabled: preferences.birthdayDigestEnabled,
+    organizationUpdatesEnabled: preferences.organizationUpdatesEnabled,
   };
 }

@@ -15,6 +15,8 @@ import type {
 } from '@churchflow/shared';
 import { slugSchema } from '@churchflow/shared';
 import { EmailService } from '../email/email.service';
+import { TelegramBotRepository } from '../telegram-bot/repositories/telegram-bot.repository';
+import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
 import {
   OrganizationRequestsRepository,
   type OrganizationRequestNotificationCandidate,
@@ -192,6 +194,8 @@ export class OrganizationRequestsService {
     @Inject(OrganizationRequestsRepository)
     private readonly organizationRequestsRepository: OrganizationRequestsRepositoryPort,
     private readonly emailService: EmailService,
+    private readonly telegramBotRepository: TelegramBotRepository,
+    private readonly telegramBotService: TelegramBotService,
   ) {}
 
   async create(input: CreateOrganizationRequestInput, requestedByUserId: string) {
@@ -436,7 +440,10 @@ export class OrganizationRequestsService {
     const requestedTelegramAccountId =
       request.requestedBy?.accounts[0]?.providerAccountId ?? 'linked Telegram account';
 
-    return this.trySendEmail(() =>
+    const title = `New organization request: ${request.organizationName}`;
+    const body = `Contact: ${request.contactName}${request.contactEmail ? ` <${request.contactEmail}>` : ''}`;
+    const url = `/admin/organization-requests/${request.id}`;
+    const emailSent = await this.trySendEmail(() =>
       this.emailService.sendOrganizationRequestAdminEmail({
         requestId: request.id,
         organizationName: request.organizationName,
@@ -448,6 +455,30 @@ export class OrganizationRequestsService {
         message: request.message,
       }),
     );
+    const telegramSent = await this.trySendPlatformAdminTelegram({ title, body, url });
+
+    return emailSent || telegramSent;
+  }
+
+  private async trySendPlatformAdminTelegram(input: {
+    title: string;
+    body: string | null;
+    url: string | null;
+  }): Promise<boolean> {
+    try {
+      const deliveries = await this.telegramBotRepository.getPlatformAdminTelegramDeliveries(input);
+      await Promise.all(
+        deliveries.map((delivery) => this.telegramBotService.deliverNotification(delivery)),
+      );
+
+      return deliveries.length > 0;
+    } catch (error: unknown) {
+      this.logger.error(
+        'Platform admin Telegram delivery failed after the business operation was committed',
+        error instanceof Error ? error.stack : undefined,
+      );
+      return false;
+    }
   }
 
   private async trySendEmail(send: () => Promise<void>): Promise<boolean> {

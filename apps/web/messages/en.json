@@ -80,6 +80,8 @@
     "remindersDescription": "Notify members before upcoming calendar items.",
     "birthdayDigest": "Birthday digest",
     "birthdayDigestDescription": "Notify owners and admins about member birthdays today.",
+    "organizationUpdates": "Organization updates",
+    "organizationUpdatesDescription": "Notify admins about member changes, linked calendar events, and organization requests.",
     "reset": "Reset",
     "saving": "Saving...",
     "savePreferences": "Save preferences",

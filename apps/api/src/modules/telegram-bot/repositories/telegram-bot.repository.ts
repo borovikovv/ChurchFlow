@@ -27,6 +27,13 @@ export interface TelegramNotificationDelivery {
   url: string | null;
 }
 
+export type TelegramNotificationPreferenceKey =
+  | 'taskAssignedEnabled'
+  | 'serviceAssignedEnabled'
+  | 'remindersEnabled'
+  | 'birthdayDigestEnabled'
+  | 'organizationUpdatesEnabled';
+
 @Injectable()
 export class TelegramBotRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -124,6 +131,7 @@ export class TelegramBotRepository {
                 serviceAssignedEnabled: true,
                 remindersEnabled: true,
                 birthdayDigestEnabled: true,
+                organizationUpdatesEnabled: true,
                 organization: { select: { name: true } },
               },
               orderBy: { updatedAt: 'desc' },
@@ -182,46 +190,10 @@ export class TelegramBotRepository {
     body: string | null;
     url: string | null;
   }): Promise<TelegramNotificationDelivery[]> {
-    if (input.recipientUserIds.length === 0) return [];
-
-    const organization = await this.prisma.organization.findFirst({
-      where: { id: input.organizationId, status: 'ACTIVE', deletedAt: null },
-      select: { name: true },
+    return this.getNotificationTelegramDeliveries({
+      ...input,
+      preferenceKey: 'taskAssignedEnabled',
     });
-    if (!organization) return [];
-
-    const bindings = await this.prisma.telegramNotificationBinding.findMany({
-      where: {
-        userId: { in: input.recipientUserIds },
-        enabled: true,
-        revokedAt: null,
-        blockedAt: null,
-        user: {
-          deletedAt: null,
-          notificationPreferences: {
-            some: {
-              organizationId: input.organizationId,
-              telegramEnabled: true,
-              taskAssignedEnabled: true,
-            },
-          },
-        },
-      },
-      select: {
-        userId: true,
-        telegramChatId: true,
-      },
-    });
-
-    return bindings.map((binding) => ({
-      notificationId: input.notificationByRecipientUserId.get(binding.userId) ?? null,
-      organizationName: organization.name,
-      recipientUserId: binding.userId,
-      chatId: binding.telegramChatId,
-      title: input.title,
-      body: input.body,
-      url: input.url,
-    }));
   }
 
   async getServiceAssignedTelegramDeliveries(input: {
@@ -232,46 +204,10 @@ export class TelegramBotRepository {
     body: string | null;
     url: string | null;
   }): Promise<TelegramNotificationDelivery[]> {
-    if (input.recipientUserIds.length === 0) return [];
-
-    const organization = await this.prisma.organization.findFirst({
-      where: { id: input.organizationId, status: 'ACTIVE', deletedAt: null },
-      select: { name: true },
+    return this.getNotificationTelegramDeliveries({
+      ...input,
+      preferenceKey: 'serviceAssignedEnabled',
     });
-    if (!organization) return [];
-
-    const bindings = await this.prisma.telegramNotificationBinding.findMany({
-      where: {
-        userId: { in: input.recipientUserIds },
-        enabled: true,
-        revokedAt: null,
-        blockedAt: null,
-        user: {
-          deletedAt: null,
-          notificationPreferences: {
-            some: {
-              organizationId: input.organizationId,
-              telegramEnabled: true,
-              serviceAssignedEnabled: true,
-            },
-          },
-        },
-      },
-      select: {
-        userId: true,
-        telegramChatId: true,
-      },
-    });
-
-    return bindings.map((binding) => ({
-      notificationId: input.notificationByRecipientUserId.get(binding.userId) ?? null,
-      organizationName: organization.name,
-      recipientUserId: binding.userId,
-      chatId: binding.telegramChatId,
-      title: input.title,
-      body: input.body,
-      url: input.url,
-    }));
   }
 
   async getBirthdayDigestTelegramDeliveries(input: {
@@ -281,6 +217,21 @@ export class TelegramBotRepository {
     title: string;
     body: string | null;
     url: string | null;
+  }): Promise<TelegramNotificationDelivery[]> {
+    return this.getNotificationTelegramDeliveries({
+      ...input,
+      preferenceKey: 'birthdayDigestEnabled',
+    });
+  }
+
+  async getNotificationTelegramDeliveries(input: {
+    organizationId: string;
+    recipientUserIds: string[];
+    notificationByRecipientUserId: Map<string, string>;
+    title: string;
+    body: string | null;
+    url: string | null;
+    preferenceKey: TelegramNotificationPreferenceKey;
   }): Promise<TelegramNotificationDelivery[]> {
     if (input.recipientUserIds.length === 0) return [];
 
@@ -302,7 +253,7 @@ export class TelegramBotRepository {
             some: {
               organizationId: input.organizationId,
               telegramEnabled: true,
-              birthdayDigestEnabled: true,
+              [input.preferenceKey]: true,
             },
           },
         },
@@ -316,6 +267,38 @@ export class TelegramBotRepository {
     return bindings.map((binding) => ({
       notificationId: input.notificationByRecipientUserId.get(binding.userId) ?? null,
       organizationName: organization.name,
+      recipientUserId: binding.userId,
+      chatId: binding.telegramChatId,
+      title: input.title,
+      body: input.body,
+      url: input.url,
+    }));
+  }
+
+  async getPlatformAdminTelegramDeliveries(input: {
+    title: string;
+    body: string | null;
+    url: string | null;
+  }): Promise<TelegramNotificationDelivery[]> {
+    const bindings = await this.prisma.telegramNotificationBinding.findMany({
+      where: {
+        enabled: true,
+        revokedAt: null,
+        blockedAt: null,
+        user: {
+          deletedAt: null,
+          platformRole: { in: ['ADMIN', 'SUPER_ADMIN'] },
+        },
+      },
+      select: {
+        userId: true,
+        telegramChatId: true,
+      },
+    });
+
+    return bindings.map((binding) => ({
+      notificationId: null,
+      organizationName: 'ChurchFlow',
       recipientUserId: binding.userId,
       chatId: binding.telegramChatId,
       title: input.title,

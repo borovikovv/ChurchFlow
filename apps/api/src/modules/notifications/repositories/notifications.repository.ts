@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@churchflow/db';
+import type { NotificationType } from '@churchflow/db';
 import type {
   ListNotificationsQuery,
   UpdateNotificationPreferencesInput,
@@ -75,6 +76,7 @@ const notificationPreferenceSelect = {
   serviceAssignedEnabled: true,
   remindersEnabled: true,
   birthdayDigestEnabled: true,
+  organizationUpdatesEnabled: true,
 } as const;
 
 export type NotificationPreferenceRecord = Prisma.NotificationPreferenceGetPayload<{
@@ -87,6 +89,56 @@ export type TelegramNotificationBindingRecord = {
   blockedAt: Date | null;
   revokedAt: Date | null;
 };
+
+export type NotificationPreferenceKey =
+  | 'taskAssignedEnabled'
+  | 'serviceAssignedEnabled'
+  | 'remindersEnabled'
+  | 'birthdayDigestEnabled'
+  | 'organizationUpdatesEnabled';
+
+export interface NotificationDeliveryRecipient {
+  userId: string;
+  email: string | null;
+  emailEnabled: boolean;
+  telegramEnabled: boolean;
+  notificationId: string | null;
+}
+
+export interface NotificationCreationResult {
+  createdCount: number;
+  deliveryRecipients: NotificationDeliveryRecipient[];
+  notificationByRecipientUserId: Map<string, string>;
+}
+
+export interface CreateNotificationsForMembershipsInput {
+  organizationId: string;
+  actorUserId?: string | null;
+  recipientMembershipIds: string[];
+  type: NotificationType;
+  preferenceKey: NotificationPreferenceKey;
+  title: string;
+  body: string | null;
+  url: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+  dedupeKey?: string | null;
+  adminOnly?: boolean;
+}
+
+export interface CreateNotificationsForUsersInput {
+  organizationId: string;
+  recipientUserIds: string[];
+  type: NotificationType;
+  preferenceKey: NotificationPreferenceKey;
+  title: string;
+  body: string | null;
+  url: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+  dedupeKey?: string | null;
+  adminOnly?: boolean;
+}
 
 export interface TaskAssignedNotificationInput {
   organizationId: string;
@@ -110,7 +162,7 @@ export interface ServiceAssignedNotificationInput {
 
 export interface TaskAssignedNotificationResult {
   createdCount: number;
-  telegramRecipientUserIds: string[];
+  deliveryRecipients: NotificationDeliveryRecipient[];
   notificationByRecipientUserId: Map<string, string>;
 }
 
@@ -118,7 +170,7 @@ export type ServiceAssignedNotificationResult = TaskAssignedNotificationResult;
 
 export interface BirthdayDigestNotificationResult {
   createdCount: number;
-  telegramRecipientUserIds: string[];
+  deliveryRecipients: NotificationDeliveryRecipient[];
   notificationByRecipientUserId: Map<string, string>;
 }
 
@@ -143,6 +195,13 @@ export class NotificationsRepository {
         organization: { status: 'ACTIVE', deletedAt: null },
       },
       select: { id: true },
+    });
+  }
+
+  findOrganizationName(organizationId: string) {
+    return this.prisma.organization.findFirst({
+      where: { id: organizationId, status: 'ACTIVE', deletedAt: null },
+      select: { name: true },
     });
   }
 
@@ -183,32 +242,150 @@ export class NotificationsRepository {
   async createTaskAssignedNotifications(
     input: TaskAssignedNotificationInput,
   ): Promise<TaskAssignedNotificationResult> {
-    return this.createAssignmentNotifications({
+    return this.createNotificationsForMemberships({
       organizationId: input.organizationId,
       actorUserId: input.actorUserId,
-      eventId: input.eventId,
-      membershipIds: input.assigneeMembershipIds,
+      recipientMembershipIds: input.assigneeMembershipIds,
       type: 'TASK_ASSIGNED',
       preferenceKey: 'taskAssignedEnabled',
       title: input.title,
       body: input.body,
       url: input.url,
+      entityType: 'CalendarEvent',
+      entityId: input.eventId,
     });
   }
 
   async createServiceAssignedNotifications(
     input: ServiceAssignedNotificationInput,
   ): Promise<ServiceAssignedNotificationResult> {
-    return this.createAssignmentNotifications({
+    return this.createNotificationsForMemberships({
       organizationId: input.organizationId,
       actorUserId: input.actorUserId,
-      eventId: input.eventId,
-      membershipIds: input.participantMembershipIds,
+      recipientMembershipIds: input.participantMembershipIds,
       type: 'SERVICE_ASSIGNED',
       preferenceKey: 'serviceAssignedEnabled',
       title: input.title,
       body: input.body,
       url: input.url,
+      entityType: 'CalendarEvent',
+      entityId: input.eventId,
+    });
+  }
+
+  async createNotificationsForMemberships(
+    input: CreateNotificationsForMembershipsInput,
+  ): Promise<NotificationCreationResult> {
+    const membershipIds = [...new Set(input.recipientMembershipIds)];
+    if (membershipIds.length === 0) return emptyNotificationCreationResult();
+
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: {
+        organizationId: input.organizationId,
+        id: { in: membershipIds },
+        status: 'ACTIVE',
+        removedAt: null,
+        userId: { not: null },
+        ...(input.adminOnly ? { role: { in: ['OWNER', 'ADMIN'] as const } } : {}),
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: {
+        id: true,
+        userId: true,
+        user: {
+          select: {
+            email: true,
+            deletedAt: true,
+            notificationPreferences: {
+              where: { organizationId: input.organizationId },
+              select: notificationPreferenceSelect,
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    const eligibleRecipients = memberships.flatMap((membership) => {
+      if (!membership.userId || membership.userId === input.actorUserId) return [];
+      const user = membership.user;
+      if (!user || user.deletedAt) return [];
+      const preferences = user.notificationPreferences[0];
+      if (preferences && !preferences[input.preferenceKey]) return [];
+
+      return {
+        membershipId: membership.id,
+        userId: membership.userId,
+        email: user.email,
+        emailEnabled: Boolean(preferences?.emailEnabled),
+        telegramEnabled: Boolean(preferences?.telegramEnabled),
+        preferences,
+      };
+    });
+
+    return this.createNotificationsForEligibleRecipients({
+      ...input,
+      recipients: eligibleRecipients,
+    });
+  }
+
+  async createNotificationsForUsers(
+    input: CreateNotificationsForUsersInput,
+  ): Promise<NotificationCreationResult> {
+    const recipientUserIds = [...new Set(input.recipientUserIds)];
+    if (recipientUserIds.length === 0) return emptyNotificationCreationResult();
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { in: recipientUserIds },
+        deletedAt: null,
+        memberships: {
+          some: {
+            organizationId: input.organizationId,
+            status: 'ACTIVE',
+            removedAt: null,
+            ...(input.adminOnly ? { role: { in: ['OWNER', 'ADMIN'] as const } } : {}),
+          },
+        },
+      },
+      select: {
+        id: true,
+        email: true,
+        notificationPreferences: {
+          where: { organizationId: input.organizationId },
+          select: notificationPreferenceSelect,
+          take: 1,
+        },
+        memberships: {
+          where: {
+            organizationId: input.organizationId,
+            status: 'ACTIVE',
+            removedAt: null,
+            ...(input.adminOnly ? { role: { in: ['OWNER', 'ADMIN'] as const } } : {}),
+          },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+
+    const eligibleRecipients = users.flatMap((user) => {
+      const preferences = user.notificationPreferences[0];
+      if (preferences && !preferences[input.preferenceKey]) return [];
+
+      return {
+        membershipId: user.memberships[0]?.id ?? null,
+        userId: user.id,
+        email: user.email,
+        emailEnabled: Boolean(preferences?.emailEnabled),
+        telegramEnabled: Boolean(preferences?.telegramEnabled),
+        preferences,
+      };
+    });
+
+    return this.createNotificationsForEligibleRecipients({
+      ...input,
+      recipients: eligibleRecipients,
     });
   }
 
@@ -313,164 +490,58 @@ export class NotificationsRepository {
   }): Promise<BirthdayDigestNotificationResult> {
     const recipientUserIds = [...new Set(input.recipientUserIds)];
     if (recipientUserIds.length === 0) return emptyNotificationCreationResult();
-
-    const users = await this.prisma.user.findMany({
-      where: {
-        id: { in: recipientUserIds },
-        deletedAt: null,
-        memberships: {
-          some: {
-            organizationId: input.organizationId,
-            role: { in: ['OWNER', 'ADMIN'] },
-            status: 'ACTIVE',
-            removedAt: null,
-          },
-        },
-      },
-      select: {
-        id: true,
-        notificationPreferences: {
-          where: { organizationId: input.organizationId },
-          select: {
-            inAppEnabled: true,
-            telegramEnabled: true,
-            birthdayDigestEnabled: true,
-          },
-          take: 1,
-        },
-        memberships: {
-          where: {
-            organizationId: input.organizationId,
-            role: { in: ['OWNER', 'ADMIN'] },
-            status: 'ACTIVE',
-            removedAt: null,
-          },
-          select: { id: true },
-          take: 1,
-        },
-      },
-    });
-    const eligibleUsers = users.filter((user) => {
-      const preferences = user.notificationPreferences[0];
-      return preferences ? preferences.birthdayDigestEnabled : true;
-    });
-    const telegramRecipientUserIds = eligibleUsers
-      .filter((user) => {
-        const preferences = user.notificationPreferences[0];
-        return Boolean(preferences?.telegramEnabled && preferences.birthdayDigestEnabled);
-      })
-      .map((user) => user.id);
-    const inAppUsers = eligibleUsers.filter((user) => {
-      const preferences = user.notificationPreferences[0];
-      return preferences ? preferences.inAppEnabled && preferences.birthdayDigestEnabled : true;
-    });
-    if (inAppUsers.length === 0) {
-      return {
-        createdCount: 0,
-        telegramRecipientUserIds,
-        notificationByRecipientUserId: new Map(),
-      };
-    }
-
-    const data: Prisma.NotificationCreateManyInput[] = inAppUsers.map((user) => ({
+    return this.createNotificationsForUsers({
       organizationId: input.organizationId,
-      recipientUserId: user.id,
-      recipientMembershipId: user.memberships[0]?.id ?? null,
+      recipientUserIds,
       type: 'BIRTHDAY_DIGEST',
+      preferenceKey: 'birthdayDigestEnabled',
       title: input.title,
       body: input.body,
       url: input.url,
       entityType: 'BirthdayDigest',
       dedupeKey: input.dedupeKey,
-    }));
-    const result = await this.prisma.notification.createMany({
-      data,
-      skipDuplicates: true,
+      adminOnly: true,
     });
-    const notifications = await this.prisma.notification.findMany({
-      where: {
-        organizationId: input.organizationId,
-        recipientUserId: { in: data.map((notification) => notification.recipientUserId) },
-        type: 'BIRTHDAY_DIGEST',
-        dedupeKey: input.dedupeKey,
-        deletedAt: null,
-      },
-      select: { id: true, recipientUserId: true },
-    });
-
-    return {
-      createdCount: result.count,
-      telegramRecipientUserIds,
-      notificationByRecipientUserId: new Map(
-        notifications.map((notification) => [notification.recipientUserId, notification.id]),
-      ),
-    };
   }
 
-  private async createAssignmentNotifications(input: {
+  private async createNotificationsForEligibleRecipients(input: {
     organizationId: string;
-    actorUserId: string;
-    eventId: string;
-    membershipIds: string[];
-    type: 'TASK_ASSIGNED' | 'SERVICE_ASSIGNED';
-    preferenceKey: 'taskAssignedEnabled' | 'serviceAssignedEnabled';
+    type: NotificationType;
+    preferenceKey: NotificationPreferenceKey;
     title: string;
-    body: string;
-    url: string;
-  }): Promise<TaskAssignedNotificationResult> {
-    const membershipIds = [...new Set(input.membershipIds)];
-    if (membershipIds.length === 0) return emptyTaskAssignedNotificationResult();
+    body: string | null;
+    url: string | null;
+    entityType?: string | null;
+    entityId?: string | null;
+    dedupeKey?: string | null;
+    recipients: Array<{
+      membershipId: string | null;
+      userId: string;
+      email: string | null;
+      emailEnabled: boolean;
+      telegramEnabled: boolean;
+      preferences: NotificationPreferenceRecord | undefined;
+    }>;
+  }): Promise<NotificationCreationResult> {
+    if (input.recipients.length === 0) return emptyNotificationCreationResult();
 
-    const assignees = await this.prisma.organizationMember.findMany({
-      where: {
-        organizationId: input.organizationId,
-        id: { in: membershipIds },
-        status: 'ACTIVE',
-        removedAt: null,
-        userId: { not: null },
-        organization: { status: 'ACTIVE', deletedAt: null },
-      },
-      select: {
-        id: true,
-        userId: true,
-        user: {
-          select: {
-            notificationPreferences: {
-              where: { organizationId: input.organizationId },
-              select: {
-                inAppEnabled: true,
-                telegramEnabled: true,
-                taskAssignedEnabled: true,
-                serviceAssignedEnabled: true,
-              },
-              take: 1,
-            },
-          },
-        },
-      },
-    });
-    const eligibleAssignees = assignees.filter((assignee) => {
-      if (!assignee.userId || assignee.userId === input.actorUserId) return false;
-      const preferences = assignee.user?.notificationPreferences[0];
+    const deliveryRecipients = input.recipients
+      .filter((recipient) => serviceDeliveryEnabled(recipient, input.preferenceKey))
+      .map((recipient) => ({
+        userId: recipient.userId,
+        email: recipient.email,
+        emailEnabled: recipient.emailEnabled,
+        telegramEnabled: recipient.telegramEnabled,
+        notificationId: null,
+      }));
+    const inAppRecipients = input.recipients.filter((recipient) =>
+      inAppDeliveryEnabled(recipient.preferences, input.preferenceKey),
+    );
 
-      return preferences ? preferences[input.preferenceKey] : true;
-    });
-    if (eligibleAssignees.length === 0) return emptyTaskAssignedNotificationResult();
-    const telegramRecipientUserIds = eligibleAssignees
-      .filter((assignee) => {
-        const preferences = assignee.user?.notificationPreferences[0];
-        return Boolean(preferences?.telegramEnabled && preferences[input.preferenceKey]);
-      })
-      .map((assignee) => assignee.userId)
-      .filter((userId): userId is string => Boolean(userId));
-    const inAppAssignees = eligibleAssignees.filter((assignee) => {
-      const preferences = assignee.user?.notificationPreferences[0];
-      return preferences ? preferences.inAppEnabled && preferences[input.preferenceKey] : true;
-    });
-    if (inAppAssignees.length === 0) {
+    if (inAppRecipients.length === 0) {
       return {
         createdCount: 0,
-        telegramRecipientUserIds,
+        deliveryRecipients,
         notificationByRecipientUserId: new Map(),
       };
     }
@@ -478,55 +549,59 @@ export class NotificationsRepository {
     const existingNotifications = await this.prisma.notification.findMany({
       where: {
         organizationId: input.organizationId,
-        recipientUserId: {
-          in: inAppAssignees
-            .map((assignee) => assignee.userId)
-            .filter((userId): userId is string => Boolean(userId)),
-        },
+        recipientUserId: { in: inAppRecipients.map((recipient) => recipient.userId) },
         type: input.type,
-        entityType: 'CalendarEvent',
-        entityId: input.eventId,
+        ...notificationDedupeWhere(input),
         deletedAt: null,
       },
-      select: { recipientUserId: true },
+      select: { id: true, recipientUserId: true },
     });
     const existingRecipientIds = new Set(
       existingNotifications.map((notification) => notification.recipientUserId),
     );
-    const data: Prisma.NotificationCreateManyInput[] = inAppAssignees.flatMap((assignee) => {
-      const userId = assignee.userId;
-      if (!userId || existingRecipientIds.has(userId)) return [];
+    const newDeliveryRecipients = deliveryRecipients.filter(
+      (recipient) => !existingRecipientIds.has(recipient.userId),
+    );
+    const data: Prisma.NotificationCreateManyInput[] = inAppRecipients.flatMap((recipient) => {
+      if (existingRecipientIds.has(recipient.userId)) return [];
 
       return {
         organizationId: input.organizationId,
-        recipientUserId: userId,
-        recipientMembershipId: assignee.id,
+        recipientUserId: recipient.userId,
+        recipientMembershipId: recipient.membershipId,
         type: input.type,
         title: input.title,
         body: input.body,
         url: input.url,
-        entityType: 'CalendarEvent',
-        entityId: input.eventId,
+        entityType: input.entityType ?? null,
+        entityId: input.entityId ?? null,
+        dedupeKey: input.dedupeKey ?? null,
       };
     });
     if (data.length === 0) {
+      const notificationByRecipientUserId = new Map(
+        existingNotifications.map((notification) => [
+          notification.recipientUserId,
+          notification.id,
+        ]),
+      );
       return {
         createdCount: 0,
-        telegramRecipientUserIds,
-        notificationByRecipientUserId: new Map(),
+        deliveryRecipients: withNotificationIds(
+          newDeliveryRecipients,
+          notificationByRecipientUserId,
+        ),
+        notificationByRecipientUserId,
       };
     }
 
-    const result = await this.prisma.notification.createMany({ data });
+    const result = await this.prisma.notification.createMany({ data, skipDuplicates: true });
     const createdNotifications = await this.prisma.notification.findMany({
       where: {
         organizationId: input.organizationId,
-        recipientUserId: {
-          in: data.map((notification) => notification.recipientUserId),
-        },
+        recipientUserId: { in: inAppRecipients.map((recipient) => recipient.userId) },
         type: input.type,
-        entityType: 'CalendarEvent',
-        entityId: input.eventId,
+        ...notificationDedupeWhere(input),
         deletedAt: null,
       },
       select: { id: true, recipientUserId: true },
@@ -534,9 +609,17 @@ export class NotificationsRepository {
 
     return {
       createdCount: result.count,
-      telegramRecipientUserIds,
       notificationByRecipientUserId: new Map(
         createdNotifications.map((notification) => [notification.recipientUserId, notification.id]),
+      ),
+      deliveryRecipients: withNotificationIds(
+        newDeliveryRecipients,
+        new Map(
+          createdNotifications.map((notification) => [
+            notification.recipientUserId,
+            notification.id,
+          ]),
+        ),
       ),
     };
   }
@@ -667,15 +750,55 @@ export class NotificationsRepository {
   }
 }
 
-function emptyTaskAssignedNotificationResult(): TaskAssignedNotificationResult {
-  return emptyNotificationCreationResult();
-}
-
 function emptyNotificationCreationResult(): TaskAssignedNotificationResult {
   return {
     createdCount: 0,
-    telegramRecipientUserIds: [],
+    deliveryRecipients: [],
     notificationByRecipientUserId: new Map(),
+  };
+}
+
+function serviceDeliveryEnabled(
+  recipient: {
+    emailEnabled: boolean;
+    telegramEnabled: boolean;
+    preferences: NotificationPreferenceRecord | undefined;
+  },
+  preferenceKey: NotificationPreferenceKey,
+): boolean {
+  const preferences = recipient.preferences;
+  return Boolean(
+    preferences?.[preferenceKey] && (recipient.emailEnabled || recipient.telegramEnabled),
+  );
+}
+
+function inAppDeliveryEnabled(
+  preferences: NotificationPreferenceRecord | undefined,
+  preferenceKey: NotificationPreferenceKey,
+): boolean {
+  return preferences ? preferences.inAppEnabled && preferences[preferenceKey] : true;
+}
+
+function withNotificationIds(
+  recipients: NotificationDeliveryRecipient[],
+  notificationByRecipientUserId: Map<string, string>,
+): NotificationDeliveryRecipient[] {
+  return recipients.map((recipient) => ({
+    ...recipient,
+    notificationId: notificationByRecipientUserId.get(recipient.userId) ?? null,
+  }));
+}
+
+function notificationDedupeWhere(input: {
+  dedupeKey?: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+}): Pick<Prisma.NotificationWhereInput, 'dedupeKey' | 'entityType' | 'entityId'> {
+  if (input.dedupeKey) return { dedupeKey: input.dedupeKey };
+
+  return {
+    entityType: input.entityType ?? null,
+    entityId: input.entityId ?? null,
   };
 }
 

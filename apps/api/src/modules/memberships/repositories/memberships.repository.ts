@@ -513,8 +513,25 @@ export class MembershipsRepository {
   async findActiveMembershipById(organizationId: string, membershipId: string) {
     return this.prisma.organizationMember.findFirst({
       where: { id: membershipId, organizationId, status: 'ACTIVE', removedAt: null },
-      include: { user: true },
+      include: { profile: true, user: true },
     });
+  }
+
+  async listAdminMembershipIds(organizationId: string, excludedUserId?: string | null) {
+    const admins = await this.prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        role: { in: ['OWNER', 'ADMIN'] },
+        status: 'ACTIVE',
+        removedAt: null,
+        userId: { not: null },
+        ...(excludedUserId ? { AND: [{ userId: { not: excludedUserId } }] } : {}),
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { id: true },
+    });
+
+    return admins.map((admin) => admin.id);
   }
 
   async removeMembership(input: {

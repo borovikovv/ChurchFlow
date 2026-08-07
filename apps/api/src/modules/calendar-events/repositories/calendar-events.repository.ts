@@ -123,6 +123,7 @@ export class CalendarEventsRepository {
       select: {
         id: true,
         type: true,
+        linkedMembershipId: true,
         assignees: { select: { membershipId: true } },
         serviceDetails: {
           select: {
@@ -146,6 +147,19 @@ export class CalendarEventsRepository {
       create: { organizationId, userId, visibleEventTypes },
       update: { visibleEventTypes },
       select: { visibleEventTypes: true },
+    });
+  }
+
+  async listReminderCandidates(windowEnd: Date): Promise<CalendarEventRecord[]> {
+    return this.prisma.calendarEvent.findMany({
+      where: {
+        reminder: { not: null },
+        deletedAt: null,
+        startsAt: { lt: windowEnd },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      include: calendarEventInclude,
+      orderBy: { startsAt: 'asc' },
     });
   }
 
