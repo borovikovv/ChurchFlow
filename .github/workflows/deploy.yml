@@ -581,7 +581,7 @@ jobs:
 
           parse_database_url() {
             local output_file="$1"
-            docker run --rm --env-file api.env "$API_IMAGE" node <<'NODE' > "$output_file"
+            docker run --rm -i --env-file api.env "$API_IMAGE" node <<'NODE' > "$output_file"
           const databaseUrl = process.env.DATABASE_URL;
           if (!databaseUrl) {
             console.error('DATABASE_URL is required for backup.');
@@ -613,7 +613,7 @@ jobs:
             fi
 
             echo "Checking pending production migrations for destructive SQL."
-            docker run --rm \
+            docker run --rm -i \
               --network "$INTERNAL_NETWORK" \
               --env-file api.env \
               -e DEPLOY_ENV="$DEPLOY_ENV" \
@@ -695,6 +695,11 @@ jobs:
             # shellcheck source=/dev/null
             source "$db_env_file"
             rm -f "$db_env_file"
+
+            if [[ -z "${PGDATABASE+x}" || -z "${PGUSER+x}" || -z "${PGPASSWORD+x}" || -z "${PGPORT+x}" ]]; then
+              echo "Could not parse DATABASE_URL for backup."
+              exit 1
+            fi
 
             backup_dir="$DEPLOY_DIR/backups"
             install -d -m 700 "$backup_dir"
