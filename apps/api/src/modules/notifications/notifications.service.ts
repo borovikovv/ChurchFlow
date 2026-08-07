@@ -375,6 +375,7 @@ function preferencesToResponse(
     remindersEnabled: preferences.remindersEnabled,
     birthdayDigestEnabled: preferences.birthdayDigestEnabled,
     organizationUpdatesEnabled: preferences.organizationUpdatesEnabled,
+    timeZone: preferences.timeZone,
     telegram: {
       connected: Boolean(telegramBinding),
       enabled: isActiveTelegramBinding(telegramBinding),

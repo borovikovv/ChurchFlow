@@ -25,4 +25,5 @@ export class UpdateNotificationPreferencesDto implements UpdateNotificationPrefe
   remindersEnabled!: boolean;
   birthdayDigestEnabled!: boolean;
   organizationUpdatesEnabled!: boolean;
+  timeZone?: string | null;
 }

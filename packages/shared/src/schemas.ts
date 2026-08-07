@@ -256,6 +256,7 @@ export const updateNotificationPreferencesSchema = z.object({
   remindersEnabled: z.boolean(),
   birthdayDigestEnabled: z.boolean(),
   organizationUpdatesEnabled: z.boolean(),
+  timeZone: z.string().trim().min(1).max(64).nullable().optional(),
 });
 
 export const notificationPreferencesSchema = updateNotificationPreferencesSchema.extend({

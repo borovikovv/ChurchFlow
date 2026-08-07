@@ -50,6 +50,7 @@ export function NotificationPreferencesForm({
       ...input,
       emailEnabled: canUseEmail ? input.emailEnabled : false,
       telegramEnabled: canUseTelegram ? input.telegramEnabled : false,
+      timeZone: browserTimeZone(),
     };
     const result = await updateNotificationPreferences(organizationId, payload);
 
@@ -326,5 +327,11 @@ function toFormValues(
     remindersEnabled: preferences.remindersEnabled,
     birthdayDigestEnabled: preferences.birthdayDigestEnabled,
     organizationUpdatesEnabled: preferences.organizationUpdatesEnabled,
+    timeZone: preferences.timeZone ?? browserTimeZone(),
   };
+}
+
+function browserTimeZone(): string | null {
+  if (typeof Intl === 'undefined') return null;
+  return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
 }

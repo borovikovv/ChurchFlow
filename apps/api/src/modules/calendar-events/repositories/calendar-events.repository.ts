@@ -163,6 +163,64 @@ export class CalendarEventsRepository {
     });
   }
 
+  async listReminderRecipientMemberships(
+    organizationId: string,
+    membershipIds: string[],
+  ): Promise<Array<{ id: string; timeZone: string }>> {
+    const uniqueMembershipIds = [...new Set(membershipIds)];
+    if (uniqueMembershipIds.length === 0) return [];
+
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        id: { in: uniqueMembershipIds },
+        status: 'ACTIVE',
+        removedAt: null,
+        userId: { not: null },
+        user: { deletedAt: null },
+      },
+      select: {
+        id: true,
+        user: {
+          select: {
+            locale: true,
+            notificationPreferences: {
+              where: { organizationId },
+              select: { timeZone: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    return memberships.map((membership) => ({
+      id: membership.id,
+      timeZone:
+        membership.user?.notificationPreferences[0]?.timeZone ??
+        fallbackTimeZoneForLocale(membership.user?.locale),
+    }));
+  }
+
+  async findCreatorMembershipId(
+    organizationId: string,
+    createdByUserId: string | null,
+  ): Promise<string | null> {
+    if (!createdByUserId) return null;
+
+    const membership = await this.prisma.organizationMember.findFirst({
+      where: {
+        organizationId,
+        userId: createdByUserId,
+        status: 'ACTIVE',
+        removedAt: null,
+      },
+      select: { id: true },
+    });
+
+    return membership?.id ?? null;
+  }
+
   async create(organizationId: string, input: CreateCalendarEventInput, actorUserId: string) {
     return this.prisma.$transaction(async (tx) => {
       await this.assertManageableActor(tx, organizationId, actorUserId);
@@ -516,4 +574,9 @@ function serviceDetailMembershipIds(
     serviceDetails.worshipLead?.membershipId,
     serviceDetails.communionLead?.membershipId,
   ].filter((id): id is string => Boolean(id));
+}
+
+function fallbackTimeZoneForLocale(locale: string | null | undefined): string {
+  if (locale === 'uk') return 'Europe/Kyiv';
+  return 'UTC';
 }

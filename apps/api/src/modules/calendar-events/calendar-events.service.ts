@@ -207,35 +207,50 @@ export class CalendarEventsService {
     let telegramSentCount = 0;
 
     for (const event of events) {
-      for (const occurrenceStart of reminderOccurrenceStarts(event, windowStart, windowEnd)) {
-        const recipientMembershipIds = calendarReminderRecipientMembershipIds(event);
-        if (recipientMembershipIds.length === 0) continue;
+      const creatorMembershipId = await this.calendarEventsRepository.findCreatorMembershipId(
+        event.organizationId,
+        event.createdByUserId,
+      );
+      const recipientMemberships =
+        await this.calendarEventsRepository.listReminderRecipientMemberships(
+          event.organizationId,
+          calendarReminderRecipientMembershipIds(event, creatorMembershipId),
+        );
+      const recipientsByTimeZone = groupReminderRecipientsByTimeZone(recipientMemberships);
 
-        try {
-          const result = await this.notificationsService.createCalendarReminderNotifications({
-            organizationId: event.organizationId,
-            actorUserId: null,
-            recipientMembershipIds,
-            type: reminderNotificationType(event),
-            preferenceKey: 'remindersEnabled',
-            title: reminderNotificationTitle(event),
-            body: `${event.title} starts at ${formatNotificationDateTime(occurrenceStart)}.`,
-            url: `/dashboard/${event.organizationId}/calendar`,
-            entityType: 'CalendarEvent',
-            entityId: event.id,
-            dedupeKey: `calendar-reminder:${event.id}:${occurrenceStart.toISOString()}`,
-          });
-          createdCount += result.createdCount;
-          emailSentCount += result.emailSentCount;
-          telegramSentCount += result.telegramSentCount;
-        } catch (error: unknown) {
-          calendarEventsLogger.error({
-            event: 'Calendar reminder notification creation failed',
-            organizationId: event.organizationId,
-            calendarEventId: event.id,
-            occurrenceStart: occurrenceStart.toISOString(),
-            error: error instanceof Error ? error.message : String(error),
-          });
+      for (const [timeZone, recipientMembershipIds] of recipientsByTimeZone) {
+        const occurrenceStarts = reminderOccurrenceStarts(event, windowStart, windowEnd, timeZone);
+        if (occurrenceStarts.length === 0) continue;
+
+        for (const occurrenceStart of occurrenceStarts) {
+          if (recipientMembershipIds.length === 0) continue;
+          try {
+            const result = await this.notificationsService.createCalendarReminderNotifications({
+              organizationId: event.organizationId,
+              actorUserId: null,
+              recipientMembershipIds,
+              type: reminderNotificationType(event),
+              preferenceKey: 'remindersEnabled',
+              title: reminderNotificationTitle(event),
+              body: `${event.title} starts at ${formatNotificationDateTime(occurrenceStart, timeZone)}.`,
+              url: `/dashboard/${event.organizationId}/calendar`,
+              entityType: 'CalendarEvent',
+              entityId: event.id,
+              dedupeKey: `calendar-reminder:${event.id}:${occurrenceStart.toISOString()}:${timeZone}`,
+            });
+            createdCount += result.createdCount;
+            emailSentCount += result.emailSentCount;
+            telegramSentCount += result.telegramSentCount;
+          } catch (error: unknown) {
+            calendarEventsLogger.error({
+              event: 'Calendar reminder notification creation failed',
+              organizationId: event.organizationId,
+              calendarEventId: event.id,
+              occurrenceStart: occurrenceStart.toISOString(),
+              timeZone,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }
       }
     }
@@ -405,8 +420,12 @@ function reminderNotificationType(event: CalendarEventRecord) {
   return 'CALENDAR_EVENT_REMINDER' as const;
 }
 
-function calendarReminderRecipientMembershipIds(event: CalendarEventRecord): string[] {
+function calendarReminderRecipientMembershipIds(
+  event: CalendarEventRecord,
+  creatorMembershipId: string | null,
+): string[] {
   return [
+    creatorMembershipId,
     event.linkedMembershipId,
     ...event.assignees.map((assignee) => assignee.membershipId),
     ...(event.serviceDetails?.participants ?? []).map((participant) => participant.membershipId),
@@ -417,6 +436,7 @@ function reminderOccurrenceStarts(
   event: CalendarEventRecord,
   windowStart: Date,
   windowEnd: Date,
+  timeZone: string,
 ): Date[] {
   if (!event.reminder) return [];
 
@@ -424,9 +444,28 @@ function reminderOccurrenceStarts(
   const occurrenceRangeStart = new Date(windowStart.getTime() + reminderOffset);
   const occurrenceRangeEnd = new Date(windowEnd.getTime() + reminderOffset);
 
-  return expandEvent(event, occurrenceRangeStart, occurrenceRangeEnd).map(
-    (occurrence) => new Date(occurrence.startsAt),
-  );
+  if (event.repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.none) {
+    return event.startsAt >= occurrenceRangeStart && event.startsAt <= occurrenceRangeEnd
+      ? [event.startsAt]
+      : [];
+  }
+
+  const occurrenceStarts: Date[] = [];
+  let occurrenceStart = new Date(event.startsAt);
+  let guard = 0;
+
+  while (occurrenceStart < occurrenceRangeStart && guard < MAX_OCCURRENCE_SEARCH_STEPS) {
+    occurrenceStart = nextOccurrenceInTimeZone(occurrenceStart, event.repeatPeriod, timeZone);
+    guard += 1;
+  }
+
+  while (occurrenceStart <= occurrenceRangeEnd && guard < MAX_OCCURRENCE_SEARCH_STEPS) {
+    occurrenceStarts.push(new Date(occurrenceStart));
+    occurrenceStart = nextOccurrenceInTimeZone(occurrenceStart, event.repeatPeriod, timeZone);
+    guard += 1;
+  }
+
+  return occurrenceStarts;
 }
 
 function reminderOffsetMs(reminder: NonNullable<CalendarEventRecord['reminder']>): number {
@@ -435,14 +474,134 @@ function reminderOffsetMs(reminder: NonNullable<CalendarEventRecord['reminder']>
   return 7 * MILLISECONDS_PER_DAY;
 }
 
-function formatNotificationDateTime(value: Date): string {
+function groupReminderRecipientsByTimeZone(
+  recipients: Array<{ id: string; timeZone: string }>,
+): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
+
+  for (const recipient of recipients) {
+    const timeZone = validTimeZoneOrFallback(recipient.timeZone);
+    const group = groups.get(timeZone) ?? [];
+    group.push(recipient.id);
+    groups.set(timeZone, group);
+  }
+
+  return groups;
+}
+
+function nextOccurrenceInTimeZone(
+  value: Date,
+  repeatPeriod: CalendarEventRecord['repeatPeriod'],
+  timeZone: string,
+): Date {
+  const parts = zonedDateParts(value, timeZone);
+  const localDate = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second),
+  );
+
+  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.daily)
+    localDate.setUTCDate(localDate.getUTCDate() + DAILY_REPEAT_STEP_DAYS);
+  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.weekly)
+    localDate.setUTCDate(localDate.getUTCDate() + WEEKLY_REPEAT_STEP_DAYS);
+  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.monthly)
+    localDate.setUTCMonth(localDate.getUTCMonth() + MONTHLY_REPEAT_STEP_MONTHS);
+  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.yearly)
+    localDate.setUTCFullYear(localDate.getUTCFullYear() + YEARLY_REPEAT_STEP_YEARS);
+
+  return zonedDateTimeToUtc(
+    {
+      year: localDate.getUTCFullYear(),
+      month: localDate.getUTCMonth() + 1,
+      day: localDate.getUTCDate(),
+      hour: localDate.getUTCHours(),
+      minute: localDate.getUTCMinutes(),
+      second: localDate.getUTCSeconds(),
+    },
+    timeZone,
+  );
+}
+
+function zonedDateTimeToUtc(
+  parts: {
+    year: number;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+    second: number;
+  },
+  timeZone: string,
+): Date {
+  const utcGuess = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second),
+  );
+  const offset = timeZoneOffsetMs(utcGuess, timeZone);
+  const adjusted = new Date(utcGuess.getTime() - offset);
+  const adjustedOffset = timeZoneOffsetMs(adjusted, timeZone);
+
+  return new Date(utcGuess.getTime() - adjustedOffset);
+}
+
+function timeZoneOffsetMs(value: Date, timeZone: string): number {
+  const parts = zonedDateParts(value, timeZone);
+  const asUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+
+  return asUtc - value.getTime();
+}
+
+function zonedDateParts(value: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: validTimeZoneOrFallback(timeZone),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = Object.fromEntries(
+    formatter
+      .formatToParts(value)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, Number(part.value)]),
+  );
+
+  return {
+    year: parts['year'] ?? value.getUTCFullYear(),
+    month: parts['month'] ?? value.getUTCMonth() + 1,
+    day: parts['day'] ?? value.getUTCDate(),
+    hour: parts['hour'] ?? value.getUTCHours(),
+    minute: parts['minute'] ?? value.getUTCMinutes(),
+    second: parts['second'] ?? value.getUTCSeconds(),
+  };
+}
+
+function validTimeZoneOrFallback(timeZone: string | null | undefined): string {
+  const candidate = timeZone || 'UTC';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date());
+    return candidate;
+  } catch {
+    return 'UTC';
+  }
+}
+
+function formatNotificationDateTime(value: Date, timeZone = 'Europe/Kyiv'): string {
   return new Intl.DateTimeFormat('uk-UA', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Europe/Kyiv',
+    timeZone: validTimeZoneOrFallback(timeZone),
   }).format(value);
 }
 

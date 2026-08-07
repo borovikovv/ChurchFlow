@@ -77,6 +77,7 @@ const notificationPreferenceSelect = {
   remindersEnabled: true,
   birthdayDigestEnabled: true,
   organizationUpdatesEnabled: true,
+  timeZone: true,
 } as const;
 
 export type NotificationPreferenceRecord = Prisma.NotificationPreferenceGetPayload<{
@@ -219,10 +220,16 @@ export class NotificationsRepository {
     userId: string,
     input: UpdateNotificationPreferencesInput,
   ) {
+    const { timeZone, ...preferences } = input;
+    const data = {
+      ...preferences,
+      ...(timeZone === undefined ? {} : { timeZone }),
+    };
+
     return this.prisma.notificationPreference.upsert({
       where: { organizationId_userId: { organizationId, userId } },
-      create: { organizationId, userId, ...input },
-      update: input,
+      create: { organizationId, userId, ...data },
+      update: data,
       select: notificationPreferenceSelect,
     });
   }

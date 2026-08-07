@@ -810,6 +810,7 @@ model NotificationPreference {
   remindersEnabled           Boolean  @default(true) @map("reminders_enabled")
   birthdayDigestEnabled      Boolean  @default(true) @map("birthday_digest_enabled")
   organizationUpdatesEnabled Boolean  @default(true) @map("organization_updates_enabled")
+  timeZone                   String?  @map("time_zone") @db.VarChar(64)
   createdAt                  DateTime @default(now()) @map("created_at")
   updatedAt                  DateTime @updatedAt @map("updated_at")
 
