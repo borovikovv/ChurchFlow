@@ -62,9 +62,11 @@ RUN groupadd --system --gid 1001 churchflow \
 
 COPY --from=builder --chown=churchflow:churchflow /runtime/api ./
 COPY --from=builder --chown=churchflow:churchflow /app/packages/db/prisma packages/db/prisma
+COPY --from=builder --chown=churchflow:churchflow /app/packages/db/prisma.config.ts packages/db/prisma.config.ts
 
 RUN set -eux; \
   node -e "const db = require('@churchflow/db'); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');"; \
+  test -f packages/db/prisma.config.ts; \
   test -f packages/db/prisma/schema.prisma; \
   test -d packages/db/prisma/migrations; \
   test -n "$(find packages/db/prisma/migrations -mindepth 2 -maxdepth 2 -name migration.sql -print -quit)"; \
@@ -79,10 +81,12 @@ RUN set -eux; \
     printf '%s\n' '  echo "Prisma CLI was not found in the API image." >&2'; \
     printf '%s\n' '  exit 1'; \
     printf '%s\n' 'fi'; \
-    printf '%s\n' 'exec node "$prisma_cli" migrate deploy --schema packages/db/prisma/schema.prisma "$@"'; \
+    printf '%s\n' 'prisma_cli="$(pwd)/$prisma_cli"'; \
+    printf '%s\n' 'cd packages/db'; \
+    printf '%s\n' 'exec node "$prisma_cli" --config prisma.config.ts migrate deploy "$@"'; \
   } > /usr/local/bin/churchflow-prisma-migrate-deploy; \
   chmod 755 /usr/local/bin/churchflow-prisma-migrate-deploy; \
-  /usr/local/bin/churchflow-prisma-migrate-deploy --help >/dev/null
+  DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public" /usr/local/bin/churchflow-prisma-migrate-deploy --help >/dev/null
 
 USER churchflow
 
