@@ -82,6 +82,8 @@ RUN set -eux; \
     printf '%s\n' '  exit 1'; \
     printf '%s\n' 'fi'; \
     printf '%s\n' 'prisma_cli="$(pwd)/$prisma_cli"'; \
+    printf '%s\n' 'prisma_node_modules="$(dirname "$(dirname "$(dirname "$prisma_cli")")")"'; \
+    printf '%s\n' 'export NODE_PATH="${prisma_node_modules}${NODE_PATH:+:$NODE_PATH}"'; \
     printf '%s\n' 'cd packages/db'; \
     printf '%s\n' 'exec node "$prisma_cli" --config prisma.config.ts migrate deploy "$@"'; \
   } > /usr/local/bin/churchflow-prisma-migrate-deploy; \
