@@ -22,7 +22,6 @@ concurrency:
 env:
   IMAGE_TAG: ${{ github.sha }}
   API_IMAGE: ghcr.io/borovikovv/churchflow-api:${{ github.sha }}
-  MIGRATOR_IMAGE: ghcr.io/borovikovv/churchflow-api-migrator:${{ github.sha }}
   WEB_IMAGE: ghcr.io/borovikovv/churchflow-web:${{ github.sha }}
   INTERNAL_NETWORK: churchflow-internal
 
@@ -176,17 +175,6 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
-      - name: Build and publish API migrator image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: apps/api/Dockerfile
-          target: migrator
-          push: true
-          tags: ${{ env.MIGRATOR_IMAGE }}
-          cache-from: type=gha,scope=api-migrator
-          cache-to: type=gha,mode=max,scope=api-migrator
-
       - name: Build and publish Web image
         uses: docker/build-push-action@v7
         with:
@@ -210,7 +198,6 @@ jobs:
             echo ""
             echo "- Commit SHA: \`${IMAGE_TAG}\`"
             echo "- API image: \`${API_IMAGE}\`"
-            echo "- Migrator image: \`${MIGRATOR_IMAGE}\`"
             echo "- Web image: \`${WEB_IMAGE}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -482,7 +469,7 @@ jobs:
           BIND_ADDRESS=127.0.0.1
 
           for key in \
-            DEPLOY_ENV IMAGE_TAG API_IMAGE MIGRATOR_IMAGE WEB_IMAGE \
+            DEPLOY_ENV IMAGE_TAG API_IMAGE WEB_IMAGE \
             TELEGRAM_CLIENT_ID BIND_ADDRESS API_HOST_PORT WEB_HOST_PORT INTERNAL_NETWORK \
             API_CONTAINER_NAME WEB_CONTAINER_NAME API_NETWORK_ALIAS WEB_NETWORK_ALIAS MIGRATOR_NETWORK_ALIAS; do
             append_required_env "$compose_env_file" "$key"
@@ -591,6 +578,151 @@ jobs:
           docker compose --env-file .env -f compose.yaml config >/dev/null
           echo "Pulling deployment images."
           docker compose --env-file .env -f compose.yaml pull api web migrator
+
+          parse_database_url() {
+            local output_file="$1"
+            docker run --rm --env-file api.env "$API_IMAGE" node <<'NODE' > "$output_file"
+          const databaseUrl = process.env.DATABASE_URL;
+          if (!databaseUrl) {
+            console.error('DATABASE_URL is required for backup.');
+            process.exit(1);
+          }
+
+          const url = new URL(databaseUrl);
+          const quote = (value) => `'${String(value).replace(/'/g, "'\\''")}'`;
+          const database = decodeURIComponent(url.pathname.replace(/^\//, ''));
+          const username = decodeURIComponent(url.username);
+          const password = decodeURIComponent(url.password);
+          const port = url.port || '5432';
+
+          if (!database || !username) {
+            console.error('DATABASE_URL must include database name and username.');
+            process.exit(1);
+          }
+
+          console.log(`PGDATABASE=${quote(database)}`);
+          console.log(`PGUSER=${quote(username)}`);
+          console.log(`PGPASSWORD=${quote(password)}`);
+          console.log(`PGPORT=${quote(port)}`);
+          NODE
+          }
+
+          check_pending_migrations_safe_for_prod() {
+            if [[ "$DEPLOY_ENV" != "prod" ]]; then
+              return 0
+            fi
+
+            echo "Checking pending production migrations for destructive SQL."
+            docker run --rm \
+              --network "$INTERNAL_NETWORK" \
+              --env-file api.env \
+              -e DEPLOY_ENV="$DEPLOY_ENV" \
+              "$API_IMAGE" \
+              node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { Client } = require('pg');
+
+          const migrationsDir = path.resolve('packages/db/prisma/migrations');
+          const destructivePattern =
+            /\b(TRUNCATE|DELETE\s+FROM|DROP\s+TABLE|DROP\s+COLUMN)\b|ALTER\s+TABLE[\s\S]{0,240}\bDROP\b/i;
+
+          async function main() {
+            if (!fs.existsSync(migrationsDir)) {
+              throw new Error(`Prisma migrations directory was not found: ${migrationsDir}`);
+            }
+
+            const migrationNames = fs
+              .readdirSync(migrationsDir, { withFileTypes: true })
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => entry.name)
+              .sort();
+
+            const client = new Client({ connectionString: process.env.DATABASE_URL });
+            await client.connect();
+            try {
+              const table = await client.query(`
+                SELECT to_regclass('public._prisma_migrations') AS table_name
+              `);
+              const hasMigrationTable = Boolean(table.rows[0]?.table_name);
+              const applied = new Set();
+
+              if (hasMigrationTable) {
+                const result = await client.query(`
+                  SELECT migration_name
+                  FROM "_prisma_migrations"
+                  WHERE finished_at IS NOT NULL
+                    AND rolled_back_at IS NULL
+                `);
+                for (const row of result.rows) applied.add(row.migration_name);
+              }
+
+              const pending = migrationNames.filter((name) => !applied.has(name));
+              const destructivePending = pending.filter((name) => {
+                const sqlPath = path.join(migrationsDir, name, 'migration.sql');
+                if (!fs.existsSync(sqlPath)) return false;
+                return destructivePattern.test(fs.readFileSync(sqlPath, 'utf8'));
+              });
+
+              if (destructivePending.length > 0) {
+                console.error('Production deployment blocked because pending migrations contain potentially destructive SQL:');
+                for (const name of destructivePending) console.error(`- ${name}`);
+                process.exit(1);
+              }
+
+              console.log(`Pending migrations checked: ${pending.length}`);
+            } finally {
+              await client.end();
+            }
+          }
+
+          main().catch((error) => {
+            console.error(error instanceof Error ? error.message : String(error));
+            process.exit(1);
+          });
+          NODE
+          }
+
+          create_database_backup() {
+            echo "Creating database backup before migrations."
+            local db_env_file
+            local backup_dir
+            local backup_file
+            local timestamp
+
+            db_env_file="$(mktemp)"
+            parse_database_url "$db_env_file"
+            # shellcheck source=/dev/null
+            source "$db_env_file"
+            rm -f "$db_env_file"
+
+            backup_dir="$DEPLOY_DIR/backups"
+            install -d -m 700 "$backup_dir"
+            timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+            backup_file="$backup_dir/${DEPLOY_ENV}-${IMAGE_TAG}-${timestamp}.dump"
+
+            if ! docker exec \
+              -e PGPASSWORD="$PGPASSWORD" \
+              churchflow-postgres \
+              pg_dump -h 127.0.0.1 -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -Fc \
+              > "$backup_file"; then
+              rm -f "$backup_file"
+              echo "Database backup failed."
+              exit 1
+            fi
+
+            if [[ ! -s "$backup_file" ]]; then
+              rm -f "$backup_file"
+              echo "Database backup file was not created."
+              exit 1
+            fi
+
+            chmod 600 "$backup_file"
+            echo "Database backup created: $backup_file"
+          }
+
+          check_pending_migrations_safe_for_prod
+          create_database_backup
 
           echo "Running database migrations."
           if ! docker compose --env-file .env -f compose.yaml --profile migrations run --rm --no-deps migrator </dev/null; then
@@ -763,7 +895,6 @@ jobs:
             echo "- Deployment environment: \`${DEPLOY_ENV}\`"
             echo "- Commit SHA: \`${IMAGE_TAG}\`"
             echo "- API image: \`${API_IMAGE}\`"
-            echo "- Migrator image: \`${MIGRATOR_IMAGE}\`"
             echo "- Web image: \`${WEB_IMAGE}\`"
             echo "- Remote directory: \`${DEPLOY_DIR}\`"
             echo ""

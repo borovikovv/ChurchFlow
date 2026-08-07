@@ -49,36 +49,11 @@ RUN set -eux; \
   cd /runtime/api; \
   node -e "const db = require('@churchflow/db'); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');"
 
-FROM dependencies AS migrator
-
-ENV NODE_ENV=production
-ENV HOME=/tmp
-ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public"
-
-WORKDIR /app
-
-COPY packages/db/prisma packages/db/prisma
-COPY packages/db/prisma.config.ts packages/db/prisma.config.ts
-
-RUN set -eux; \
-  pnpm --filter @churchflow/db db:generate; \
-  generated_client="$(find /app -path '*/node_modules/.prisma/client/default.js' -print -quit)"; \
-  test -n "$generated_client"; \
-  node -e "const db = require(process.argv[1]); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');" "$generated_client"
-
-RUN groupadd --system --gid 1001 churchflow \
-  && useradd --system --uid 1001 --gid churchflow churchflow
-
-USER churchflow
-
-WORKDIR /app/packages/db
-
-CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]
-
-FROM node:22-bookworm-slim AS runner
+FROM base AS runner
 
 ENV NODE_ENV=production
 ENV PORT=4000
+ENV HOME=/tmp
 
 WORKDIR /app
 
@@ -86,8 +61,15 @@ RUN groupadd --system --gid 1001 churchflow \
   && useradd --system --uid 1001 --gid churchflow churchflow
 
 COPY --from=builder --chown=churchflow:churchflow /runtime/api ./
+COPY --from=builder --chown=churchflow:churchflow /app/packages/db/prisma packages/db/prisma
 
-RUN node -e "const db = require('@churchflow/db'); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');"
+RUN set -eux; \
+  node -e "const db = require('@churchflow/db'); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');"; \
+  test -x ./node_modules/.bin/prisma; \
+  test -f packages/db/prisma/schema.prisma; \
+  test -d packages/db/prisma/migrations; \
+  test -n "$(find packages/db/prisma/migrations -mindepth 2 -maxdepth 2 -name migration.sql -print -quit)"; \
+  ./node_modules/.bin/prisma --version >/dev/null
 
 USER churchflow
 

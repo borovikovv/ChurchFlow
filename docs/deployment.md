@@ -14,7 +14,7 @@ Images are always deployed by immutable commit SHA tags. Do not deploy `latest`.
 
 - `apps/api` runs as `churchflow-stage-api` or `churchflow-production-api` on container port `4000`.
 - `apps/web` runs as `churchflow-stage-web` or `churchflow-production-web` on container port `3000`.
-- `churchflow-api-migrator` is a one-shot container that runs `prisma migrate deploy` before API/Web are updated.
+- The API image also contains Prisma CLI plus `schema.prisma` and migration files. The deploy workflow runs `prisma migrate deploy` once as a one-shot Compose service before API/Web are updated.
 - PostgreSQL is managed separately and must already run as `churchflow-postgres`.
 - API, Web, migrator, and `churchflow-postgres` share the external Docker network `churchflow-internal`.
 - PostgreSQL is not published by the app Compose file.
@@ -90,7 +90,6 @@ The `prod` GitHub Environment deploys into the existing production runtime names
 The workflow checks out `github.sha` from the selected `Use workflow from` ref and publishes:
 
 - `ghcr.io/borovikovv/churchflow-api:<github.sha>`
-- `ghcr.io/borovikovv/churchflow-api-migrator:<github.sha>`
 - `ghcr.io/borovikovv/churchflow-web:<github.sha>`
 
 The Web image embeds `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, `API_INTERNAL_URL`, and `JWT_ACCESS_PUBLIC_KEY` at `next build` time. Build the Web image separately for each environment. `TELEGRAM_CLIENT_ID` is runtime-only and is rendered into the server env files, not built into an image.
@@ -99,11 +98,14 @@ Prod deploys accept only a `github.sha` reachable from `main` or exactly matchin
 
 The workflow:
 
-- builds and pushes the API, migrator, and Web images to GHCR with the immutable `github.sha` tag;
+- builds and pushes the API and Web images to GHCR with the immutable `github.sha` tag;
 - uploads the Compose file and generated env files to `/opt/churchflow/stage` or `/opt/churchflow/production`;
 - logs in to GHCR on the server through stdin;
 - creates `churchflow-internal` if needed;
 - connects `churchflow-postgres` to that network if needed;
+- pulls the new API and Web images;
+- for production, blocks pending migrations that contain potentially destructive SQL;
+- creates a PostgreSQL custom-format backup under `/opt/churchflow/<environment>/backups`;
 - runs `docker compose run --rm migrator`;
 - stops if migrations fail;
 - runs `docker compose up -d --remove-orphans api web`;
@@ -250,7 +252,7 @@ Rollback cannot undo a migration that has already changed the database. If a mig
 
 ## Failed Migration Recovery
 
-If the migrator fails, the workflow stops before `docker compose up -d`. The currently running API/Web containers remain on the previous image tag.
+If backup creation or the migrator fails, the workflow stops before `docker compose up -d`. The currently running API/Web containers remain on the previous image tag.
 
 On the server:
 
@@ -259,6 +261,7 @@ cd /opt/churchflow/<environment>
 docker compose --env-file .env -f compose.yaml ps
 docker compose --env-file .env -f compose.yaml --profile migrations run --rm --no-deps migrator
 docker exec churchflow-postgres pg_isready -U churchflow -d churchflow
+ls -lh /opt/churchflow/<environment>/backups
 ```
 
 Inspect the failed migration and fix it with a new commit. Do not manually edit Prisma migration history unless you have a tested recovery plan and a database backup.
