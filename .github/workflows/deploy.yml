@@ -581,7 +581,7 @@ jobs:
 
           parse_database_url() {
             local output_file="$1"
-            docker run --rm -i --env-file api.env "$API_IMAGE" node <<'NODE' > "$output_file"
+            docker compose --env-file .env -f compose.yaml --profile migrations run --rm --no-deps --entrypoint node migrator - <<'NODE' > "$output_file"
           const databaseUrl = process.env.DATABASE_URL;
           if (!databaseUrl) {
             console.error('DATABASE_URL is required for backup.');
@@ -613,12 +613,10 @@ jobs:
             fi
 
             echo "Checking pending production migrations for destructive SQL."
-            docker run --rm -i \
-              --network "$INTERNAL_NETWORK" \
-              --env-file api.env \
+            docker compose --env-file .env -f compose.yaml --profile migrations run --rm --no-deps \
+              --entrypoint node \
               -e DEPLOY_ENV="$DEPLOY_ENV" \
-              "$API_IMAGE" \
-              node <<'NODE'
+              migrator - <<'NODE'
           const fs = require('node:fs');
           const path = require('node:path');
           const { Client } = require('pg');
