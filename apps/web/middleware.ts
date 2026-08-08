@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { AUTH_COOKIE_NAMES } from '@churchflow/shared';
+import { AUTH_COOKIE_NAMES } from './src/shared/edge';
 import {
   internalRedirectTarget,
   isAccessTokenFresh,

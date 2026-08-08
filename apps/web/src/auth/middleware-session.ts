@@ -1,4 +1,4 @@
-import { normalizePem } from '@churchflow/shared';
+import { normalizePem } from '@/shared/edge';
 
 export async function isAccessTokenFresh(
   token: string,
