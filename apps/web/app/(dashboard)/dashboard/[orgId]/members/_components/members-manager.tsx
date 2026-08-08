@@ -92,7 +92,7 @@ export function MembersManager({
     },
     {
       id: 'contact',
-      accessorFn: (member) => member.profile.email ?? member.profile.phone ?? '',
+      accessorFn: (member) => member.profile.phone ?? member.profile.email ?? '',
       header: t('contact'),
       cell: ({ row }) => <MemberContactSummary profile={row.original.profile} />,
     },

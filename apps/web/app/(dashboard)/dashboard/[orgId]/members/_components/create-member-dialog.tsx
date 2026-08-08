@@ -117,7 +117,13 @@ export function CreateMemberDialog({
               error={errors.email?.message}
               {...register('email')}
             />
-            <FormInput label={t('phone')} error={errors.phone?.message} {...register('phone')} />
+            <FormInput
+              label={t('phone')}
+              type="tel"
+              inputMode="tel"
+              error={errors.phone?.message}
+              {...register('phone')}
+            />
             <FormSelect label={t('role')} error={errors.role?.message} {...register('role')}>
               <option value="MEMBER">{t('roleLabels.MEMBER')}</option>
               <option value="VIEWER">{t('roleLabels.VIEWER')}</option>

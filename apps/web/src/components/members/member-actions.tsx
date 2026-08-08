@@ -374,7 +374,13 @@ export function EditMemberDialog({
               error={errors.email?.message}
               {...register('email')}
             />
-            <FormInput label={t('phone')} error={errors.phone?.message} {...register('phone')} />
+            <FormInput
+              label={t('phone')}
+              type="tel"
+              inputMode="tel"
+              error={errors.phone?.message}
+              {...register('phone')}
+            />
             <FormTextarea
               label={t('notes')}
               rows={5}

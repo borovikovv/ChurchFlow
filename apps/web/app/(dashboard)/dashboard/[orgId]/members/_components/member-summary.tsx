@@ -30,7 +30,7 @@ export function MemberContactSummary({ profile }: { profile: SummaryProfile }) {
 
   return (
     <span className="col-start-1 truncate text-[var(--muted)] md:col-auto">
-      {profile.email ?? profile.phone ?? t('noContactInformation')}
+      {profile.phone ?? profile.email ?? t('noContactInformation')}
     </span>
   );
 }

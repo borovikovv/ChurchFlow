@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PhoneNumberUtil } from 'google-libphonenumber';
 import {
   APP_LOCALES,
   CALENDAR_EVENT_REMINDERS,
@@ -15,6 +16,9 @@ import {
   NOTIFICATION_TYPES,
   PUBLIC_SECTION_TYPES,
 } from './constants.js';
+
+const DEFAULT_PHONE_REGION = 'UA';
+const phoneNumberUtil = PhoneNumberUtil.getInstance();
 
 export const uuidSchema = z.string().uuid();
 export const slugSchema = z
@@ -114,6 +118,14 @@ const nullableTrimmedString = (max: number) =>
     .optional()
     .transform((value) => (value === '' ? null : value));
 
+const nullableEmail = nullableTrimmedString(255)
+  .refine(isNullableEmail, { message: 'Invalid email' })
+  .transform((value) => value?.toLowerCase() ?? value);
+
+const nullablePhoneNumber = nullableTrimmedString(40).refine(isNullablePhoneNumber, {
+  message: 'Invalid phone number',
+});
+
 const nullablePastOrTodayDate = z
   .string()
   .date()
@@ -122,6 +134,25 @@ const nullablePastOrTodayDate = z
   .refine((value) => value == null || value <= new Date().toISOString().slice(0, 10), {
     message: 'Date cannot be in the future',
   });
+
+function isNullableEmail(value: string | null | undefined): boolean {
+  return value === undefined || value === null || z.string().email().safeParse(value).success;
+}
+
+function isNullablePhoneNumber(value: string | null | undefined): boolean {
+  if (value === undefined || value === null) return true;
+
+  try {
+    const parsed = phoneNumberUtil.parseAndKeepRawInput(
+      value,
+      value.startsWith('+') ? undefined : DEFAULT_PHONE_REGION,
+    );
+
+    return phoneNumberUtil.isValidNumber(parsed);
+  } catch {
+    return false;
+  }
+}
 
 const dateTimeStringSchema = z.string().datetime({ offset: true });
 
@@ -411,13 +442,7 @@ export const updateCurrentUserProfileSchema = z
       (value) => value === undefined || value === null || value.length >= 2,
       { message: 'Name must be at least 2 characters' },
     ),
-    email: nullableTrimmedString(255)
-      .refine(
-        (value) =>
-          value === undefined || value === null || z.string().email().safeParse(value).success,
-        { message: 'Invalid email' },
-      )
-      .transform((value) => value?.toLowerCase() ?? value),
+    email: nullableEmail,
     baptizedAt: nullablePastOrTodayDate,
     baptismChurchName: nullableTrimmedString(160),
     locale: appLocaleSchema.optional(),
@@ -454,14 +479,8 @@ export const confirmMemberPhotoUploadSchema = z.object({ assetId: uuidSchema });
 
 export const createManualOrganizationMemberSchema = z.object({
   displayName: z.string().trim().min(2).max(160),
-  email: nullableTrimmedString(255)
-    .refine(
-      (value) =>
-        value === undefined || value === null || z.string().email().safeParse(value).success,
-      { message: 'Invalid email' },
-    )
-    .transform((value) => value?.toLowerCase() ?? value),
-  phone: nullableTrimmedString(40),
+  email: nullableEmail,
+  phone: nullablePhoneNumber,
   notes: nullableTrimmedString(2000),
   memberSince: nullablePastOrTodayDate,
   birthday: nullablePastOrTodayDate,
@@ -503,14 +522,8 @@ export const importOrganizationMembersCsvResultSchema = z.object({
 export const updateOrganizationMemberProfileSchema = z
   .object({
     displayName: z.string().trim().min(2).max(160).optional(),
-    email: nullableTrimmedString(255)
-      .refine(
-        (value) =>
-          value === undefined || value === null || z.string().email().safeParse(value).success,
-        { message: 'Invalid email' },
-      )
-      .transform((value) => value?.toLowerCase() ?? value),
-    phone: nullableTrimmedString(40),
+    email: nullableEmail,
+    phone: nullablePhoneNumber,
     notes: nullableTrimmedString(2000),
     memberSince: nullablePastOrTodayDate,
     birthday: nullablePastOrTodayDate,

@@ -186,7 +186,7 @@
     "invitationCreatedAndEmailed": "Запрошення створено та надіслано email.",
     "invitationRevoked": "Запрошення відкликано.",
     "backToMembers": "Назад до учасників",
-    "member": "Учасник",
+    "member": "член церкви",
     "memberDetails": "Деталі учасника",
     "memberSince": "Учасник з",
     "ministry": {
@@ -241,10 +241,10 @@
     "revoking": "Відкликання...",
     "role": "Роль",
     "roleLabels": {
-      "ADMIN": "Адмін",
-      "MEMBER": "Учасник",
-      "OWNER": "Власник",
-      "VIEWER": "Переглядач"
+      "ADMIN": "адмін",
+      "MEMBER": "член церкви",
+      "OWNER": "власник",
+      "VIEWER": "відвідувач"
     },
     "saveChanges": "Зберегти зміни",
     "selectMember": "Оберіть учасника",
@@ -273,7 +273,7 @@
     "updating": "Оновлення...",
     "uploading": "Завантаження...",
     "viewMember": "Переглянути учасника",
-    "viewer": "Переглядач",
+    "viewer": "відвідувач",
     "yourRole": "Ваша роль: {role}"
   },
   "calendar": {
