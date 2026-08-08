@@ -22,6 +22,12 @@ const formSchema = createManualOrganizationMemberSchema.and(
 type FormInput = z.input<typeof formSchema>;
 type FormValues = z.output<typeof formSchema>;
 
+const createMemberDefaultValues = {
+  role: 'MEMBER',
+  prepareAccess: false,
+  ministries: [],
+} satisfies Partial<FormInput>;
+
 interface CreatedMember {
   id: string;
   role: string;
@@ -75,13 +81,14 @@ export function CreateMemberDialog({
     dialogRef.current?.close();
   });
 
+  const openDialog = () => {
+    reset(createMemberDefaultValues);
+    dialogRef.current?.showModal();
+  };
+
   return (
     <>
-      <Button
-        className={triggerClassName}
-        type="button"
-        onClick={() => dialogRef.current?.showModal()}
-      >
+      <Button className={triggerClassName} type="button" onClick={openDialog}>
         {t('createMember')}
       </Button>
       <dialog

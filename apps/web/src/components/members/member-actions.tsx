@@ -110,6 +110,21 @@ export type MemberProfileUpdate = Partial<EditableMember['profile']> & {
   ministries?: MemberMinistry[];
 };
 
+function memberProfileFormValues(member: EditableMember): UpdateOrganizationMemberProfileInput {
+  return {
+    displayName: member.profile.displayName,
+    email: member.profile.email,
+    phone: member.profile.phone,
+    notes: member.profile.notes,
+    memberSince: member.profile.memberSince?.slice(0, 10) ?? null,
+    birthday: member.profile.birthday?.slice(0, 10) ?? null,
+    anniversary: member.profile.anniversary?.slice(0, 10) ?? null,
+    biography: member.profile.biography,
+    familyNotes: member.profile.familyNotes,
+    ministries: [...member.ministries],
+  };
+}
+
 function MenuIcon({ children }: { children: ReactNode }) {
   return (
     <svg
@@ -173,23 +188,13 @@ export function EditMemberDialog({
     register,
     control,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<UpdateOrganizationMemberProfileInput>({
     resolver: zodResolver(updateOrganizationMemberProfileSchema),
     mode: 'onBlur',
     reValidateMode: 'onChange',
-    defaultValues: {
-      displayName: member.profile.displayName,
-      email: member.profile.email,
-      phone: member.profile.phone,
-      notes: member.profile.notes,
-      memberSince: member.profile.memberSince?.slice(0, 10) ?? null,
-      birthday: member.profile.birthday?.slice(0, 10) ?? null,
-      anniversary: member.profile.anniversary?.slice(0, 10) ?? null,
-      biography: member.profile.biography,
-      familyNotes: member.profile.familyNotes,
-      ministries: member.ministries,
-    },
+    defaultValues: memberProfileFormValues(member),
   });
   const relationshipAlreadySelected = relatedMembershipId
     ? relationships.some((relationship) =>
@@ -313,6 +318,10 @@ export function EditMemberDialog({
     setRelationshipType('SPOUSE');
   };
   const openDialog = () => {
+    reset(memberProfileFormValues(member));
+    setPhoto(null);
+    setPhotoError(null);
+    setSavedPhotoUrl(member.profile.photoUrl);
     resetRelationshipDraft();
     onOpen();
     dialogRef.current?.showModal();
