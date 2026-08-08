@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { createHash, generateKeyPairSync, sign } = require('node:crypto');
+const { AuthController } = require('../dist/modules/auth/auth.controller.js');
 const { AuthService } = require('../dist/modules/auth/auth.service.js');
 const {
   OrganizationRequestsService,
@@ -39,18 +40,18 @@ function createAuthRepository(overrides = {}) {
   };
 }
 
-function createAuthService(repository) {
+function createAuthService(repository, options = {}) {
   return new AuthService(
     {
       getOrThrow(key) {
         if (key === 'WEB_APP_URL') {
-          return 'https://churchflow.test';
+          return options.webAppUrl ?? 'https://churchflow.test';
         }
         if (key === 'TELEGRAM_CLIENT_ID') {
           return 'churchflow';
         }
         if (key === 'TELEGRAM_REDIRECT_URI') {
-          return 'https://api.churchflow.test/v1/auth/telegram/callback';
+          return options.telegramRedirectUri ?? 'https://churchflow.test/v1/auth/telegram/callback';
         }
         throw new Error('Config should not be read in admission tests');
       },
@@ -90,6 +91,93 @@ function activeRefreshSession(overrides = {}) {
     },
     ...overrides,
   };
+}
+
+function createAuthController(cookieDomain, webAppUrl = 'https://stage.mychurchflow.org') {
+  const authService = {
+    beginTelegramLogin: () => ({
+      authorizationUrl: 'https://oauth.telegram.org/auth?state=state',
+      state: 'state',
+      codeVerifier: 'verifier',
+      nonce: 'nonce',
+      redirectTo: '/dashboard/stage',
+    }),
+    completeTelegramLogin: async (input) => ({
+      user: {
+        id: 'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
+        email: null,
+        displayName: 'Stage User',
+        platformRole: 'USER',
+      },
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      accessTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      redirectTo: input.redirectTo ?? '/dashboard/stage',
+    }),
+  };
+
+  const config = {
+    get(key) {
+      if (key === 'COOKIE_DOMAIN') {
+        return cookieDomain;
+      }
+      if (key === 'NODE_ENV') {
+        return 'production';
+      }
+      return undefined;
+    },
+    getOrThrow(key) {
+      if (key === 'WEB_APP_URL') {
+        return webAppUrl;
+      }
+      throw new Error(`Unexpected controller config key: ${key}`);
+    },
+  };
+
+  return new AuthController(authService, config);
+}
+
+class FakeResponse {
+  constructor() {
+    this.cookies = [];
+    this.clearedCookies = [];
+    this.redirectUrl = undefined;
+  }
+
+  cookie(name, value, options) {
+    this.cookies.push({ name, value, options });
+    return this;
+  }
+
+  clearCookie(name, options) {
+    this.clearedCookies.push({ name, options });
+    return this;
+  }
+
+  redirect(url) {
+    this.redirectUrl = url;
+    return this;
+  }
+}
+
+function cookieHeader(cookies) {
+  return Object.entries(cookies)
+    .map(([name, value]) => `${name}=${encodeURIComponent(value)}`)
+    .join('; ');
+}
+
+function assertSecureCookiePolicy(options, { maxAge } = {}) {
+  assert.equal(options.httpOnly, true);
+  assert.equal(options.secure, true);
+  assert.equal(options.sameSite, 'lax');
+  assert.equal(options.path, '/');
+  assert.equal(Object.hasOwn(options, 'domain'), false);
+  if (maxAge === undefined) {
+    assert.equal(Object.hasOwn(options, 'maxAge'), false);
+  } else {
+    assert.equal(options.maxAge, maxAge);
+  }
 }
 
 test('valid refresh token issues a 15-minute access token without extending session', async () => {
@@ -231,6 +319,122 @@ test('redirect normalization accepts only canonical same-origin URLs', () => {
   assert.equal(service.normalizeRedirectTo('https://evil.example/path'), undefined);
   assert.equal(service.normalizeRedirectTo('/%5c%5cevil.example'), undefined);
   assert.equal(service.normalizeRedirectTo('/%2f%2fevil.example'), undefined);
+});
+
+test('redirect normalization is scoped to the configured stage origin', () => {
+  const service = createAuthService(createAuthRepository(), {
+    webAppUrl: 'https://stage.mychurchflow.org',
+  });
+
+  assert.equal(service.normalizeRedirectTo('https://stage.mychurchflow.org/profile'), '/profile');
+  assert.equal(service.normalizeRedirectTo('https://mychurchflow.org/profile'), undefined);
+});
+
+test('redirect normalization is scoped to the configured production origin', () => {
+  const service = createAuthService(createAuthRepository(), {
+    webAppUrl: 'https://mychurchflow.org',
+  });
+
+  assert.equal(service.normalizeRedirectTo('https://mychurchflow.org/profile'), '/profile');
+  assert.equal(service.normalizeRedirectTo('https://stage.mychurchflow.org/profile'), undefined);
+});
+
+for (const [label, cookieDomain] of [
+  ['missing COOKIE_DOMAIN', undefined],
+  ['empty COOKIE_DOMAIN', ''],
+  ['blank COOKIE_DOMAIN', '   '],
+]) {
+  test(`auth and Telegram OAuth cookies are host-only with ${label}`, async () => {
+    const controller = createAuthController(cookieDomain);
+    const startResponse = new FakeResponse();
+    controller.startTelegramLogin('/dashboard/stage', startResponse);
+
+    assert.equal(startResponse.cookies.length, 4);
+    for (const operation of startResponse.cookies) {
+      assertSecureCookiePolicy(operation.options, { maxAge: 10 * 60 * 1000 });
+    }
+    for (const operation of startResponse.clearedCookies) {
+      assertSecureCookiePolicy(operation.options, { maxAge: 10 * 60 * 1000 });
+    }
+
+    const callbackResponse = new FakeResponse();
+    await controller.completeTelegramLogin(
+      'telegram-code',
+      'state',
+      undefined,
+      {
+        headers: {
+          cookie: cookieHeader({
+            churchflow_telegram_state: 'state',
+            churchflow_telegram_verifier: 'verifier',
+            churchflow_telegram_nonce: 'nonce',
+            churchflow_telegram_redirect: '/dashboard/stage',
+          }),
+        },
+      },
+      callbackResponse,
+    );
+
+    assert.deepEqual(
+      callbackResponse.cookies.map(({ name }) => name),
+      ['churchflow_access', 'churchflow_refresh'],
+    );
+    for (const operation of callbackResponse.cookies) {
+      assertSecureCookiePolicy(operation.options);
+      assert.ok(operation.options.expires instanceof Date);
+    }
+    for (const operation of callbackResponse.clearedCookies) {
+      assertSecureCookiePolicy(operation.options, { maxAge: 10 * 60 * 1000 });
+    }
+  });
+}
+
+test('Telegram callback redirects to the configured stage web origin', async () => {
+  const controller = createAuthController(undefined, 'https://stage.mychurchflow.org');
+  const response = new FakeResponse();
+
+  await controller.completeTelegramLogin(
+    'telegram-code',
+    'state',
+    undefined,
+    {
+      headers: {
+        cookie: cookieHeader({
+          churchflow_telegram_state: 'state',
+          churchflow_telegram_verifier: 'verifier',
+          churchflow_telegram_nonce: 'nonce',
+          churchflow_telegram_redirect: '/dashboard/stage',
+        }),
+      },
+    },
+    response,
+  );
+
+  assert.equal(response.redirectUrl, 'https://stage.mychurchflow.org/dashboard/stage');
+});
+
+test('Telegram callback redirects to the configured production web origin', async () => {
+  const controller = createAuthController(undefined, 'https://mychurchflow.org');
+  const response = new FakeResponse();
+
+  await controller.completeTelegramLogin(
+    'telegram-code',
+    'state',
+    undefined,
+    {
+      headers: {
+        cookie: cookieHeader({
+          churchflow_telegram_state: 'state',
+          churchflow_telegram_verifier: 'verifier',
+          churchflow_telegram_nonce: 'nonce',
+          churchflow_telegram_redirect: '/dashboard/prod',
+        }),
+      },
+    },
+    response,
+  );
+
+  assert.equal(response.redirectUrl, 'https://mychurchflow.org/dashboard/prod');
 });
 
 test('Telegram authorization starts with state, PKCE and nonce', () => {

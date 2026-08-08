@@ -121,7 +121,7 @@ async function refreshAccessToken(
 }
 
 function authCookieOptions(expiresAt?: string) {
-  const domain = process.env['COOKIE_DOMAIN'];
+  const cookieDomain = serverEnv.COOKIE_DOMAIN?.trim();
 
   return {
     httpOnly: true,
@@ -129,7 +129,7 @@ function authCookieOptions(expiresAt?: string) {
     secure: process.env['NODE_ENV'] === 'production',
     path: '/',
     ...(expiresAt ? { expires: new Date(expiresAt) } : {}),
-    ...(domain ? { domain } : {}),
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
   };
 }
 

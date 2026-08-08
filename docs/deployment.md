@@ -123,10 +123,9 @@ Required variables for `stage`:
 - `NEXT_PUBLIC_API_URL=https://api-stage.mychurchflow.org/v1`
 - `API_INTERNAL_URL=http://churchflow-stage-api:4000/v1`
 - `WEB_APP_URL=https://stage.mychurchflow.org`
-- `COOKIE_DOMAIN=.mychurchflow.org`
 - `PLATFORM_ADMIN_EMAIL=<admin email>`
 - `TELEGRAM_CLIENT_ID=<telegram OAuth client id>`
-- `TELEGRAM_REDIRECT_URI=https://api-stage.mychurchflow.org/v1/auth/telegram/callback`
+- `TELEGRAM_REDIRECT_URI=https://stage.mychurchflow.org/v1/auth/telegram/callback`
 - `TELEGRAM_BOT_USERNAME=<bot username>`
 - `TELEGRAM_WEBHOOK_URL=https://api-stage.mychurchflow.org/v1/telegram/webhook/<route-token>`
 - `EMAIL_PROVIDER=resend`
@@ -143,10 +142,11 @@ Required variables for `prod` use the production domains and ports:
 - `NEXT_PUBLIC_API_URL=https://api.mychurchflow.org/v1`
 - `API_INTERNAL_URL=http://churchflow-production-api:4000/v1`
 - `WEB_APP_URL=https://mychurchflow.org`
-- `COOKIE_DOMAIN=.mychurchflow.org`
+- `TELEGRAM_REDIRECT_URI=https://mychurchflow.org/v1/auth/telegram/callback`
 - the production equivalents of the remaining variables above.
 
 `API_INTERNAL_URL` is a Docker-network URL used by Next.js server code and rewrites. Do not use `localhost` for it inside containers.
+Leave `COOKIE_DOMAIN` unset in both environments so auth and Telegram OAuth cookies are host-only.
 
 ## GitHub Environment Secrets
 

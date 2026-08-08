@@ -9,6 +9,15 @@ const optionalNonEmptyString = z.preprocess(
   z.string().min(1).optional(),
 );
 
+const optionalTrimmedNonEmptyString = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().min(1).optional());
+
 const optionalEmailProviderSchema = z.preprocess(
   (value) => (value === '' ? undefined : value),
   z.enum(['resend', 'console', 'smtp']).optional(),
@@ -35,7 +44,7 @@ export const apiEnvSchema = z
     JWT_ACCESS_PRIVATE_KEY: pemKeySchema('JWT_ACCESS_PRIVATE_KEY', 'PRIVATE'),
     JWT_REFRESH_PUBLIC_KEY: pemKeySchema('JWT_REFRESH_PUBLIC_KEY', 'PUBLIC'),
     JWT_REFRESH_PRIVATE_KEY: pemKeySchema('JWT_REFRESH_PRIVATE_KEY', 'PRIVATE'),
-    COOKIE_DOMAIN: z.string().optional(),
+    COOKIE_DOMAIN: optionalTrimmedNonEmptyString,
     WEB_APP_URL: z.string().url(),
     PLATFORM_ADMIN_EMAIL: z.string().email(),
     TELEGRAM_CLIENT_ID: optionalNonEmptyString,
@@ -114,6 +123,7 @@ export const webEnvSchema = z
     API_INTERNAL_URL: z.string().url().optional(),
     NEXT_PUBLIC_API_URL: z.string().url().optional(),
     JWT_ACCESS_PUBLIC_KEY: pemKeySchema('JWT_ACCESS_PUBLIC_KEY', 'PUBLIC').optional(),
+    COOKIE_DOMAIN: optionalTrimmedNonEmptyString,
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== 'production') {
@@ -141,6 +151,7 @@ export const webEnvSchema = z
     API_INTERNAL_URL: env.API_INTERNAL_URL ?? 'http://localhost:4000/v1',
     NEXT_PUBLIC_API_URL: env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1',
     JWT_ACCESS_PUBLIC_KEY: env.JWT_ACCESS_PUBLIC_KEY,
+    COOKIE_DOMAIN: env.COOKIE_DOMAIN,
   }));
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

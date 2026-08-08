@@ -287,7 +287,7 @@ export class AuthController {
   }
 
   private get cookieOptions(): CookieOptions {
-    const domain = this.config.get<string>('COOKIE_DOMAIN');
+    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN')?.trim();
     const isHttpsApp = this.webAppUrl.startsWith('https://');
 
     return {
@@ -295,7 +295,7 @@ export class AuthController {
       sameSite: 'lax' as const,
       secure: isHttpsApp || this.config.get<string>('NODE_ENV') === 'production',
       path: '/',
-      ...(domain ? { domain } : {}),
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
     };
   }
 

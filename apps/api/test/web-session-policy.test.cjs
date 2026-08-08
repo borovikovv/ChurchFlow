@@ -25,7 +25,13 @@ function loadTypeScript(relativePath, dependencies = {}) {
 }
 
 const routePolicy = loadTypeScript('apps/web/src/auth/route-policy.ts');
-const sessionHelpers = loadTypeScript('apps/web/src/auth/middleware-session.ts');
+const sharedEdge = {
+  AUTH_COOKIE_NAMES: { access: 'churchflow_access', refresh: 'churchflow_refresh' },
+  normalizePem: (value) => value,
+};
+const sessionHelpers = loadTypeScript('apps/web/src/auth/middleware-session.ts', {
+  '@/shared/edge': sharedEdge,
+});
 const webJwtKeys = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const webPublicKeyPem = webJwtKeys.publicKey.export({ type: 'spki', format: 'pem' });
 
@@ -145,9 +151,8 @@ class FakeNextResponse {
 
 const middlewareModule = loadTypeScript('apps/web/middleware.ts', {
   'next/server': { NextResponse: FakeNextResponse },
-  '@churchflow/shared': {
-    AUTH_COOKIE_NAMES: { access: 'churchflow_access', refresh: 'churchflow_refresh' },
-  },
+  '@churchflow/shared': sharedEdge,
+  './src/shared/edge': sharedEdge,
   './src/auth/route-policy': routePolicy,
   './src/auth/middleware-session': sessionHelpers,
 });
@@ -201,6 +206,54 @@ test('middleware injects refreshed access into current request and response cook
     else process.env.JWT_ACCESS_PUBLIC_KEY = originalPublicKey;
   }
 });
+
+for (const [label, cookieDomain] of [
+  ['missing COOKIE_DOMAIN', undefined],
+  ['empty COOKIE_DOMAIN', ''],
+  ['blank COOKIE_DOMAIN', '   '],
+]) {
+  test(`middleware refresh Set-Cookie is host-only with ${label}`, async () => {
+    const originalFetch = global.fetch;
+    const originalPublicKey = process.env.JWT_ACCESS_PUBLIC_KEY;
+    const originalCookieDomain = process.env.COOKIE_DOMAIN;
+    process.env.JWT_ACCESS_PUBLIC_KEY = webPublicKeyPem;
+    if (cookieDomain === undefined) {
+      delete process.env.COOKIE_DOMAIN;
+    } else {
+      process.env.COOKIE_DOMAIN = cookieDomain;
+    }
+    global.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        accessToken: 'new-access-token',
+        accessTokenExpiresAt: new Date(Date.now() + 900_000).toISOString(),
+      }),
+    });
+
+    try {
+      const response = await middlewareModule.middleware(
+        requestFor('https://stage.mychurchflow.org/dashboard/org', {
+          churchflow_access: 'invalid-access-token',
+          churchflow_refresh: 'valid-refresh-token',
+        }),
+      );
+
+      assert.equal(response.kind, 'next');
+      const options = response.cookies.operations[0].options;
+      assert.equal(options.httpOnly, true);
+      assert.equal(options.secure, true);
+      assert.equal(options.sameSite, 'lax');
+      assert.equal(options.path, '/');
+      assert.equal(Object.hasOwn(options, 'domain'), false);
+    } finally {
+      global.fetch = originalFetch;
+      if (originalPublicKey === undefined) delete process.env.JWT_ACCESS_PUBLIC_KEY;
+      else process.env.JWT_ACCESS_PUBLIC_KEY = originalPublicKey;
+      if (originalCookieDomain === undefined) delete process.env.COOKIE_DOMAIN;
+      else process.env.COOKIE_DOMAIN = originalCookieDomain;
+    }
+  });
+}
 
 test('middleware handles anonymous public routes and protects unknown routes without loops', async () => {
   const publicResponse = await middlewareModule.middleware(

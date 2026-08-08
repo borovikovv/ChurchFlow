@@ -87,6 +87,33 @@ test('JWT env schemas normalize and import valid public and private PEM keys', (
   assert.equal(parsedWebEnv.JWT_ACCESS_PUBLIC_KEY, publicPem);
 });
 
+test('COOKIE_DOMAIN is optional and blank values normalize to undefined', () => {
+  for (const cookieDomain of [undefined, '', '   ']) {
+    assert.equal(
+      apiEnvSchema.parse(apiEnv({ COOKIE_DOMAIN: cookieDomain })).COOKIE_DOMAIN,
+      undefined,
+    );
+  }
+
+  for (const cookieDomain of [undefined, '', '   ']) {
+    const parsedWebEnv = webEnvSchema.parse({
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_WEB_URL: 'https://churchflow.test',
+      NEXT_PUBLIC_API_URL: 'https://api.churchflow.test/v1',
+      API_INTERNAL_URL: 'http://api:4000/v1',
+      JWT_ACCESS_PUBLIC_KEY: publicPem,
+      COOKIE_DOMAIN: cookieDomain,
+    });
+
+    assert.equal(parsedWebEnv.COOKIE_DOMAIN, undefined);
+  }
+
+  assert.equal(
+    apiEnvSchema.parse(apiEnv({ COOKIE_DOMAIN: '  churchflow.test  ' })).COOKIE_DOMAIN,
+    'churchflow.test',
+  );
+});
+
 test('JWT env schemas reject invalid PEM keys without exposing the key value', () => {
   const invalidPublicPem =
     '-----BEGIN PUBLIC KEY-----\nnot-a-valid-key\n-----END PUBLIC KEY-----\n';

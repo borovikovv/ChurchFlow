@@ -87,7 +87,7 @@ function clearAuthCookies(response: NextResponse, request: NextRequest): void {
 }
 
 function authCookieOptions(request: NextRequest, expiresAt?: string) {
-  const domain = process.env['COOKIE_DOMAIN'];
+  const cookieDomain = process.env['COOKIE_DOMAIN']?.trim();
 
   return {
     httpOnly: true,
@@ -95,7 +95,7 @@ function authCookieOptions(request: NextRequest, expiresAt?: string) {
     secure: request.nextUrl.protocol === 'https:' || process.env['NODE_ENV'] === 'production',
     path: '/',
     ...(expiresAt ? { expires: new Date(expiresAt) } : {}),
-    ...(domain ? { domain } : {}),
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
   };
 }
 
