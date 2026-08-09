@@ -20,9 +20,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE_TAG: ${{ github.sha }}
-  API_IMAGE: ghcr.io/borovikovv/churchflow-api:${{ github.sha }}
-  WEB_IMAGE: ghcr.io/borovikovv/churchflow-web:${{ github.sha }}
+  COMMIT_SHA: ${{ github.sha }}
+  IMAGE_TAG: ${{ inputs.environment }}-${{ github.sha }}
+  API_IMAGE: ghcr.io/borovikovv/churchflow-api:${{ inputs.environment }}-${{ github.sha }}
+  MIGRATOR_IMAGE: ghcr.io/borovikovv/churchflow-api-migrator:${{ inputs.environment }}-${{ github.sha }}
+  WEB_IMAGE: ghcr.io/borovikovv/churchflow-web:${{ inputs.environment }}-${{ github.sha }}
   INTERNAL_NETWORK: churchflow-internal
 
 jobs:
@@ -45,12 +47,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ ! "$IMAGE_TAG" =~ ^[0-9a-fA-F]{40}$ ]]; then
+          if [[ ! "$COMMIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
             echo "github.sha must be a full 40-character Git commit SHA."
             exit 1
           fi
 
-          echo "Building immutable images for commit $IMAGE_TAG."
+          echo "Building immutable images for ${{ inputs.environment }} commit $COMMIT_SHA with tag $IMAGE_TAG."
 
       - name: Validate deployment branch
         shell: bash
@@ -171,7 +173,9 @@ jobs:
           context: .
           file: apps/api/Dockerfile
           push: true
-          tags: ${{ env.API_IMAGE }}
+          tags: |
+            ${{ env.API_IMAGE }}
+            ${{ env.MIGRATOR_IMAGE }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
@@ -196,8 +200,10 @@ jobs:
           {
             echo "### Published images"
             echo ""
-            echo "- Commit SHA: \`${IMAGE_TAG}\`"
+            echo "- Commit SHA: \`${COMMIT_SHA}\`"
+            echo "- Image tag: \`${IMAGE_TAG}\`"
             echo "- API image: \`${API_IMAGE}\`"
+            echo "- Migrator image: \`${MIGRATOR_IMAGE}\`"
             echo "- Web image: \`${WEB_IMAGE}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -224,7 +230,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ ! "$IMAGE_TAG" =~ ^[0-9a-fA-F]{40}$ ]]; then
+          if [[ ! "$COMMIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
             echo "github.sha must be a full 40-character Git commit SHA."
             exit 1
           fi
@@ -261,7 +267,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
           {
-            echo "commit_sha=$IMAGE_TAG"
+            echo "commit_sha=$COMMIT_SHA"
             echo "deploy_env=$deploy_env"
             echo "deploy_dir=$deploy_dir"
           } >> "$GITHUB_OUTPUT"
@@ -469,7 +475,7 @@ jobs:
           BIND_ADDRESS=127.0.0.1
 
           for key in \
-            DEPLOY_ENV IMAGE_TAG API_IMAGE WEB_IMAGE \
+            DEPLOY_ENV COMMIT_SHA IMAGE_TAG API_IMAGE MIGRATOR_IMAGE WEB_IMAGE \
             TELEGRAM_CLIENT_ID BIND_ADDRESS API_HOST_PORT WEB_HOST_PORT INTERNAL_NETWORK \
             API_CONTAINER_NAME WEB_CONTAINER_NAME API_NETWORK_ALIAS WEB_NETWORK_ALIAS MIGRATOR_NETWORK_ALIAS; do
             append_required_env "$compose_env_file" "$key"
@@ -550,13 +556,14 @@ jobs:
           remote_output="$(mktemp)"
           ssh -i ~/.ssh/churchflow_deploy -o StrictHostKeyChecking=accept-new \
             "$SSH_USER@$SSH_HOST" \
-            "DEPLOY_DIR='$DEPLOY_DIR' DEPLOY_ENV='$DEPLOY_ENV' GHCR_USERNAME='$GHCR_USERNAME' IMAGE_TAG='$IMAGE_TAG' API_IMAGE='$API_IMAGE' WEB_IMAGE='$WEB_IMAGE' INTERNAL_NETWORK='$INTERNAL_NETWORK' API_CONTAINER_NAME='$API_CONTAINER_NAME' WEB_CONTAINER_NAME='$WEB_CONTAINER_NAME' API_HOST_PORT='$API_HOST_PORT' WEB_HOST_PORT='$WEB_HOST_PORT' GITHUB_REF_NAME='$GITHUB_REF_NAME' GITHUB_REF_TYPE='$GITHUB_REF_TYPE' bash -s" <<'REMOTE' | tee "$remote_output"
+            "DEPLOY_DIR='$DEPLOY_DIR' DEPLOY_ENV='$DEPLOY_ENV' GHCR_USERNAME='$GHCR_USERNAME' COMMIT_SHA='$COMMIT_SHA' IMAGE_TAG='$IMAGE_TAG' API_IMAGE='$API_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' WEB_IMAGE='$WEB_IMAGE' INTERNAL_NETWORK='$INTERNAL_NETWORK' API_CONTAINER_NAME='$API_CONTAINER_NAME' WEB_CONTAINER_NAME='$WEB_CONTAINER_NAME' API_HOST_PORT='$API_HOST_PORT' WEB_HOST_PORT='$WEB_HOST_PORT' GITHUB_REF_NAME='$GITHUB_REF_NAME' GITHUB_REF_TYPE='$GITHUB_REF_TYPE' bash -s" <<'REMOTE' | tee "$remote_output"
           set -Eeuo pipefail
           cd "$DEPLOY_DIR"
 
           docker_config="$(mktemp -d)"
           trap 'rm -f .ghcr-token; rm -rf "$docker_config"' EXIT
           export DOCKER_CONFIG="$docker_config"
+          export COMMIT_SHA
           export IMAGE_TAG
 
           chmod 600 .env api.env web.env .ghcr-token
@@ -702,7 +709,7 @@ jobs:
             backup_dir="$DEPLOY_DIR/backups"
             install -d -m 700 "$backup_dir"
             timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-            backup_file="$backup_dir/${DEPLOY_ENV}-${IMAGE_TAG}-${timestamp}.dump"
+            backup_file="$backup_dir/${IMAGE_TAG}-${timestamp}.dump"
 
             if ! docker exec \
               -e PGPASSWORD="$PGPASSWORD" \
@@ -856,8 +863,10 @@ jobs:
             echo ""
             echo "- Environment: \`$DEPLOY_ENV\`"
             echo "- Branch/ref: \`$GITHUB_REF_TYPE/$GITHUB_REF_NAME\`"
-            echo "- Commit SHA: \`$IMAGE_TAG\`"
+            echo "- Commit SHA: \`$COMMIT_SHA\`"
+            echo "- Image tag: \`$IMAGE_TAG\`"
             echo "- Remote directory: \`$DEPLOY_DIR\`"
+            echo "- Migrator image: \`$MIGRATOR_IMAGE\`"
             echo "- Expected API image: \`$EXPECTED_API_IMAGE\`"
             echo "- Running API image: \`$RUNNING_API_IMAGE\`"
             echo "- Expected Web image: \`$EXPECTED_WEB_IMAGE\`"
@@ -896,8 +905,10 @@ jobs:
             echo ""
             echo "- GitHub Environment: \`${{ inputs.environment }}\`"
             echo "- Deployment environment: \`${DEPLOY_ENV}\`"
-            echo "- Commit SHA: \`${IMAGE_TAG}\`"
+            echo "- Commit SHA: \`${COMMIT_SHA}\`"
+            echo "- Image tag: \`${IMAGE_TAG}\`"
             echo "- API image: \`${API_IMAGE}\`"
+            echo "- Migrator image: \`${MIGRATOR_IMAGE}\`"
             echo "- Web image: \`${WEB_IMAGE}\`"
             echo "- Remote directory: \`${DEPLOY_DIR}\`"
             echo ""

@@ -89,8 +89,9 @@ The `prod` GitHub Environment deploys into the existing production runtime names
 
 The workflow checks out `github.sha` from the selected `Use workflow from` ref and publishes:
 
-- `ghcr.io/borovikovv/churchflow-api:<github.sha>`
-- `ghcr.io/borovikovv/churchflow-web:<github.sha>`
+- `ghcr.io/borovikovv/churchflow-api:<environment>-<github.sha>`
+- `ghcr.io/borovikovv/churchflow-api-migrator:<environment>-<github.sha>`
+- `ghcr.io/borovikovv/churchflow-web:<environment>-<github.sha>`
 
 The Web image embeds `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, `API_INTERNAL_URL`, and `JWT_ACCESS_PUBLIC_KEY` at `next build` time. Build the Web image separately for each environment. `TELEGRAM_CLIENT_ID` is runtime-only and is rendered into the server env files, not built into an image.
 
@@ -98,12 +99,12 @@ Prod deploys accept only a `github.sha` reachable from `main` or exactly matchin
 
 The workflow:
 
-- builds and pushes the API and Web images to GHCR with the immutable `github.sha` tag;
+- builds and pushes the API, migrator, and Web images to GHCR with the immutable `<environment>-<github.sha>` tag;
 - uploads the Compose file and generated env files to `/opt/churchflow/stage` or `/opt/churchflow/production`;
 - logs in to GHCR on the server through stdin;
 - creates `churchflow-internal` if needed;
 - connects `churchflow-postgres` to that network if needed;
-- pulls the new API and Web images;
+- pulls the new API, migrator, and Web images;
 - for production, blocks pending migrations that contain potentially destructive SQL;
 - creates a PostgreSQL custom-format backup under `/opt/churchflow/<environment>/backups`;
 - runs `docker compose run --rm migrator`;
@@ -219,7 +220,7 @@ Do not pass private JWT keys, database credentials, Telegram credentials, Resend
 ## Production Deployment
 
 1. Run `Deploy` from `main` or a `v*` release tag with `environment=prod`.
-2. Confirm the workflow summary lists the expected `github.sha`.
+2. Confirm the workflow summary lists the expected `github.sha` and `prod-<github.sha>` image tag.
 3. Verify Caddy proxies:
    - production Web -> `127.0.0.1:3100`
    - production API -> `127.0.0.1:4100`

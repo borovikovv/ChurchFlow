@@ -16,7 +16,7 @@ x-common: &common
 services:
   migrator:
     <<: *common
-    image: ${API_IMAGE:?Set API_IMAGE to an immutable API image tag}
+    image: ${MIGRATOR_IMAGE:?Set MIGRATOR_IMAGE to an immutable migrator image tag}
     command:
       - churchflow-prisma-migrate-deploy
     env_file:
