@@ -70,7 +70,9 @@ export function DataTable<TData>({
   }
 
   return (
-    <div className="grid gap-3">
+    <div
+      className={pagination ? 'data-table-shell data-table-shell-paginated' : 'data-table-shell'}
+    >
       <div className={frameClassName ? `data-table-frame ${frameClassName}` : 'data-table-frame'}>
         <table className={tableClassName ? `data-table ${tableClassName}` : 'data-table'}>
           <thead>

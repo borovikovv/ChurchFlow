@@ -878,12 +878,28 @@
     text-align: center;
   }
 
+  .data-table-shell {
+    display: grid;
+    min-width: 0;
+    gap: 12px;
+  }
+
+  .data-table-shell-paginated {
+    display: flex;
+    min-height: clamp(320px, calc(100dvh - 360px), 640px);
+    flex-direction: column;
+  }
+
   .data-table-pagination {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
     color: var(--foreground);
+  }
+
+  .data-table-shell-paginated .data-table-pagination {
+    margin-top: auto;
   }
 
   .data-table-pagination-summary,
