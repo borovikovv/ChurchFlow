@@ -19,6 +19,8 @@ const TELEGRAM_API_BASE_URL = 'https://api.telegram.org';
 const SERVICES_MENU_BUTTON_TEXT = '📅 Графік служінь';
 const SERVICES_ORGANIZATION_CALLBACK_PREFIX = 'services_org:';
 const SERVICE_SCHEDULE_TIME_ZONE = 'Europe/Kyiv';
+const SERVICE_SCHEDULE_MESSAGE_LIMIT = 3900;
+const SERVICE_SEPARATOR = '──────────────';
 
 interface TelegramUpdate {
   message?: TelegramMessage;
@@ -53,6 +55,16 @@ interface TelegramReplyKeyboardMarkup {
 
 interface TelegramInlineKeyboardMarkup {
   inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+}
+
+interface TelegramSendMessageOptions {
+  replyMarkup?: TelegramReplyKeyboardMarkup | TelegramInlineKeyboardMarkup;
+  parseMode?: 'HTML';
+}
+
+interface ServiceScheduleMessageBlock {
+  kind: 'month' | 'service';
+  text: string;
 }
 
 interface TelegramApiResponse<T> {
@@ -206,11 +218,9 @@ export class TelegramBotService {
       return;
     }
 
-    await this.sendMessage(
-      input.chatId,
-      'Telegram notifications are connected to ChurchFlow.',
-      mainMenuReplyMarkup(),
-    );
+    await this.sendMessage(input.chatId, 'Telegram notifications are connected to ChurchFlow.', {
+      replyMarkup: mainMenuReplyMarkup(),
+    });
   }
 
   private async handleStop(chatId: string, telegramUserId: string) {
@@ -258,11 +268,9 @@ export class TelegramBotService {
     }
 
     if (organizations.length > 1) {
-      await this.sendMessage(
-        chatId,
-        'Оберіть організацію:',
-        organizationSelectionMarkup(organizations),
-      );
+      await this.sendMessage(chatId, 'Оберіть організацію:', {
+        replyMarkup: organizationSelectionMarkup(organizations),
+      });
       return;
     }
 
@@ -313,11 +321,13 @@ export class TelegramBotService {
       rangeEnd,
     });
     if (services.length === 0) {
-      await this.sendMessage(chatId, 'No upcoming services were found.');
+      await this.sendMessage(chatId, 'На цей і наступний місяць служінь не знайдено.');
       return;
     }
 
-    await this.sendMessage(chatId, formatUpcomingServices(services));
+    for (const message of formatUpcomingServices(services)) {
+      await this.sendMessage(chatId, message, { parseMode: 'HTML' });
+    }
   }
 
   private sendHelp(chatId: string) {
@@ -336,7 +346,7 @@ export class TelegramBotService {
   private async sendMessage(
     chatId: string,
     text: string,
-    replyMarkup?: TelegramReplyKeyboardMarkup | TelegramInlineKeyboardMarkup,
+    options: TelegramSendMessageOptions = {},
   ): Promise<void> {
     const token = this.botToken();
     if (!token) {
@@ -350,7 +360,8 @@ export class TelegramBotService {
         chat_id: chatId,
         text,
         disable_web_page_preview: true,
-        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+        ...(options.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
+        ...(options.parseMode ? { parse_mode: options.parseMode } : {}),
       }),
     });
     const body = (await response.json()) as TelegramApiResponse<unknown>;
@@ -450,40 +461,16 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function formatUpcomingServices(services: UpcomingServiceRecord[]): string {
-  const organizationName = services[0]?.organization.name ?? 'ChurchFlow';
-  const lines = [`Service schedule - ${organizationName}`];
+function formatUpcomingServices(services: UpcomingServiceRecord[]): string[] {
+  const organizationName = escapeTelegramHtml(services[0]?.organization.name ?? 'ChurchFlow');
+  const header = [`📅 <b>Графік служінь</b>`, organizationName].join('\n');
+  const blocks = serviceScheduleBlocks(services);
 
-  services.forEach((service, index) => {
-    lines.push(
-      [
-        '',
-        `${String(index + 1)}. ${service.title}`,
-        formatDateTime(service.startsAt),
-        formatParticipants(service),
-      ]
-        .filter((line): line is string => Boolean(line))
-        .join('\n'),
-    );
-  });
-
-  return lines.join('\n');
+  return chunkTelegramHtmlBlocks(header, blocks, SERVICE_SCHEDULE_MESSAGE_LIMIT);
 }
 
 function isTelegramUpdate(value: unknown): value is TelegramUpdate {
   return typeof value === 'object' && value !== null;
-}
-
-function formatDateTime(value: Date): string {
-  return new Intl.DateTimeFormat('uk-UA', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: SERVICE_SCHEDULE_TIME_ZONE,
-  }).format(value);
 }
 
 function formatParticipants(service: UpcomingServiceRecord): string | null {
@@ -493,7 +480,9 @@ function formatParticipants(service: UpcomingServiceRecord): string | null {
   return participants
     .map(
       (participant) =>
-        `${formatServiceRole(participant.role)}: ${participant.displayNameSnapshot ?? 'Guest'}`,
+        `<b>${escapeTelegramHtml(formatServiceRole(participant.role))}:</b> ${escapeTelegramHtml(
+          participant.displayNameSnapshot ?? participant.customName ?? 'Guest',
+        )}`,
     )
     .join('\n');
 }
@@ -528,6 +517,117 @@ function organizationSelectionMarkup(
       },
     ]),
   };
+}
+
+function serviceScheduleBlocks(services: UpcomingServiceRecord[]): ServiceScheduleMessageBlock[] {
+  const blocks: ServiceScheduleMessageBlock[] = [];
+  let currentMonthKey: string | null = null;
+
+  services.forEach((service) => {
+    const monthKey = formatServiceMonthKey(service.startsAt);
+    if (monthKey !== currentMonthKey) {
+      blocks.push({ kind: 'month', text: formatMonthHeadingBlock(service.startsAt) });
+      currentMonthKey = monthKey;
+    }
+
+    blocks.push({ kind: 'service', text: formatServiceBlock(service) });
+  });
+
+  return blocks;
+}
+
+function formatServiceBlock(service: UpcomingServiceRecord): string {
+  return [
+    `<b>${escapeTelegramHtml(formatServiceDateTime(service.startsAt))}</b>`,
+    escapeTelegramHtml(service.title),
+    formatParticipants(service),
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n\n');
+}
+
+function chunkTelegramHtmlBlocks(
+  header: string,
+  blocks: ServiceScheduleMessageBlock[],
+  limit: number,
+): string[] {
+  const messages: string[] = [];
+  let current = header;
+  let previousBlockWasService = false;
+
+  blocks.forEach((block) => {
+    const nextBlockIsMonth = block.kind === 'month';
+    const separator =
+      previousBlockWasService && !nextBlockIsMonth ? `\n\n${SERVICE_SEPARATOR}` : '';
+    const candidate = `${current}${separator}\n\n${block.text}`;
+
+    if (candidate.length <= limit || current.length === 0) {
+      current = candidate;
+    } else {
+      messages.push(current);
+      current = block.text;
+    }
+
+    previousBlockWasService = !nextBlockIsMonth;
+  });
+
+  if (current.length > 0) messages.push(current);
+
+  return messages;
+}
+
+function formatServiceMonthKey(value: Date): string {
+  const parts = zonedDateParts(value, SERVICE_SCHEDULE_TIME_ZONE);
+
+  return `${String(parts.year)}-${String(parts.month).padStart(2, '0')}`;
+}
+
+function formatServiceMonthHeading(value: Date): string {
+  const formatter = new Intl.DateTimeFormat('uk-UA', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: SERVICE_SCHEDULE_TIME_ZONE,
+  });
+
+  return formatter.format(value).toLocaleUpperCase('uk-UA');
+}
+
+function formatMonthHeadingBlock(value: Date): string {
+  return `<b>${escapeTelegramHtml(formatServiceMonthHeading(value))}</b>`;
+}
+
+function formatServiceDateTime(value: Date): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('uk-UA', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+      timeZone: SERVICE_SCHEDULE_TIME_ZONE,
+    })
+      .formatToParts(value)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  const weekday = capitalizeUkrainian((parts['weekday'] ?? '').replace(/\.$/, ''));
+  const day = parts['day'] ?? '';
+  const month = parts['month'] ?? '';
+  const hour = parts['hour'] ?? '00';
+  const minute = parts['minute'] ?? '00';
+
+  return `${weekday}, ${day} ${month} · ${hour}:${minute}`;
+}
+
+function capitalizeUkrainian(value: string): string {
+  if (!value) return value;
+
+  return `${value.slice(0, 1).toLocaleUpperCase('uk-UA')}${value.slice(1)}`;
+}
+
+function escapeTelegramHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function serviceScheduleRange(now: Date): { rangeStart: Date; rangeEnd: Date } {
