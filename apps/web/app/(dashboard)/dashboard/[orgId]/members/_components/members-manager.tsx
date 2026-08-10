@@ -12,10 +12,14 @@ import { CreateMemberDialog } from './create-member-dialog';
 import { MemberCsvActions } from './member-csv-actions';
 import { MemberAvatar } from './member-avatar';
 import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
-import type { OrganizationMembersAccessFilter } from '@churchflow/shared';
+import type {
+  OrganizationMembersAccessFilter,
+  OrganizationMembersTypeFilter,
+} from '@churchflow/shared';
 import { QueryFilterSelect } from '@/components/forms/query-filter-select';
 import { organizationMemberRoute } from '@/features/organizations/routes';
 import { useMembersQuery } from '../_hooks/use-members-query';
+import { MemberSearchInput } from './member-search-input';
 
 const MEMBERS_ACTION_BUTTON_CLASS_NAME =
   'h-8 min-h-8 max-w-full shrink-0 whitespace-normal px-3 text-center text-sm leading-5 md:whitespace-nowrap';
@@ -39,12 +43,16 @@ export function MembersManager({
   organizationId,
   initialPayload,
   memberAccess,
+  memberSearch,
+  memberType,
   manageInvitation,
   ...actions
 }: {
   organizationId: string;
   initialPayload: MembersPayload;
   memberAccess: OrganizationMembersAccessFilter;
+  memberSearch: string;
+  memberType: OrganizationMembersTypeFilter;
   manageInvitation: ComponentProps<typeof InviteAppUserForm>['action'];
 } & MemberActionProps) {
   const t = useTranslations('members');
@@ -53,6 +61,8 @@ export function MembersManager({
     access: memberAccess,
     initialPayload,
     organizationId,
+    search: memberSearch,
+    type: memberType,
   });
   const members = payload.members;
   const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
@@ -71,6 +81,17 @@ export function MembersManager({
     { label: t('accessRequested'), value: 'requested' },
     { label: t('suspended'), value: 'suspended' },
   ];
+  const memberTypeFilterOptions: Array<{
+    label: string;
+    value: OrganizationMembersTypeFilter | '';
+  }> = [
+    { label: t('allTypes'), value: '' },
+    { label: t('roleLabels.MEMBER'), value: 'member' },
+    { label: t('roleLabels.VIEWER'), value: 'visitor' },
+  ];
+  const preservedAccess = memberAccess === 'all' ? undefined : memberAccess;
+  const preservedType = memberType === 'all' ? undefined : memberType;
+  const preservedSearch = memberSearch || undefined;
   const columns: Array<ColumnDef<OrganizationMember>> = [
     {
       accessorFn: (member) => member.profile.displayName,
@@ -163,15 +184,34 @@ export function MembersManager({
 
   return (
     <>
-      <div className="flex flex-col md:flex-row justify-between gap-3">
-        <div className="filter-bar min-w-0">
-          <QueryFilterSelect
-            label={t('access')}
-            name="access"
-            options={memberAccessFilterOptions}
-            size="medium"
-            value={memberAccess === 'all' ? '' : memberAccess}
+      <div className="flex flex-col justify-between gap-3 md:flex-row">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 md:max-w-1/3 w-full">
+          <MemberSearchInput
+            label={t('searchByName')}
+            placeholder={t('searchByNamePlaceholder')}
+            preserveParams={{ access: preservedAccess, type: preservedType }}
+            search={memberSearch}
           />
+          <div className="filter-bar min-w-0 flex-wrap">
+            <QueryFilterSelect
+              label={t('access')}
+              labelClassName="sr-only"
+              name="access"
+              options={memberAccessFilterOptions}
+              preserveParams={{ search: preservedSearch, type: preservedType }}
+              size="medium"
+              value={memberAccess === 'all' ? '' : memberAccess}
+            />
+            <QueryFilterSelect
+              label={t('type')}
+              labelClassName="sr-only"
+              name="type"
+              options={memberTypeFilterOptions}
+              preserveParams={{ access: preservedAccess, search: preservedSearch }}
+              size="medium"
+              value={memberType === 'all' ? '' : memberType}
+            />
+          </div>
         </div>
         {canManage ? (
           <div className="contents md:flex md:min-w-0 md:flex-nowrap md:items-start md:justify-end md:gap-2">

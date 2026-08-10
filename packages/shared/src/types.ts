@@ -19,6 +19,7 @@ import type {
   membershipClaimTokenSchema,
   listOrganizationMembersQuerySchema,
   organizationMembersAccessFilterSchema,
+  organizationMembersTypeFilterSchema,
   adminOrganizationWorkspaceViewSchema,
   adminOrganizationWorkspaceStatusSchema,
   listAdminOrganizationWorkspaceQuerySchema,
@@ -99,6 +100,7 @@ export type UpdateOrganizationMemberProfileInput = z.infer<
 >;
 export type MembershipClaimTokenInput = z.infer<typeof membershipClaimTokenSchema>;
 export type OrganizationMembersAccessFilter = z.infer<typeof organizationMembersAccessFilterSchema>;
+export type OrganizationMembersTypeFilter = z.infer<typeof organizationMembersTypeFilterSchema>;
 export type ListOrganizationMembersQuery = z.infer<typeof listOrganizationMembersQuerySchema>;
 export type AdminOrganizationWorkspaceView = z.infer<typeof adminOrganizationWorkspaceViewSchema>;
 export type AdminOrganizationWorkspaceStatus = z.infer<

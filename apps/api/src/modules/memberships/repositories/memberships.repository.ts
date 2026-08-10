@@ -4,6 +4,7 @@ import type {
   CreateManualOrganizationMemberInput,
   MemberMinistry,
   OrganizationMembersAccessFilter,
+  OrganizationMembersTypeFilter,
   UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -12,7 +13,12 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class MembershipsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listForOrganization(organizationId: string, access: OrganizationMembersAccessFilter) {
+  async listForOrganization(
+    organizationId: string,
+    access: OrganizationMembersAccessFilter,
+    type: OrganizationMembersTypeFilter,
+    search: string,
+  ) {
     const now = new Date();
     const accessWhere: Record<
       OrganizationMembersAccessFilter,
@@ -44,6 +50,20 @@ export class MembershipsRepository {
       },
       suspended: { status: 'SUSPENDED' },
     };
+    const typeWhere: Record<OrganizationMembersTypeFilter, Prisma.OrganizationMemberWhereInput> = {
+      all: {},
+      member: { role: { in: ['MEMBER', 'ADMIN', 'OWNER'] } },
+      visitor: { role: 'VIEWER' },
+    };
+    const searchTerm = search.trim();
+    const searchWhere: Prisma.OrganizationMemberWhereInput = searchTerm
+      ? {
+          OR: [
+            { profile: { is: { displayName: { contains: searchTerm, mode: 'insensitive' } } } },
+            { user: { is: { displayName: { contains: searchTerm, mode: 'insensitive' } } } },
+          ],
+        }
+      : {};
 
     return this.prisma.organizationMember.findMany({
       where: {
@@ -51,6 +71,8 @@ export class MembershipsRepository {
         status: { in: ['ACTIVE', 'SUSPENDED'] },
         removedAt: null,
         ...accessWhere[access],
+        ...typeWhere[type],
+        ...searchWhere,
       },
       include: {
         profile: true,

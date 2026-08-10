@@ -12,6 +12,7 @@ export interface QueryFilterSelectOption {
 
 export function QueryFilterSelect({
   label,
+  labelClassName = 'filter-label',
   name,
   options,
   size,
@@ -19,6 +20,7 @@ export function QueryFilterSelect({
   preserveParams,
 }: {
   label: string;
+  labelClassName?: string;
   name: string;
   options: QueryFilterSelectOption[];
   size?: 'default' | 'medium';
@@ -47,7 +49,7 @@ export function QueryFilterSelect({
     <FormSelect
       className="m-0 flex items-center gap-2"
       label={label}
-      labelClassName="filter-label"
+      labelClassName={labelClassName}
       name={name}
       selectClassName="md:w-60 w-full max-w-full"
       size={size}

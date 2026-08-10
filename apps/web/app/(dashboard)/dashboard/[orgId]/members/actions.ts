@@ -11,6 +11,7 @@ import type {
   ImportOrganizationMembersCsvResult,
   MemberMinistry,
   OrganizationMembersAccessFilter,
+  OrganizationMembersTypeFilter,
 } from '@churchflow/shared';
 import type { ProfileUpdateState, RoleUpdateState } from '@/components/members/member-actions';
 import { getMessages } from '@/i18n/messages';
@@ -30,9 +31,15 @@ function membersUrl(organizationId: string, params?: Record<string, string>): Ro
 export async function loadMembersAction(input: {
   organizationId: string;
   access: OrganizationMembersAccessFilter;
+  type: OrganizationMembersTypeFilter;
+  search: string;
 }) {
   const result = await apiFetch<MembersPayload>(
-    `/organizations/${input.organizationId}/memberships?${new URLSearchParams({ access: input.access })}`,
+    `/organizations/${input.organizationId}/memberships?${new URLSearchParams({
+      access: input.access,
+      type: input.type,
+      search: input.search,
+    })}`,
   );
   if (!result.ok) return { ok: false as const, error: result.error.message };
 
@@ -68,6 +75,8 @@ export async function loadMemberDetailsAction(input: {
   const membersResult = await loadMembersAction({
     organizationId: input.organizationId,
     access: 'all',
+    type: 'all',
+    search: '',
   });
   if (!membersResult.ok) return membersResult;
 

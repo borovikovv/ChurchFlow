@@ -44,6 +44,8 @@ export class MembershipsController {
       organizationId,
       this.getActorUserId(request),
       query.access,
+      query.type,
+      query.search,
     );
   }
 

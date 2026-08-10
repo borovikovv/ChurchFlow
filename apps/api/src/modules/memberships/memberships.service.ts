@@ -9,11 +9,12 @@ import { InvitationsRepository } from '../invitations/repositories/invitations.r
 import { NotificationsService } from '../notifications/notifications.service';
 import type { OrganizationRole } from '@churchflow/db';
 import type {
-  CreateManualOrganizationMemberInput,
-  OrganizationMembersAccessFilter,
-  UpdateOrganizationMemberProfileInput,
   CreateOrganizationMemberRelationshipInput,
+  CreateManualOrganizationMemberInput,
   ImportOrganizationMembersCsvResult,
+  OrganizationMembersAccessFilter,
+  OrganizationMembersTypeFilter,
+  UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
 import { parseMembersCsv } from './member-csv-import';
 import { MembershipsRepository } from './repositories/memberships.repository';
@@ -30,9 +31,11 @@ export class MembershipsService {
     organizationId: string,
     actorUserId: string,
     access: OrganizationMembersAccessFilter,
+    type: OrganizationMembersTypeFilter,
+    search: string,
   ) {
     const [members, pendingInvitations, actorMembership] = await Promise.all([
-      this.membershipsRepository.listForOrganization(organizationId, access),
+      this.membershipsRepository.listForOrganization(organizationId, access, type, search),
       this.invitationsRepository.listPendingForOrganization(organizationId),
       this.membershipsRepository.findActiveMembership(organizationId, actorUserId),
     ]);

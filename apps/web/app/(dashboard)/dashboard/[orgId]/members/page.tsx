@@ -17,6 +17,8 @@ import type { MembersPayload } from './types';
 import {
   organizationMembersAccessFilterSchema,
   type OrganizationMembersAccessFilter,
+  organizationMembersTypeFilterSchema,
+  type OrganizationMembersTypeFilter,
 } from '@churchflow/shared';
 import { CopyField } from '@/components/copy-field';
 
@@ -25,6 +27,8 @@ type MembersSearchParams = {
   claimLink?: string;
   error?: string;
   message?: string;
+  search?: string;
+  type?: string;
 };
 
 const emptyMembersPayload: MembersPayload = {
@@ -42,11 +46,25 @@ export default async function MembersDashboardPage({
   searchParams: Promise<MembersSearchParams>;
 }) {
   const { orgId } = await params;
-  const { claimLink, message, error, access = 'all' } = await searchParams;
+  const {
+    claimLink,
+    message,
+    error,
+    access = 'all',
+    search = '',
+    type = 'all',
+  } = await searchParams;
   const user = await getCurrentUser();
   const messages = getMessages(user?.locale ?? 'en');
   const memberAccess = parseMemberAccess(access);
-  const membersResult = await loadMembersAction({ organizationId: orgId, access: memberAccess });
+  const memberType = parseMemberType(type);
+  const memberSearch = parseMemberSearch(search);
+  const membersResult = await loadMembersAction({
+    organizationId: orgId,
+    access: memberAccess,
+    type: memberType,
+    search: memberSearch,
+  });
   const payload = membersResult.ok ? membersResult.payload : emptyMembersPayload;
 
   return (
@@ -66,8 +84,9 @@ export default async function MembersDashboardPage({
       {claimLink ? <CopyField value={claimLink} /> : null}
 
       <MembersManager
-        key={memberAccess}
         memberAccess={memberAccess}
+        memberSearch={memberSearch}
+        memberType={memberType}
         organizationId={orgId}
         initialPayload={payload}
         manageInvitation={manageInlineInvitationAction}
@@ -87,4 +106,13 @@ export default async function MembersDashboardPage({
 function parseMemberAccess(access: string): OrganizationMembersAccessFilter {
   const parsedAccess = organizationMembersAccessFilterSchema.safeParse(access);
   return parsedAccess.success ? parsedAccess.data : 'all';
+}
+
+function parseMemberType(type: string): OrganizationMembersTypeFilter {
+  const parsedType = organizationMembersTypeFilterSchema.safeParse(type);
+  return parsedType.success ? parsedType.data : 'all';
+}
+
+function parseMemberSearch(search: string): string {
+  return search.trim().slice(0, 100);
 }

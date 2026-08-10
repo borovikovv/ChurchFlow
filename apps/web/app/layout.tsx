@@ -21,6 +21,10 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'ChurchFlow',
   description: 'Multi-tenant organization websites and administration',
+  icons: {
+    icon: '/icons/favicon.png',
+    shortcut: '/icons/favicon.png',
+  },
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

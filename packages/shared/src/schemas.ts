@@ -64,8 +64,11 @@ export const organizationMembersAccessFilterSchema = z.enum([
   'requested',
   'suspended',
 ]);
+export const organizationMembersTypeFilterSchema = z.enum(['all', 'member', 'visitor']);
 export const listOrganizationMembersQuerySchema = z.object({
   access: organizationMembersAccessFilterSchema.default('all'),
+  type: organizationMembersTypeFilterSchema.default('all'),
+  search: z.string().trim().max(100).default(''),
 });
 export const calendarEventTypeSchema = z.enum(CALENDAR_EVENT_TYPES);
 export const calendarEventReminderSchema = z.enum(CALENDAR_EVENT_REMINDERS);
