@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@churchflow/db';
+import { Prisma, type OrganizationRole } from '@churchflow/db';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 const upcomingServiceInclude = {
@@ -13,9 +13,15 @@ const upcomingServiceInclude = {
   },
 } as const;
 
-export type UpcomingSundayServiceRecord = Prisma.CalendarEventGetPayload<{
+export type UpcomingServiceRecord = Prisma.CalendarEventGetPayload<{
   include: typeof upcomingServiceInclude;
 }>;
+
+export interface ActiveTelegramOrganizationRecord {
+  organizationId: string;
+  organizationName: string;
+  role: OrganizationRole;
+}
 
 export interface TelegramNotificationDelivery {
   notificationId: string | null;
@@ -307,48 +313,75 @@ export class TelegramBotRepository {
     }));
   }
 
-  async listUpcomingSundayServicesForUser(
+  async listActiveOrganizationsForUser(
     userId: string,
-    now: Date,
-  ): Promise<UpcomingSundayServiceRecord[]> {
-    const membership = await this.prisma.organizationMember.findFirst({
+  ): Promise<ActiveTelegramOrganizationRecord[]> {
+    const memberships = await this.prisma.organizationMember.findMany({
       where: {
         userId,
         status: 'ACTIVE',
         removedAt: null,
+        role: { in: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] },
         organization: { status: 'ACTIVE', deletedAt: null },
       },
-      select: { organizationId: true },
-      orderBy: { joinedAt: 'desc' },
+      select: {
+        organizationId: true,
+        role: true,
+        organization: { select: { name: true } },
+      },
+      orderBy: [{ organization: { name: 'asc' } }, { organizationId: 'asc' }],
+    });
+
+    return memberships.map((membership) => ({
+      organizationId: membership.organizationId,
+      organizationName: membership.organization.name,
+      role: membership.role,
+    }));
+  }
+
+  async listUpcomingServicesForOrganization(input: {
+    userId: string;
+    organizationId: string;
+    rangeStart: Date;
+    rangeEnd: Date;
+  }): Promise<UpcomingServiceRecord[]> {
+    const membership = await this.prisma.organizationMember.findFirst({
+      where: {
+        userId: input.userId,
+        organizationId: input.organizationId,
+        status: 'ACTIVE',
+        removedAt: null,
+        role: { in: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { id: true },
     });
     if (!membership) return [];
 
-    const ids = await this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT "calendar_events"."id"
-      FROM "calendar_events"
-      JOIN "organizations" ON "organizations"."id" = "calendar_events"."organization_id"
-      WHERE "calendar_events"."organization_id" = ${membership.organizationId}::uuid
-        AND "calendar_events"."type" = 'SERVICE'::"CalendarEventType"
-        AND "calendar_events"."starts_at" >= ${now}
-        AND "calendar_events"."deleted_at" IS NULL
-        AND "organizations"."status" = 'ACTIVE'::"OrganizationStatus"
-        AND "organizations"."deleted_at" IS NULL
-        AND EXTRACT(DOW FROM "calendar_events"."starts_at") = 0
-      ORDER BY "calendar_events"."starts_at" ASC, "calendar_events"."id" ASC
-      LIMIT 4
-    `;
-    const eventIds = ids.map((row) => row.id);
-    if (eventIds.length === 0) return [];
-
-    const events = await this.prisma.calendarEvent.findMany({
-      where: { id: { in: eventIds } },
+    return this.prisma.calendarEvent.findMany({
+      where: {
+        organizationId: input.organizationId,
+        type: 'SERVICE',
+        startsAt: {
+          gte: input.rangeStart,
+          lt: input.rangeEnd,
+        },
+        deletedAt: null,
+        organization: {
+          status: 'ACTIVE',
+          deletedAt: null,
+          members: {
+            some: {
+              userId: input.userId,
+              status: 'ACTIVE',
+              removedAt: null,
+              role: { in: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] },
+            },
+          },
+        },
+      },
       include: upcomingServiceInclude,
-    });
-    const eventById = new Map(events.map((event) => [event.id, event]));
-
-    return eventIds.flatMap((id) => {
-      const event = eventById.get(id);
-      return event ? [event] : [];
+      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
     });
   }
 }

@@ -9,15 +9,20 @@ import {
 } from '@churchflow/shared';
 import {
   TelegramBotRepository,
+  type ActiveTelegramOrganizationRecord,
   type TelegramNotificationDelivery,
-  type UpcomingSundayServiceRecord,
+  type UpcomingServiceRecord,
 } from './repositories/telegram-bot.repository';
 
 const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const TELEGRAM_API_BASE_URL = 'https://api.telegram.org';
+const SERVICES_MENU_BUTTON_TEXT = '📅 Графік служінь';
+const SERVICES_ORGANIZATION_CALLBACK_PREFIX = 'services_org:';
+const SERVICE_SCHEDULE_TIME_ZONE = 'Europe/Kyiv';
 
 interface TelegramUpdate {
   message?: TelegramMessage;
+  callback_query?: TelegramCallbackQuery;
 }
 
 interface TelegramMessage {
@@ -27,6 +32,27 @@ interface TelegramMessage {
     username?: string;
   };
   text?: string;
+}
+
+interface TelegramCallbackQuery {
+  id: string;
+  from?: {
+    id: number | string;
+    username?: string;
+  };
+  message?: TelegramMessage;
+  data?: string;
+}
+
+interface TelegramReplyKeyboardMarkup {
+  keyboard: Array<Array<{ text: string }>>;
+  resize_keyboard?: boolean;
+  one_time_keyboard?: boolean;
+  is_persistent?: boolean;
+}
+
+interface TelegramInlineKeyboardMarkup {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
 }
 
 interface TelegramApiResponse<T> {
@@ -88,7 +114,14 @@ export class TelegramBotService {
       throw new ForbiddenException('Invalid Telegram webhook secret');
     }
 
-    const message = isTelegramUpdate(update) ? update.message : undefined;
+    const parsedUpdate = isTelegramUpdate(update) ? update : null;
+    const callbackQuery = parsedUpdate?.callback_query;
+    if (callbackQuery) {
+      await this.handleCallbackQuery(callbackQuery);
+      return { ok: true };
+    }
+
+    const message = parsedUpdate?.message;
     if (!message?.text || !message.from) {
       return { ok: true };
     }
@@ -112,9 +145,17 @@ export class TelegramBotService {
     const chatId = String(message.chat.id);
     const telegramUserId = String(message.from?.id ?? '');
     const username = message.from?.username ?? null;
-    const { command, payload } = parseCommand(message.text ?? '');
+    const text = message.text?.trim() ?? '';
 
-    if (!telegramUserId || !command) return;
+    if (!telegramUserId) return;
+
+    if (text === SERVICES_MENU_BUTTON_TEXT) {
+      await this.handleServices(chatId, telegramUserId);
+      return;
+    }
+
+    const { command, payload } = parseCommand(text);
+    if (!command) return;
 
     switch (command) {
       case '/start':
@@ -165,7 +206,11 @@ export class TelegramBotService {
       return;
     }
 
-    await this.sendMessage(input.chatId, 'Telegram notifications are connected to ChurchFlow.');
+    await this.sendMessage(
+      input.chatId,
+      'Telegram notifications are connected to ChurchFlow.',
+      mainMenuReplyMarkup(),
+    );
   }
 
   private async handleStop(chatId: string, telegramUserId: string) {
@@ -204,12 +249,71 @@ export class TelegramBotService {
       return;
     }
 
-    const services = await this.telegramBotRepository.listUpcomingSundayServicesForUser(
+    const organizations = await this.telegramBotRepository.listActiveOrganizationsForUser(
       binding.userId,
-      new Date(),
     );
+    if (organizations.length === 0) {
+      await this.sendMessage(chatId, 'Ви не є активним учасником жодної організації.');
+      return;
+    }
+
+    if (organizations.length > 1) {
+      await this.sendMessage(
+        chatId,
+        'Оберіть організацію:',
+        organizationSelectionMarkup(organizations),
+      );
+      return;
+    }
+
+    const [organization] = organizations;
+    if (!organization) return;
+
+    await this.sendServiceSchedule(chatId, binding.userId, organization.organizationId);
+  }
+
+  private async handleCallbackQuery(callbackQuery: TelegramCallbackQuery): Promise<void> {
+    const callbackQueryId = callbackQuery.id;
+    const chatId = callbackQuery.message?.chat.id ? String(callbackQuery.message.chat.id) : null;
+    const telegramUserId = callbackQuery.from?.id ? String(callbackQuery.from.id) : '';
+    const data = callbackQuery.data ?? '';
+
+    try {
+      if (!chatId || !telegramUserId) return;
+      if (!data.startsWith(SERVICES_ORGANIZATION_CALLBACK_PREFIX)) return;
+
+      const organizationId = data.slice(SERVICES_ORGANIZATION_CALLBACK_PREFIX.length).trim();
+      if (!organizationId) return;
+
+      const binding = await this.telegramBotRepository.findBindingByTelegramIdentity(
+        telegramUserId,
+        chatId,
+      );
+      if (!binding) {
+        await this.sendMessage(chatId, 'Connect this bot in ChurchFlow before using /services.');
+        return;
+      }
+
+      await this.sendServiceSchedule(chatId, binding.userId, organizationId);
+    } finally {
+      await this.answerCallbackQuery(callbackQueryId);
+    }
+  }
+
+  private async sendServiceSchedule(
+    chatId: string,
+    userId: string,
+    organizationId: string,
+  ): Promise<void> {
+    const { rangeStart, rangeEnd } = serviceScheduleRange(new Date());
+    const services = await this.telegramBotRepository.listUpcomingServicesForOrganization({
+      userId,
+      organizationId,
+      rangeStart,
+      rangeEnd,
+    });
     if (services.length === 0) {
-      await this.sendMessage(chatId, 'No upcoming Sunday services were found.');
+      await this.sendMessage(chatId, 'No upcoming services were found.');
       return;
     }
 
@@ -221,7 +325,7 @@ export class TelegramBotService {
       chatId,
       [
         'ChurchFlow bot commands:',
-        '/services - next 4 Sunday services',
+        `${SERVICES_MENU_BUTTON_TEXT} or /services - service schedule`,
         '/status - connection status',
         '/stop - disable Telegram notifications',
         '/help - show this help',
@@ -229,7 +333,11 @@ export class TelegramBotService {
     );
   }
 
-  private async sendMessage(chatId: string, text: string): Promise<void> {
+  private async sendMessage(
+    chatId: string,
+    text: string,
+    replyMarkup?: TelegramReplyKeyboardMarkup | TelegramInlineKeyboardMarkup,
+  ): Promise<void> {
     const token = this.botToken();
     if (!token) {
       throw new ConflictException('Telegram bot is not configured');
@@ -242,12 +350,35 @@ export class TelegramBotService {
         chat_id: chatId,
         text,
         disable_web_page_preview: true,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       }),
     });
     const body = (await response.json()) as TelegramApiResponse<unknown>;
     if (!response.ok || !body.ok) {
       throw new TelegramSendError(
         body.description ?? 'Telegram sendMessage failed',
+        body.error_code ?? response.status,
+      );
+    }
+  }
+
+  private async answerCallbackQuery(callbackQueryId: string): Promise<void> {
+    const token = this.botToken();
+    if (!token) {
+      throw new ConflictException('Telegram bot is not configured');
+    }
+
+    const response = await fetch(`${TELEGRAM_API_BASE_URL}/bot${token}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+      }),
+    });
+    const body = (await response.json()) as TelegramApiResponse<unknown>;
+    if (!response.ok || !body.ok) {
+      throw new TelegramSendError(
+        body.description ?? 'Telegram answerCallbackQuery failed',
         body.error_code ?? response.status,
       );
     }
@@ -319,9 +450,9 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function formatUpcomingServices(services: UpcomingSundayServiceRecord[]): string {
+function formatUpcomingServices(services: UpcomingServiceRecord[]): string {
   const organizationName = services[0]?.organization.name ?? 'ChurchFlow';
-  const lines = [`Next Sunday services - ${organizationName}`];
+  const lines = [`Service schedule - ${organizationName}`];
 
   services.forEach((service, index) => {
     lines.push(
@@ -351,11 +482,11 @@ function formatDateTime(value: Date): string {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Europe/Kyiv',
+    timeZone: SERVICE_SCHEDULE_TIME_ZONE,
   }).format(value);
 }
 
-function formatParticipants(service: UpcomingSundayServiceRecord): string | null {
+function formatParticipants(service: UpcomingServiceRecord): string | null {
   const participants = service.serviceDetails?.participants ?? [];
   if (participants.length === 0) return null;
 
@@ -376,4 +507,105 @@ function notificationDetailUrl(url: string | null, notificationId: string | null
   const separator = url.includes('?') ? '&' : '?';
 
   return `${url}${separator}notificationId=${encodeURIComponent(notificationId)}`;
+}
+
+function mainMenuReplyMarkup(): TelegramReplyKeyboardMarkup {
+  return {
+    keyboard: [[{ text: SERVICES_MENU_BUTTON_TEXT }]],
+    resize_keyboard: true,
+    is_persistent: true,
+  };
+}
+
+function organizationSelectionMarkup(
+  organizations: ActiveTelegramOrganizationRecord[],
+): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: organizations.map((organization) => [
+      {
+        text: organization.organizationName,
+        callback_data: `${SERVICES_ORGANIZATION_CALLBACK_PREFIX}${organization.organizationId}`,
+      },
+    ]),
+  };
+}
+
+function serviceScheduleRange(now: Date): { rangeStart: Date; rangeEnd: Date } {
+  const parts = zonedDateParts(now, SERVICE_SCHEDULE_TIME_ZONE);
+  const rangeEnd = zonedDateTimeToUtc(
+    {
+      year: parts.month >= 11 ? parts.year + 1 : parts.year,
+      month: ((parts.month + 1) % 12) + 1,
+      day: 1,
+      hour: 0,
+      minute: 0,
+      second: 0,
+    },
+    SERVICE_SCHEDULE_TIME_ZONE,
+  );
+
+  return { rangeStart: now, rangeEnd };
+}
+
+function zonedDateTimeToUtc(
+  parts: {
+    year: number;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+    second: number;
+  },
+  timeZone: string,
+): Date {
+  const utcGuess = new Date(
+    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second),
+  );
+  const offset = timeZoneOffsetMs(utcGuess, timeZone);
+  const adjusted = new Date(utcGuess.getTime() - offset);
+  const adjustedOffset = timeZoneOffsetMs(adjusted, timeZone);
+
+  return new Date(utcGuess.getTime() - adjustedOffset);
+}
+
+function timeZoneOffsetMs(value: Date, timeZone: string): number {
+  const parts = zonedDateParts(value, timeZone);
+  const asUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+
+  return asUtc - value.getTime();
+}
+
+function zonedDateParts(value: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = Object.fromEntries(
+    formatter
+      .formatToParts(value)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, Number(part.value)]),
+  );
+
+  return {
+    year: parts['year'] ?? value.getUTCFullYear(),
+    month: parts['month'] ?? value.getUTCMonth() + 1,
+    day: parts['day'] ?? value.getUTCDate(),
+    hour: parts['hour'] ?? value.getUTCHours(),
+    minute: parts['minute'] ?? value.getUTCMinutes(),
+    second: parts['second'] ?? value.getUTCSeconds(),
+  };
 }
