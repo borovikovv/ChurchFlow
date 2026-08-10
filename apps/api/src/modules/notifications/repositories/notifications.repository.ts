@@ -179,6 +179,7 @@ export interface BirthdayDigestGroup {
   organizationId: string;
   organizationName: string;
   birthdays: string[];
+  anniversaries: string[];
   recipientUserIds: string[];
 }
 
@@ -399,17 +400,19 @@ export class NotificationsRepository {
   async listBirthdayDigestGroups(now: Date): Promise<BirthdayDigestGroup[]> {
     const month = now.getUTCMonth() + 1;
     const day = now.getUTCDate();
-    const birthdays = await this.prisma.$queryRaw<
+    const milestones = await this.prisma.$queryRaw<
       Array<{
         organization_id: string;
         organization_name: string;
         display_name: string;
+        milestone_type: 'birthday' | 'anniversary';
       }>
     >`
       SELECT
         "organizations"."id"::text AS "organization_id",
         "organizations"."name" AS "organization_name",
-        "organization_member_profiles"."display_name" AS "display_name"
+        "organization_member_profiles"."display_name" AS "display_name",
+        'birthday' AS "milestone_type"
       FROM "organization_member_profiles"
       JOIN "organization_members"
         ON "organization_members"."id" = "organization_member_profiles"."membership_id"
@@ -422,22 +425,52 @@ export class NotificationsRepository {
         AND "organization_members"."removed_at" IS NULL
         AND "organizations"."status" = 'ACTIVE'::"OrganizationStatus"
         AND "organizations"."deleted_at" IS NULL
-      ORDER BY "organizations"."name" ASC, "organization_member_profiles"."display_name" ASC
+
+      UNION ALL
+
+      SELECT
+        "organizations"."id"::text AS "organization_id",
+        "organizations"."name" AS "organization_name",
+        "organization_member_profiles"."display_name" AS "display_name",
+        'anniversary' AS "milestone_type"
+      FROM "organization_member_profiles"
+      JOIN "organization_members"
+        ON "organization_members"."id" = "organization_member_profiles"."membership_id"
+      JOIN "organizations"
+        ON "organizations"."id" = "organization_members"."organization_id"
+      WHERE "organization_member_profiles"."anniversary" IS NOT NULL
+        AND EXTRACT(MONTH FROM "organization_member_profiles"."anniversary") = ${month}
+        AND EXTRACT(DAY FROM "organization_member_profiles"."anniversary") = ${day}
+        AND "organization_members"."status" = 'ACTIVE'::"OrganizationMemberStatus"
+        AND "organization_members"."removed_at" IS NULL
+        AND "organizations"."status" = 'ACTIVE'::"OrganizationStatus"
+        AND "organizations"."deleted_at" IS NULL
+      ORDER BY "organization_name" ASC, "display_name" ASC
     `;
-    if (birthdays.length === 0) return [];
+    if (milestones.length === 0) return [];
 
     const birthdayGroups = new Map<
       string,
-      { organizationName: string; birthdays: string[]; recipientUserIds: string[] }
+      {
+        organizationName: string;
+        birthdays: string[];
+        anniversaries: string[];
+        recipientUserIds: string[];
+      }
     >();
-    for (const birthday of birthdays) {
-      const group = birthdayGroups.get(birthday.organization_id) ?? {
-        organizationName: birthday.organization_name,
+    for (const milestone of milestones) {
+      const group = birthdayGroups.get(milestone.organization_id) ?? {
+        organizationName: milestone.organization_name,
         birthdays: [],
+        anniversaries: [],
         recipientUserIds: [],
       };
-      group.birthdays.push(birthday.display_name);
-      birthdayGroups.set(birthday.organization_id, group);
+      if (milestone.milestone_type === 'birthday') {
+        group.birthdays.push(milestone.display_name);
+      } else {
+        group.anniversaries.push(milestone.display_name);
+      }
+      birthdayGroups.set(milestone.organization_id, group);
     }
 
     const recipientMemberships = await this.prisma.organizationMember.findMany({
@@ -480,6 +513,7 @@ export class NotificationsRepository {
               organizationId,
               organizationName: group.organizationName,
               birthdays: group.birthdays,
+              anniversaries: group.anniversaries,
               recipientUserIds: [...new Set(group.recipientUserIds)],
             },
           ]

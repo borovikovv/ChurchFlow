@@ -195,11 +195,12 @@ export class NotificationsService {
     const digestDate = formatDateKey(now);
     const groups = await this.notificationsRepository.listBirthdayDigestGroups(now);
     let createdCount = 0;
+    let emailSentCount = 0;
     let telegramSentCount = 0;
 
     for (const group of groups) {
-      const title = 'Birthdays today';
-      const body = birthdayDigestBody(group.birthdays);
+      const title = birthdayDigestTitle(group);
+      const body = birthdayDigestBody(group);
       const result = await this.notificationsRepository.createBirthdayDigestNotifications({
         organizationId: group.organizationId,
         recipientUserIds: group.recipientUserIds,
@@ -220,6 +221,7 @@ export class NotificationsService {
         result,
         'birthdayDigestEnabled',
       );
+      emailSentCount += sentCounts.emailSentCount;
       telegramSentCount += sentCounts.telegramSentCount;
     }
 
@@ -228,10 +230,11 @@ export class NotificationsService {
       digestDate,
       organizationsCount: groups.length,
       createdCount,
+      emailSentCount,
       telegramSentCount,
     });
 
-    return { organizationsCount: groups.length, createdCount, telegramSentCount };
+    return { organizationsCount: groups.length, createdCount, emailSentCount, telegramSentCount };
   }
 
   private async dispatchToEnabledServices(
@@ -448,9 +451,26 @@ function memberDisplayName(member: {
   return member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? 'Member';
 }
 
-function birthdayDigestBody(names: string[]): string {
-  const firstName = names[0];
-  return names.length === 1 && firstName ? `Today: ${firstName}` : `Today: ${names.join(', ')}`;
+function birthdayDigestTitle(group: { birthdays: string[]; anniversaries: string[] }): string {
+  if (group.birthdays.length > 0 && group.anniversaries.length > 0) {
+    return 'Birthdays and anniversaries today';
+  }
+  if (group.anniversaries.length > 0) return 'Anniversaries today';
+  return 'Birthdays today';
+}
+
+function birthdayDigestBody(group: { birthdays: string[]; anniversaries: string[] }): string {
+  const sections = [
+    milestoneDigestSection('Birthdays', group.birthdays),
+    milestoneDigestSection('Anniversaries', group.anniversaries),
+  ].filter((section): section is string => Boolean(section));
+
+  return sections.join('\n');
+}
+
+function milestoneDigestSection(label: string, names: string[]): string | null {
+  if (names.length === 0) return null;
+  return `${label}: ${names.join(', ')}`;
 }
 
 function formatDateKey(value: Date): string {
