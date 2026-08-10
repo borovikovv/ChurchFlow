@@ -233,7 +233,16 @@ export function EventModal({
             disabled={readonly}
             error={errors.reminder?.message}
             label={t('reminder')}
-            {...register('reminder')}
+            value={values.reminder}
+            {...register('reminder', {
+              onChange: (event) => {
+                setValue('reminder', event.currentTarget.value as CalendarFormState['reminder'], {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+                clearErrors('reminder');
+              },
+            })}
           >
             {REMINDER_VALUES.map((value) => (
               <option key={value || 'none'} value={value}>
@@ -245,7 +254,20 @@ export function EventModal({
             disabled={readonly}
             error={errors.repeatPeriod?.message}
             label={t('repeat')}
-            {...register('repeatPeriod')}
+            value={values.repeatPeriod}
+            {...register('repeatPeriod', {
+              onChange: (event) => {
+                setValue(
+                  'repeatPeriod',
+                  event.currentTarget.value as CalendarFormState['repeatPeriod'],
+                  {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  },
+                );
+                clearErrors('repeatPeriod');
+              },
+            })}
           >
             {CALENDAR_EVENT_REPEAT_PERIODS.map((value) => (
               <option key={value} value={value}>

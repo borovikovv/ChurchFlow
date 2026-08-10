@@ -150,12 +150,16 @@ export class CalendarEventsRepository {
     });
   }
 
-  async listReminderCandidates(windowEnd: Date): Promise<CalendarEventRecord[]> {
+  async listReminderCandidates(windowStart: Date, windowEnd: Date): Promise<CalendarEventRecord[]> {
     return this.prisma.calendarEvent.findMany({
       where: {
-        reminder: { not: null },
         deletedAt: null,
         startsAt: { lt: windowEnd },
+        OR: [
+          { repeatPeriod: { not: CALENDAR_EVENT_REPEAT_PERIOD.none } },
+          { reminder: { not: null } },
+          { startsAt: { gte: windowStart } },
+        ],
         organization: { status: 'ACTIVE', deletedAt: null },
       },
       include: calendarEventInclude,
@@ -200,6 +204,23 @@ export class CalendarEventsRepository {
         membership.user?.notificationPreferences[0]?.timeZone ??
         fallbackTimeZoneForLocale(membership.user?.locale),
     }));
+  }
+
+  async listAdminReminderRecipientMembershipIds(organizationId: string): Promise<string[]> {
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        role: { in: ['OWNER', 'ADMIN'] },
+        status: 'ACTIVE',
+        removedAt: null,
+        userId: { not: null },
+        user: { deletedAt: null },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { id: true },
+    });
+
+    return memberships.map((membership) => membership.id);
   }
 
   async findCreatorMembershipId(

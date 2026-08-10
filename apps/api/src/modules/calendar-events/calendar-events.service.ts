@@ -39,6 +39,9 @@ const REMINDER_LOOKAHEAD_MS = 7 * MILLISECONDS_PER_DAY;
 const MAX_EXPANDED_OCCURRENCES_PER_EVENT = 500;
 const MAX_OCCURRENCE_SEARCH_STEPS = 5000;
 const calendarEventsLogger = new Logger('CalendarEventsService');
+type CalendarNotificationSchedule =
+  | { kind: 'event'; offsetMs: 0 }
+  | { kind: 'reminder'; offsetMs: number };
 
 @Injectable()
 export class CalendarEventsService {
@@ -201,7 +204,10 @@ export class CalendarEventsService {
     const windowStart = new Date(now.getTime() - REMINDER_WINDOW_MS);
     const windowEnd = now;
     const candidateEnd = new Date(windowEnd.getTime() + REMINDER_LOOKAHEAD_MS);
-    const events = await this.calendarEventsRepository.listReminderCandidates(candidateEnd);
+    const events = await this.calendarEventsRepository.listReminderCandidates(
+      windowStart,
+      candidateEnd,
+    );
     let createdCount = 0;
     let emailSentCount = 0;
     let telegramSentCount = 0;
@@ -211,45 +217,77 @@ export class CalendarEventsService {
         event.organizationId,
         event.createdByUserId,
       );
-      const recipientMemberships =
-        await this.calendarEventsRepository.listReminderRecipientMemberships(
+      const linkedRecipientMembershipIds = calendarReminderRecipientMembershipIds(
+        event,
+        creatorMembershipId,
+      );
+      const adminRecipientMembershipIds =
+        await this.calendarEventsRepository.listAdminReminderRecipientMembershipIds(
           event.organizationId,
-          calendarReminderRecipientMembershipIds(event, creatorMembershipId),
         );
+      const recipientMemberships =
+        await this.calendarEventsRepository.listReminderRecipientMemberships(event.organizationId, [
+          ...linkedRecipientMembershipIds,
+          ...adminRecipientMembershipIds,
+        ]);
       const recipientsByTimeZone = groupReminderRecipientsByTimeZone(recipientMemberships);
 
       for (const [timeZone, recipientMembershipIds] of recipientsByTimeZone) {
-        const occurrenceStarts = reminderOccurrenceStarts(event, windowStart, windowEnd, timeZone);
-        if (occurrenceStarts.length === 0) continue;
+        const schedules = notificationSchedules(event);
+        const linkedRecipientMembershipIdSet = new Set(linkedRecipientMembershipIds);
+        const adminRecipientMembershipIdSet = new Set(adminRecipientMembershipIds);
 
-        for (const occurrenceStart of occurrenceStarts) {
-          if (recipientMembershipIds.length === 0) continue;
-          try {
-            const result = await this.notificationsService.createCalendarReminderNotifications({
-              organizationId: event.organizationId,
-              actorUserId: null,
-              recipientMembershipIds,
-              type: reminderNotificationType(event),
-              preferenceKey: 'remindersEnabled',
-              title: reminderNotificationTitle(event),
-              body: `${event.title} starts at ${formatNotificationDateTime(occurrenceStart, timeZone)}.`,
-              url: `/dashboard/${event.organizationId}/calendar`,
-              entityType: 'CalendarEvent',
-              entityId: event.id,
-              dedupeKey: `calendar-reminder:${event.id}:${occurrenceStart.toISOString()}:${timeZone}`,
-            });
-            createdCount += result.createdCount;
-            emailSentCount += result.emailSentCount;
-            telegramSentCount += result.telegramSentCount;
-          } catch (error: unknown) {
-            calendarEventsLogger.error({
-              event: 'Calendar reminder notification creation failed',
-              organizationId: event.organizationId,
-              calendarEventId: event.id,
-              occurrenceStart: occurrenceStart.toISOString(),
-              timeZone,
-              error: error instanceof Error ? error.message : String(error),
-            });
+        for (const schedule of schedules) {
+          const scheduledRecipientMembershipIds = calendarNotificationRecipientMembershipIds(
+            recipientMembershipIds,
+            linkedRecipientMembershipIdSet,
+            adminRecipientMembershipIdSet,
+            schedule.kind,
+          );
+          const occurrenceStarts = notificationOccurrenceStarts(
+            event,
+            schedule.offsetMs,
+            windowStart,
+            windowEnd,
+            timeZone,
+          );
+          if (occurrenceStarts.length === 0) continue;
+
+          for (const occurrenceStart of occurrenceStarts) {
+            if (scheduledRecipientMembershipIds.length === 0) continue;
+            try {
+              const result = await this.notificationsService.createCalendarReminderNotifications({
+                organizationId: event.organizationId,
+                actorUserId: null,
+                recipientMembershipIds: scheduledRecipientMembershipIds,
+                type: reminderNotificationType(event),
+                preferenceKey: 'remindersEnabled',
+                title: calendarNotificationTitle(event, schedule.kind),
+                body: calendarNotificationBody(event, occurrenceStart, timeZone, schedule.kind),
+                url: `/dashboard/${event.organizationId}/calendar`,
+                entityType: 'CalendarEvent',
+                entityId: event.id,
+                dedupeKey: calendarNotificationDedupeKey(
+                  event,
+                  occurrenceStart,
+                  timeZone,
+                  schedule,
+                ),
+              });
+              createdCount += result.createdCount;
+              emailSentCount += result.emailSentCount;
+              telegramSentCount += result.telegramSentCount;
+            } catch (error: unknown) {
+              calendarEventsLogger.error({
+                event: 'Calendar notification creation failed',
+                organizationId: event.organizationId,
+                calendarEventId: event.id,
+                occurrenceStart: occurrenceStart.toISOString(),
+                schedule: schedule.kind,
+                timeZone,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
           }
         }
       }
@@ -414,6 +452,36 @@ function reminderNotificationTitle(event: CalendarEventRecord): string {
   return 'Calendar reminder';
 }
 
+function eventNotificationTitle(event: CalendarEventRecord): string {
+  if (event.type === CALENDAR_EVENT_TYPE.task) return 'Task due';
+  if (event.type === CALENDAR_EVENT_TYPE.service) return 'Service starts';
+  if (event.type === CALENDAR_EVENT_TYPE.birthday) return 'Birthday';
+  if (event.type === CALENDAR_EVENT_TYPE.anniversary) return 'Anniversary';
+  return 'Calendar event';
+}
+
+function calendarNotificationTitle(
+  event: CalendarEventRecord,
+  scheduleKind: CalendarNotificationSchedule['kind'],
+): string {
+  return scheduleKind === 'reminder'
+    ? reminderNotificationTitle(event)
+    : eventNotificationTitle(event);
+}
+
+function calendarNotificationBody(
+  event: CalendarEventRecord,
+  occurrenceStart: Date,
+  timeZone: string,
+  scheduleKind: CalendarNotificationSchedule['kind'],
+): string {
+  if (scheduleKind === 'event') {
+    return `${event.title} is scheduled for ${formatNotificationDateTime(occurrenceStart, timeZone)}.`;
+  }
+
+  return `${event.title} starts at ${formatNotificationDateTime(occurrenceStart, timeZone)}.`;
+}
+
 function reminderNotificationType(event: CalendarEventRecord) {
   if (event.type === CALENDAR_EVENT_TYPE.task) return 'TASK_DUE_REMINDER' as const;
   if (event.type === CALENDAR_EVENT_TYPE.service) return 'SERVICE_REMINDER' as const;
@@ -432,17 +500,36 @@ function calendarReminderRecipientMembershipIds(
   ].filter((membershipId): membershipId is string => Boolean(membershipId));
 }
 
-function reminderOccurrenceStarts(
+function calendarNotificationRecipientMembershipIds(
+  availableRecipientMembershipIds: string[],
+  linkedRecipientMembershipIds: Set<string>,
+  adminRecipientMembershipIds: Set<string>,
+  scheduleKind: CalendarNotificationSchedule['kind'],
+): string[] {
+  return availableRecipientMembershipIds.filter((membershipId) => {
+    if (linkedRecipientMembershipIds.has(membershipId)) return true;
+    return scheduleKind === 'event' && adminRecipientMembershipIds.has(membershipId);
+  });
+}
+
+function notificationSchedules(event: CalendarEventRecord): CalendarNotificationSchedule[] {
+  return [
+    { kind: 'event', offsetMs: 0 },
+    ...(event.reminder
+      ? [{ kind: 'reminder' as const, offsetMs: reminderOffsetMs(event.reminder) }]
+      : []),
+  ];
+}
+
+function notificationOccurrenceStarts(
   event: CalendarEventRecord,
+  notificationOffsetMs: number,
   windowStart: Date,
   windowEnd: Date,
   timeZone: string,
 ): Date[] {
-  if (!event.reminder) return [];
-
-  const reminderOffset = reminderOffsetMs(event.reminder);
-  const occurrenceRangeStart = new Date(windowStart.getTime() + reminderOffset);
-  const occurrenceRangeEnd = new Date(windowEnd.getTime() + reminderOffset);
+  const occurrenceRangeStart = new Date(windowStart.getTime() + notificationOffsetMs);
+  const occurrenceRangeEnd = new Date(windowEnd.getTime() + notificationOffsetMs);
 
   if (event.repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.none) {
     return event.startsAt >= occurrenceRangeStart && event.startsAt <= occurrenceRangeEnd
@@ -466,6 +553,19 @@ function reminderOccurrenceStarts(
   }
 
   return occurrenceStarts;
+}
+
+function calendarNotificationDedupeKey(
+  event: CalendarEventRecord,
+  occurrenceStart: Date,
+  timeZone: string,
+  schedule: CalendarNotificationSchedule,
+): string {
+  if (schedule.kind === 'reminder') {
+    return `calendar-reminder:${event.id}:${String(schedule.offsetMs)}:${occurrenceStart.toISOString()}:${timeZone}`;
+  }
+
+  return `calendar-event:${event.id}:${occurrenceStart.toISOString()}:${timeZone}`;
 }
 
 function reminderOffsetMs(reminder: NonNullable<CalendarEventRecord['reminder']>): number {

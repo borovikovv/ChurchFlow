@@ -82,22 +82,25 @@ export function CalendarManager({
   );
   const selectedDateTasks = selectedDateEvents.filter((event) => event.type === CALENDAR_TYPE.task);
 
-  function refreshEvents(nextRange = range, nextTypes = visibleTypes) {
-    startTransition(async () => {
-      const result = await loadEvents({
-        organizationId,
-        rangeStart: nextRange.rangeStart,
-        rangeEnd: nextRange.rangeEnd,
-        types: nextTypes,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
+  async function refreshEvents(nextRange = range, nextTypes = visibleTypes) {
+    const result = await loadEvents({
+      organizationId,
+      rangeStart: nextRange.rangeStart,
+      rangeEnd: nextRange.rangeEnd,
+      types: nextTypes,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return false;
+    }
+
+    startTransition(() => {
       setError(null);
       setEvents(result.payload.events);
       setMembers(result.payload.members);
     });
+
+    return true;
   }
 
   function openCreate(date: string) {
@@ -130,7 +133,7 @@ export function CalendarManager({
     if (!result.ok) return result;
     setModalMode(null);
     setError(null);
-    refreshEvents();
+    await refreshEvents();
     return { ok: true as const };
   }
 
@@ -142,7 +145,7 @@ export function CalendarManager({
       return;
     }
     setModalMode(null);
-    refreshEvents();
+    void refreshEvents();
   }
 
   async function toggleFilter(type: (typeof visibleTypes)[number]) {
@@ -155,7 +158,7 @@ export function CalendarManager({
       setError(result.error);
       return;
     }
-    refreshEvents(range, nextTypes);
+    void refreshEvents(range, nextTypes);
   }
 
   async function uploadImage(file: File) {
@@ -233,7 +236,7 @@ export function CalendarManager({
     setRange(nextRange);
     if (lastRangeKey.current === key) return;
     lastRangeKey.current = key;
-    refreshEvents(nextRange);
+    void refreshEvents(nextRange);
   }
 
   function handleDateClick(arg: DateClickArg) {
