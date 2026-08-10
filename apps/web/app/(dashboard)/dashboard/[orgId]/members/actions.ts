@@ -31,19 +31,34 @@ function membersUrl(organizationId: string, params?: Record<string, string>): Ro
 export async function loadMembersAction(input: {
   organizationId: string;
   access: OrganizationMembersAccessFilter;
+  membershipId?: string;
+  ministries: MemberMinistry[];
+  page: number;
+  pageSize: number;
   type: OrganizationMembersTypeFilter;
   search: string;
 }) {
+  const params = new URLSearchParams({
+    access: input.access,
+    type: input.type,
+    search: input.search,
+    page: String(input.page),
+    pageSize: String(input.pageSize),
+  });
+  if (input.ministries.length > 0) {
+    params.set('ministries', input.ministries.join(','));
+  }
+  if (input.membershipId) {
+    params.set('membershipId', input.membershipId);
+  }
+
   const result = await apiFetch<MembersPayload>(
-    `/organizations/${input.organizationId}/memberships?${new URLSearchParams({
-      access: input.access,
-      type: input.type,
-      search: input.search,
-    })}`,
+    `/organizations/${input.organizationId}/memberships?${params}`,
   );
   if (!result.ok) return { ok: false as const, error: result.error.message };
 
   const payload = result.data;
+  payload.memberCandidates = payload.memberCandidates ?? [];
   await Promise.all(
     payload.members.map(async (member) => {
       if (!member.profile.profilePhotoAssetId) return;
@@ -75,6 +90,10 @@ export async function loadMemberDetailsAction(input: {
   const membersResult = await loadMembersAction({
     organizationId: input.organizationId,
     access: 'all',
+    membershipId: input.membershipId,
+    ministries: [],
+    page: 1,
+    pageSize: 10,
     type: 'all',
     search: '',
   });

@@ -13,9 +13,12 @@ import { MemberCsvActions } from './member-csv-actions';
 import { MemberAvatar } from './member-avatar';
 import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
 import type {
+  MemberMinistry,
   OrganizationMembersAccessFilter,
   OrganizationMembersTypeFilter,
 } from '@churchflow/shared';
+import { MEMBER_MINISTRIES, MEMBER_PAGE_SIZE_OPTIONS } from '@churchflow/shared';
+import { QueryFilterMultiSelect } from '@/components/forms/query-filter-multi-select';
 import { QueryFilterSelect } from '@/components/forms/query-filter-select';
 import { organizationMemberRoute } from '@/features/organizations/routes';
 import { useMembersQuery } from '../_hooks/use-members-query';
@@ -43,6 +46,9 @@ export function MembersManager({
   organizationId,
   initialPayload,
   memberAccess,
+  memberMinistries,
+  memberPage,
+  memberPageSize,
   memberSearch,
   memberType,
   manageInvitation,
@@ -51,6 +57,9 @@ export function MembersManager({
   organizationId: string;
   initialPayload: MembersPayload;
   memberAccess: OrganizationMembersAccessFilter;
+  memberMinistries: MemberMinistry[];
+  memberPage: number;
+  memberPageSize: number;
   memberSearch: string;
   memberType: OrganizationMembersTypeFilter;
   manageInvitation: ComponentProps<typeof InviteAppUserForm>['action'];
@@ -60,17 +69,17 @@ export function MembersManager({
   const { data: payload, refresh: refreshMembers } = useMembersQuery({
     access: memberAccess,
     initialPayload,
+    ministries: memberMinistries,
     organizationId,
+    page: memberPage,
+    pageSize: memberPageSize,
     search: memberSearch,
     type: memberType,
   });
   const members = payload.members;
   const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
   const isOwner = payload.actorRole === 'OWNER';
-  const memberCandidates = members.map(({ id, profile }) => ({
-    id,
-    displayName: profile.displayName,
-  }));
+  const memberCandidates = payload.memberCandidates;
   const memberAccessFilterOptions: Array<{
     label: string;
     value: OrganizationMembersAccessFilter | '';
@@ -89,7 +98,14 @@ export function MembersManager({
     { label: t('roleLabels.MEMBER'), value: 'member' },
     { label: t('roleLabels.VIEWER'), value: 'visitor' },
   ];
+  const memberMinistryFilterOptions = MEMBER_MINISTRIES.map((ministry) => ({
+    label: t(`ministry.${ministry}`),
+    value: ministry,
+  }));
   const preservedAccess = memberAccess === 'all' ? undefined : memberAccess;
+  const preservedMinistries = memberMinistries.length > 0 ? memberMinistries.join(',') : undefined;
+  const preservedPageSize =
+    memberPageSize === MEMBER_PAGE_SIZE_OPTIONS[0] ? undefined : String(memberPageSize);
   const preservedType = memberType === 'all' ? undefined : memberType;
   const preservedSearch = memberSearch || undefined;
   const columns: Array<ColumnDef<OrganizationMember>> = [
@@ -189,8 +205,28 @@ export function MembersManager({
           <MemberSearchInput
             label={t('searchByName')}
             placeholder={t('searchByNamePlaceholder')}
-            preserveParams={{ access: preservedAccess, type: preservedType }}
+            preserveParams={{
+              access: preservedAccess,
+              ministries: preservedMinistries,
+              pageSize: preservedPageSize,
+              type: preservedType,
+            }}
             search={memberSearch}
+          />
+          <QueryFilterMultiSelect
+            label={t('ministries')}
+            labelClassName="sr-only"
+            name="ministries"
+            options={memberMinistryFilterOptions}
+            placeholder={t('allMinistries')}
+            preserveParams={{
+              access: preservedAccess,
+              pageSize: preservedPageSize,
+              search: preservedSearch,
+              type: preservedType,
+            }}
+            selectClassName="w-full"
+            value={memberMinistries}
           />
           <div className="filter-bar min-w-0 flex-wrap">
             <QueryFilterSelect
@@ -198,7 +234,12 @@ export function MembersManager({
               labelClassName="sr-only"
               name="access"
               options={memberAccessFilterOptions}
-              preserveParams={{ search: preservedSearch, type: preservedType }}
+              preserveParams={{
+                ministries: preservedMinistries,
+                pageSize: preservedPageSize,
+                search: preservedSearch,
+                type: preservedType,
+              }}
               size="medium"
               value={memberAccess === 'all' ? '' : memberAccess}
             />
@@ -207,7 +248,12 @@ export function MembersManager({
               labelClassName="sr-only"
               name="type"
               options={memberTypeFilterOptions}
-              preserveParams={{ access: preservedAccess, search: preservedSearch }}
+              preserveParams={{
+                access: preservedAccess,
+                ministries: preservedMinistries,
+                pageSize: preservedPageSize,
+                search: preservedSearch,
+              }}
               size="medium"
               value={memberType === 'all' ? '' : memberType}
             />
@@ -255,6 +301,25 @@ export function MembersManager({
           data={members}
           emptyMessage={t('emptyFilter')}
           getRowHref={(member) => organizationMemberRoute(organizationId, member.id)}
+          pagination={{
+            firstPageLabel: t('firstPage'),
+            itemLabel: t('page'),
+            lastPageLabel: t('lastPage'),
+            nextPageLabel: t('nextPage'),
+            ofLabel: t('of'),
+            page: payload.pagination.page,
+            pageSize: payload.pagination.pageSize,
+            pageSizeLabel: t('itemsPerPage'),
+            pageSizeOptions: [...MEMBER_PAGE_SIZE_OPTIONS],
+            previousPageLabel: t('previousPage'),
+            preserveParams: {
+              access: preservedAccess,
+              ministries: preservedMinistries,
+              search: preservedSearch,
+              type: preservedType,
+            },
+            total: payload.pagination.total,
+          }}
           tableClassName="min-w-[860px]"
         />
       </section>

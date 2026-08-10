@@ -46,6 +46,10 @@ export class MembershipsController {
       query.access,
       query.type,
       query.search,
+      query.ministries,
+      query.page,
+      query.pageSize,
+      query.membershipId,
     );
   }
 

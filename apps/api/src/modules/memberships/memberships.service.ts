@@ -12,6 +12,7 @@ import type {
   CreateOrganizationMemberRelationshipInput,
   CreateManualOrganizationMemberInput,
   ImportOrganizationMembersCsvResult,
+  MemberMinistry,
   OrganizationMembersAccessFilter,
   OrganizationMembersTypeFilter,
   UpdateOrganizationMemberProfileInput,
@@ -33,12 +34,26 @@ export class MembershipsService {
     access: OrganizationMembersAccessFilter,
     type: OrganizationMembersTypeFilter,
     search: string,
+    ministries: MemberMinistry[],
+    page: number,
+    pageSize: number,
+    membershipId?: string,
   ) {
-    const [members, pendingInvitations, actorMembership] = await Promise.all([
-      this.membershipsRepository.listForOrganization(organizationId, access, type, search),
+    const [membersPage, pendingInvitations, actorMembership] = await Promise.all([
+      this.membershipsRepository.listForOrganization(
+        organizationId,
+        access,
+        type,
+        search,
+        ministries,
+        page,
+        pageSize,
+        membershipId,
+      ),
       this.invitationsRepository.listPendingForOrganization(organizationId),
       this.membershipsRepository.findActiveMembership(organizationId, actorUserId),
     ]);
+    const { candidates, members, page: currentPage, total } = membersPage;
 
     const canManageProfiles =
       actorMembership?.role === 'OWNER' || actorMembership?.role === 'ADMIN';
@@ -46,6 +61,20 @@ export class MembershipsService {
     return {
       actorRole: actorMembership?.role ?? null,
       actorMembershipId: actorMembership?.id ?? null,
+      pagination: {
+        page: currentPage,
+        pageSize,
+        total,
+        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+      },
+      memberCandidates: candidates.map((candidate) => ({
+        id: candidate.id,
+        displayName:
+          candidate.profile?.displayName ??
+          candidate.user?.displayName ??
+          candidate.user?.email ??
+          'Member',
+      })),
       members: members.map((member) => {
         const activeClaim = member.claims.find((claim) => claim.expiresAt.getTime() > Date.now());
         const accountState = member.user

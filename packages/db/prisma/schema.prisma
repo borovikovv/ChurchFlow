@@ -198,6 +198,8 @@ enum MemberMinistry {
   MISSIONARY
   EVANGELIST
   CHAPLAIN
+  CHILDREN
+  YOUTH
 }
 
 model User {

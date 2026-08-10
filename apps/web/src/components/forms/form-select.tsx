@@ -14,13 +14,13 @@ import {
 import Select, { type SingleValue, type StylesConfig } from 'react-select';
 import { FormField } from './form-field';
 
-interface SelectOption {
+export interface SelectOption {
   isDisabled?: boolean;
   label: string;
   value: string;
 }
 
-type SelectSize = 'default' | 'medium';
+export type SelectSize = 'default' | 'medium';
 
 type FormSelectProps = {
   children: ReactNode;
@@ -46,7 +46,9 @@ type OptionElementProps = {
   value?: string | number | readonly string[];
 };
 
-function createSelectStyles(size: SelectSize): StylesConfig<SelectOption, false> {
+export function createSelectStyles<IsMulti extends boolean = false>(
+  size: SelectSize,
+): StylesConfig<SelectOption, IsMulti> {
   const medium = size === 'medium';
   const controlHeight = medium ? 32 : 42;
 
@@ -165,12 +167,42 @@ function createSelectStyles(size: SelectSize): StylesConfig<SelectOption, false>
       marginTop: 0,
       maxHeight: medium ? controlHeight : base.maxHeight,
     }),
+    multiValue: (base) => ({
+      ...base,
+      alignItems: 'center',
+      borderRadius: 999,
+      backgroundColor: '#fd8c73',
+      color: '#5f1f12',
+      minHeight: medium ? 22 : 26,
+      margin: 2,
+    }),
+    multiValueLabel: (base) => ({
+      ...base,
+      color: '#5f1f12',
+      fontSize: medium ? 12 : 13,
+      fontWeight: 600,
+      padding: 0,
+      paddingLeft: 8,
+    }),
+    multiValueRemove: (base) => ({
+      ...base,
+      borderRadius: 999,
+      color: '#5f1f12',
+      paddingLeft: 4,
+      paddingRight: 6,
+      ':hover': {
+        backgroundColor: 'rgba(31, 35, 40, 0.12)',
+        color: '#5f1f12',
+      },
+    }),
     valueContainer: (base) => ({
       ...base,
       alignItems: 'center',
-      display: 'grid',
+      display: medium ? 'flex' : 'grid',
+      flexWrap: 'nowrap',
       height: '100%',
       minHeight: 0,
+      overflow: 'hidden',
       paddingBottom: 0,
       paddingLeft: medium ? 8 : 12,
       paddingRight: medium ? 8 : 12,

@@ -15,10 +15,14 @@ import {
 } from './actions';
 import type { MembersPayload } from './types';
 import {
+  DEFAULT_MEMBER_PAGE_SIZE,
+  MEMBER_PAGE_SIZE_OPTIONS,
   organizationMembersAccessFilterSchema,
   type OrganizationMembersAccessFilter,
   organizationMembersTypeFilterSchema,
   type OrganizationMembersTypeFilter,
+  memberMinistriesSchema,
+  type MemberMinistry,
 } from '@churchflow/shared';
 import { CopyField } from '@/components/copy-field';
 
@@ -27,6 +31,9 @@ type MembersSearchParams = {
   claimLink?: string;
   error?: string;
   message?: string;
+  ministries?: string;
+  page?: string;
+  pageSize?: string;
   search?: string;
   type?: string;
 };
@@ -34,6 +41,13 @@ type MembersSearchParams = {
 const emptyMembersPayload: MembersPayload = {
   actorRole: null,
   actorMembershipId: null,
+  memberCandidates: [],
+  pagination: {
+    page: 1,
+    pageCount: 1,
+    pageSize: DEFAULT_MEMBER_PAGE_SIZE,
+    total: 0,
+  },
   members: [],
   pendingInvitations: [],
 };
@@ -51,17 +65,26 @@ export default async function MembersDashboardPage({
     message,
     error,
     access = 'all',
+    ministries = '',
+    page = '1',
+    pageSize = String(DEFAULT_MEMBER_PAGE_SIZE),
     search = '',
     type = 'all',
   } = await searchParams;
   const user = await getCurrentUser();
   const messages = getMessages(user?.locale ?? 'en');
   const memberAccess = parseMemberAccess(access);
+  const memberMinistries = parseMemberMinistries(ministries);
+  const memberPage = parseMemberPage(page);
+  const memberPageSize = parseMemberPageSize(pageSize);
   const memberType = parseMemberType(type);
   const memberSearch = parseMemberSearch(search);
   const membersResult = await loadMembersAction({
     organizationId: orgId,
     access: memberAccess,
+    ministries: memberMinistries,
+    page: memberPage,
+    pageSize: memberPageSize,
     type: memberType,
     search: memberSearch,
   });
@@ -85,6 +108,9 @@ export default async function MembersDashboardPage({
 
       <MembersManager
         memberAccess={memberAccess}
+        memberMinistries={memberMinistries}
+        memberPage={memberPage}
+        memberPageSize={memberPageSize}
         memberSearch={memberSearch}
         memberType={memberType}
         organizationId={orgId}
@@ -115,4 +141,23 @@ function parseMemberType(type: string): OrganizationMembersTypeFilter {
 
 function parseMemberSearch(search: string): string {
   return search.trim().slice(0, 100);
+}
+
+function parseMemberMinistries(ministries: string): MemberMinistry[] {
+  const parsedMinistries = memberMinistriesSchema.safeParse(ministries.split(',').filter(Boolean));
+  return parsedMinistries.success ? parsedMinistries.data : [];
+}
+
+function parseMemberPage(page: string): number {
+  const parsedPage = Number(page);
+  return Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+}
+
+function parseMemberPageSize(pageSize: string): (typeof MEMBER_PAGE_SIZE_OPTIONS)[number] {
+  const parsedPageSize = Number(pageSize);
+  return MEMBER_PAGE_SIZE_OPTIONS.includes(
+    parsedPageSize as (typeof MEMBER_PAGE_SIZE_OPTIONS)[number],
+  )
+    ? (parsedPageSize as (typeof MEMBER_PAGE_SIZE_OPTIONS)[number])
+    : DEFAULT_MEMBER_PAGE_SIZE;
 }

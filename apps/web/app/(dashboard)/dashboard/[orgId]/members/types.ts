@@ -67,6 +67,13 @@ export interface PendingInvitation {
 export interface MembersPayload {
   actorRole: OrganizationRole | null;
   actorMembershipId: string | null;
+  memberCandidates: Array<{ id: string; displayName: string }>;
+  pagination: {
+    page: number;
+    pageCount: number;
+    pageSize: number;
+    total: number;
+  };
   members: OrganizationMember[];
   pendingInvitations: PendingInvitation[];
 }

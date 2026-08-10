@@ -878,6 +878,83 @@
     text-align: center;
   }
 
+  .data-table-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    color: var(--foreground);
+  }
+
+  .data-table-pagination-summary,
+  .data-table-pagination-pages {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .data-table-pagination-summary {
+    justify-content: flex-start;
+  }
+
+  .data-table-page-size-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .data-table-page-size-label {
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  .data-table-page-size-select {
+    width: 72px;
+  }
+
+  .data-table-pagination-button {
+    display: inline-flex;
+    min-width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--foreground);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .data-table-pagination-button:hover,
+  .data-table-pagination-button:focus-visible {
+    color: var(--accent-strong);
+    outline: none;
+  }
+
+  .data-table-pagination-button.active {
+    border-bottom-color: var(--accent);
+    color: var(--accent-strong);
+  }
+
+  .data-table-pagination-button:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .data-table-pagination-ellipsis {
+    display: inline-flex;
+    min-width: 28px;
+    justify-content: center;
+    color: var(--muted);
+  }
+
   .status-badge {
     display: inline-flex;
     width: fit-content;
@@ -1139,7 +1216,8 @@
     }
 
     .page-header,
-    .filter-bar {
+    .filter-bar,
+    .data-table-pagination {
       align-items: stretch;
       flex-direction: column;
     }

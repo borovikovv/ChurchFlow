@@ -18,6 +18,10 @@ export class MembershipsRepository {
     access: OrganizationMembersAccessFilter,
     type: OrganizationMembersTypeFilter,
     search: string,
+    ministries: MemberMinistry[],
+    page: number,
+    pageSize: number,
+    membershipId?: string,
   ) {
     const now = new Date();
     const accessWhere: Record<
@@ -64,16 +68,33 @@ export class MembershipsRepository {
           ],
         }
       : {};
+    const ministriesWhere: Prisma.OrganizationMemberWhereInput =
+      ministries.length > 0
+        ? {
+            ministries: {
+              some: {
+                ministry: { in: ministries },
+              },
+            },
+          }
+        : {};
+    const where: Prisma.OrganizationMemberWhereInput = {
+      ...(membershipId ? { id: membershipId } : {}),
+      organizationId,
+      status: { in: ['ACTIVE', 'SUSPENDED'] },
+      removedAt: null,
+      ...accessWhere[access],
+      ...typeWhere[type],
+      ...searchWhere,
+      ...ministriesWhere,
+    };
+    const total = await this.prisma.organizationMember.count({ where });
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = Math.min(page, pageCount);
+    const skip = (currentPage - 1) * pageSize;
 
-    return this.prisma.organizationMember.findMany({
-      where: {
-        organizationId,
-        status: { in: ['ACTIVE', 'SUSPENDED'] },
-        removedAt: null,
-        ...accessWhere[access],
-        ...typeWhere[type],
-        ...searchWhere,
-      },
+    const members = await this.prisma.organizationMember.findMany({
+      where,
       include: {
         profile: true,
         ministries: true,
@@ -112,7 +133,24 @@ export class MembershipsRepository {
         },
       },
       orderBy: { createdAt: 'desc' },
+      skip,
+      take: pageSize,
     });
+    const candidates = await this.prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        status: { in: ['ACTIVE', 'SUSPENDED'] },
+        removedAt: null,
+      },
+      select: {
+        id: true,
+        profile: { select: { displayName: true } },
+        user: { select: { displayName: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { candidates, members, page: currentPage, total };
   }
 
   async createManualMember(

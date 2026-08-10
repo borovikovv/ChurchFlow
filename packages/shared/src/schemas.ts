@@ -11,7 +11,9 @@ import {
   BUDGET_CATEGORY_TYPES,
   BUDGET_ENTRY_FIELDS,
   BUDGET_GROUPS,
+  DEFAULT_MEMBER_PAGE_SIZE,
   MEMBER_MINISTRIES,
+  MEMBER_PAGE_SIZE_OPTIONS,
   MEMBER_CSV_TEMPLATE_COLUMNS,
   NOTIFICATION_TYPES,
   PUBLIC_SECTION_TYPES,
@@ -65,18 +67,37 @@ export const organizationMembersAccessFilterSchema = z.enum([
   'suspended',
 ]);
 export const organizationMembersTypeFilterSchema = z.enum(['all', 'member', 'visitor']);
+export const memberMinistrySchema = z.enum(MEMBER_MINISTRIES);
+export const memberMinistriesSchema = z.array(memberMinistrySchema);
+
+const memberMinistriesQuerySchema = z.preprocess((value) => {
+  if (Array.isArray(value)) return value.flatMap((item) => String(item).split(','));
+  if (typeof value === 'string') return value.split(',').filter(Boolean);
+  return value;
+}, memberMinistriesSchema.default([]));
+
 export const listOrganizationMembersQuerySchema = z.object({
   access: organizationMembersAccessFilterSchema.default('all'),
+  membershipId: uuidSchema.optional(),
   type: organizationMembersTypeFilterSchema.default('all'),
   search: z.string().trim().max(100).default(''),
+  ministries: memberMinistriesQuerySchema,
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .refine(
+      (value): value is (typeof MEMBER_PAGE_SIZE_OPTIONS)[number] =>
+        MEMBER_PAGE_SIZE_OPTIONS.includes(value as (typeof MEMBER_PAGE_SIZE_OPTIONS)[number]),
+      { message: 'Page size must be 10, 25, or 50' },
+    )
+    .default(DEFAULT_MEMBER_PAGE_SIZE),
 });
 export const calendarEventTypeSchema = z.enum(CALENDAR_EVENT_TYPES);
 export const calendarEventReminderSchema = z.enum(CALENDAR_EVENT_REMINDERS);
 export const calendarEventRepeatPeriodSchema = z.enum(CALENDAR_EVENT_REPEAT_PERIODS);
 export const calendarEventTypesSchema = z.array(calendarEventTypeSchema);
 export const calendarServiceRoleSchema = z.enum(CALENDAR_SERVICE_ROLES);
-export const memberMinistrySchema = z.enum(MEMBER_MINISTRIES);
-export const memberMinistriesSchema = z.array(memberMinistrySchema);
 export const membershipSourceSchema = z.enum([
   'EXISTING',
   'MANUAL',

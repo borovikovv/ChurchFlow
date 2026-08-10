@@ -189,6 +189,8 @@ export const MEMBER_MINISTRIES = [
   'MISSIONARY',
   'EVANGELIST',
   'CHAPLAIN',
+  'CHILDREN',
+  'YOUTH',
 ] as const;
 
 export const MEMBER_MINISTRY = {
@@ -200,7 +202,12 @@ export const MEMBER_MINISTRY = {
   missionary: 'MISSIONARY',
   evangelist: 'EVANGELIST',
   chaplain: 'CHAPLAIN',
+  children: 'CHILDREN',
+  youth: 'YOUTH',
 } as const;
+
+export const MEMBER_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+export const DEFAULT_MEMBER_PAGE_SIZE = 10;
 
 export const MEMBER_CSV_TEMPLATE_COLUMNS = [
   'displayName',
