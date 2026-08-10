@@ -15,6 +15,12 @@ import {
   type TelegramNotificationDelivery,
   type UpcomingServiceRecord,
 } from './repositories/telegram-bot.repository';
+import {
+  CalendarRecurrenceError,
+  expandCalendarEventOccurrences,
+  zonedDateParts,
+  zonedDateTimeToUtc,
+} from '../calendar-events/recurrence/calendar-recurrence';
 
 const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const TELEGRAM_API_BASE_URL = 'https://api.telegram.org';
@@ -74,6 +80,8 @@ interface ServiceScheduleMessages {
   emptySchedule: string;
   heading: string;
 }
+
+type UpcomingServiceOccurrenceRecord = UpcomingServiceRecord;
 
 interface TelegramLocaleConfig {
   intlLocale: string;
@@ -361,13 +369,14 @@ export class TelegramBotService {
       rangeStart,
       rangeEnd,
     });
+    const serviceOccurrences = expandUpcomingServices(services, rangeStart, rangeEnd, this.logger);
     const appLocale = appLocaleOrFallback(locale);
-    if (services.length === 0) {
+    if (serviceOccurrences.length === 0) {
       await this.sendMessage(chatId, serviceScheduleMessages(appLocale).emptySchedule);
       return;
     }
 
-    for (const message of formatUpcomingServices(services, appLocale)) {
+    for (const message of formatUpcomingServices(serviceOccurrences, appLocale)) {
       await this.sendMessage(chatId, message, { parseMode: 'HTML' });
     }
   }
@@ -503,7 +512,50 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function formatUpcomingServices(services: UpcomingServiceRecord[], locale: AppLocale): string[] {
+function expandUpcomingServices(
+  services: UpcomingServiceRecord[],
+  rangeStart: Date,
+  rangeEnd: Date,
+  logger: Pick<Logger, 'error'>,
+): UpcomingServiceOccurrenceRecord[] {
+  return services
+    .flatMap((service) => {
+      try {
+        return expandCalendarEventOccurrences({
+          event: service,
+          rangeStart,
+          rangeEnd,
+          timeZone: SERVICE_SCHEDULE_TIME_ZONE,
+        }).map((occurrence) => ({
+          ...service,
+          startsAt: occurrence.startsAt,
+          endsAt: occurrence.endsAt,
+        }));
+      } catch (error: unknown) {
+        if (error instanceof CalendarRecurrenceError) {
+          logger.error({
+            event: 'Telegram service schedule recurrence expansion failed',
+            organizationId: service.organizationId,
+            calendarEventId: service.id,
+            code: error.code,
+            context: error.context,
+          });
+          return [];
+        }
+
+        throw error;
+      }
+    })
+    .sort((left, right) => {
+      const startsAtComparison = left.startsAt.getTime() - right.startsAt.getTime();
+      return startsAtComparison === 0 ? left.id.localeCompare(right.id) : startsAtComparison;
+    });
+}
+
+function formatUpcomingServices(
+  services: UpcomingServiceOccurrenceRecord[],
+  locale: AppLocale,
+): string[] {
   const organizationName = escapeTelegramHtml(services[0]?.organization.name ?? 'ChurchFlow');
   const header = [
     `📅 <b>${escapeTelegramHtml(serviceScheduleMessages(locale).heading)}</b>`,
@@ -518,7 +570,10 @@ function isTelegramUpdate(value: unknown): value is TelegramUpdate {
   return typeof value === 'object' && value !== null;
 }
 
-function formatParticipants(service: UpcomingServiceRecord, locale: AppLocale): string | null {
+function formatParticipants(
+  service: UpcomingServiceOccurrenceRecord,
+  locale: AppLocale,
+): string | null {
   const participants = service.serviceDetails?.participants ?? [];
   if (participants.length === 0) return null;
 
@@ -565,7 +620,7 @@ function organizationSelectionMarkup(
 }
 
 function serviceScheduleBlocks(
-  services: UpcomingServiceRecord[],
+  services: UpcomingServiceOccurrenceRecord[],
   locale: AppLocale,
 ): ServiceScheduleMessageBlock[] {
   const blocks: ServiceScheduleMessageBlock[] = [];
@@ -584,7 +639,7 @@ function serviceScheduleBlocks(
   return blocks;
 }
 
-function formatServiceBlock(service: UpcomingServiceRecord, locale: AppLocale): string {
+function formatServiceBlock(service: UpcomingServiceOccurrenceRecord, locale: AppLocale): string {
   return [
     `<b>${escapeTelegramHtml(formatServiceDateTime(service.startsAt, locale))}</b>`,
     escapeTelegramHtml(service.title),
@@ -595,7 +650,10 @@ function formatServiceBlock(service: UpcomingServiceRecord, locale: AppLocale): 
     .join('\n\n');
 }
 
-function formatBiblePassage(service: UpcomingServiceRecord, locale: AppLocale): string | null {
+function formatBiblePassage(
+  service: UpcomingServiceOccurrenceRecord,
+  locale: AppLocale,
+): string | null {
   const biblePassage = service.serviceDetails?.biblePassage?.trim();
   if (!biblePassage) return null;
 
@@ -731,67 +789,4 @@ function serviceScheduleRange(now: Date): { rangeStart: Date; rangeEnd: Date } {
   );
 
   return { rangeStart: now, rangeEnd };
-}
-
-function zonedDateTimeToUtc(
-  parts: {
-    year: number;
-    month: number;
-    day: number;
-    hour: number;
-    minute: number;
-    second: number;
-  },
-  timeZone: string,
-): Date {
-  const utcGuess = new Date(
-    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second),
-  );
-  const offset = timeZoneOffsetMs(utcGuess, timeZone);
-  const adjusted = new Date(utcGuess.getTime() - offset);
-  const adjustedOffset = timeZoneOffsetMs(adjusted, timeZone);
-
-  return new Date(utcGuess.getTime() - adjustedOffset);
-}
-
-function timeZoneOffsetMs(value: Date, timeZone: string): number {
-  const parts = zonedDateParts(value, timeZone);
-  const asUtc = Date.UTC(
-    parts.year,
-    parts.month - 1,
-    parts.day,
-    parts.hour,
-    parts.minute,
-    parts.second,
-  );
-
-  return asUtc - value.getTime();
-}
-
-function zonedDateParts(value: Date, timeZone: string) {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  });
-  const parts = Object.fromEntries(
-    formatter
-      .formatToParts(value)
-      .filter((part) => part.type !== 'literal')
-      .map((part) => [part.type, Number(part.value)]),
-  );
-
-  return {
-    year: parts['year'] ?? value.getUTCFullYear(),
-    month: parts['month'] ?? value.getUTCMonth() + 1,
-    day: parts['day'] ?? value.getUTCDate(),
-    hour: parts['hour'] ?? value.getUTCHours(),
-    minute: parts['minute'] ?? value.getUTCMinutes(),
-    second: parts['second'] ?? value.getUTCSeconds(),
-  };
 }

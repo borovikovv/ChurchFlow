@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type OrganizationRole } from '@churchflow/db';
+import { CALENDAR_EVENT_REPEAT_PERIOD } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 const upcomingServiceInclude = {
@@ -363,10 +364,20 @@ export class TelegramBotRepository {
       where: {
         organizationId: input.organizationId,
         type: 'SERVICE',
-        startsAt: {
-          gte: input.rangeStart,
-          lt: input.rangeEnd,
-        },
+        OR: [
+          {
+            repeatPeriod: CALENDAR_EVENT_REPEAT_PERIOD.none,
+            startsAt: { lt: input.rangeEnd },
+            OR: [
+              { endsAt: null, startsAt: { gte: input.rangeStart } },
+              { endsAt: { gte: input.rangeStart } },
+            ],
+          },
+          {
+            repeatPeriod: { not: CALENDAR_EVENT_REPEAT_PERIOD.none },
+            startsAt: { lt: input.rangeEnd },
+          },
+        ],
         deletedAt: null,
         organization: {
           status: 'ACTIVE',

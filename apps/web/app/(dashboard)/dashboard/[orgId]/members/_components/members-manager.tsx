@@ -25,10 +25,10 @@ import { useMembersQuery } from '../_hooks/use-members-query';
 import { MemberSearchInput } from './member-search-input';
 
 const MEMBERS_ACTION_BUTTON_CLASS_NAME =
-  'h-8 min-h-8 max-w-full shrink-0 whitespace-normal px-3 text-center text-sm leading-5 md:whitespace-nowrap';
+  'h-8 min-h-8 max-w-full shrink-0 whitespace-normal px-3 text-center text-sm leading-5 xl:whitespace-nowrap';
 
 const MEMBERS_MENU_BUTTON_CLASS_NAME =
-  '!h-8 !min-h-8 max-w-full shrink-0 justify-center whitespace-normal px-3 text-center text-sm leading-5 md:whitespace-nowrap';
+  '!h-8 !min-h-8 max-w-full shrink-0 justify-center whitespace-normal px-3 text-center text-sm leading-5 xl:whitespace-nowrap';
 
 type MemberActionProps = Pick<
   ComponentProps<typeof MemberActions>,
@@ -200,7 +200,7 @@ export function MembersManager({
 
   return (
     <>
-      <div className="flex flex-col justify-between gap-3 md:flex-row">
+      <div className="flex min-w-0 flex-col justify-between gap-3 xl:flex-row">
         <div className="flex w-full min-w-0 flex-col gap-2 md:w-[492px] md:max-w-full md:flex-none">
           <MemberSearchInput
             label={t('searchByName')}
@@ -260,9 +260,9 @@ export function MembersManager({
           </div>
         </div>
         {canManage ? (
-          <div className="contents md:flex md:min-w-0 md:flex-nowrap md:items-start md:justify-end md:gap-2">
+          <div className="contents xl:flex xl:min-w-0 xl:flex-nowrap xl:items-start xl:justify-end xl:gap-2">
             <FormDialog
-              triggerClassName={`${MEMBERS_ACTION_BUTTON_CLASS_NAME} col-start-1 row-start-2 w-full md:w-auto`}
+              triggerClassName={`${MEMBERS_ACTION_BUTTON_CLASS_NAME} col-start-1 row-start-2 w-full xl:w-auto`}
               triggerLabel={t('inviteAppUser')}
               title={t('inviteTitle')}
               onOpen={() => setInviteFormKey((current) => current + 1)}
@@ -276,7 +276,7 @@ export function MembersManager({
             </FormDialog>
             <CreateMemberDialog
               organizationId={organizationId}
-              triggerClassName={`${MEMBERS_ACTION_BUTTON_CLASS_NAME} col-start-2 row-start-2 w-full md:w-auto`}
+              triggerClassName={`${MEMBERS_ACTION_BUTTON_CLASS_NAME} col-start-2 row-start-2 w-full xl:w-auto`}
               onCreated={(created) => {
                 void created;
                 refreshMembers();
@@ -284,8 +284,8 @@ export function MembersManager({
             />
             <MemberCsvActions
               organizationId={organizationId}
-              triggerClassName={`${MEMBERS_MENU_BUTTON_CLASS_NAME} w-full md:w-auto`}
-              wrapperClassName="flex w-full md:w-auto"
+              triggerClassName={`${MEMBERS_MENU_BUTTON_CLASS_NAME} w-full xl:w-auto`}
+              wrapperClassName="flex w-full xl:w-auto"
               onImported={() => {
                 refreshMembers();
               }}
@@ -294,7 +294,7 @@ export function MembersManager({
         ) : null}
       </div>
 
-      <section className="stack">
+      <section className="stack min-w-0">
         <h2>{t('organizationMembers')}</h2>
         <DataTable
           columns={columns}

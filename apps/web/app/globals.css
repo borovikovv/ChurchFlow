@@ -1238,6 +1238,17 @@
       flex-direction: column;
     }
 
+    .data-table-pagination {
+      align-items: center;
+    }
+
+    .data-table-pagination-summary,
+    .data-table-pagination-pages {
+      width: 100%;
+      justify-content: center;
+      text-align: center;
+    }
+
     .organization-request-page {
       align-content: start;
       justify-items: stretch;

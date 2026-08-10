@@ -15,29 +15,22 @@ import type {
   ListCalendarEventsQuery,
   UpdateCalendarEventInput,
 } from '@churchflow/shared';
-import {
-  CALENDAR_EVENT_TYPE,
-  CALENDAR_EVENT_REPEAT_PERIOD,
-  DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES,
-} from '@churchflow/shared';
+import { CALENDAR_EVENT_TYPE, DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES } from '@churchflow/shared';
 import {
   CalendarEventsRepository,
   type CalendarEventRecord,
 } from './repositories/calendar-events.repository';
+import {
+  CalendarRecurrenceError,
+  expandCalendarEventOccurrences,
+  getOccurrenceStarts,
+  validTimeZoneOrFallback,
+} from './recurrence/calendar-recurrence';
 import { NotificationsService } from '../notifications/notifications.service';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
-const DAYS_PER_WEEK = 7;
-const DAILY_REPEAT_INTERVAL_MS = MILLISECONDS_PER_DAY;
-const WEEKLY_REPEAT_INTERVAL_MS = DAYS_PER_WEEK * MILLISECONDS_PER_DAY;
-const DAILY_REPEAT_STEP_DAYS = 1;
-const WEEKLY_REPEAT_STEP_DAYS = DAYS_PER_WEEK;
-const MONTHLY_REPEAT_STEP_MONTHS = 1;
-const YEARLY_REPEAT_STEP_YEARS = 1;
 const REMINDER_WINDOW_MS = 5 * 60 * 1000;
 const REMINDER_LOOKAHEAD_MS = 7 * MILLISECONDS_PER_DAY;
-const MAX_EXPANDED_OCCURRENCES_PER_EVENT = 500;
-const MAX_OCCURRENCE_SEARCH_STEPS = 5000;
 const calendarEventsLogger = new Logger('CalendarEventsService');
 type CalendarNotificationSchedule =
   | { kind: 'event'; offsetMs: 0 }
@@ -244,7 +237,7 @@ export class CalendarEventsService {
             adminRecipientMembershipIdSet,
             schedule.kind,
           );
-          const occurrenceStarts = notificationOccurrenceStarts(
+          const occurrenceStarts = safeNotificationOccurrenceStarts(
             event,
             schedule.offsetMs,
             windowStart,
@@ -521,38 +514,36 @@ function notificationSchedules(event: CalendarEventRecord): CalendarNotification
   ];
 }
 
-function notificationOccurrenceStarts(
+function safeNotificationOccurrenceStarts(
   event: CalendarEventRecord,
   notificationOffsetMs: number,
   windowStart: Date,
   windowEnd: Date,
   timeZone: string,
 ): Date[] {
-  const occurrenceRangeStart = new Date(windowStart.getTime() + notificationOffsetMs);
-  const occurrenceRangeEnd = new Date(windowEnd.getTime() + notificationOffsetMs);
+  try {
+    return getOccurrenceStarts({
+      startsAt: event.startsAt,
+      repeatPeriod: event.repeatPeriod,
+      rangeStart: new Date(windowStart.getTime() + notificationOffsetMs),
+      rangeEnd: new Date(windowEnd.getTime() + notificationOffsetMs),
+      timeZone,
+      includeRangeEnd: true,
+    });
+  } catch (error: unknown) {
+    if (error instanceof CalendarRecurrenceError) {
+      calendarEventsLogger.error({
+        event: 'Calendar notification recurrence expansion failed',
+        organizationId: event.organizationId,
+        calendarEventId: event.id,
+        code: error.code,
+        context: error.context,
+      });
+      return [];
+    }
 
-  if (event.repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.none) {
-    return event.startsAt >= occurrenceRangeStart && event.startsAt <= occurrenceRangeEnd
-      ? [event.startsAt]
-      : [];
+    throw error;
   }
-
-  const occurrenceStarts: Date[] = [];
-  let occurrenceStart = new Date(event.startsAt);
-  let guard = 0;
-
-  while (occurrenceStart < occurrenceRangeStart && guard < MAX_OCCURRENCE_SEARCH_STEPS) {
-    occurrenceStart = nextOccurrenceInTimeZone(occurrenceStart, event.repeatPeriod, timeZone);
-    guard += 1;
-  }
-
-  while (occurrenceStart <= occurrenceRangeEnd && guard < MAX_OCCURRENCE_SEARCH_STEPS) {
-    occurrenceStarts.push(new Date(occurrenceStart));
-    occurrenceStart = nextOccurrenceInTimeZone(occurrenceStart, event.repeatPeriod, timeZone);
-    guard += 1;
-  }
-
-  return occurrenceStarts;
 }
 
 function calendarNotificationDedupeKey(
@@ -587,111 +578,6 @@ function groupReminderRecipientsByTimeZone(
   }
 
   return groups;
-}
-
-function nextOccurrenceInTimeZone(
-  value: Date,
-  repeatPeriod: CalendarEventRecord['repeatPeriod'],
-  timeZone: string,
-): Date {
-  const parts = zonedDateParts(value, timeZone);
-  const localDate = new Date(
-    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second),
-  );
-
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.daily)
-    localDate.setUTCDate(localDate.getUTCDate() + DAILY_REPEAT_STEP_DAYS);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.weekly)
-    localDate.setUTCDate(localDate.getUTCDate() + WEEKLY_REPEAT_STEP_DAYS);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.monthly)
-    localDate.setUTCMonth(localDate.getUTCMonth() + MONTHLY_REPEAT_STEP_MONTHS);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.yearly)
-    localDate.setUTCFullYear(localDate.getUTCFullYear() + YEARLY_REPEAT_STEP_YEARS);
-
-  return zonedDateTimeToUtc(
-    {
-      year: localDate.getUTCFullYear(),
-      month: localDate.getUTCMonth() + 1,
-      day: localDate.getUTCDate(),
-      hour: localDate.getUTCHours(),
-      minute: localDate.getUTCMinutes(),
-      second: localDate.getUTCSeconds(),
-    },
-    timeZone,
-  );
-}
-
-function zonedDateTimeToUtc(
-  parts: {
-    year: number;
-    month: number;
-    day: number;
-    hour: number;
-    minute: number;
-    second: number;
-  },
-  timeZone: string,
-): Date {
-  const utcGuess = new Date(
-    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second),
-  );
-  const offset = timeZoneOffsetMs(utcGuess, timeZone);
-  const adjusted = new Date(utcGuess.getTime() - offset);
-  const adjustedOffset = timeZoneOffsetMs(adjusted, timeZone);
-
-  return new Date(utcGuess.getTime() - adjustedOffset);
-}
-
-function timeZoneOffsetMs(value: Date, timeZone: string): number {
-  const parts = zonedDateParts(value, timeZone);
-  const asUtc = Date.UTC(
-    parts.year,
-    parts.month - 1,
-    parts.day,
-    parts.hour,
-    parts.minute,
-    parts.second,
-  );
-
-  return asUtc - value.getTime();
-}
-
-function zonedDateParts(value: Date, timeZone: string) {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: validTimeZoneOrFallback(timeZone),
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  });
-  const parts = Object.fromEntries(
-    formatter
-      .formatToParts(value)
-      .filter((part) => part.type !== 'literal')
-      .map((part) => [part.type, Number(part.value)]),
-  );
-
-  return {
-    year: parts['year'] ?? value.getUTCFullYear(),
-    month: parts['month'] ?? value.getUTCMonth() + 1,
-    day: parts['day'] ?? value.getUTCDate(),
-    hour: parts['hour'] ?? value.getUTCHours(),
-    minute: parts['minute'] ?? value.getUTCMinutes(),
-    second: parts['second'] ?? value.getUTCSeconds(),
-  };
-}
-
-function validTimeZoneOrFallback(timeZone: string | null | undefined): string {
-  const candidate = timeZone || 'UTC';
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date());
-    return candidate;
-  } catch {
-    return 'UTC';
-  }
 }
 
 function formatNotificationDateTime(value: Date, timeZone = 'Europe/Kyiv'): string {
@@ -790,139 +676,30 @@ function expandEvent(
   rangeStart: Date,
   rangeEnd: Date,
 ): CalendarEventItem[] {
-  if (event.repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.none) {
-    return overlaps(event.startsAt, event.endsAt, rangeStart, rangeEnd)
-      ? [baseEventToItem(event)]
-      : [];
-  }
-
-  const items: CalendarEventItem[] = [];
-  const duration = event.endsAt ? event.endsAt.getTime() - event.startsAt.getTime() : null;
-  const occurrenceSearchStart =
-    duration === null ? rangeStart : new Date(rangeStart.getTime() - Math.max(duration, 0));
-  let occurrenceStart = firstOccurrenceInRange(
-    event.id,
-    event.startsAt,
-    event.repeatPeriod,
-    occurrenceSearchStart,
-  );
-  let guard = 0;
-
-  while (occurrenceStart < rangeEnd && guard < MAX_EXPANDED_OCCURRENCES_PER_EVENT) {
-    const occurrenceEnd = duration === null ? null : new Date(occurrenceStart.getTime() + duration);
-    if (overlaps(occurrenceStart, occurrenceEnd, rangeStart, rangeEnd)) {
+  try {
+    return expandCalendarEventOccurrences({
+      event,
+      rangeStart,
+      rangeEnd,
+      timeZone: 'Europe/Kyiv',
+    }).map((occurrence) => {
       const item = baseEventToItem(event);
-      item.occurrenceId = `${event.id}:${occurrenceStart.toISOString()}`;
-      item.startsAt = occurrenceStart.toISOString();
-      item.endsAt = occurrenceEnd?.toISOString() ?? null;
-      items.push(item);
-    }
-    occurrenceStart = nextOccurrenceAfter(event.id, occurrenceStart, event.repeatPeriod);
-    guard += 1;
-  }
-
-  if (occurrenceStart < rangeEnd) {
-    logRepeatWarning('Stopped expanding repeated calendar event after hitting occurrence limit', {
-      eventId: event.id,
-      repeatPeriod: event.repeatPeriod,
-      maxOccurrences: MAX_EXPANDED_OCCURRENCES_PER_EVENT,
-      rangeStart: rangeStart.toISOString(),
-      rangeEnd: rangeEnd.toISOString(),
-      lastOccurrenceStart: occurrenceStart.toISOString(),
+      item.occurrenceId = `${event.id}:${occurrence.startsAt.toISOString()}`;
+      item.startsAt = occurrence.startsAt.toISOString();
+      item.endsAt = occurrence.endsAt?.toISOString() ?? null;
+      return item;
     });
-  }
-
-  return items;
-}
-
-function firstOccurrenceInRange(
-  eventId: string,
-  startsAt: Date,
-  repeatPeriod: CalendarEventRecord['repeatPeriod'],
-  rangeStart: Date,
-): Date {
-  const occurrenceStart = new Date(startsAt);
-
-  if (
-    repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.daily ||
-    repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.weekly
-  ) {
-    const intervalMs =
-      repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.daily
-        ? DAILY_REPEAT_INTERVAL_MS
-        : WEEKLY_REPEAT_INTERVAL_MS;
-    const elapsedIntervals = Math.floor(
-      (rangeStart.getTime() - occurrenceStart.getTime()) / intervalMs,
-    );
-    if (elapsedIntervals > 0) {
-      occurrenceStart.setTime(occurrenceStart.getTime() + elapsedIntervals * intervalMs);
+  } catch (error: unknown) {
+    if (error instanceof CalendarRecurrenceError) {
+      calendarEventsLogger.error({
+        event: 'Calendar recurrence expansion failed',
+        organizationId: event.organizationId,
+        calendarEventId: event.id,
+        code: error.code,
+        context: error.context,
+      });
     }
-    while (occurrenceStart < rangeStart) {
-      occurrenceStart.setTime(occurrenceStart.getTime() + intervalMs);
-    }
-    return occurrenceStart;
+
+    throw error;
   }
-
-  let guard = 0;
-  while (guard < MAX_OCCURRENCE_SEARCH_STEPS) {
-    const next = nextOccurrenceAfter(eventId, occurrenceStart, repeatPeriod);
-    if (next > rangeStart) return occurrenceStart;
-
-    occurrenceStart.setTime(next.getTime());
-    guard += 1;
-  }
-
-  logRepeatError('Could not find first repeated calendar occurrence within search limit', {
-    eventId,
-    repeatPeriod,
-    startsAt: startsAt.toISOString(),
-    rangeStart: rangeStart.toISOString(),
-    maxSearchSteps: MAX_OCCURRENCE_SEARCH_STEPS,
-    lastOccurrenceStart: occurrenceStart.toISOString(),
-  });
-  throw new Error('CALENDAR_REPEAT_SEARCH_LIMIT_REACHED');
-}
-
-function overlaps(start: Date, end: Date | null, rangeStart: Date, rangeEnd: Date): boolean {
-  return start < rangeEnd && (end ?? start) >= rangeStart;
-}
-
-function nextOccurrence(value: Date, repeatPeriod: CalendarEventRecord['repeatPeriod']): Date {
-  const next = new Date(value);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.daily)
-    next.setUTCDate(next.getUTCDate() + DAILY_REPEAT_STEP_DAYS);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.weekly)
-    next.setUTCDate(next.getUTCDate() + WEEKLY_REPEAT_STEP_DAYS);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.monthly)
-    next.setUTCMonth(next.getUTCMonth() + MONTHLY_REPEAT_STEP_MONTHS);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.yearly)
-    next.setUTCFullYear(next.getUTCFullYear() + YEARLY_REPEAT_STEP_YEARS);
-  return next;
-}
-
-function nextOccurrenceAfter(
-  eventId: string,
-  value: Date,
-  repeatPeriod: CalendarEventRecord['repeatPeriod'],
-): Date {
-  const next = nextOccurrence(value, repeatPeriod);
-  if (next <= value) {
-    logRepeatError('Calendar repeat calculation did not advance occurrence date', {
-      eventId,
-      repeatPeriod,
-      currentOccurrenceStart: value.toISOString(),
-      nextOccurrenceStart: next.toISOString(),
-    });
-    throw new Error('CALENDAR_REPEAT_DID_NOT_ADVANCE');
-  }
-
-  return next;
-}
-
-function logRepeatWarning(message: string, context: Record<string, unknown>) {
-  calendarEventsLogger.warn(`${message}: ${JSON.stringify(context)}`);
-}
-
-function logRepeatError(message: string, context: Record<string, unknown>) {
-  calendarEventsLogger.error(`${message}: ${JSON.stringify(context)}`);
 }
