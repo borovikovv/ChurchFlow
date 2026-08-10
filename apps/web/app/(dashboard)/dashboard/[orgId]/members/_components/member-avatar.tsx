@@ -1,3 +1,7 @@
+'use client';
+
+import { useState } from 'react';
+
 type MemberAvatarSize = 'sm' | 'md' | 'lg';
 
 const NO_AVATAR_ICON_PATH = '/icons/no-avatar.svg';
@@ -18,27 +22,22 @@ export function MemberAvatar({
   size?: MemberAvatarSize;
 }) {
   const sizeClass = avatarSizeClasses[size];
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const imageLoadFailed = Boolean(url && failedUrl === url);
 
-  if (url) {
-    return (
-      // Signed private URLs are short-lived and cannot use a stable Next image loader.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        className={`${sizeClass} shrink-0 rounded-full object-cover`}
-        src={url}
-        alt={displayName}
-      />
-    );
-  }
+  const imageUrl = url && !imageLoadFailed ? url : NO_AVATAR_ICON_PATH;
 
   return (
     // eslint requires the same exception here because this route already renders avatars with img.
     // eslint-disable-next-line @next/next/no-img-element
     <img
       className={`${sizeClass} shrink-0 rounded-full object-cover`}
-      src={NO_AVATAR_ICON_PATH}
-      alt=""
-      aria-hidden="true"
+      src={imageUrl}
+      alt={url && !imageLoadFailed ? displayName : ''}
+      aria-hidden={!url || imageLoadFailed ? 'true' : undefined}
+      onError={() => {
+        if (url && imageUrl !== NO_AVATAR_ICON_PATH) setFailedUrl(url);
+      }}
     />
   );
 }
