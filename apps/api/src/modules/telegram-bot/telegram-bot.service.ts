@@ -672,9 +672,7 @@ function chunkTelegramHtmlBlocks(
   let previousBlockWasService = false;
 
   blocks.forEach((block) => {
-    const nextBlockIsMonth = block.kind === 'month';
-    const separator =
-      previousBlockWasService && !nextBlockIsMonth ? `\n\n${SERVICE_SEPARATOR}` : '';
+    const separator = previousBlockWasService ? `\n\n${SERVICE_SEPARATOR}` : '';
     const candidate = `${current}${separator}\n\n${block.text}`;
 
     if (candidate.length <= limit || current.length === 0) {
@@ -684,7 +682,7 @@ function chunkTelegramHtmlBlocks(
       current = block.text;
     }
 
-    previousBlockWasService = !nextBlockIsMonth;
+    previousBlockWasService = block.kind === 'service';
   });
 
   if (current.length > 0) messages.push(current);

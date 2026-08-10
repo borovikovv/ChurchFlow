@@ -38,6 +38,7 @@ export function DateRangeInput({
           aria-describedby={errorId}
           aria-invalid={invalid ? 'true' : 'false'}
           calendarClassName={styles['calendar'] ?? ''}
+          calendarStartDay={1}
           className={styles['input'] ?? ''}
           dateFormat="MM/dd/yyyy"
           disabled={disabled}
