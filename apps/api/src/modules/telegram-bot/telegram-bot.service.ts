@@ -70,8 +70,15 @@ interface ServiceScheduleMessageBlock {
 }
 
 interface ServiceScheduleMessages {
+  biblePassageLabel: string;
   emptySchedule: string;
   heading: string;
+}
+
+interface TelegramLocaleConfig {
+  intlLocale: string;
+  serviceDateOrder: 'day-month' | 'month-day';
+  serviceSchedule: ServiceScheduleMessages;
 }
 
 interface TelegramApiResponse<T> {
@@ -80,6 +87,27 @@ interface TelegramApiResponse<T> {
   error_code?: number;
   description?: string;
 }
+
+const TELEGRAM_LOCALE_CONFIG = {
+  en: {
+    intlLocale: 'en-US',
+    serviceDateOrder: 'month-day',
+    serviceSchedule: {
+      biblePassageLabel: 'Bible passage',
+      emptySchedule: 'No services were found for this month and next month.',
+      heading: 'Service schedule',
+    },
+  },
+  uk: {
+    intlLocale: 'uk-UA',
+    serviceDateOrder: 'day-month',
+    serviceSchedule: {
+      biblePassageLabel: 'Уривок',
+      emptySchedule: 'На цей і наступний місяць служінь не знайдено.',
+      heading: 'Графік служінь',
+    },
+  },
+} as const satisfies Record<AppLocale, TelegramLocaleConfig>;
 
 @Injectable()
 export class TelegramBotService {
@@ -560,10 +588,20 @@ function formatServiceBlock(service: UpcomingServiceRecord, locale: AppLocale): 
   return [
     `<b>${escapeTelegramHtml(formatServiceDateTime(service.startsAt, locale))}</b>`,
     escapeTelegramHtml(service.title),
+    formatBiblePassage(service, locale),
     formatParticipants(service, locale),
   ]
     .filter((line): line is string => Boolean(line))
     .join('\n\n');
+}
+
+function formatBiblePassage(service: UpcomingServiceRecord, locale: AppLocale): string | null {
+  const biblePassage = service.serviceDetails?.biblePassage?.trim();
+  if (!biblePassage) return null;
+
+  return `<b>${escapeTelegramHtml(
+    serviceScheduleMessages(locale).biblePassageLabel,
+  )}:</b> ${escapeTelegramHtml(biblePassage)}`;
 }
 
 function chunkTelegramHtmlBlocks(
@@ -617,8 +655,9 @@ function formatMonthHeadingBlock(value: Date, locale: AppLocale): string {
 }
 
 function formatServiceDateTime(value: Date, locale: AppLocale): string {
+  const config = telegramLocaleConfig(locale);
   const parts = Object.fromEntries(
-    new Intl.DateTimeFormat(intlLocale(locale), {
+    new Intl.DateTimeFormat(config.intlLocale, {
       weekday: 'short',
       day: 'numeric',
       month: 'long',
@@ -637,9 +676,9 @@ function formatServiceDateTime(value: Date, locale: AppLocale): string {
   const hour = parts['hour'] ?? '00';
   const minute = parts['minute'] ?? '00';
 
-  return locale === 'uk'
-    ? `${weekday}, ${day} ${month} · ${hour}:${minute}`
-    : `${weekday}, ${month} ${day} · ${hour}:${minute}`;
+  const dateText = config.serviceDateOrder === 'day-month' ? `${day} ${month}` : `${month} ${day}`;
+
+  return `${weekday}, ${dateText} · ${hour}:${minute}`;
 }
 
 function capitalizeLocale(value: string, locale: AppLocale): string {
@@ -653,25 +692,28 @@ function escapeTelegramHtml(value: string): string {
 }
 
 function appLocaleOrFallback(locale: string | null | undefined): AppLocale {
-  return locale === 'uk' ? 'uk' : DEFAULT_APP_LOCALE;
+  if (isTelegramAppLocale(locale)) return locale;
+
+  return DEFAULT_APP_LOCALE;
 }
 
 function intlLocale(locale: AppLocale): string {
-  return locale === 'uk' ? 'uk-UA' : 'en-US';
+  return telegramLocaleConfig(locale).intlLocale;
 }
 
 function serviceScheduleMessages(locale: AppLocale): ServiceScheduleMessages {
-  if (locale === 'uk') {
-    return {
-      emptySchedule: 'На цей і наступний місяць служінь не знайдено.',
-      heading: 'Графік служінь',
-    };
-  }
+  return telegramLocaleConfig(locale).serviceSchedule;
+}
 
-  return {
-    emptySchedule: 'No services were found for this month and next month.',
-    heading: 'Service schedule',
-  };
+function telegramLocaleConfig(locale: AppLocale): TelegramLocaleConfig {
+  return TELEGRAM_LOCALE_CONFIG[locale];
+}
+
+function isTelegramAppLocale(locale: string | null | undefined): locale is AppLocale {
+  return (
+    typeof locale === 'string' &&
+    Object.prototype.hasOwnProperty.call(TELEGRAM_LOCALE_CONFIG, locale)
+  );
 }
 
 function serviceScheduleRange(now: Date): { rangeStart: Date; rangeEnd: Date } {
