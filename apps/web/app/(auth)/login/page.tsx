@@ -16,7 +16,7 @@ export default async function LoginPage({
   const messages = getMessages(DEFAULT_APP_LOCALE);
 
   return (
-    <main className="section">
+    <main className="section auth-section">
       <div className="shell stack auth-panel">
         <Image
           alt="ChurchFlow"

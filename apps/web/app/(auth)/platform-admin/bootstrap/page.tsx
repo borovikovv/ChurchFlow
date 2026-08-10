@@ -34,9 +34,7 @@ async function consumeBootstrap(formData: FormData) {
   }
 
   const params = new URLSearchParams({ token, error: result.error.message });
-  redirect(
-    `/platform-admin/bootstrap?${params.toString()}` as Route,
-  );
+  redirect(`/platform-admin/bootstrap?${params.toString()}` as Route);
 }
 
 export default async function PlatformAdminBootstrapPage({
@@ -56,8 +54,8 @@ export default async function PlatformAdminBootstrapPage({
   const isSignedIn = await hasServerSession();
 
   return (
-    <main className="section">
-      <div className="shell stack auth-panel">
+    <main className="section auth-section">
+      <div className="shell stack auth-panel auth-flow-panel">
         <h1>Platform administrator bootstrap</h1>
         {error ? <p className="form-error">{error}</p> : null}
         {!token || !state?.valid ? (
@@ -68,8 +66,8 @@ export default async function PlatformAdminBootstrapPage({
         ) : (
           <>
             <p>
-              Continue with Telegram to create the first platform super administrator. This
-              one-time bootstrap expires at {new Date(state.expiresAt ?? '').toLocaleString()}.
+              Continue with Telegram to create the first platform super administrator. This one-time
+              bootstrap expires at {new Date(state.expiresAt ?? '').toLocaleString()}.
             </p>
             {isSignedIn ? (
               <form action={consumeBootstrap}>

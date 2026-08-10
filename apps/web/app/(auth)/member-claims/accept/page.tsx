@@ -2,7 +2,9 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { redirect } from 'next/navigation';
 import { apiFetch } from '@/api/client';
-import { hasServerSession } from '@/auth/session';
+import { getCurrentUser } from '@/auth/session';
+import { DEFAULT_APP_LOCALE } from '@/i18n/locales';
+import { getMessages } from '@/i18n/messages';
 
 interface ClaimValidation {
   valid: boolean;
@@ -36,23 +38,29 @@ export default async function MembershipClaimAcceptPage({
       )
     : null;
   const claim = result?.ok ? result.data : null;
-  const signedIn = await hasServerSession();
+  const user = await getCurrentUser();
+  const messages = getMessages(user?.locale ?? DEFAULT_APP_LOCALE).auth;
 
   return (
-    <main className="section">
-      <div className="shell stack">
-        <h1>Request organization access</h1>
+    <main className="section auth-section">
+      <div className="shell stack auth-flow-panel">
+        <h1>{messages.requestOrganizationAccess}</h1>
         {error ? <p className="form-error">{error}</p> : null}
         {!token || !claim?.valid ? (
-          <p>This access link is invalid, expired, or no longer available.</p>
+          <p>{messages.accessLinkUnavailable}</p>
         ) : (
           <>
-            <p>An administrator of {claim.organizationName} prepared a member account for you.</p>
-            {signedIn ? (
+            <p>
+              {messages.memberAccountPrepared.replace(
+                '{organization}',
+                claim.organizationName ?? '',
+              )}
+            </p>
+            {user ? (
               <form action={requestAccess}>
                 <input type="hidden" name="token" value={token} />
                 <button className="button" type="submit">
-                  Request access
+                  {messages.requestAccess}
                 </button>
               </form>
             ) : (
@@ -60,7 +68,7 @@ export default async function MembershipClaimAcceptPage({
                 className="button"
                 href={`/login?redirectTo=${encodeURIComponent(`/member-claims/accept?token=${token}`)}`}
               >
-                Continue with Telegram
+                {messages.continueWithTelegram}
               </Link>
             )}
           </>

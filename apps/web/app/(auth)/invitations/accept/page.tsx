@@ -2,7 +2,9 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { redirect } from 'next/navigation';
 import { apiFetch } from '@/api/client';
-import { hasServerSession } from '@/auth/session';
+import { getCurrentUser } from '@/auth/session';
+import { DEFAULT_APP_LOCALE } from '@/i18n/locales';
+import { getMessages } from '@/i18n/messages';
 
 interface InvitationValidation {
   valid: boolean;
@@ -22,6 +24,14 @@ interface AcceptInvitationResult {
 async function acceptInvitation(formData: FormData) {
   'use server';
   const token = String(formData.get('token'));
+  const redirectTo = invitationAcceptRoute(token);
+  const messages = getMessages(DEFAULT_APP_LOCALE).auth;
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect(loginRouteForInvitation(token, messages.signInBeforeAcceptingInvitation));
+  }
+
   const result = await apiFetch<AcceptInvitationResult>('/invitations/accept', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -31,58 +41,60 @@ async function acceptInvitation(formData: FormData) {
   if (result.ok) {
     redirect(result.data.redirectTo as Route);
   }
+
+  redirect(`${redirectTo}&error=${encodeURIComponent(result.error.message)}` as Route);
 }
 
 export default async function AcceptInvitationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: string; error?: string }>;
 }) {
-  const { token } = await searchParams;
+  const { token, error } = await searchParams;
   const result = token
     ? await apiFetch<InvitationValidation>(
         `/invitations/validate?token=${encodeURIComponent(token)}`,
       )
     : null;
   const invitation = result?.ok ? result.data : null;
-  const isSignedIn = await hasServerSession();
+  const user = await getCurrentUser();
+  const messages = getMessages(user?.locale ?? DEFAULT_APP_LOCALE).auth;
 
   return (
-    <main className="section">
-      <div className="shell stack max-w-[75%]">
-        <h1>Invitation</h1>
+    <main className="section auth-section">
+      <div className="shell stack auth-flow-panel">
+        <h1>{messages.invitationTitle}</h1>
+        {error ? <p className="form-error">{error}</p> : null}
         {!token || !invitation?.valid ? (
-          <p>This invitation is invalid or no longer available.</p>
+          <p>{messages.invitationUnavailable}</p>
         ) : (
           <>
-            <p>
-              You must accept this invitation before organization dashboard content is available.
-            </p>
+            <p>{messages.invitationDescription}</p>
             <dl className="details">
-              <dt>Organization</dt>
+              <dt>{messages.organization}</dt>
               <dd>{invitation.organizationName}</dd>
-              <dt>Invitation type</dt>
+              <dt>{messages.invitationType}</dt>
               <dd>
                 {invitation.mode === 'claimable_link'
-                  ? 'Claimable Telegram link'
-                  : 'Targeted Telegram invite'}
+                  ? messages.claimableTelegramLink
+                  : messages.targetedTelegramInvite}
               </dd>
-              <dt>Role</dt>
+              <dt>{messages.role}</dt>
               <dd>{invitation.role}</dd>
             </dl>
-            {isSignedIn ? (
+            {user ? (
               <form action={acceptInvitation}>
                 <input type="hidden" name="token" value={token} />
                 <button className="button" type="submit">
-                  Accept invitation
+                  {messages.acceptInvitation}
                 </button>
               </form>
             ) : (
               <Link
-                className="button max-w-75"
-                href={`/login?redirectTo=${encodeURIComponent(`/invitations/accept?token=${token}`)}`}
+                className="button"
+                href={loginRouteForInvitation(token, messages.signInBeforeAcceptingInvitation)}
               >
-                Sign in or create an account
+                {messages.signInOrCreateAccount}
               </Link>
             )}
           </>
@@ -90,4 +102,17 @@ export default async function AcceptInvitationPage({
       </div>
     </main>
   );
+}
+
+function invitationAcceptRoute(token: string): Route {
+  return `/invitations/accept?token=${encodeURIComponent(token)}` as Route;
+}
+
+function loginRouteForInvitation(token: string, error: string): Route {
+  const params = new URLSearchParams({
+    redirectTo: invitationAcceptRoute(token),
+    error,
+  });
+
+  return `/login?${params.toString()}` as Route;
 }

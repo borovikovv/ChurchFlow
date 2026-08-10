@@ -5,6 +5,8 @@ import type { Route } from 'next';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { PhoneInputField } from '@/components/ui/phone-input-field';
+import { DEFAULT_APP_LOCALE } from '@/i18n/locales';
+import { getMessages } from '@/i18n/messages';
 import { APP_ROUTES } from '@/routes';
 
 async function submitOrganizationRequest(formData: FormData) {
@@ -48,41 +50,39 @@ export default async function OrganizationRequestPage({
     );
   }
   const { error } = await searchParams;
+  const messages = getMessages(user.locale ?? DEFAULT_APP_LOCALE).organizationRequest;
 
   return (
-    <main className="page-content stack">
-      <PageHeader
-        title="Request an organization"
-        description="Tell us about your organization. A platform administrator will review the request."
-      />
+    <main className="page-content stack organization-request-page">
+      <PageHeader title={messages.title} description={messages.description} />
       <div className="content-narrow stack">
         {error ? <p className="form-error">{error}</p> : null}
         <form className="form-grid" action={submitOrganizationRequest}>
           <label>
-            Organization name
+            {messages.organizationName}
             <input name="organizationName" required minLength={2} maxLength={160} />
           </label>
           <label>
-            Desired slug
-            <input name="organizationSlug" placeholder="grace-community" maxLength={80} />
+            {messages.desiredSlug}
+            <input name="organizationSlug" placeholder={messages.slugPlaceholder} maxLength={80} />
           </label>
           <label>
-            Contact name
+            {messages.contactName}
             <input name="contactName" required minLength={2} maxLength={160} />
           </label>
           <label>
-            Contact email
+            {messages.contactEmail}
             <input name="contactEmail" type="email" maxLength={255} />
           </label>
           <label>
-            Contact phone
+            {messages.contactPhone}
             <PhoneInputField name="contactPhone" />
           </label>
           <label>
-            Message
+            {messages.message}
             <textarea name="message" maxLength={2000} rows={5} />
           </label>
-          <Button type="submit">Submit request</Button>
+          <Button type="submit">{messages.submitRequest}</Button>
         </form>
       </div>
     </main>

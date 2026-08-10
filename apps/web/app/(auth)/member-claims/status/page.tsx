@@ -1,7 +1,9 @@
 import { apiFetch } from '@/api/client';
-import { requireServerSession } from '@/auth/session';
+import { getCurrentUser, requireServerSession } from '@/auth/session';
 import { ButtonLink } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { DEFAULT_APP_LOCALE } from '@/i18n/locales';
+import { getMessages } from '@/i18n/messages';
 
 interface ClaimStatus {
   id: string;
@@ -15,28 +17,30 @@ interface ClaimStatus {
 
 export default async function MembershipClaimStatusPage() {
   await requireServerSession('/member-claims/status');
+  const user = await getCurrentUser();
+  const messages = getMessages(user?.locale ?? DEFAULT_APP_LOCALE).auth;
   const result = await apiFetch<ClaimStatus[]>('/membership-claims/status');
   const claims = result.ok ? result.data : [];
 
   return (
-    <main className="section">
-      <div className="shell stack">
-        <h1>App access requests</h1>
+    <main className="section auth-section">
+      <div className="shell stack auth-flow-panel">
+        <h1>{messages.appAccessRequests}</h1>
         {!result.ok ? <p className="form-error">{result.error.message}</p> : null}
-        {claims.length === 0 ? <p>You have no membership access requests.</p> : null}
+        {claims.length === 0 ? <p>{messages.noMembershipAccessRequests}</p> : null}
         {claims.map((claim) => (
           <article className="form-grid" key={claim.id}>
             <strong>{claim.membership.organization.name}</strong>
             <StatusBadge status={claim.status} />
             {claim.status === 'REQUESTED' ? (
-              <p>Waiting for an organization administrator.</p>
+              <p>{messages.waitingForOrganizationAdministrator}</p>
             ) : null}
             {claim.status === 'APPROVED' ? (
               <ButtonLink href={`/dashboard/${claim.membership.organizationId}`}>
-                Open dashboard
+                {messages.openDashboard}
               </ButtonLink>
             ) : null}
-            {claim.status === 'REJECTED' ? <p>Your request was rejected.</p> : null}
+            {claim.status === 'REJECTED' ? <p>{messages.requestRejected}</p> : null}
           </article>
         ))}
       </div>
