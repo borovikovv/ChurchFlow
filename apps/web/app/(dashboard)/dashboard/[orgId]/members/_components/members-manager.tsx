@@ -185,7 +185,7 @@ export function MembersManager({
   return (
     <>
       <div className="flex flex-col justify-between gap-3 md:flex-row">
-        <div className="flex min-w-0 flex-1 flex-col gap-2 md:max-w-1/3 w-full">
+        <div className="flex w-full min-w-0 flex-col gap-2 md:w-[492px] md:max-w-full md:flex-none">
           <MemberSearchInput
             label={t('searchByName')}
             placeholder={t('searchByNamePlaceholder')}
