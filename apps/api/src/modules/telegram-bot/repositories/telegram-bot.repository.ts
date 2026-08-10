@@ -130,6 +130,7 @@ export class TelegramBotRepository {
         username: true,
         user: {
           select: {
+            locale: true,
             notificationPreferences: {
               select: {
                 telegramEnabled: true,

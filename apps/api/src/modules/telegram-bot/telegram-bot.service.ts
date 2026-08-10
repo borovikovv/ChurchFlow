@@ -2,7 +2,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import { ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
-  CALENDAR_SERVICE_ROLE_LABELS,
+  CALENDAR_SERVICE_ROLE_LABELS_BY_LOCALE,
+  DEFAULT_APP_LOCALE,
+  type AppLocale,
   type CalendarServiceRole,
   type NotificationPreferences,
   type TelegramNotificationLink,
@@ -65,6 +67,11 @@ interface TelegramSendMessageOptions {
 interface ServiceScheduleMessageBlock {
   kind: 'month' | 'service';
   text: string;
+}
+
+interface ServiceScheduleMessages {
+  emptySchedule: string;
+  heading: string;
 }
 
 interface TelegramApiResponse<T> {
@@ -277,7 +284,12 @@ export class TelegramBotService {
     const [organization] = organizations;
     if (!organization) return;
 
-    await this.sendServiceSchedule(chatId, binding.userId, organization.organizationId);
+    await this.sendServiceSchedule(
+      chatId,
+      binding.userId,
+      organization.organizationId,
+      binding.user.locale,
+    );
   }
 
   private async handleCallbackQuery(callbackQuery: TelegramCallbackQuery): Promise<void> {
@@ -302,7 +314,7 @@ export class TelegramBotService {
         return;
       }
 
-      await this.sendServiceSchedule(chatId, binding.userId, organizationId);
+      await this.sendServiceSchedule(chatId, binding.userId, organizationId, binding.user.locale);
     } finally {
       await this.answerCallbackQuery(callbackQueryId);
     }
@@ -312,6 +324,7 @@ export class TelegramBotService {
     chatId: string,
     userId: string,
     organizationId: string,
+    locale: string,
   ): Promise<void> {
     const { rangeStart, rangeEnd } = serviceScheduleRange(new Date());
     const services = await this.telegramBotRepository.listUpcomingServicesForOrganization({
@@ -320,12 +333,13 @@ export class TelegramBotService {
       rangeStart,
       rangeEnd,
     });
+    const appLocale = appLocaleOrFallback(locale);
     if (services.length === 0) {
-      await this.sendMessage(chatId, 'На цей і наступний місяць служінь не знайдено.');
+      await this.sendMessage(chatId, serviceScheduleMessages(appLocale).emptySchedule);
       return;
     }
 
-    for (const message of formatUpcomingServices(services)) {
+    for (const message of formatUpcomingServices(services, appLocale)) {
       await this.sendMessage(chatId, message, { parseMode: 'HTML' });
     }
   }
@@ -461,10 +475,13 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function formatUpcomingServices(services: UpcomingServiceRecord[]): string[] {
+function formatUpcomingServices(services: UpcomingServiceRecord[], locale: AppLocale): string[] {
   const organizationName = escapeTelegramHtml(services[0]?.organization.name ?? 'ChurchFlow');
-  const header = [`📅 <b>Графік служінь</b>`, organizationName].join('\n');
-  const blocks = serviceScheduleBlocks(services);
+  const header = [
+    `📅 <b>${escapeTelegramHtml(serviceScheduleMessages(locale).heading)}</b>`,
+    organizationName,
+  ].join('\n');
+  const blocks = serviceScheduleBlocks(services, locale);
 
   return chunkTelegramHtmlBlocks(header, blocks, SERVICE_SCHEDULE_MESSAGE_LIMIT);
 }
@@ -473,22 +490,22 @@ function isTelegramUpdate(value: unknown): value is TelegramUpdate {
   return typeof value === 'object' && value !== null;
 }
 
-function formatParticipants(service: UpcomingServiceRecord): string | null {
+function formatParticipants(service: UpcomingServiceRecord, locale: AppLocale): string | null {
   const participants = service.serviceDetails?.participants ?? [];
   if (participants.length === 0) return null;
 
   return participants
     .map(
       (participant) =>
-        `<b>${escapeTelegramHtml(formatServiceRole(participant.role))}:</b> ${escapeTelegramHtml(
+        `<b>${escapeTelegramHtml(formatServiceRole(participant.role, locale))}:</b> ${escapeTelegramHtml(
           participant.displayNameSnapshot ?? participant.customName ?? 'Guest',
         )}`,
     )
     .join('\n');
 }
 
-function formatServiceRole(role: CalendarServiceRole): string {
-  return CALENDAR_SERVICE_ROLE_LABELS[role];
+function formatServiceRole(role: CalendarServiceRole, locale: AppLocale): string {
+  return CALENDAR_SERVICE_ROLE_LABELS_BY_LOCALE[locale][role];
 }
 
 function notificationDetailUrl(url: string | null, notificationId: string | null): string | null {
@@ -519,28 +536,31 @@ function organizationSelectionMarkup(
   };
 }
 
-function serviceScheduleBlocks(services: UpcomingServiceRecord[]): ServiceScheduleMessageBlock[] {
+function serviceScheduleBlocks(
+  services: UpcomingServiceRecord[],
+  locale: AppLocale,
+): ServiceScheduleMessageBlock[] {
   const blocks: ServiceScheduleMessageBlock[] = [];
   let currentMonthKey: string | null = null;
 
   services.forEach((service) => {
     const monthKey = formatServiceMonthKey(service.startsAt);
     if (monthKey !== currentMonthKey) {
-      blocks.push({ kind: 'month', text: formatMonthHeadingBlock(service.startsAt) });
+      blocks.push({ kind: 'month', text: formatMonthHeadingBlock(service.startsAt, locale) });
       currentMonthKey = monthKey;
     }
 
-    blocks.push({ kind: 'service', text: formatServiceBlock(service) });
+    blocks.push({ kind: 'service', text: formatServiceBlock(service, locale) });
   });
 
   return blocks;
 }
 
-function formatServiceBlock(service: UpcomingServiceRecord): string {
+function formatServiceBlock(service: UpcomingServiceRecord, locale: AppLocale): string {
   return [
-    `<b>${escapeTelegramHtml(formatServiceDateTime(service.startsAt))}</b>`,
+    `<b>${escapeTelegramHtml(formatServiceDateTime(service.startsAt, locale))}</b>`,
     escapeTelegramHtml(service.title),
-    formatParticipants(service),
+    formatParticipants(service, locale),
   ]
     .filter((line): line is string => Boolean(line))
     .join('\n\n');
@@ -582,23 +602,23 @@ function formatServiceMonthKey(value: Date): string {
   return `${String(parts.year)}-${String(parts.month).padStart(2, '0')}`;
 }
 
-function formatServiceMonthHeading(value: Date): string {
-  const formatter = new Intl.DateTimeFormat('uk-UA', {
+function formatServiceMonthHeading(value: Date, locale: AppLocale): string {
+  const formatter = new Intl.DateTimeFormat(intlLocale(locale), {
     month: 'long',
     year: 'numeric',
     timeZone: SERVICE_SCHEDULE_TIME_ZONE,
   });
 
-  return formatter.format(value).toLocaleUpperCase('uk-UA');
+  return formatter.format(value).toLocaleUpperCase(intlLocale(locale));
 }
 
-function formatMonthHeadingBlock(value: Date): string {
-  return `<b>${escapeTelegramHtml(formatServiceMonthHeading(value))}</b>`;
+function formatMonthHeadingBlock(value: Date, locale: AppLocale): string {
+  return `<b>${escapeTelegramHtml(formatServiceMonthHeading(value, locale))}</b>`;
 }
 
-function formatServiceDateTime(value: Date): string {
+function formatServiceDateTime(value: Date, locale: AppLocale): string {
   const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('uk-UA', {
+    new Intl.DateTimeFormat(intlLocale(locale), {
       weekday: 'short',
       day: 'numeric',
       month: 'long',
@@ -611,23 +631,47 @@ function formatServiceDateTime(value: Date): string {
       .filter((part) => part.type !== 'literal')
       .map((part) => [part.type, part.value]),
   );
-  const weekday = capitalizeUkrainian((parts['weekday'] ?? '').replace(/\.$/, ''));
+  const weekday = capitalizeLocale((parts['weekday'] ?? '').replace(/\.$/, ''), locale);
   const day = parts['day'] ?? '';
   const month = parts['month'] ?? '';
   const hour = parts['hour'] ?? '00';
   const minute = parts['minute'] ?? '00';
 
-  return `${weekday}, ${day} ${month} · ${hour}:${minute}`;
+  return locale === 'uk'
+    ? `${weekday}, ${day} ${month} · ${hour}:${minute}`
+    : `${weekday}, ${month} ${day} · ${hour}:${minute}`;
 }
 
-function capitalizeUkrainian(value: string): string {
+function capitalizeLocale(value: string, locale: AppLocale): string {
   if (!value) return value;
 
-  return `${value.slice(0, 1).toLocaleUpperCase('uk-UA')}${value.slice(1)}`;
+  return `${value.slice(0, 1).toLocaleUpperCase(intlLocale(locale))}${value.slice(1)}`;
 }
 
 function escapeTelegramHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function appLocaleOrFallback(locale: string | null | undefined): AppLocale {
+  return locale === 'uk' ? 'uk' : DEFAULT_APP_LOCALE;
+}
+
+function intlLocale(locale: AppLocale): string {
+  return locale === 'uk' ? 'uk-UA' : 'en-US';
+}
+
+function serviceScheduleMessages(locale: AppLocale): ServiceScheduleMessages {
+  if (locale === 'uk') {
+    return {
+      emptySchedule: 'На цей і наступний місяць служінь не знайдено.',
+      heading: 'Графік служінь',
+    };
+  }
+
+  return {
+    emptySchedule: 'No services were found for this month and next month.',
+    heading: 'Service schedule',
+  };
 }
 
 function serviceScheduleRange(now: Date): { rangeStart: Date; rangeEnd: Date } {

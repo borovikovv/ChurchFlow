@@ -52,6 +52,19 @@ export const CALENDAR_SERVICE_ROLE_LABELS = {
   COMMUNION_LEAD: 'Communion',
 } as const satisfies Record<(typeof CALENDAR_SERVICE_ROLES)[number], string>;
 
+export const CALENDAR_SERVICE_ROLE_LABELS_BY_LOCALE = {
+  en: CALENDAR_SERVICE_ROLE_LABELS,
+  uk: {
+    PREACHER: 'Проповідник',
+    SERVICE_HOST: 'Ведучий',
+    WORSHIP_LEAD: 'Прославлення',
+    COMMUNION_LEAD: 'Причастя',
+  },
+} as const satisfies Record<
+  (typeof APP_LOCALES)[number],
+  Record<(typeof CALENDAR_SERVICE_ROLES)[number], string>
+>;
+
 export const NOTIFICATION_TYPES = [
   'TASK_ASSIGNED',
   'TASK_UPDATED',
