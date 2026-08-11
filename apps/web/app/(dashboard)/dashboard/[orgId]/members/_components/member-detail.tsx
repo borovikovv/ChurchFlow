@@ -39,10 +39,7 @@ export function MemberDetail({
   const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
   const canEditProfile = canManage || member.id === payload.actorMembershipId;
   const canEditRelationships = canManage || member.id === payload.actorMembershipId;
-  const memberCandidates = payload.members.map(({ id, profile }) => ({
-    id,
-    displayName: profile.displayName,
-  }));
+  const memberCandidates = payload.memberCandidates;
 
   function updateProfile(updates: MemberProfileUpdate) {
     const { ministries, ...profileUpdates } = updates;
