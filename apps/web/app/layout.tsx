@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { Suspense } from 'react';
 import { getCurrentUser, hasServerSession } from '@/auth/session';
@@ -10,6 +10,7 @@ import {
 } from '@/features/organizations/server/access';
 import { PublicAppHeader } from '@/components/public-app-header';
 import { QueryProvider } from '@/components/query-provider';
+import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
 import { ToastProvider } from '@/components/toast-provider';
 import { DEFAULT_APP_LOCALE, isAppLocale } from '@/i18n/locales';
 import { getMessages } from '@/i18n/messages';
@@ -21,10 +22,16 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'ChurchFlow',
   description: 'Multi-tenant organization websites and administration',
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: '/icons/favicon.png',
     shortcut: '/icons/favicon.png',
+    apple: '/icons/apple-touch-icon.png',
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0969da',
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -58,6 +65,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <Suspense>
               <ToastProvider />
             </Suspense>
+            <ServiceWorkerRegistration />
           </QueryProvider>
         </NextIntlClientProvider>
       </body>

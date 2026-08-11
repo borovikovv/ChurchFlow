@@ -3,10 +3,16 @@ const PUBLIC_EXACT_PATHS = new Set([
   '/login',
   '/invitations/accept',
   '/member-claims/accept',
+  '/offline',
   '/platform-admin/bootstrap',
 ]);
 
-const STATIC_EXACT_PATHS = new Set(['/favicon.ico', '/robots.txt', '/sitemap.xml']);
+const STATIC_EXACT_PATHS = new Set([
+  '/favicon.ico',
+  '/manifest.webmanifest',
+  '/robots.txt',
+  '/sitemap.xml',
+]);
 const STATIC_FILE_PATTERN =
   /\.(?:avif|css|eot|gif|ico|jpe?g|js|json|map|png|svg|ttf|webp|woff2?)$/i;
 

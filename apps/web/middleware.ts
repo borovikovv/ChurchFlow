@@ -76,7 +76,7 @@ function unauthenticatedResponse(
 
 export const config = {
   matcher: [
-    '/((?!api(?:/|$)|v1(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|robots\\.txt$|sitemap\\.xml$|.*\\.(?:avif|css|eot|gif|ico|jpe?g|js|json|map|png|svg|ttf|webp|woff2?)$).*)',
+    '/((?!api(?:/|$)|v1(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|manifest\\.webmanifest$|robots\\.txt$|sitemap\\.xml$|.*\\.(?:avif|css|eot|gif|ico|jpe?g|js|json|map|png|svg|ttf|webp|woff2?)$).*)',
   ],
 };
 

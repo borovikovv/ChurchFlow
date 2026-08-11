@@ -49,7 +49,7 @@ export function AppShell({
   const pathname = usePathname();
   const t = useTranslations('navigation');
   const commonT = useTranslations('common');
-  if (pathname === '/o' || pathname.startsWith('/o/')) {
+  if (pathname === '/offline' || pathname === '/o' || pathname.startsWith('/o/')) {
     return <>{children}</>;
   }
 
