@@ -17,7 +17,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'any',
       },
       {
-        src: '/icons/favicon.png',
+        src: '/icons/pwa-512x512.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
