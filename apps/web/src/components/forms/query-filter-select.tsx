@@ -11,6 +11,7 @@ export interface QueryFilterSelectOption {
 }
 
 export function QueryFilterSelect({
+  allowMobileKeyboard = false,
   label,
   labelClassName = 'filter-label',
   name,
@@ -19,6 +20,7 @@ export function QueryFilterSelect({
   value,
   preserveParams,
 }: {
+  allowMobileKeyboard?: boolean | undefined;
   label: string;
   labelClassName?: string;
   name: string;
@@ -51,6 +53,7 @@ export function QueryFilterSelect({
       label={label}
       labelClassName={labelClassName}
       name={name}
+      allowMobileKeyboard={allowMobileKeyboard}
       selectClassName="md:w-60 w-full max-w-full"
       size={size}
       value={value}

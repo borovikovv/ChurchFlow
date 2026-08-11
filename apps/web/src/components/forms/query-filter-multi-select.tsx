@@ -8,9 +8,11 @@ import {
   type SelectOption,
   type SelectSize,
 } from '@/components/forms/form-select';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import { FormField } from './form-field';
 
 export function QueryFilterMultiSelect({
+  allowMobileKeyboard = false,
   label,
   labelClassName = 'filter-label',
   name,
@@ -21,6 +23,7 @@ export function QueryFilterMultiSelect({
   size = 'medium',
   value,
 }: {
+  allowMobileKeyboard?: boolean | undefined;
   label: string;
   labelClassName?: string;
   name: string;
@@ -35,6 +38,8 @@ export function QueryFilterMultiSelect({
   const router = useRouter();
   const selectedOptions = options.filter((option) => value.includes(option.value));
   const maxMenuHeight = Math.min(280, Math.max(42, options.length * 40 + 8));
+  const isMobile = useIsMobile();
+  const isSearchable = allowMobileKeyboard || !isMobile;
 
   const updateFilter = (selected: MultiValue<SelectOption>) => {
     const params = new URLSearchParams();
@@ -61,6 +66,7 @@ export function QueryFilterMultiSelect({
           instanceId={id}
           isClearable
           isMulti
+          isSearchable={isSearchable}
           closeMenuOnSelect={false}
           maxMenuHeight={maxMenuHeight}
           menuPosition="fixed"

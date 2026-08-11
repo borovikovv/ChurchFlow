@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from 'react';
 import Select, { type SingleValue, type StylesConfig } from 'react-select';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import { FormField } from './form-field';
 
 export interface SelectOption {
@@ -38,6 +39,7 @@ type FormSelectProps = {
   size?: SelectSize | undefined;
   value?: string | number | readonly string[] | undefined;
   clearable?: boolean | undefined;
+  allowMobileKeyboard?: boolean | undefined;
 };
 
 type OptionElementProps = {
@@ -214,6 +216,7 @@ export function createSelectStyles<IsMulti extends boolean = false>(
 const selectStyles = createSelectStyles('default');
 
 export function FormSelect({
+  allowMobileKeyboard = false,
   label,
   error,
   children,
@@ -236,6 +239,8 @@ export function FormSelect({
   const selectedValue = value === undefined ? internalValue : stringValue(value);
   const selectedOption = options.find((option) => option.value === selectedValue) ?? null;
   const maxMenuHeight = Math.min(240, Math.max(42, options.length * 40 + 8));
+  const isMobile = useIsMobile();
+  const isSearchable = allowMobileKeyboard || !isMobile;
 
   return (
     <FormField label={label} error={error} className={className} labelClassName={labelClassName}>
@@ -250,6 +255,7 @@ export function FormSelect({
             isClearable={Boolean(clearable)}
             isDisabled={Boolean(disabled)}
             isOptionDisabled={(option) => Boolean(option.isDisabled)}
+            isSearchable={isSearchable}
             maxMenuHeight={maxMenuHeight}
             menuPosition="fixed"
             menuShouldScrollIntoView={false}
