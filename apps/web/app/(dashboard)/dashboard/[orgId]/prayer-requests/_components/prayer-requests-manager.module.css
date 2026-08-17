@@ -1,0 +1,159 @@
+.page {
+  display: flex;
+  min-height: calc(100dvh - 56px - clamp(40px, 6vw, 80px));
+  flex-direction: column;
+}
+
+.manager {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.tableShell {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.tableShell :global(.data-table-expanded-row td) {
+  background: #f6f8fa;
+}
+
+.tableShell :global(.data-table-expanded-row:last-child td) {
+  border-bottom: 0;
+}
+
+.tableShell :global(.data-table-expanded-content) {
+  overflow: hidden;
+  animation: expandedContentOpen 180ms ease-out;
+}
+
+.highlightHeader {
+  background: var(--surface-subtle);
+  color: var(--muted);
+}
+
+.requestColumn {
+  width: 40%;
+  min-width: 300px;
+}
+
+.authorColumn {
+  width: 20%;
+  max-width: 180px;
+  white-space: nowrap;
+}
+
+.dateColumn {
+  width: 20%;
+  max-width: 170px;
+  white-space: nowrap;
+}
+
+.statusColumn {
+  width: 10%;
+  max-width: 120px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.titleCell {
+  width: 100%;
+  min-width: 0;
+}
+
+.expandButton {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-height: 54px;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #edf0f2;
+  border-radius: var(--radius);
+  padding: 10px;
+  background: #fafbfc;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.expandButton:hover,
+.expandButton:focus-visible {
+  border-color: #e1e6eb;
+  background: #f4f6f8;
+  outline: none;
+}
+
+.chevron {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  margin-top: -1px;
+  place-items: center;
+  color: var(--accent-strong);
+  line-height: 1;
+}
+
+.chevron svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 160ms ease;
+}
+
+.summary {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.summaryTitle {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.summaryDescription {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.expandedContent {
+  max-width: 860px;
+  padding: 6px 0;
+}
+
+.expandedContent p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+}
+
+@keyframes expandedContentOpen {
+  from {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    max-height: 60dvh;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tableShell :global(.data-table-expanded-content) {
+    animation: none;
+  }
+}

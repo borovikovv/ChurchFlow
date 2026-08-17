@@ -45,6 +45,10 @@ import type {
   updateCalendarEventSchema,
   updateCalendarPreferencesSchema,
   toggleCalendarTaskCompletionSchema,
+  prayerRequestTabSchema,
+  listPrayerRequestsQuerySchema,
+  createPrayerRequestSchema,
+  updatePrayerRequestSchema,
   budgetGroupSchema,
   budgetCategoryTypeSchema,
   budgetEntryFieldSchema,
@@ -126,6 +130,10 @@ export type CreateCalendarEventInput = z.infer<typeof createCalendarEventSchema>
 export type UpdateCalendarEventInput = z.infer<typeof updateCalendarEventSchema>;
 export type UpdateCalendarPreferencesInput = z.infer<typeof updateCalendarPreferencesSchema>;
 export type ToggleCalendarTaskCompletionInput = z.infer<typeof toggleCalendarTaskCompletionSchema>;
+export type PrayerRequestTab = z.infer<typeof prayerRequestTabSchema>;
+export type ListPrayerRequestsQuery = z.infer<typeof listPrayerRequestsQuerySchema>;
+export type CreatePrayerRequestInput = z.infer<typeof createPrayerRequestSchema>;
+export type UpdatePrayerRequestInput = z.infer<typeof updatePrayerRequestSchema>;
 export type BudgetGroup = z.infer<typeof budgetGroupSchema>;
 export type BudgetCategoryType = z.infer<typeof budgetCategoryTypeSchema>;
 export type BudgetEntryField = z.infer<typeof budgetEntryFieldSchema>;
@@ -217,6 +225,44 @@ export interface CalendarEventsPayload {
   events: CalendarEventItem[];
   preferences: CalendarPreferences;
   members: CalendarMemberOption[];
+}
+
+export interface PrayerRequestAuthor {
+  membershipId: string | null;
+  userId: string | null;
+  displayName: string;
+}
+
+export interface PrayerRequestItem {
+  id: string;
+  organizationId: string;
+  title: string;
+  description: string;
+  author: PrayerRequestAuthor;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+  canEdit: boolean;
+  canDelete: boolean;
+  canArchive: boolean;
+  canRestore: boolean;
+}
+
+export interface PrayerRequestsPayload {
+  actorRole: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER' | null;
+  actorMembershipId: string | null;
+  tab: PrayerRequestTab;
+  items: PrayerRequestItem[];
+  counts: {
+    active: number;
+    archived: number;
+  };
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    pageCount: number;
+  };
 }
 
 export interface BudgetCurrencyTotals {

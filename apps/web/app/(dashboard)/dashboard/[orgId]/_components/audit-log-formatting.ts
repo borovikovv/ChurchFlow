@@ -12,9 +12,11 @@ export const AUDIT_ACTION_KEYS = [
   'CREATE_CALENDAR_EVENT',
   'CREATE_MANUAL_MEMBER',
   'CREATE_MEMBER_RELATIONSHIP',
+  'CREATE_PRAYER_REQUEST',
   'DELETE',
   'DELETE_CALENDAR_EVENT',
   'DELETE_MEMBER_RELATIONSHIP',
+  'DELETE_PRAYER_REQUEST',
   'INVITE',
   'MEMBERSHIP_CLAIM_CONFLICT',
   'PROMOTE_PLATFORM_ADMIN',
@@ -23,6 +25,7 @@ export const AUDIT_ACTION_KEYS = [
   'REMOVE_MEMBER',
   'RESEND',
   'RESTORE',
+  'RESTORE_PRAYER_REQUEST',
   'REVOKE',
   'REVOKED',
   'REQUEST_MEMBERSHIP_CLAIM',
@@ -32,6 +35,8 @@ export const AUDIT_ACTION_KEYS = [
   'UPDATE_MEMBER_PROFILE',
   'UPDATE_ORGANIZATION_LOGO',
   'UPDATE_ORGANIZATION_PROFILE',
+  'UPDATE_PRAYER_REQUEST',
+  'ARCHIVE_PRAYER_REQUEST',
 ] as const;
 
 const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
@@ -46,9 +51,11 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   CREATE_CALENDAR_EVENT: 'Calendar event created',
   CREATE_MANUAL_MEMBER: 'Member added',
   CREATE_MEMBER_RELATIONSHIP: 'Relationship added',
+  CREATE_PRAYER_REQUEST: 'Prayer request created',
   DELETE: 'Deleted',
   DELETE_CALENDAR_EVENT: 'Calendar event deleted',
   DELETE_MEMBER_RELATIONSHIP: 'Relationship deleted',
+  DELETE_PRAYER_REQUEST: 'Prayer request deleted',
   INVITE: 'Invitation sent',
   MEMBERSHIP_CLAIM_CONFLICT: 'Membership claim conflict recorded',
   PROMOTE_PLATFORM_ADMIN: 'Platform admin promoted',
@@ -57,6 +64,7 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   REMOVE_MEMBER: 'Member removed',
   RESEND: 'Invitation resent',
   RESTORE: 'Organization restored',
+  RESTORE_PRAYER_REQUEST: 'Prayer request restored',
   REVOKE: 'Invitation revoked',
   REVOKED: 'Membership claim revoked',
   REQUEST_MEMBERSHIP_CLAIM: 'Membership claim requested',
@@ -66,6 +74,8 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   UPDATE_MEMBER_PROFILE: 'Member profile updated',
   UPDATE_ORGANIZATION_LOGO: 'Organization logo updated',
   UPDATE_ORGANIZATION_PROFILE: 'Organization details updated',
+  UPDATE_PRAYER_REQUEST: 'Prayer request updated',
+  ARCHIVE_PRAYER_REQUEST: 'Prayer request archived',
 };
 
 export function createAuditDateFormatter(locale: string) {

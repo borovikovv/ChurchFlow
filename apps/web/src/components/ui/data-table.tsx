@@ -3,14 +3,17 @@
 import {
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type ExpandedState,
+  type Row,
   type SortingState,
 } from '@tanstack/react-table';
 import { usePathname, useRouter } from 'next/navigation';
 import type { Route } from 'next';
-import { useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { FormSelect } from '@/components/forms/form-select';
 
 export interface DataTableColumnMeta {
@@ -39,8 +42,11 @@ export function DataTable<TData>({
   getRowHref,
   emptyMessage = 'No results found.',
   frameClassName,
+  shellClassName,
   tableClassName,
   getRowClassName,
+  getRowCanExpand,
+  renderExpandedRow,
   pagination,
 }: {
   data: TData[];
@@ -48,20 +54,27 @@ export function DataTable<TData>({
   getRowHref?: (row: TData) => string;
   emptyMessage?: string;
   frameClassName?: string;
+  shellClassName?: string;
   tableClassName?: string;
   getRowClassName?: (row: TData) => string | undefined;
+  getRowCanExpand?: (row: Row<TData>) => boolean;
+  renderExpandedRow?: (row: Row<TData>) => ReactNode;
   pagination?: DataTablePagination | undefined;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
   const pageCount = pagination ? Math.max(1, Math.ceil(pagination.total / pagination.pageSize)) : 1;
   const table = useReactTable({
     data,
     columns,
-    state: { sorting },
+    state: { expanded, sorting },
+    onExpandedChange: setExpanded,
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+    ...(getRowCanExpand ? { getRowCanExpand } : {}),
     getSortedRowModel: getSortedRowModel(),
   });
 
@@ -71,7 +84,12 @@ export function DataTable<TData>({
 
   return (
     <div
-      className={pagination ? 'data-table-shell data-table-shell-paginated' : 'data-table-shell'}
+      className={[
+        pagination ? 'data-table-shell data-table-shell-paginated' : 'data-table-shell',
+        shellClassName ?? '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       <div className={frameClassName ? `data-table-frame ${frameClassName}` : 'data-table-frame'}>
         <table className={tableClassName ? `data-table ${tableClassName}` : 'data-table'}>
@@ -112,47 +130,55 @@ export function DataTable<TData>({
               const href = getRowHref?.(row.original);
               const rowClassName = getRowClassName?.(row.original);
               return (
-                <tr
-                  className={
-                    href && rowClassName
-                      ? `clickable-table-row ${rowClassName}`
-                      : href
-                        ? 'clickable-table-row'
-                        : rowClassName
-                  }
-                  key={row.id}
-                  onClick={
-                    href
-                      ? (event) => {
-                          if (isInteractiveTableTarget(event.target)) return;
-                          router.push(href as Route);
-                        }
-                      : undefined
-                  }
-                  onKeyDown={
-                    href
-                      ? (event) => {
-                          if (isInteractiveTableTarget(event.target)) return;
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
+                <Fragment key={row.id}>
+                  <tr
+                    className={
+                      href && rowClassName
+                        ? `clickable-table-row ${rowClassName}`
+                        : href
+                          ? 'clickable-table-row'
+                          : rowClassName
+                    }
+                    onClick={
+                      href
+                        ? (event) => {
+                            if (isInteractiveTableTarget(event.target)) return;
                             router.push(href as Route);
                           }
-                        }
-                      : undefined
-                  }
-                  role={href ? 'link' : undefined}
-                  tabIndex={href ? 0 : undefined}
-                >
-                  {row.getVisibleCells().map((cell) => {
-                    const meta = cell.column.columnDef.meta as DataTableColumnMeta | undefined;
+                        : undefined
+                    }
+                    onKeyDown={
+                      href
+                        ? (event) => {
+                            if (isInteractiveTableTarget(event.target)) return;
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              router.push(href as Route);
+                            }
+                          }
+                        : undefined
+                    }
+                    role={href ? 'link' : undefined}
+                    tabIndex={href ? 0 : undefined}
+                  >
+                    {row.getVisibleCells().map((cell) => {
+                      const meta = cell.column.columnDef.meta as DataTableColumnMeta | undefined;
 
-                    return (
-                      <td className={meta?.cellClassName} key={cell.id}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      return (
+                        <td className={meta?.cellClassName} key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  {row.getIsExpanded() && renderExpandedRow ? (
+                    <tr className="data-table-expanded-row">
+                      <td colSpan={row.getVisibleCells().length}>
+                        <div className="data-table-expanded-content">{renderExpandedRow(row)}</div>
                       </td>
-                    );
-                  })}
-                </tr>
+                    </tr>
+                  ) : null}
+                </Fragment>
               );
             })}
           </tbody>

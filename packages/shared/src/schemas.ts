@@ -16,6 +16,9 @@ import {
   MEMBER_PAGE_SIZE_OPTIONS,
   MEMBER_CSV_TEMPLATE_COLUMNS,
   NOTIFICATION_TYPES,
+  DEFAULT_PRAYER_REQUEST_PAGE_SIZE,
+  PRAYER_REQUEST_PAGE_SIZE_OPTIONS,
+  PRAYER_REQUEST_TABS,
   PUBLIC_SECTION_TYPES,
 } from './constants.js';
 
@@ -457,6 +460,38 @@ export const updateCalendarEventSchema = calendarEventInputSchema
 export const toggleCalendarTaskCompletionSchema = z.object({
   completed: z.boolean(),
 });
+
+export const prayerRequestTabSchema = z.enum(PRAYER_REQUEST_TABS);
+
+export const listPrayerRequestsQuerySchema = z.object({
+  tab: prayerRequestTabSchema.default('active'),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .refine(
+      (value): value is (typeof PRAYER_REQUEST_PAGE_SIZE_OPTIONS)[number] =>
+        PRAYER_REQUEST_PAGE_SIZE_OPTIONS.includes(
+          value as (typeof PRAYER_REQUEST_PAGE_SIZE_OPTIONS)[number],
+        ),
+      { message: 'Page size must be 10, 25, or 50' },
+    )
+    .default(DEFAULT_PRAYER_REQUEST_PAGE_SIZE),
+});
+
+export const createPrayerRequestSchema = z.object({
+  title: z.string().trim().min(2).max(160),
+  description: z.string().trim().min(2).max(5000),
+});
+
+export const updatePrayerRequestSchema = z
+  .object({
+    title: z.string().trim().min(2).max(160).optional(),
+    description: z.string().trim().min(2).max(5000).optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'At least one prayer request field is required',
+  });
 
 export const appLocaleSchema = z.enum(APP_LOCALES);
 

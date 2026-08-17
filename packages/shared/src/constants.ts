@@ -76,9 +76,16 @@ export const NOTIFICATION_TYPES = [
   'MEMBER_ADDED',
   'MEMBER_REMOVED',
   'ORGANIZATION_REQUEST_CREATED',
+  'PRAYER_REQUEST_CREATED',
   'BIRTHDAY_DIGEST',
   'ORGANIZATION_ANNOUNCEMENT',
 ] as const;
+
+export const PRAYER_REQUEST_TABS = ['active', 'archived'] as const;
+
+export const DEFAULT_PRAYER_REQUEST_PAGE_SIZE = 10;
+
+export const PRAYER_REQUEST_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 
 export const BUDGET_GROUPS = [
   'INCOME',

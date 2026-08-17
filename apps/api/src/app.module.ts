@@ -24,6 +24,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ScheduledJobsModule } from './modules/scheduled-jobs/scheduled-jobs.module';
 import { TelegramBotModule } from './modules/telegram-bot/telegram-bot.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
+import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { BudgetsModule } from './modules/budgets/budgets.module';
     MembershipsModule,
     MembershipClaimsModule,
     CalendarEventsModule,
+    PrayerRequestsModule,
     BudgetsModule,
     ScheduledJobsModule,
     NotificationsModule,

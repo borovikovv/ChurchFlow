@@ -7,6 +7,7 @@ import { InviteAppUserForm } from '@/components/members/invite-app-user-form';
 import { MemberActions, MemberRoleStatus } from '@/components/members/member-actions';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { DataTable } from '@/components/ui/data-table';
+import { createDataTablePagination } from '@/components/ui/data-table-pagination';
 import type { MembersPayload, OrganizationMember } from '../types';
 import { CreateMemberDialog } from './create-member-dialog';
 import { MemberCsvActions } from './member-csv-actions';
@@ -65,6 +66,7 @@ export function MembersManager({
   manageInvitation: ComponentProps<typeof InviteAppUserForm>['action'];
 } & MemberActionProps) {
   const t = useTranslations('members');
+  const paginationT = useTranslations('pagination');
   const [inviteFormKey, setInviteFormKey] = useState(0);
   const { data: payload, refresh: refreshMembers } = useMembersQuery({
     access: memberAccess,
@@ -301,17 +303,19 @@ export function MembersManager({
           data={members}
           emptyMessage={t('emptyFilter')}
           getRowHref={(member) => organizationMemberRoute(organizationId, member.id)}
-          pagination={{
-            firstPageLabel: t('firstPage'),
-            itemLabel: t('page'),
-            lastPageLabel: t('lastPage'),
-            nextPageLabel: t('nextPage'),
-            ofLabel: t('of'),
+          pagination={createDataTablePagination({
+            labels: {
+              firstPageLabel: paginationT('firstPage'),
+              itemLabel: paginationT('page'),
+              lastPageLabel: paginationT('lastPage'),
+              nextPageLabel: paginationT('nextPage'),
+              ofLabel: paginationT('of'),
+              pageSizeLabel: paginationT('itemsPerPage'),
+              previousPageLabel: paginationT('previousPage'),
+            },
             page: payload.pagination.page,
             pageSize: payload.pagination.pageSize,
-            pageSizeLabel: t('itemsPerPage'),
             pageSizeOptions: [...MEMBER_PAGE_SIZE_OPTIONS],
-            previousPageLabel: t('previousPage'),
             preserveParams: {
               access: preservedAccess,
               ministries: preservedMinistries,
@@ -319,7 +323,7 @@ export function MembersManager({
               type: preservedType,
             },
             total: payload.pagination.total,
-          }}
+          })}
           tableClassName="min-w-[860px]"
         />
       </section>

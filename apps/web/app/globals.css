@@ -125,6 +125,24 @@
     box-shadow: none;
     outline: none;
   }
+
+  input[aria-invalid='true'],
+  select[aria-invalid='true'],
+  textarea[aria-invalid='true'] {
+    border-color: var(--danger);
+    background: #fff5f5;
+    box-shadow: 0 0 0 1px rgba(207, 34, 46, 0.18);
+  }
+
+  input[aria-invalid='true']:focus,
+  input[aria-invalid='true']:focus-visible,
+  select[aria-invalid='true']:focus,
+  select[aria-invalid='true']:focus-visible,
+  textarea[aria-invalid='true']:focus,
+  textarea[aria-invalid='true']:focus-visible {
+    border-color: var(--danger-strong);
+    box-shadow: 0 0 0 3px rgba(207, 34, 46, 0.14);
+  }
 }
 
 @layer components {
@@ -995,6 +1013,12 @@
   }
 
   .status-off {
+    border-color: var(--line);
+    background: var(--surface-subtle);
+    color: var(--muted);
+  }
+
+  .status-archived {
     border-color: var(--line);
     background: var(--surface-subtle);
     color: var(--muted);

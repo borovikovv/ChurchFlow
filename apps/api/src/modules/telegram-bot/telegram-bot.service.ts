@@ -11,6 +11,7 @@ import {
 } from '@churchflow/shared';
 import {
   TelegramBotRepository,
+  type ActivePrayerRequestRecord,
   type ActiveTelegramOrganizationRecord,
   type TelegramNotificationDelivery,
   type UpcomingServiceRecord,
@@ -24,11 +25,15 @@ import {
 
 const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const TELEGRAM_API_BASE_URL = 'https://api.telegram.org';
-const SERVICES_MENU_BUTTON_TEXT = '📅 Графік служінь';
+const LEGACY_SERVICES_MENU_BUTTON_TEXT = '📅 Графік служінь';
+const LEGACY_PRAYER_REQUESTS_MENU_BUTTON_TEXT = '🙏 Молитовні потреби';
 const SERVICES_ORGANIZATION_CALLBACK_PREFIX = 'services_org:';
+const PRAYER_REQUESTS_ORGANIZATION_CALLBACK_PREFIX = 'prayers_org:';
 const SERVICE_SCHEDULE_TIME_ZONE = 'Europe/Kyiv';
 const SERVICE_SCHEDULE_MESSAGE_LIMIT = 3900;
 const SERVICE_SEPARATOR = '──────────────';
+const PRAYER_REQUESTS_MESSAGE_LIMIT = 3900;
+const PRAYER_REQUEST_DESCRIPTION_LIMIT = 1800;
 
 interface TelegramUpdate {
   message?: TelegramMessage;
@@ -81,10 +86,45 @@ interface ServiceScheduleMessages {
   heading: string;
 }
 
+interface TelegramMenuMessages {
+  prayerRequests: string;
+  services: string;
+}
+
+interface TelegramCommonMessages {
+  accountNotConnected: string;
+  chooseOrganization: string;
+  connectBeforeAction: string;
+  connectBeforePrayerRequests: string;
+  connectBeforeServices: string;
+  connected: string;
+  connectedStatus: string;
+  deliveryDisabled: string;
+  enabledFor: string;
+  helpCommandDescription: string;
+  helpHeading: string;
+  invalidConnectionLink: string;
+  noActiveOrganizations: string;
+  startLinkInstructions: string;
+  statusCommandDescription: string;
+  stopped: string;
+  stopCommandDescription: string;
+  unknownCommand: string;
+}
+
+interface PrayerRequestsMessages {
+  authorLabel: string;
+  empty: string;
+  heading: string;
+}
+
 type UpcomingServiceOccurrenceRecord = UpcomingServiceRecord;
 
 interface TelegramLocaleConfig {
+  common: TelegramCommonMessages;
   intlLocale: string;
+  menu: TelegramMenuMessages;
+  prayerRequests: PrayerRequestsMessages;
   serviceDateOrder: 'day-month' | 'month-day';
   serviceSchedule: ServiceScheduleMessages;
 }
@@ -98,7 +138,38 @@ interface TelegramApiResponse<T> {
 
 const TELEGRAM_LOCALE_CONFIG = {
   en: {
+    common: {
+      accountNotConnected: 'This Telegram account is not connected to ChurchFlow.',
+      chooseOrganization: 'Choose an organization:',
+      connectBeforeAction: 'Connect this bot in ChurchFlow before using this action.',
+      connectBeforePrayerRequests: 'Connect this bot in ChurchFlow before using /prayers.',
+      connectBeforeServices: 'Connect this bot in ChurchFlow before using /services.',
+      connected: 'Telegram notifications are connected to ChurchFlow.',
+      connectedStatus: 'Connected to ChurchFlow.',
+      deliveryDisabled: 'Telegram delivery is connected, but disabled in organization preferences.',
+      enabledFor: 'Enabled for',
+      helpCommandDescription: 'show this help',
+      helpHeading: 'ChurchFlow bot commands:',
+      invalidConnectionLink:
+        'This connection link is invalid or expired. Create a new link in ChurchFlow.',
+      noActiveOrganizations: 'You are not an active member of any organization.',
+      startLinkInstructions:
+        'Open ChurchFlow notification settings and tap Connect Telegram to link this bot.',
+      statusCommandDescription: 'connection status',
+      stopped: 'Telegram notifications are disabled.',
+      stopCommandDescription: 'disable Telegram notifications',
+      unknownCommand: 'Unknown command. Use /help to see available actions.',
+    },
     intlLocale: 'en-US',
+    menu: {
+      prayerRequests: '🙏 Prayer Requests',
+      services: '📅 Service Schedule',
+    },
+    prayerRequests: {
+      authorLabel: 'Requested by',
+      empty: 'There are no active prayer requests yet.',
+      heading: 'Prayer Requests',
+    },
     serviceDateOrder: 'month-day',
     serviceSchedule: {
       biblePassageLabel: 'Bible passage',
@@ -107,7 +178,38 @@ const TELEGRAM_LOCALE_CONFIG = {
     },
   },
   uk: {
+    common: {
+      accountNotConnected: 'Цей Telegram акаунт не підключений до ChurchFlow.',
+      chooseOrganization: 'Оберіть організацію:',
+      connectBeforeAction: 'Підключіть цей бот у ChurchFlow перед використанням цієї дії.',
+      connectBeforePrayerRequests: 'Підключіть цей бот у ChurchFlow перед використанням /prayers.',
+      connectBeforeServices: 'Підключіть цей бот у ChurchFlow перед використанням /services.',
+      connected: 'Telegram-сповіщення підключені до ChurchFlow.',
+      connectedStatus: 'Підключено до ChurchFlow.',
+      deliveryDisabled: 'Доставку в Telegram підключено, але вимкнено в налаштуваннях організації.',
+      enabledFor: 'Увімкнено для',
+      helpCommandDescription: 'показати цю довідку',
+      helpHeading: 'Команди бота ChurchFlow:',
+      invalidConnectionLink:
+        'Це посилання для підключення недійсне або протерміноване. Створіть нове посилання в ChurchFlow.',
+      noActiveOrganizations: 'Ви не є активним учасником жодної організації.',
+      startLinkInstructions:
+        'Відкрийте налаштування сповіщень ChurchFlow і натисніть Підключити Telegram.',
+      statusCommandDescription: 'статус підключення',
+      stopped: 'Telegram-сповіщення вимкнено.',
+      stopCommandDescription: 'вимкнути Telegram-сповіщення',
+      unknownCommand: 'Невідома команда. Використайте /help, щоб побачити доступні дії.',
+    },
     intlLocale: 'uk-UA',
+    menu: {
+      prayerRequests: '🙏 Молитовні потреби',
+      services: '📅 Графік служінь',
+    },
+    prayerRequests: {
+      authorLabel: 'Просить',
+      empty: 'Активних молитовних потреб поки немає.',
+      heading: 'Молитовні потреби',
+    },
     serviceDateOrder: 'day-month',
     serviceSchedule: {
       biblePassageLabel: 'Уривок',
@@ -204,8 +306,13 @@ export class TelegramBotService {
 
     if (!telegramUserId) return;
 
-    if (text === SERVICES_MENU_BUTTON_TEXT) {
+    if (isServicesMenuButton(text)) {
       await this.handleServices(chatId, telegramUserId);
+      return;
+    }
+
+    if (isPrayerRequestsMenuButton(text)) {
+      await this.handlePrayerRequests(chatId, telegramUserId);
       return;
     }
 
@@ -225,11 +332,14 @@ export class TelegramBotService {
       case '/services':
         await this.handleServices(chatId, telegramUserId);
         return;
+      case '/prayers':
+        await this.handlePrayerRequests(chatId, telegramUserId);
+        return;
       case '/help':
-        await this.sendHelp(chatId);
+        await this.sendHelp(chatId, telegramUserId);
         return;
       default:
-        await this.sendMessage(chatId, 'Unknown command. Use /help to see available actions.');
+        await this.sendMessage(chatId, telegramCommonMessages(DEFAULT_APP_LOCALE).unknownCommand);
     }
   }
 
@@ -242,7 +352,7 @@ export class TelegramBotService {
     if (!input.payload) {
       await this.sendMessage(
         input.chatId,
-        'Open ChurchFlow notification settings and tap Connect Telegram to link this bot.',
+        telegramCommonMessages(DEFAULT_APP_LOCALE).startLinkInstructions,
       );
       return;
     }
@@ -256,19 +366,25 @@ export class TelegramBotService {
     if (!binding) {
       await this.sendMessage(
         input.chatId,
-        'This connection link is invalid or expired. Create a new link in ChurchFlow.',
+        telegramCommonMessages(DEFAULT_APP_LOCALE).invalidConnectionLink,
       );
       return;
     }
 
-    await this.sendMessage(input.chatId, 'Telegram notifications are connected to ChurchFlow.', {
-      replyMarkup: mainMenuReplyMarkup(),
+    const appLocale = appLocaleOrFallback(binding.user.locale);
+    await this.sendMessage(input.chatId, telegramCommonMessages(appLocale).connected, {
+      replyMarkup: mainMenuReplyMarkup(appLocale),
     });
   }
 
   private async handleStop(chatId: string, telegramUserId: string) {
+    const binding = await this.telegramBotRepository.findBindingByTelegramIdentity(
+      telegramUserId,
+      chatId,
+    );
+    const appLocale = appLocaleOrFallback(binding?.user.locale);
     await this.telegramBotRepository.disableBindingByTelegramIdentity(telegramUserId, chatId);
-    await this.sendMessage(chatId, 'Telegram notifications are disabled.');
+    await this.sendMessage(chatId, telegramCommonMessages(appLocale).stopped);
   }
 
   private async handleStatus(chatId: string, telegramUserId: string) {
@@ -277,19 +393,26 @@ export class TelegramBotService {
       chatId,
     );
     if (!binding) {
-      await this.sendMessage(chatId, 'This Telegram account is not connected to ChurchFlow.');
+      await this.sendMessage(
+        chatId,
+        telegramCommonMessages(DEFAULT_APP_LOCALE).accountNotConnected,
+      );
       return;
     }
+    const appLocale = appLocaleOrFallback(binding.user.locale);
+    const messages = telegramCommonMessages(appLocale);
 
     const enabledOrganizations = binding.user.notificationPreferences
       .filter((preference) => preference.telegramEnabled)
       .map((preference) => preference.organization.name);
     const organizationsText =
       enabledOrganizations.length > 0
-        ? `Enabled for: ${enabledOrganizations.join(', ')}`
-        : 'Telegram delivery is connected, but disabled in organization preferences.';
+        ? `${messages.enabledFor}: ${enabledOrganizations.join(', ')}`
+        : messages.deliveryDisabled;
 
-    await this.sendMessage(chatId, `Connected to ChurchFlow.\n${organizationsText}`);
+    await this.sendMessage(chatId, `${messages.connectedStatus}\n${organizationsText}`, {
+      replyMarkup: mainMenuReplyMarkup(appLocale),
+    });
   }
 
   private async handleServices(chatId: string, telegramUserId: string) {
@@ -298,20 +421,24 @@ export class TelegramBotService {
       chatId,
     );
     if (!binding) {
-      await this.sendMessage(chatId, 'Connect this bot in ChurchFlow before using /services.');
+      await this.sendMessage(
+        chatId,
+        telegramCommonMessages(DEFAULT_APP_LOCALE).connectBeforeServices,
+      );
       return;
     }
+    const appLocale = appLocaleOrFallback(binding.user.locale);
 
     const organizations = await this.telegramBotRepository.listActiveOrganizationsForUser(
       binding.userId,
     );
     if (organizations.length === 0) {
-      await this.sendMessage(chatId, 'Ви не є активним учасником жодної організації.');
+      await this.sendMessage(chatId, telegramCommonMessages(appLocale).noActiveOrganizations);
       return;
     }
 
     if (organizations.length > 1) {
-      await this.sendMessage(chatId, 'Оберіть організацію:', {
+      await this.sendMessage(chatId, telegramCommonMessages(appLocale).chooseOrganization, {
         replyMarkup: organizationSelectionMarkup(organizations),
       });
       return;
@@ -320,12 +447,45 @@ export class TelegramBotService {
     const [organization] = organizations;
     if (!organization) return;
 
-    await this.sendServiceSchedule(
+    await this.sendServiceSchedule(chatId, binding.userId, organization.organizationId, appLocale);
+  }
+
+  private async handlePrayerRequests(chatId: string, telegramUserId: string) {
+    const binding = await this.telegramBotRepository.findBindingByTelegramIdentity(
+      telegramUserId,
       chatId,
-      binding.userId,
-      organization.organizationId,
-      binding.user.locale,
     );
+    if (!binding) {
+      await this.sendMessage(
+        chatId,
+        telegramCommonMessages(DEFAULT_APP_LOCALE).connectBeforePrayerRequests,
+      );
+      return;
+    }
+    const appLocale = appLocaleOrFallback(binding.user.locale);
+
+    const organizations = await this.telegramBotRepository.listActiveOrganizationsForUser(
+      binding.userId,
+    );
+    if (organizations.length === 0) {
+      await this.sendMessage(chatId, telegramCommonMessages(appLocale).noActiveOrganizations);
+      return;
+    }
+
+    if (organizations.length > 1) {
+      await this.sendMessage(chatId, telegramCommonMessages(appLocale).chooseOrganization, {
+        replyMarkup: organizationSelectionMarkup(
+          organizations,
+          PRAYER_REQUESTS_ORGANIZATION_CALLBACK_PREFIX,
+        ),
+      });
+      return;
+    }
+
+    const [organization] = organizations;
+    if (!organization) return;
+
+    await this.sendPrayerRequests(chatId, binding.userId, organization.organizationId, appLocale);
   }
 
   private async handleCallbackQuery(callbackQuery: TelegramCallbackQuery): Promise<void> {
@@ -336,9 +496,21 @@ export class TelegramBotService {
 
     try {
       if (!chatId || !telegramUserId) return;
-      if (!data.startsWith(SERVICES_ORGANIZATION_CALLBACK_PREFIX)) return;
+      if (
+        !data.startsWith(SERVICES_ORGANIZATION_CALLBACK_PREFIX) &&
+        !data.startsWith(PRAYER_REQUESTS_ORGANIZATION_CALLBACK_PREFIX)
+      ) {
+        return;
+      }
 
-      const organizationId = data.slice(SERVICES_ORGANIZATION_CALLBACK_PREFIX.length).trim();
+      const isPrayerRequestCallback = data.startsWith(PRAYER_REQUESTS_ORGANIZATION_CALLBACK_PREFIX);
+      const organizationId = data
+        .slice(
+          isPrayerRequestCallback
+            ? PRAYER_REQUESTS_ORGANIZATION_CALLBACK_PREFIX.length
+            : SERVICES_ORGANIZATION_CALLBACK_PREFIX.length,
+        )
+        .trim();
       if (!organizationId) return;
 
       const binding = await this.telegramBotRepository.findBindingByTelegramIdentity(
@@ -346,11 +518,19 @@ export class TelegramBotService {
         chatId,
       );
       if (!binding) {
-        await this.sendMessage(chatId, 'Connect this bot in ChurchFlow before using /services.');
+        await this.sendMessage(
+          chatId,
+          telegramCommonMessages(DEFAULT_APP_LOCALE).connectBeforeAction,
+        );
         return;
       }
+      const appLocale = appLocaleOrFallback(binding.user.locale);
 
-      await this.sendServiceSchedule(chatId, binding.userId, organizationId, binding.user.locale);
+      if (isPrayerRequestCallback) {
+        await this.sendPrayerRequests(chatId, binding.userId, organizationId, appLocale);
+      } else {
+        await this.sendServiceSchedule(chatId, binding.userId, organizationId, appLocale);
+      }
     } finally {
       await this.answerCallbackQuery(callbackQueryId);
     }
@@ -381,16 +561,26 @@ export class TelegramBotService {
     }
   }
 
-  private sendHelp(chatId: string) {
+  private async sendHelp(chatId: string, telegramUserId: string) {
+    const binding = await this.telegramBotRepository.findBindingByTelegramIdentity(
+      telegramUserId,
+      chatId,
+    );
+    const locale = appLocaleOrFallback(binding?.user.locale);
+    const messages = telegramCommonMessages(locale);
+    const menu = telegramMenuMessages(locale);
+
     return this.sendMessage(
       chatId,
       [
-        'ChurchFlow bot commands:',
-        `${SERVICES_MENU_BUTTON_TEXT} or /services - service schedule`,
-        '/status - connection status',
-        '/stop - disable Telegram notifications',
-        '/help - show this help',
+        messages.helpHeading,
+        `${menu.services} or /services - ${serviceScheduleMessages(locale).heading}`,
+        `${menu.prayerRequests} or /prayers - ${prayerRequestsMessages(locale).heading}`,
+        `/status - ${messages.statusCommandDescription}`,
+        `/stop - ${messages.stopCommandDescription}`,
+        `/help - ${messages.helpCommandDescription}`,
       ].join('\n'),
+      { replyMarkup: mainMenuReplyMarkup(locale) },
     );
   }
 
@@ -421,6 +611,26 @@ export class TelegramBotService {
         body.description ?? 'Telegram sendMessage failed',
         body.error_code ?? response.status,
       );
+    }
+  }
+
+  private async sendPrayerRequests(
+    chatId: string,
+    userId: string,
+    organizationId: string,
+    locale: AppLocale,
+  ): Promise<void> {
+    const requests = await this.telegramBotRepository.listActivePrayerRequestsForOrganization({
+      userId,
+      organizationId,
+    });
+    if (requests.length === 0) {
+      await this.sendMessage(chatId, prayerRequestsMessages(locale).empty);
+      return;
+    }
+
+    for (const message of formatPrayerRequests(requests, locale)) {
+      await this.sendMessage(chatId, message, { parseMode: 'HTML' });
     }
   }
 
@@ -598,9 +808,11 @@ function notificationDetailUrl(url: string | null, notificationId: string | null
   return `${url}${separator}notificationId=${encodeURIComponent(notificationId)}`;
 }
 
-function mainMenuReplyMarkup(): TelegramReplyKeyboardMarkup {
+function mainMenuReplyMarkup(locale: AppLocale): TelegramReplyKeyboardMarkup {
+  const menu = telegramMenuMessages(locale);
+
   return {
-    keyboard: [[{ text: SERVICES_MENU_BUTTON_TEXT }]],
+    keyboard: [[{ text: menu.services }, { text: menu.prayerRequests }]],
     resize_keyboard: true,
     is_persistent: true,
   };
@@ -608,15 +820,48 @@ function mainMenuReplyMarkup(): TelegramReplyKeyboardMarkup {
 
 function organizationSelectionMarkup(
   organizations: ActiveTelegramOrganizationRecord[],
+  callbackPrefix = SERVICES_ORGANIZATION_CALLBACK_PREFIX,
 ): TelegramInlineKeyboardMarkup {
   return {
     inline_keyboard: organizations.map((organization) => [
       {
         text: organization.organizationName,
-        callback_data: `${SERVICES_ORGANIZATION_CALLBACK_PREFIX}${organization.organizationId}`,
+        callback_data: `${callbackPrefix}${organization.organizationId}`,
       },
     ]),
   };
+}
+
+function formatPrayerRequests(requests: ActivePrayerRequestRecord[], locale: AppLocale): string[] {
+  const organizationName = escapeTelegramHtml(requests[0]?.organization.name ?? 'ChurchFlow');
+  const header = [
+    `🙏 <b>${escapeTelegramHtml(prayerRequestsMessages(locale).heading)}</b>`,
+    organizationName,
+  ].join('\n');
+  const blocks = requests.map((request) => formatPrayerRequestBlock(request, locale));
+
+  return chunkTelegramTextBlocks(header, blocks, PRAYER_REQUESTS_MESSAGE_LIMIT);
+}
+
+function formatPrayerRequestBlock(request: ActivePrayerRequestRecord, locale: AppLocale): string {
+  return [
+    `<b>${escapeTelegramHtml(request.title)}</b>`,
+    `<b>${escapeTelegramHtml(prayerRequestsMessages(locale).authorLabel)}:</b> ${escapeTelegramHtml(
+      prayerRequestAuthorName(request),
+    )}`,
+    escapeTelegramHtml(truncateTelegramText(request.description, PRAYER_REQUEST_DESCRIPTION_LIMIT)),
+  ].join('\n');
+}
+
+function prayerRequestAuthorName(request: ActivePrayerRequestRecord): string {
+  return (
+    request.authorMembership?.profile?.displayName ??
+    request.authorMembership?.user?.displayName ??
+    request.authorMembership?.user?.email ??
+    request.author?.displayName ??
+    request.author?.email ??
+    'Member'
+  );
 }
 
 function serviceScheduleBlocks(
@@ -690,6 +935,25 @@ function chunkTelegramHtmlBlocks(
   return messages;
 }
 
+function chunkTelegramTextBlocks(header: string, blocks: string[], limit: number): string[] {
+  const messages: string[] = [];
+  let current = header;
+
+  blocks.forEach((block) => {
+    const candidate = `${current}\n\n${SERVICE_SEPARATOR}\n\n${block}`;
+    if (candidate.length <= limit || current.length === 0) {
+      current = candidate;
+    } else {
+      messages.push(current);
+      current = block;
+    }
+  });
+
+  if (current.length > 0) messages.push(current);
+
+  return messages;
+}
+
 function formatServiceMonthKey(value: Date): string {
   const parts = zonedDateParts(value, SERVICE_SCHEDULE_TIME_ZONE);
 
@@ -747,6 +1011,12 @@ function escapeTelegramHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function truncateTelegramText(value: string, limit: number): string {
+  if (value.length <= limit) return value;
+
+  return `${value.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+}
+
 function appLocaleOrFallback(locale: string | null | undefined): AppLocale {
   if (isTelegramAppLocale(locale)) return locale;
 
@@ -761,8 +1031,34 @@ function serviceScheduleMessages(locale: AppLocale): ServiceScheduleMessages {
   return telegramLocaleConfig(locale).serviceSchedule;
 }
 
+function telegramCommonMessages(locale: AppLocale): TelegramCommonMessages {
+  return telegramLocaleConfig(locale).common;
+}
+
+function telegramMenuMessages(locale: AppLocale): TelegramMenuMessages {
+  return telegramLocaleConfig(locale).menu;
+}
+
+function prayerRequestsMessages(locale: AppLocale): PrayerRequestsMessages {
+  return telegramLocaleConfig(locale).prayerRequests;
+}
+
 function telegramLocaleConfig(locale: AppLocale): TelegramLocaleConfig {
   return TELEGRAM_LOCALE_CONFIG[locale];
+}
+
+function isServicesMenuButton(text: string): boolean {
+  return (
+    text === LEGACY_SERVICES_MENU_BUTTON_TEXT ||
+    Object.values(TELEGRAM_LOCALE_CONFIG).some((config) => text === config.menu.services)
+  );
+}
+
+function isPrayerRequestsMenuButton(text: string): boolean {
+  return (
+    text === LEGACY_PRAYER_REQUESTS_MENU_BUTTON_TEXT ||
+    Object.values(TELEGRAM_LOCALE_CONFIG).some((config) => text === config.menu.prayerRequests)
+  );
 }
 
 function isTelegramAppLocale(locale: string | null | undefined): locale is AppLocale {

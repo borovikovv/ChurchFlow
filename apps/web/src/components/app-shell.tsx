@@ -13,13 +13,51 @@ import { useCloseOnOutsideClick } from '@/hooks/use-close-on-outside-click';
 import { APP_ROUTES } from '@/routes';
 import {
   ORGANIZATION_ROUTE_SEGMENTS,
-  organizationCalendarRoute,
   organizationBudgetRoute,
+  organizationCalendarRoute,
   organizationHomeRoute,
   organizationMembersRoute,
+  organizationPrayerRequestsRoute,
   organizationProfileRoute,
   organizationWebsiteRoute,
 } from '@/features/organizations/routes';
+
+interface AppShellProps {
+  children: ReactNode;
+  canOpenAdmin: boolean;
+  budgetOrganizationIds: string[];
+  displayName: string;
+  websiteOrganizationIds: string[];
+}
+
+interface AppNavItem {
+  href: Route;
+  label: string;
+  exact?: boolean;
+}
+
+interface DashboardNavigationLabels {
+  budget: string;
+  calendar: string;
+  home: string;
+  members: string;
+  prayerRequests: string;
+  profile: string;
+  website: string;
+}
+
+interface DashboardNavigationAccess {
+  canOpenBudget: boolean;
+  canOpenWebsite: boolean;
+  labels: DashboardNavigationLabels;
+}
+
+interface MobileAppMenuProps {
+  canOpenAdmin: boolean;
+  displayName: string;
+  organizationId: string | null;
+  navItems: AppNavItem[];
+}
 
 function getDashboardOrgId(pathname: string): string | null {
   const [, section, orgId] = pathname.split('/');
@@ -27,10 +65,8 @@ function getDashboardOrgId(pathname: string): string | null {
   return section === ORGANIZATION_ROUTE_SEGMENTS.dashboard && orgId ? orgId : null;
 }
 
-interface AppNavItem {
-  href: string;
-  label: string;
-  exact?: boolean;
+function usesPlainShell(pathname: string): boolean {
+  return pathname === '/offline' || pathname === '/o' || pathname.startsWith('/o/');
 }
 
 export function AppShell({
@@ -39,21 +75,16 @@ export function AppShell({
   budgetOrganizationIds,
   displayName,
   websiteOrganizationIds,
-}: {
-  children: ReactNode;
-  canOpenAdmin: boolean;
-  budgetOrganizationIds: string[];
-  displayName: string;
-  websiteOrganizationIds: string[];
-}) {
+}: AppShellProps) {
   const pathname = usePathname();
   const t = useTranslations('navigation');
   const commonT = useTranslations('common');
-  if (pathname === '/offline' || pathname === '/o' || pathname.startsWith('/o/')) {
+  if (usesPlainShell(pathname)) {
     return <>{children}</>;
   }
 
   const dashboardOrgId = getDashboardOrgId(pathname);
+  const showAccountNavigation = canOpenAdmin || Boolean(dashboardOrgId);
   const canOpenWebsite = dashboardOrgId ? websiteOrganizationIds.includes(dashboardOrgId) : false;
   const canOpenBudget = dashboardOrgId ? budgetOrganizationIds.includes(dashboardOrgId) : false;
   const navItems = dashboardOrgId
@@ -65,6 +96,7 @@ export function AppShell({
           calendar: t('calendar'),
           home: t('home'),
           members: t('members'),
+          prayerRequests: t('prayerRequests'),
           profile: t('profile'),
           website: t('website'),
         },
@@ -80,7 +112,7 @@ export function AppShell({
           <Link className="brand" href={APP_ROUTES.home}>
             <Image src="/icons/church-flow.svg" alt="ChurchFlow" width={60} height={40} priority />
           </Link>
-          {canOpenAdmin || dashboardOrgId ? (
+          {showAccountNavigation ? (
             <nav className="site-nav desktop-site-nav" aria-label={t('accountNavigation')}>
               {dashboardOrgId ? <NotificationBell organizationId={dashboardOrgId} /> : null}
               {canOpenAdmin ? (
@@ -88,7 +120,7 @@ export function AppShell({
               ) : null}
             </nav>
           ) : null}
-          {canOpenAdmin || dashboardOrgId ? (
+          {showAccountNavigation ? (
             <div className="mobile-header-actions">
               <MobileAppMenu
                 canOpenAdmin={canOpenAdmin}
@@ -133,12 +165,7 @@ function MobileAppMenu({
   displayName,
   organizationId,
   navItems,
-}: {
-  canOpenAdmin: boolean;
-  displayName: string;
-  organizationId: string | null;
-  navItems: AppNavItem[];
-}) {
+}: MobileAppMenuProps) {
   const pathname = usePathname();
   const t = useTranslations('navigation');
   const commonT = useTranslations('common');
@@ -177,7 +204,7 @@ function MobileAppMenu({
               {navItems.map((item) => (
                 <Link
                   className={mobileMenuLinkClass(pathname, item)}
-                  href={item.href as Route}
+                  href={item.href}
                   key={item.href}
                   onClick={close}
                 >
@@ -212,24 +239,14 @@ function MobileAppMenu({
 
 function dashboardNavigationItems(
   organizationId: string,
-  access: {
-    canOpenBudget: boolean;
-    canOpenWebsite: boolean;
-    labels: {
-      budget: string;
-      calendar: string;
-      home: string;
-      members: string;
-      profile: string;
-      website: string;
-    };
-  },
+  access: DashboardNavigationAccess,
 ): AppNavItem[] {
   return [
     { href: organizationHomeRoute(organizationId), label: access.labels.home, exact: true },
     { href: organizationProfileRoute(organizationId), label: access.labels.profile },
     { href: organizationMembersRoute(organizationId), label: access.labels.members },
     { href: organizationCalendarRoute(organizationId), label: access.labels.calendar },
+    { href: organizationPrayerRequestsRoute(organizationId), label: access.labels.prayerRequests },
     ...(access.canOpenBudget
       ? [{ href: organizationBudgetRoute(organizationId), label: access.labels.budget }]
       : []),

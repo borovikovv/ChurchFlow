@@ -18,6 +18,21 @@ export type UpcomingServiceRecord = Prisma.CalendarEventGetPayload<{
   include: typeof upcomingServiceInclude;
 }>;
 
+const activePrayerRequestInclude = {
+  organization: { select: { id: true, name: true } },
+  author: { select: { displayName: true, email: true } },
+  authorMembership: {
+    select: {
+      profile: { select: { displayName: true } },
+      user: { select: { displayName: true, email: true } },
+    },
+  },
+} as const;
+
+export type ActivePrayerRequestRecord = Prisma.PrayerRequestGetPayload<{
+  include: typeof activePrayerRequestInclude;
+}>;
+
 export interface ActiveTelegramOrganizationRecord {
   organizationId: string;
   organizationName: string;
@@ -111,6 +126,7 @@ export class TelegramBotRepository {
         select: {
           userId: true,
           username: true,
+          user: { select: { locale: true } },
         },
       });
     });
@@ -394,6 +410,46 @@ export class TelegramBotRepository {
       },
       include: upcomingServiceInclude,
       orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async listActivePrayerRequestsForOrganization(input: {
+    userId: string;
+    organizationId: string;
+  }): Promise<ActivePrayerRequestRecord[]> {
+    const membership = await this.prisma.organizationMember.findFirst({
+      where: {
+        userId: input.userId,
+        organizationId: input.organizationId,
+        status: 'ACTIVE',
+        removedAt: null,
+        role: { in: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { id: true },
+    });
+    if (!membership) return [];
+
+    return this.prisma.prayerRequest.findMany({
+      where: {
+        organizationId: input.organizationId,
+        archivedAt: null,
+        deletedAt: null,
+        organization: {
+          status: 'ACTIVE',
+          deletedAt: null,
+          members: {
+            some: {
+              userId: input.userId,
+              status: 'ACTIVE',
+              removedAt: null,
+              role: { in: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] },
+            },
+          },
+        },
+      },
+      include: activePrayerRequestInclude,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   }
 }
