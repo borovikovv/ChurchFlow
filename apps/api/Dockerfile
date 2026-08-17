@@ -42,9 +42,13 @@ RUN set -eux; \
   test -n "$deployed_clients"; \
   for prisma_client_default in $deployed_clients; do \
     deployed_node_modules="$(dirname "$(dirname "$(dirname "$prisma_client_default")")")"; \
+    deployed_client_dir="$(dirname "$prisma_client_default")"; \
     rm -rf "$deployed_node_modules/.prisma/client"; \
+    rm -rf "$deployed_client_dir/.prisma/client"; \
     mkdir -p "$deployed_node_modules/.prisma"; \
+    mkdir -p "$deployed_client_dir/.prisma"; \
     cp -a "$generated_client_dir" "$deployed_node_modules/.prisma/client"; \
+    cp -a "$generated_client_dir" "$deployed_client_dir/.prisma/client"; \
   done; \
   cd /runtime/api; \
   node -e "const db = require('@churchflow/db'); if (typeof db.PrismaClient !== 'function') throw new Error('PrismaClient export missing');"
@@ -83,7 +87,9 @@ RUN set -eux; \
     printf '%s\n' 'fi'; \
     printf '%s\n' 'prisma_cli="$(pwd)/$prisma_cli"'; \
     printf '%s\n' 'prisma_node_modules="$(dirname "$(dirname "$(dirname "$prisma_cli")")")"'; \
-    printf '%s\n' 'export NODE_PATH="${prisma_node_modules}${NODE_PATH:+:$NODE_PATH}"'; \
+    printf '%s\n' 'db_package_json="$(node -p '\''require.resolve("@churchflow/db/package.json")'\'')"'; \
+    printf '%s\n' 'db_node_modules="$(dirname "$(dirname "$(dirname "$db_package_json")")")"'; \
+    printf '%s\n' 'export NODE_PATH="${prisma_node_modules}:${db_node_modules}${NODE_PATH:+:$NODE_PATH}"'; \
     printf '%s\n' 'cd packages/db'; \
     printf '%s\n' 'exec node "$prisma_cli" --config prisma.config.ts migrate deploy "$@"'; \
   } > /usr/local/bin/churchflow-prisma-migrate-deploy; \
