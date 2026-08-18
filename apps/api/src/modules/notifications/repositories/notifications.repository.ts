@@ -476,7 +476,6 @@ export class NotificationsRepository {
     const recipientMemberships = await this.prisma.organizationMember.findMany({
       where: {
         organizationId: { in: [...birthdayGroups.keys()] },
-        role: { in: ['OWNER', 'ADMIN'] },
         status: 'ACTIVE',
         removedAt: null,
         userId: { not: null },
@@ -488,13 +487,6 @@ export class NotificationsRepository {
         user: {
           select: {
             deletedAt: true,
-            notificationPreferences: {
-              select: {
-                inAppEnabled: true,
-                telegramEnabled: true,
-                birthdayDigestEnabled: true,
-              },
-            },
           },
         },
       },
@@ -541,7 +533,6 @@ export class NotificationsRepository {
       url: input.url,
       entityType: 'BirthdayDigest',
       dedupeKey: input.dedupeKey,
-      adminOnly: true,
     });
   }
 

@@ -215,13 +215,18 @@ export class CalendarEventsService {
         creatorMembershipId,
       );
       const adminRecipientMembershipIds =
-        await this.calendarEventsRepository.listAdminReminderRecipientMembershipIds(
+        await this.calendarEventsRepository.listAdminNotificationRecipientMembershipIds(
+          event.organizationId,
+        );
+      const calendarEventRecipientMembershipIds =
+        await this.calendarEventsRepository.listCalendarEventNotificationRecipientMembershipIds(
           event.organizationId,
         );
       const recipientMemberships =
         await this.calendarEventsRepository.listReminderRecipientMemberships(event.organizationId, [
           ...linkedRecipientMembershipIds,
           ...adminRecipientMembershipIds,
+          ...calendarEventRecipientMembershipIds,
         ]);
       const recipientsByTimeZone = groupReminderRecipientsByTimeZone(recipientMemberships);
 
@@ -229,13 +234,16 @@ export class CalendarEventsService {
         const schedules = notificationSchedules(event);
         const linkedRecipientMembershipIdSet = new Set(linkedRecipientMembershipIds);
         const adminRecipientMembershipIdSet = new Set(adminRecipientMembershipIds);
+        const calendarEventRecipientMembershipIdSet = new Set(calendarEventRecipientMembershipIds);
 
         for (const schedule of schedules) {
           const scheduledRecipientMembershipIds = calendarNotificationRecipientMembershipIds(
             recipientMembershipIds,
             linkedRecipientMembershipIdSet,
             adminRecipientMembershipIdSet,
+            calendarEventRecipientMembershipIdSet,
             schedule.kind,
+            event.type,
           );
           const occurrenceStarts = safeNotificationOccurrenceStarts(
             event,
@@ -402,17 +410,24 @@ export class CalendarEventsService {
     if (event.linkedMembershipId === options.previousLinkedMembershipId) return;
 
     try {
+      const recipientMembershipIds =
+        await this.calendarEventsRepository.listAdminNotificationRecipientMembershipIds(
+          organizationId,
+        );
+      if (recipientMembershipIds.length === 0) return;
+
       await this.notificationsService.createCalendarLinkedNotifications({
         organizationId,
         actorUserId,
-        recipientMembershipIds: [event.linkedMembershipId],
+        recipientMembershipIds,
         type: 'CALENDAR_EVENT_LINKED',
         preferenceKey: 'organizationUpdatesEnabled',
-        title: 'You were linked to a calendar event',
-        body: `${event.title} starts at ${formatNotificationDateTime(event.startsAt)}.`,
+        title: 'Calendar event linked to member',
+        body: calendarLinkedNotificationBody(event),
         url: `/dashboard/${organizationId}/calendar`,
         entityType: 'CalendarEvent',
         entityId: event.id,
+        adminOnly: true,
       });
     } catch (error: unknown) {
       calendarEventsLogger.error({
@@ -437,6 +452,19 @@ function taskAssignedNotificationBody(event: CalendarEventRecord): string {
 
 function serviceAssignedNotificationBody(event: CalendarEventRecord): string {
   return `${event.title} starts at ${formatNotificationDateTime(event.startsAt)}.`;
+}
+
+function calendarLinkedNotificationBody(event: CalendarEventRecord): string {
+  const linkedMemberName = event.linkedMembership
+    ? memberDisplayName(event.linkedMembership)
+    : 'A member';
+  return `${linkedMemberName} was linked to ${event.title}, starting at ${formatNotificationDateTime(
+    event.startsAt,
+  )}.`;
+}
+
+function memberDisplayName(member: NonNullable<CalendarEventRecord['linkedMembership']>): string {
+  return member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? 'Member';
 }
 
 function reminderNotificationTitle(event: CalendarEventRecord): string {
@@ -497,12 +525,26 @@ function calendarNotificationRecipientMembershipIds(
   availableRecipientMembershipIds: string[],
   linkedRecipientMembershipIds: Set<string>,
   adminRecipientMembershipIds: Set<string>,
+  calendarEventRecipientMembershipIds: Set<string>,
   scheduleKind: CalendarNotificationSchedule['kind'],
+  eventType: CalendarEventRecord['type'],
 ): string[] {
   return availableRecipientMembershipIds.filter((membershipId) => {
+    if (isBirthdayOrAnniversaryEvent(eventType)) return false;
     if (linkedRecipientMembershipIds.has(membershipId)) return true;
-    return scheduleKind === 'event' && adminRecipientMembershipIds.has(membershipId);
+    if (scheduleKind !== 'event') return false;
+    if (eventType === CALENDAR_EVENT_TYPE.task) {
+      return adminRecipientMembershipIds.has(membershipId);
+    }
+
+    return calendarEventRecipientMembershipIds.has(membershipId);
   });
+}
+
+function isBirthdayOrAnniversaryEvent(eventType: CalendarEventRecord['type']): boolean {
+  return (
+    eventType === CALENDAR_EVENT_TYPE.birthday || eventType === CALENDAR_EVENT_TYPE.anniversary
+  );
 }
 
 function notificationSchedules(event: CalendarEventRecord): CalendarNotificationSchedule[] {

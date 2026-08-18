@@ -1,13 +1,11 @@
 'use client';
 
-import {
-  updateNotificationPreferencesSchema,
-  type NotificationPreferences,
-  type UpdateNotificationPreferencesInput,
+import type {
+  NotificationPreferences,
+  UpdateNotificationPreferencesInput,
 } from '@churchflow/shared';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
@@ -30,40 +28,66 @@ export function NotificationPreferencesForm({
 }) {
   const t = useTranslations('notifications');
   const [savedPreferences, setSavedPreferences] = useState(preferences);
+  const [savingPreference, setSavingPreference] =
+    useState<NotificationPreferenceCheckboxName | null>(null);
   const [telegramActionPending, setTelegramActionPending] = useState(false);
-  const {
-    register,
-    handleSubmit,
-    watch,
-    reset,
-    formState: { isSubmitting },
-  } = useForm<UpdateNotificationPreferencesInput>({
-    resolver: zodResolver(updateNotificationPreferencesSchema),
+  const { register, getValues, watch, reset } = useForm<UpdateNotificationPreferencesInput>({
     defaultValues: toFormValues(savedPreferences, userEmail),
   });
   const values = watch();
   const canUseEmail = Boolean(userEmail);
   const canUseTelegram = savedPreferences.telegram.enabled;
+  const preferencesPending = savingPreference !== null;
 
-  const submit = handleSubmit(async (input) => {
-    const payload = {
-      ...input,
-      emailEnabled: canUseEmail ? input.emailEnabled : false,
-      telegramEnabled: canUseTelegram ? input.telegramEnabled : false,
-      timeZone: browserTimeZone(),
-    };
-    const result = await updateNotificationPreferences(organizationId, payload);
+  const savePreferences = async (
+    input: UpdateNotificationPreferencesInput,
+    preferenceName: NotificationPreferenceCheckboxName,
+  ) => {
+    if (preferencesPending) return;
+    setSavingPreference(preferenceName);
 
-    if (result.ok) {
-      const nextPreferences = result.data;
-      setSavedPreferences(nextPreferences);
-      reset(toFormValues(nextPreferences, userEmail));
-      toast.success(t('saved'));
-      return;
+    try {
+      const payload = {
+        ...input,
+        emailEnabled: canUseEmail ? input.emailEnabled : false,
+        telegramEnabled: canUseTelegram ? input.telegramEnabled : false,
+        timeZone: browserTimeZone(),
+      };
+      const result = await updateNotificationPreferences(organizationId, payload);
+
+      if (result.ok) {
+        const nextPreferences = result.data;
+        setSavedPreferences(nextPreferences);
+        reset(toFormValues(nextPreferences, userEmail));
+        toast.success(t('saved'));
+        return;
+      }
+
+      reset(toFormValues(savedPreferences, userEmail));
+      toast.error(result.error);
+    } catch (error: unknown) {
+      reset(toFormValues(savedPreferences, userEmail));
+      toast.error(error instanceof Error ? error.message : t('saveFailed'));
+    } finally {
+      setSavingPreference(null);
     }
+  };
 
-    toast.error(result.error);
-  });
+  const registerPreference = (name: NotificationPreferenceCheckboxName) => {
+    const field = register(name);
+
+    return {
+      ...field,
+      onChange: (event: ChangeEvent<HTMLInputElement>) => {
+        field.onChange(event);
+        const nextValues = {
+          ...getValues(),
+          [name]: event.currentTarget.checked,
+        };
+        void savePreferences(nextValues, name);
+      },
+    };
+  };
 
   const connectTelegram = async () => {
     if (telegramActionPending) return;
@@ -115,7 +139,7 @@ export function NotificationPreferencesForm({
   };
 
   return (
-    <form className="stack max-w-2xl" onSubmit={submit}>
+    <form className="stack max-w-2xl" onSubmit={(event) => event.preventDefault()}>
       <section className="stack rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-6 shadow-[var(--shadow)]">
         <div className="stack gap-1">
           <h2 className="m-0 text-2xl">{t('deliveryChannels')}</h2>
@@ -130,7 +154,15 @@ export function NotificationPreferencesForm({
             description={t('inAppDescription')}
             checked={values.inAppEnabled}
           >
-            <Checkbox label={t('enabled')} {...register('inAppEnabled')} />
+            <Checkbox
+              disabled={preferencesPending}
+              label={checkboxStateLabel(values.inAppEnabled, savingPreference === 'inAppEnabled', {
+                disabled: t('disabled'),
+                enabled: t('enabled'),
+                saving: t('saving'),
+              })}
+              {...registerPreference('inAppEnabled')}
+            />
           </PreferenceRow>
 
           <PreferenceRow
@@ -144,7 +176,19 @@ export function NotificationPreferencesForm({
             }
             checked={values.emailEnabled && canUseEmail}
           >
-            <Checkbox disabled={!canUseEmail} label={t('enabled')} {...register('emailEnabled')} />
+            <Checkbox
+              disabled={preferencesPending || !canUseEmail}
+              label={checkboxStateLabel(
+                values.emailEnabled && canUseEmail,
+                savingPreference === 'emailEnabled',
+                {
+                  disabled: t('disabled'),
+                  enabled: t('enabled'),
+                  saving: t('saving'),
+                },
+              )}
+              {...registerPreference('emailEnabled')}
+            />
           </PreferenceRow>
 
           <PreferenceRow
@@ -162,9 +206,17 @@ export function NotificationPreferencesForm({
           >
             <div className="flex flex-wrap items-center gap-2">
               <Checkbox
-                disabled={!canUseTelegram}
-                label={t('enabled')}
-                {...register('telegramEnabled')}
+                disabled={preferencesPending || !canUseTelegram}
+                label={checkboxStateLabel(
+                  values.telegramEnabled && canUseTelegram,
+                  savingPreference === 'telegramEnabled',
+                  {
+                    disabled: t('disabled'),
+                    enabled: t('enabled'),
+                    saving: t('saving'),
+                  },
+                )}
+                {...registerPreference('telegramEnabled')}
               />
               {savedPreferences.telegram.enabled ? (
                 <Button
@@ -206,7 +258,19 @@ export function NotificationPreferencesForm({
             description={t('taskAssignmentsDescription')}
             checked={values.taskAssignedEnabled}
           >
-            <Checkbox label={t('enabled')} {...register('taskAssignedEnabled')} />
+            <Checkbox
+              disabled={preferencesPending}
+              label={checkboxStateLabel(
+                values.taskAssignedEnabled,
+                savingPreference === 'taskAssignedEnabled',
+                {
+                  disabled: t('disabled'),
+                  enabled: t('enabled'),
+                  saving: t('saving'),
+                },
+              )}
+              {...registerPreference('taskAssignedEnabled')}
+            />
           </PreferenceRow>
           <PreferenceRow
             offLabel={t('off')}
@@ -215,7 +279,19 @@ export function NotificationPreferencesForm({
             description={t('serviceAssignmentsDescription')}
             checked={values.serviceAssignedEnabled}
           >
-            <Checkbox label={t('enabled')} {...register('serviceAssignedEnabled')} />
+            <Checkbox
+              disabled={preferencesPending}
+              label={checkboxStateLabel(
+                values.serviceAssignedEnabled,
+                savingPreference === 'serviceAssignedEnabled',
+                {
+                  disabled: t('disabled'),
+                  enabled: t('enabled'),
+                  saving: t('saving'),
+                },
+              )}
+              {...registerPreference('serviceAssignedEnabled')}
+            />
           </PreferenceRow>
           <PreferenceRow
             offLabel={t('off')}
@@ -224,7 +300,19 @@ export function NotificationPreferencesForm({
             description={t('remindersDescription')}
             checked={values.remindersEnabled}
           >
-            <Checkbox label={t('enabled')} {...register('remindersEnabled')} />
+            <Checkbox
+              disabled={preferencesPending}
+              label={checkboxStateLabel(
+                values.remindersEnabled,
+                savingPreference === 'remindersEnabled',
+                {
+                  disabled: t('disabled'),
+                  enabled: t('enabled'),
+                  saving: t('saving'),
+                },
+              )}
+              {...registerPreference('remindersEnabled')}
+            />
           </PreferenceRow>
           <PreferenceRow
             offLabel={t('off')}
@@ -233,7 +321,19 @@ export function NotificationPreferencesForm({
             description={t('birthdayDigestDescription')}
             checked={values.birthdayDigestEnabled}
           >
-            <Checkbox label={t('enabled')} {...register('birthdayDigestEnabled')} />
+            <Checkbox
+              disabled={preferencesPending}
+              label={checkboxStateLabel(
+                values.birthdayDigestEnabled,
+                savingPreference === 'birthdayDigestEnabled',
+                {
+                  disabled: t('disabled'),
+                  enabled: t('enabled'),
+                  saving: t('saving'),
+                },
+              )}
+              {...registerPreference('birthdayDigestEnabled')}
+            />
           </PreferenceRow>
           <PreferenceRow
             offLabel={t('off')}
@@ -242,27 +342,30 @@ export function NotificationPreferencesForm({
             description={t('organizationUpdatesDescription')}
             checked={values.organizationUpdatesEnabled}
           >
-            <Checkbox label={t('enabled')} {...register('organizationUpdatesEnabled')} />
+            <Checkbox
+              disabled={preferencesPending}
+              label={checkboxStateLabel(
+                values.organizationUpdatesEnabled,
+                savingPreference === 'organizationUpdatesEnabled',
+                {
+                  disabled: t('disabled'),
+                  enabled: t('enabled'),
+                  saving: t('saving'),
+                },
+              )}
+              {...registerPreference('organizationUpdatesEnabled')}
+            />
           </PreferenceRow>
         </div>
       </section>
-
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button
-          disabled={isSubmitting}
-          onClick={() => reset(toFormValues(savedPreferences, userEmail))}
-          type="button"
-          variant="secondary"
-        >
-          {t('reset')}
-        </Button>
-        <Button disabled={isSubmitting} type="submit">
-          {isSubmitting ? t('saving') : t('savePreferences')}
-        </Button>
-      </div>
     </form>
   );
 }
+
+type NotificationPreferenceCheckboxName = Exclude<
+  keyof UpdateNotificationPreferencesInput,
+  'timeZone'
+>;
 
 function PreferenceRow({
   title,
@@ -293,6 +396,15 @@ function PreferenceRow({
       {children}
     </div>
   );
+}
+
+function checkboxStateLabel(
+  checked: boolean,
+  saving: boolean,
+  labels: { disabled: string; enabled: string; saving: string },
+): string {
+  if (saving) return labels.saving;
+  return checked ? labels.enabled : labels.disabled;
 }
 
 function telegramDescription(

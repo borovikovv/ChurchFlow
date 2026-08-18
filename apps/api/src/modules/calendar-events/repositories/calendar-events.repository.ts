@@ -206,11 +206,29 @@ export class CalendarEventsRepository {
     }));
   }
 
-  async listAdminReminderRecipientMembershipIds(organizationId: string): Promise<string[]> {
+  async listAdminNotificationRecipientMembershipIds(organizationId: string): Promise<string[]> {
     const memberships = await this.prisma.organizationMember.findMany({
       where: {
         organizationId,
         role: { in: ['OWNER', 'ADMIN'] },
+        status: 'ACTIVE',
+        removedAt: null,
+        userId: { not: null },
+        user: { deletedAt: null },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { id: true },
+    });
+
+    return memberships.map((membership) => membership.id);
+  }
+
+  async listCalendarEventNotificationRecipientMembershipIds(
+    organizationId: string,
+  ): Promise<string[]> {
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: {
+        organizationId,
         status: 'ACTIVE',
         removedAt: null,
         userId: { not: null },
