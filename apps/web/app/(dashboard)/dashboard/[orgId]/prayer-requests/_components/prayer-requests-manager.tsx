@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useState, useTransition } from 'react';
 import type {
+  ArchivePrayerRequestInput,
   CreatePrayerRequestInput,
   PrayerRequestItem,
   PrayerRequestsPayload,
@@ -49,6 +50,7 @@ export function PrayerRequestsManager({
   archiveRequest: (input: {
     organizationId: string;
     requestId: string;
+    request: ArchivePrayerRequestInput;
   }) => Promise<MutationResult<PrayerRequestItem>>;
   restoreRequest: (input: {
     organizationId: string;
@@ -130,8 +132,8 @@ export function PrayerRequestsManager({
         onUpdate={(requestId, request) => {
           mutate(updateRequest({ organizationId, requestId, request }));
         }}
-        onArchive={(requestId) => {
-          mutate(archiveRequest({ organizationId, requestId }));
+        onArchive={(requestId, request) => {
+          mutate(archiveRequest({ organizationId, requestId, request }));
         }}
         onRestore={(requestId) => {
           mutate(restoreRequest({ organizationId, requestId }));

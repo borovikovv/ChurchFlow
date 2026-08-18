@@ -70,7 +70,7 @@
     "home": "Home",
     "main": "Main",
     "members": "Members",
-    "prayerRequests": "Prayer Requests",
+    "prayerRequests": "Prayers",
     "navigationMenu": "Navigation menu",
     "openNavigationMenu": "Open navigation menu",
     "profile": "Profile",
@@ -708,7 +708,7 @@
     }
   },
   "prayerRequests": {
-    "title": "Prayer Requests",
+    "title": "Prayers",
     "tabsLabel": "Prayer request views",
     "active": "Active",
     "archived": "Archived",
@@ -725,6 +725,13 @@
     "cancel": "Cancel",
     "edit": "Edit",
     "archive": "Archive",
+    "archiveDescription": "Add an optional note about why this prayer is being archived.",
+    "archiveReasonColumn": "Archive note",
+    "archiveReasonLabel": "Archive note",
+    "archiveReasonPlaceholder": "Answered, no longer relevant, or another note...",
+    "archiveSubmit": "Archive",
+    "archiveTitle": "Archive prayer",
+    "archiving": "Archiving...",
     "restore": "Restore",
     "delete": "Delete",
     "deleteTitle": "Delete prayer request",
@@ -733,7 +740,8 @@
     "titleLabel": "Title",
     "descriptionLabel": "Prayer request",
     "emptyActive": "No active prayer requests yet.",
-    "emptyArchived": "No archived prayer requests yet."
+    "emptyArchived": "No archived prayer requests yet.",
+    "noArchiveReason": "No archive note"
   },
   "home": {
     "title": "Home",

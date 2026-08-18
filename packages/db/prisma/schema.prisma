@@ -768,6 +768,7 @@ model PrayerRequest {
   authorMembershipId String?   @map("author_membership_id") @db.Uuid
   title              String
   description        String
+  archiveReason      String?   @map("archive_reason")
   archivedAt         DateTime? @map("archived_at")
   archivedByUserId   String?   @map("archived_by_user_id") @db.Uuid
   deletedAt          DateTime? @map("deleted_at")

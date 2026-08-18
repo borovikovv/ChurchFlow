@@ -50,6 +50,7 @@ import type {
   listPrayerRequestsQuerySchema,
   createPrayerRequestSchema,
   updatePrayerRequestSchema,
+  archivePrayerRequestSchema,
   budgetGroupSchema,
   budgetCategoryTypeSchema,
   budgetEntryFieldSchema,
@@ -136,6 +137,7 @@ export type PrayerRequestTab = z.infer<typeof prayerRequestTabSchema>;
 export type ListPrayerRequestsQuery = z.infer<typeof listPrayerRequestsQuerySchema>;
 export type CreatePrayerRequestInput = z.infer<typeof createPrayerRequestSchema>;
 export type UpdatePrayerRequestInput = z.infer<typeof updatePrayerRequestSchema>;
+export type ArchivePrayerRequestInput = z.infer<typeof archivePrayerRequestSchema>;
 export type BudgetGroup = z.infer<typeof budgetGroupSchema>;
 export type BudgetCategoryType = z.infer<typeof budgetCategoryTypeSchema>;
 export type BudgetEntryField = z.infer<typeof budgetEntryFieldSchema>;
@@ -240,6 +242,7 @@ export interface PrayerRequestItem {
   organizationId: string;
   title: string;
   description: string;
+  archiveReason: string | null;
   author: PrayerRequestAuthor;
   createdAt: string;
   updatedAt: string;

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { OrganizationRole, Prisma } from '@churchflow/db';
 import type {
+  ArchivePrayerRequestInput,
   CreatePrayerRequestInput,
   PrayerRequestTab,
   UpdatePrayerRequestInput,
@@ -159,14 +160,16 @@ export class PrayerRequestsRepository {
     requestId: string;
     actorUserId: string;
     actor: PrayerRequestActor;
+    request: ArchivePrayerRequestInput;
   }): Promise<PrayerRequestRecord | null> {
     return this.prisma.$transaction(async (tx) => {
       const existing = await this.findMutableRequest(tx, input);
       if (!existing) return null;
 
+      const archiveReason = input.request.archiveReason ?? null;
       const request = await tx.prayerRequest.update({
         where: { id: existing.id },
-        data: { archivedAt: new Date(), archivedByUserId: input.actorUserId },
+        data: { archivedAt: new Date(), archivedByUserId: input.actorUserId, archiveReason },
         include: prayerRequestInclude,
       });
 
@@ -177,7 +180,7 @@ export class PrayerRequestsRepository {
           action: 'ARCHIVE_PRAYER_REQUEST',
           entityType: 'PrayerRequest',
           entityId: request.id,
-          metadata: { authorMembershipId: existing.authorMembershipId },
+          metadata: { authorMembershipId: existing.authorMembershipId, archiveReason },
         },
       });
 
@@ -197,7 +200,7 @@ export class PrayerRequestsRepository {
 
       const request = await tx.prayerRequest.update({
         where: { id: existing.id },
-        data: { archivedAt: null, archivedByUserId: null },
+        data: { archivedAt: null, archivedByUserId: null, archiveReason: null },
         include: prayerRequestInclude,
       });
 

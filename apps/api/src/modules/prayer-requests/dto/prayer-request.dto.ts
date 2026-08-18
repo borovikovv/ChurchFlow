@@ -1,9 +1,11 @@
 import {
+  archivePrayerRequestSchema,
   createPrayerRequestSchema,
   listPrayerRequestsQuerySchema,
   updatePrayerRequestSchema,
 } from '@churchflow/shared';
 import type {
+  ArchivePrayerRequestInput,
   CreatePrayerRequestInput,
   ListPrayerRequestsQuery,
   PrayerRequestTab,
@@ -30,4 +32,10 @@ export class UpdatePrayerRequestDto implements UpdatePrayerRequestInput {
 
   title?: string;
   description?: string;
+}
+
+export class ArchivePrayerRequestDto implements ArchivePrayerRequestInput {
+  static readonly schema = archivePrayerRequestSchema;
+
+  archiveReason?: string | null;
 }

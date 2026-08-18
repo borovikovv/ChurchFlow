@@ -13,6 +13,7 @@ import {
 import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import {
+  ArchivePrayerRequestDto,
   CreatePrayerRequestDto,
   ListPrayerRequestsQueryDto,
   UpdatePrayerRequestDto,
@@ -65,9 +66,15 @@ export class PrayerRequestsController {
   archive(
     @Param('organizationId') organizationId: string,
     @Param('requestId') requestId: string,
+    @Body() body: ArchivePrayerRequestDto,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.prayerRequestsService.archive(organizationId, requestId, this.actorUserId(request));
+    return this.prayerRequestsService.archive(
+      organizationId,
+      requestId,
+      body,
+      this.actorUserId(request),
+    );
   }
 
   @Post(':requestId/restore')

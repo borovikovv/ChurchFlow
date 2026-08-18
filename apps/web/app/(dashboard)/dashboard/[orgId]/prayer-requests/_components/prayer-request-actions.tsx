@@ -1,13 +1,18 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import type { PrayerRequestItem, UpdatePrayerRequestInput } from '@churchflow/shared';
+import type {
+  ArchivePrayerRequestInput,
+  PrayerRequestItem,
+  UpdatePrayerRequestInput,
+} from '@churchflow/shared';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
 import {
   TableRowAction,
   TableRowActions,
   tableRowActionClassNameFor,
 } from '@/components/ui/table-row-actions';
+import { PrayerRequestArchiveDialog } from './prayer-request-archive-dialog';
 import { PrayerRequestFormDialog } from './prayer-request-form-dialog';
 
 export function PrayerRequestActions({
@@ -21,7 +26,7 @@ export function PrayerRequestActions({
   disabled: boolean;
   request: PrayerRequestItem;
   onUpdate: (requestId: string, request: UpdatePrayerRequestInput) => void;
-  onArchive: (requestId: string) => void;
+  onArchive: (requestId: string, request: ArchivePrayerRequestInput) => void;
   onRestore: (requestId: string) => void;
   onDelete: (request: PrayerRequestItem) => Promise<void>;
 }) {
@@ -48,9 +53,7 @@ export function PrayerRequestActions({
         />
       ) : null}
       {request.canArchive ? (
-        <TableRowAction disabled={disabled} onSelect={() => onArchive(request.id)}>
-          {t('archive')}
-        </TableRowAction>
+        <PrayerRequestArchiveDialog disabled={disabled} request={request} onArchive={onArchive} />
       ) : null}
       {request.canRestore ? (
         <TableRowAction disabled={disabled} onSelect={() => onRestore(request.id)}>

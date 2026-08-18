@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { apiFetch } from '@/api/client';
 import type {
+  ArchivePrayerRequestInput,
   CreatePrayerRequestInput,
   PrayerRequestItem,
   PrayerRequestsPayload,
@@ -84,10 +85,15 @@ export async function updatePrayerRequestAction(input: {
 export async function archivePrayerRequestAction(input: {
   organizationId: string;
   requestId: string;
+  request: ArchivePrayerRequestInput;
 }) {
   const result = await apiFetch<PrayerRequestItem>(
     `/organizations/${input.organizationId}/prayer-requests/${input.requestId}/archive`,
-    { method: 'POST' },
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input.request),
+    },
   );
   revalidatePath(prayerRequestsPath(input.organizationId));
 

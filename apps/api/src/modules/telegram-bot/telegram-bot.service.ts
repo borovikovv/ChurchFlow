@@ -162,13 +162,13 @@ const TELEGRAM_LOCALE_CONFIG = {
     },
     intlLocale: 'en-US',
     menu: {
-      prayerRequests: '🙏 Prayer Requests',
+      prayerRequests: '🙏 Prayers',
       services: '📅 Service Schedule',
     },
     prayerRequests: {
       authorLabel: 'Requested by',
       empty: 'There are no active prayer requests yet.',
-      heading: 'Prayer Requests',
+      heading: 'Prayers',
     },
     serviceDateOrder: 'month-day',
     serviceSchedule: {
@@ -202,13 +202,13 @@ const TELEGRAM_LOCALE_CONFIG = {
     },
     intlLocale: 'uk-UA',
     menu: {
-      prayerRequests: '🙏 Молитовні потреби',
+      prayerRequests: '🙏 Молитви',
       services: '📅 Графік служінь',
     },
     prayerRequests: {
       authorLabel: 'Просить',
       empty: 'Активних молитовних потреб поки немає.',
-      heading: 'Молитовні потреби',
+      heading: 'Молитви',
     },
     serviceDateOrder: 'day-month',
     serviceSchedule: {

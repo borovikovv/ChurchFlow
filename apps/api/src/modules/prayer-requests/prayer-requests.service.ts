@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { OrganizationRole } from '@churchflow/db';
 import type {
+  ArchivePrayerRequestInput,
   CreatePrayerRequestInput,
   ListPrayerRequestsQuery,
   PrayerRequestItem,
@@ -91,6 +92,7 @@ export class PrayerRequestsService {
   async archive(
     organizationId: string,
     requestId: string,
+    input: ArchivePrayerRequestInput,
     actorUserId: string,
   ): Promise<PrayerRequestItem> {
     const actor = await this.requireActorMembership(organizationId, actorUserId);
@@ -99,6 +101,7 @@ export class PrayerRequestsService {
       requestId,
       actorUserId,
       actor,
+      request: input,
     });
     if (!request) throw new NotFoundException('Prayer request was not found');
 
@@ -193,6 +196,7 @@ function requestToItem(request: PrayerRequestRecord, actor: PrayerRequestActor):
     organizationId: request.organizationId,
     title: request.title,
     description: request.description,
+    archiveReason: request.archiveReason,
     author: {
       membershipId: request.authorMembershipId,
       userId: request.authorUserId,

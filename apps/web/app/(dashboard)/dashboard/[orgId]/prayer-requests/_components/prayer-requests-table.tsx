@@ -4,6 +4,7 @@ import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import type {
+  ArchivePrayerRequestInput,
   PrayerRequestItem,
   PrayerRequestsPayload,
   UpdatePrayerRequestInput,
@@ -26,29 +27,42 @@ export function PrayerRequestsTable({
   disabled: boolean;
   payload: PrayerRequestsPayload;
   onUpdate: (requestId: string, request: UpdatePrayerRequestInput) => void;
-  onArchive: (requestId: string) => void;
+  onArchive: (requestId: string, request: ArchivePrayerRequestInput) => void;
   onRestore: (requestId: string) => void;
   onDelete: (request: PrayerRequestItem) => Promise<void>;
 }) {
   const t = useTranslations('prayerRequests');
   const paginationT = useTranslations('pagination');
   const locale = useLocale();
+  const isArchivedTab = payload.tab === 'archived';
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }),
     [locale],
   );
-  const columns = useMemo<Array<ColumnDef<PrayerRequestItem>>>(
-    () => [
-      {
-        id: 'request',
-        header: t('request'),
-        accessorFn: (request) => request.title,
-        cell: ({ row }) => <PrayerRequestSummaryCell row={row} />,
-        meta: {
-          headerClassName: cx(styles['highlightHeader'], styles['requestColumn']),
-          cellClassName: styles['requestColumn'] ?? '',
-        },
+  const columns = useMemo<Array<ColumnDef<PrayerRequestItem>>>(() => {
+    const requestColumn: ColumnDef<PrayerRequestItem> = {
+      id: 'request',
+      header: t('request'),
+      accessorFn: (request) => request.title,
+      cell: ({ row }) => <PrayerRequestSummaryCell row={row} />,
+      meta: {
+        headerClassName: cx(styles['highlightHeader'], styles['requestColumn']),
+        cellClassName: styles['requestColumn'] ?? '',
       },
+    };
+    const archiveReasonColumn: ColumnDef<PrayerRequestItem> = {
+      id: 'archiveReason',
+      header: t('archiveReasonColumn'),
+      accessorFn: (request) => request.archiveReason ?? '',
+      cell: ({ row }) => (
+        <ArchiveReasonCell reason={row.original.archiveReason} emptyLabel={t('noArchiveReason')} />
+      ),
+      meta: {
+        headerClassName: cx(styles['highlightHeader'], styles['archiveReasonColumn']),
+        cellClassName: styles['archiveReasonColumn'] ?? '',
+      },
+    };
+    const trailingColumns: Array<ColumnDef<PrayerRequestItem>> = [
       {
         id: 'author',
         header: t('author'),
@@ -102,9 +116,12 @@ export function PrayerRequestsTable({
           cellClassName: 'w-11',
         },
       },
-    ],
-    [dateFormatter, disabled, onArchive, onDelete, onRestore, onUpdate, t],
-  );
+    ];
+
+    return isArchivedTab
+      ? [requestColumn, archiveReasonColumn, ...trailingColumns]
+      : [requestColumn, ...trailingColumns];
+  }, [dateFormatter, disabled, isArchivedTab, onArchive, onDelete, onRestore, onUpdate, t]);
 
   const pagination = createDataTablePagination({
     labels: {
@@ -132,7 +149,7 @@ export function PrayerRequestsTable({
       renderExpandedRow={(row) => <ExpandedPrayerRequest row={row} />}
       pagination={pagination}
       shellClassName={styles['tableShell'] ?? ''}
-      tableClassName="min-w-[860px]"
+      tableClassName={isArchivedTab ? 'min-w-[1080px]' : 'min-w-[860px]'}
     />
   );
 }
@@ -162,6 +179,21 @@ function ExpandedPrayerRequest({ row }: { row: Row<PrayerRequestItem> }) {
   return (
     <div className={styles['expandedContent'] ?? ''}>
       <p>{row.original.description}</p>
+    </div>
+  );
+}
+
+function ArchiveReasonCell({ reason, emptyLabel }: { reason: string | null; emptyLabel: string }) {
+  return (
+    <div
+      className={
+        reason
+          ? (styles['archiveReasonNote'] ?? '')
+          : cx(styles['archiveReasonNote'], styles['archiveReasonNoteEmpty'])
+      }
+      title={reason ?? emptyLabel}
+    >
+      {reason ?? emptyLabel}
     </div>
   );
 }

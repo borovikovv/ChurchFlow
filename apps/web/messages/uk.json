@@ -70,7 +70,7 @@
     "home": "Головна",
     "main": "Головна навігація",
     "members": "Учасники",
-    "prayerRequests": "Молитовні потреби",
+    "prayerRequests": "Молитви",
     "navigationMenu": "Меню навігації",
     "openNavigationMenu": "Відкрити меню навігації",
     "profile": "Профіль",
@@ -708,7 +708,7 @@
     }
   },
   "prayerRequests": {
-    "title": "Молитовні потреби",
+    "title": "Молитви",
     "tabsLabel": "Види молитовних потреб",
     "active": "Активні",
     "archived": "Архівовані",
@@ -725,6 +725,13 @@
     "cancel": "Скасувати",
     "edit": "Редагувати",
     "archive": "Архівувати",
+    "archiveDescription": "Додайте необовʼязкову причину архівації цієї молитви.",
+    "archiveReasonColumn": "Причина",
+    "archiveReasonLabel": "Причина архівації",
+    "archiveReasonPlaceholder": "Є відповідь, не актуально або інша примітка...",
+    "archiveSubmit": "Архівувати",
+    "archiveTitle": "Архівувати молитву",
+    "archiving": "Архівація...",
     "restore": "Відновити",
     "delete": "Видалити",
     "deleteTitle": "Видалити молитовну потребу",
@@ -733,7 +740,8 @@
     "titleLabel": "Заголовок",
     "descriptionLabel": "Молитовна потреба",
     "emptyActive": "Активних молитовних потреб поки немає.",
-    "emptyArchived": "Архівованих молитовних потреб поки немає."
+    "emptyArchived": "Архівованих молитовних потреб поки немає.",
+    "noArchiveReason": "Без причини"
   },
   "home": {
     "title": "Головна",

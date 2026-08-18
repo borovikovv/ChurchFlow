@@ -501,6 +501,10 @@ export const updatePrayerRequestSchema = z
     message: 'At least one prayer request field is required',
   });
 
+export const archivePrayerRequestSchema = z.object({
+  archiveReason: nullableTrimmedString(1000),
+});
+
 export const appLocaleSchema = z.enum(APP_LOCALES);
 
 export const updateCurrentUserProfileSchema = z
