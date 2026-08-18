@@ -13,6 +13,7 @@ import {
   BUDGET_GROUPS,
   DEFAULT_MEMBER_PAGE_SIZE,
   MEMBER_MINISTRIES,
+  MEMBER_TABS,
   MEMBER_PAGE_SIZE_OPTIONS,
   MEMBER_CSV_TEMPLATE_COLUMNS,
   NOTIFICATION_TYPES,
@@ -51,7 +52,12 @@ export const invitationModeSchema = z.enum(['targeted_telegram', 'claimable_link
 export const platformRoleSchema = z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']);
 export const organizationRoleSchema = z.enum(['OWNER', 'ADMIN', 'MEMBER', 'VIEWER']);
 export const organizationStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'ARCHIVED', 'DELETED']);
-export const organizationMemberStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'REMOVED']);
+export const organizationMemberStatusSchema = z.enum([
+  'ACTIVE',
+  'SUSPENDED',
+  'ARCHIVED',
+  'REMOVED',
+]);
 export const updateOrganizationMemberRoleSchema = z.object({
   role: organizationRoleSchema,
 });
@@ -70,6 +76,7 @@ export const organizationMembersAccessFilterSchema = z.enum([
   'suspended',
 ]);
 export const organizationMembersTypeFilterSchema = z.enum(['all', 'member', 'visitor']);
+export const organizationMembersTabSchema = z.enum(MEMBER_TABS);
 export const memberMinistrySchema = z.enum(MEMBER_MINISTRIES);
 export const memberMinistriesSchema = z.array(memberMinistrySchema);
 
@@ -82,6 +89,7 @@ const memberMinistriesQuerySchema = z.preprocess((value) => {
 export const listOrganizationMembersQuerySchema = z.object({
   access: organizationMembersAccessFilterSchema.default('all'),
   membershipId: uuidSchema.optional(),
+  tab: organizationMembersTabSchema.default('active'),
   type: organizationMembersTypeFilterSchema.default('all'),
   search: z.string().trim().max(100).default(''),
   ministries: memberMinistriesQuerySchema,

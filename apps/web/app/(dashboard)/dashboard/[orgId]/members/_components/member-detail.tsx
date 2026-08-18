@@ -4,8 +4,9 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { Button, ButtonLink } from '@/components/ui/button';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { EditMemberDialog } from '@/components/members/member-actions';
-import type { MemberProfileUpdate } from '@/components/members/member-actions';
+import type { MemberProfileUpdate } from '@/components/members/member-actions.types';
 import { organizationMembersRoute } from '@/features/organizations/routes';
 import type { MembersPayload, OrganizationMember } from '../types';
 import { MemberAvatar } from './member-avatar';
@@ -40,6 +41,10 @@ export function MemberDetail({
   const canEditProfile = canManage || member.id === payload.actorMembershipId;
   const canEditRelationships = canManage || member.id === payload.actorMembershipId;
   const memberCandidates = payload.memberCandidates;
+  const backHref =
+    member.status === 'ARCHIVED'
+      ? (`${organizationMembersRoute(organizationId)}?tab=archived` as const)
+      : organizationMembersRoute(organizationId);
 
   function updateProfile(updates: MemberProfileUpdate) {
     const { ministries, ...profileUpdates } = updates;
@@ -69,11 +74,7 @@ export function MemberDetail({
   return (
     <div className="flex min-w-0 flex-col gap-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <ButtonLink
-          className="w-full sm:w-auto"
-          href={organizationMembersRoute(organizationId)}
-          variant="secondary"
-        >
+        <ButtonLink className="w-full sm:w-auto" href={backHref} variant="secondary">
           {t('backToMembers')}
         </ButtonLink>
         {canEditProfile ? (
@@ -106,7 +107,14 @@ export function MemberDetail({
           />
           <div className="min-w-0 flex-1">
             <p className="mb-1 text-sm font-semibold text-[var(--muted)]">{t('memberDetails')}</p>
-            <h1 className="mb-0 break-words text-3xl sm:text-4xl">{member.profile.displayName}</h1>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h1 className="mb-0 break-words text-3xl sm:text-4xl">
+                {member.profile.displayName}
+              </h1>
+              {member.status === 'ARCHIVED' ? (
+                <StatusBadge status="archived" label={t('archived')} />
+              ) : null}
+            </div>
           </div>
         </div>
       </header>

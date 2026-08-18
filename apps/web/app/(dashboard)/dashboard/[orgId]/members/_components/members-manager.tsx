@@ -8,6 +8,7 @@ import { MemberActions, MemberRoleStatus } from '@/components/members/member-act
 import { FormDialog } from '@/components/ui/form-dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { createDataTablePagination } from '@/components/ui/data-table-pagination';
+import { Tabs } from '@/components/ui/tabs';
 import type { MembersPayload, OrganizationMember } from '../types';
 import { CreateMemberDialog } from './create-member-dialog';
 import { MemberCsvActions } from './member-csv-actions';
@@ -16,6 +17,7 @@ import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
 import type {
   MemberMinistry,
   OrganizationMembersAccessFilter,
+  OrganizationMembersTab,
   OrganizationMembersTypeFilter,
 } from '@churchflow/shared';
 import { MEMBER_MINISTRIES, MEMBER_PAGE_SIZE_OPTIONS } from '@churchflow/shared';
@@ -35,7 +37,9 @@ type MemberActionProps = Pick<
   ComponentProps<typeof MemberActions>,
   | 'updateProfile'
   | 'updateRole'
+  | 'archiveMember'
   | 'removeMember'
+  | 'restoreMember'
   | 'claimAction'
   | 'createRelationship'
   | 'deleteRelationship'
@@ -51,6 +55,7 @@ export function MembersManager({
   memberPage,
   memberPageSize,
   memberSearch,
+  memberTab,
   memberType,
   manageInvitation,
   ...actions
@@ -62,6 +67,7 @@ export function MembersManager({
   memberPage: number;
   memberPageSize: number;
   memberSearch: string;
+  memberTab: OrganizationMembersTab;
   memberType: OrganizationMembersTypeFilter;
   manageInvitation: ComponentProps<typeof InviteAppUserForm>['action'];
 } & MemberActionProps) {
@@ -76,6 +82,7 @@ export function MembersManager({
     page: memberPage,
     pageSize: memberPageSize,
     search: memberSearch,
+    tab: memberTab,
     type: memberType,
   });
   const members = payload.members;
@@ -104,12 +111,28 @@ export function MembersManager({
     label: t(`ministry.${ministry}`),
     value: ministry,
   }));
-  const preservedAccess = memberAccess === 'all' ? undefined : memberAccess;
+  const preservedAccess =
+    memberAccess === 'all' || memberTab === 'archived' ? undefined : memberAccess;
   const preservedMinistries = memberMinistries.length > 0 ? memberMinistries.join(',') : undefined;
   const preservedPageSize =
     memberPageSize === MEMBER_PAGE_SIZE_OPTIONS[0] ? undefined : String(memberPageSize);
+  const preservedTab = memberTab === 'archived' ? memberTab : undefined;
   const preservedType = memberType === 'all' ? undefined : memberType;
   const preservedSearch = memberSearch || undefined;
+  const activeMembersHref = createMembersTabHref(organizationId, {
+    access: preservedAccess,
+    ministries: preservedMinistries,
+    pageSize: preservedPageSize,
+    search: preservedSearch,
+    type: preservedType,
+  });
+  const archivedMembersHref = createMembersTabHref(organizationId, {
+    ministries: preservedMinistries,
+    pageSize: preservedPageSize,
+    search: preservedSearch,
+    tab: 'archived',
+    type: preservedType,
+  });
   const columns: Array<ColumnDef<OrganizationMember>> = [
     {
       accessorFn: (member) => member.profile.displayName,
@@ -124,7 +147,11 @@ export function MembersManager({
               url={member.profile.photoUrl}
               size="md"
             />
-            <MemberIdentitySummary source={member.source} profile={member.profile} />
+            <MemberIdentitySummary
+              archived={member.status === 'ARCHIVED'}
+              source={member.source}
+              profile={member.profile}
+            />
           </div>
         );
       },
@@ -204,6 +231,23 @@ export function MembersManager({
     <>
       <div className="flex min-w-0 flex-col justify-between gap-3 xl:flex-row">
         <div className="flex w-full min-w-0 flex-col gap-2 md:w-[492px] md:max-w-full md:flex-none">
+          <Tabs
+            label={t('memberTabsLabel')}
+            items={[
+              {
+                label: t('activeMembers'),
+                href: activeMembersHref,
+                active: memberTab === 'active',
+                count: payload.counts.active,
+              },
+              {
+                label: t('archivedMembers'),
+                href: archivedMembersHref,
+                active: memberTab === 'archived',
+                count: payload.counts.archived,
+              },
+            ]}
+          />
           <MemberSearchInput
             label={t('searchByName')}
             placeholder={t('searchByNamePlaceholder')}
@@ -211,6 +255,7 @@ export function MembersManager({
               access: preservedAccess,
               ministries: preservedMinistries,
               pageSize: preservedPageSize,
+              tab: preservedTab,
               type: preservedType,
             }}
             search={memberSearch}
@@ -225,26 +270,29 @@ export function MembersManager({
               access: preservedAccess,
               pageSize: preservedPageSize,
               search: preservedSearch,
+              tab: preservedTab,
               type: preservedType,
             }}
             selectClassName="w-full"
             value={memberMinistries}
           />
           <div className="filter-bar min-w-0 flex-wrap">
-            <QueryFilterSelect
-              label={t('access')}
-              labelClassName="sr-only"
-              name="access"
-              options={memberAccessFilterOptions}
-              preserveParams={{
-                ministries: preservedMinistries,
-                pageSize: preservedPageSize,
-                search: preservedSearch,
-                type: preservedType,
-              }}
-              size="medium"
-              value={memberAccess === 'all' ? '' : memberAccess}
-            />
+            {memberTab === 'active' ? (
+              <QueryFilterSelect
+                label={t('access')}
+                labelClassName="sr-only"
+                name="access"
+                options={memberAccessFilterOptions}
+                preserveParams={{
+                  ministries: preservedMinistries,
+                  pageSize: preservedPageSize,
+                  search: preservedSearch,
+                  type: preservedType,
+                }}
+                size="medium"
+                value={memberAccess === 'all' ? '' : memberAccess}
+              />
+            ) : null}
             <QueryFilterSelect
               label={t('type')}
               labelClassName="sr-only"
@@ -255,6 +303,7 @@ export function MembersManager({
                 ministries: preservedMinistries,
                 pageSize: preservedPageSize,
                 search: preservedSearch,
+                tab: preservedTab,
               }}
               size="medium"
               value={memberType === 'all' ? '' : memberType}
@@ -303,6 +352,7 @@ export function MembersManager({
           data={members}
           emptyMessage={t('emptyFilter')}
           getRowHref={(member) => organizationMemberRoute(organizationId, member.id)}
+          getRowClassName={(member) => (member.status === 'ARCHIVED' ? 'opacity-75' : undefined)}
           pagination={createDataTablePagination({
             labels: {
               firstPageLabel: paginationT('firstPage'),
@@ -320,6 +370,7 @@ export function MembersManager({
               access: preservedAccess,
               ministries: preservedMinistries,
               search: preservedSearch,
+              tab: preservedTab,
               type: preservedType,
             },
             total: payload.pagination.total,
@@ -329,6 +380,17 @@ export function MembersManager({
       </section>
     </>
   );
+}
+
+function createMembersTabHref(organizationId: string, params: Record<string, string | undefined>) {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([name, value]) => {
+    if (value) searchParams.set(name, value);
+  });
+  const query = searchParams.toString();
+  return query
+    ? `/dashboard/${organizationId}/members?${query}`
+    : `/dashboard/${organizationId}/members`;
 }
 
 function LocalizedStatusBadge({ status, label }: { status: string; label: string }) {

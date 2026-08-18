@@ -1,6 +1,7 @@
 import type { MemberMinistry } from '@churchflow/shared';
 
 export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
+export type OrganizationMemberStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'REMOVED';
 export type AccountState =
   | 'UNCLAIMED'
   | 'CLAIM_PENDING'
@@ -20,11 +21,12 @@ export interface MemberRelationship {
 export interface OrganizationMember {
   id: string;
   role: OrganizationRole;
-  status: string;
+  status: OrganizationMemberStatus;
   source: string;
   ministries: MemberMinistry[];
   accountState: AccountState;
   claimedAt: string | null;
+  archivedAt: string | null;
   profile: {
     displayName: string;
     email: string | null;
@@ -73,6 +75,10 @@ export interface MembersPayload {
     pageCount: number;
     pageSize: number;
     total: number;
+  };
+  counts: {
+    active: number;
+    archived: number;
   };
   members: OrganizationMember[];
   pendingInvitations: PendingInvitation[];

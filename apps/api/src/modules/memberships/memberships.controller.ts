@@ -44,6 +44,7 @@ export class MembershipsController {
       organizationId,
       this.getActorUserId(request),
       query.access,
+      query.tab,
       query.type,
       query.search,
       query.ministries,
@@ -166,6 +167,32 @@ export class MembershipsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.membershipsService.removeMember(
+      organizationId,
+      membershipId,
+      this.getActorUserId(request),
+    );
+  }
+
+  @Post(':membershipId/archive')
+  async archive(
+    @Param('organizationId') organizationId: string,
+    @Param('membershipId') membershipId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.membershipsService.archiveMember(
+      organizationId,
+      membershipId,
+      this.getActorUserId(request),
+    );
+  }
+
+  @Post(':membershipId/restore')
+  async restore(
+    @Param('organizationId') organizationId: string,
+    @Param('membershipId') membershipId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.membershipsService.restoreMember(
       organizationId,
       membershipId,
       this.getActorUserId(request),

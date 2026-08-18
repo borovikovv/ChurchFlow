@@ -10,5 +10,6 @@ export class ListMembershipsQueryDto implements ListOrganizationMembersQuery {
   page!: ListOrganizationMembersQuery['page'];
   pageSize!: ListOrganizationMembersQuery['pageSize'];
   search!: ListOrganizationMembersQuery['search'];
+  tab!: ListOrganizationMembersQuery['tab'];
   type!: ListOrganizationMembersQuery['type'];
 }

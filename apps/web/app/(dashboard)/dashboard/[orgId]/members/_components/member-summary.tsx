@@ -1,4 +1,5 @@
 import { useTranslations } from 'next-intl';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 interface SummaryProfile {
   displayName: string;
@@ -7,9 +8,11 @@ interface SummaryProfile {
 }
 
 export function MemberIdentitySummary({
+  archived,
   source,
   profile,
 }: {
+  archived?: boolean;
   source: string;
   profile: SummaryProfile;
 }) {
@@ -18,8 +21,11 @@ export function MemberIdentitySummary({
   return (
     <div className="grid min-w-0 gap-[3px]">
       <strong>{profile.displayName}</strong>
-      <span className="truncate text-[var(--muted)]">
-        {source === 'MANUAL' ? t('addedManually') : t('appMember')}
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-[var(--muted)]">
+        <span className="truncate">
+          {source === 'MANUAL' ? t('addedManually') : t('appMember')}
+        </span>
+        {archived ? <StatusBadge status="archived" label={t('archived')} /> : null}
       </span>
     </div>
   );

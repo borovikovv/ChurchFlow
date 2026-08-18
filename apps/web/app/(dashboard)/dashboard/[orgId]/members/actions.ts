@@ -11,9 +11,13 @@ import type {
   ImportOrganizationMembersCsvResult,
   MemberMinistry,
   OrganizationMembersAccessFilter,
+  OrganizationMembersTab,
   OrganizationMembersTypeFilter,
 } from '@churchflow/shared';
-import type { ProfileUpdateState, RoleUpdateState } from '@/components/members/member-actions';
+import type {
+  ProfileUpdateState,
+  RoleUpdateState,
+} from '@/components/members/member-actions.types';
 import { getMessages } from '@/i18n/messages';
 import type {
   ClaimMutationResult,
@@ -35,11 +39,13 @@ export async function loadMembersAction(input: {
   ministries: MemberMinistry[];
   page: number;
   pageSize: number;
+  tab: OrganizationMembersTab;
   type: OrganizationMembersTypeFilter;
   search: string;
 }) {
   const params = new URLSearchParams({
     access: input.access,
+    tab: input.tab,
     type: input.type,
     search: input.search,
     page: String(input.page),
@@ -94,6 +100,7 @@ export async function loadMemberDetailsAction(input: {
     ministries: [],
     page: 1,
     pageSize: 10,
+    tab: 'active',
     type: 'all',
     search: '',
   });
@@ -251,6 +258,36 @@ export async function removeMemberAction(formData: FormData) {
   const membershipId = String(formData.get('membershipId'));
   const result = await apiFetch(
     `/organizations/${organizationId}/memberships/${membershipId}/remove`,
+    { method: 'POST' },
+  );
+  if (result.ok) {
+    revalidatePath(`/dashboard/${organizationId}/members`);
+    return { ok: true as const };
+  }
+
+  return { ok: false as const, error: result.error.message };
+}
+
+export async function archiveMemberAction(formData: FormData) {
+  const organizationId = String(formData.get('organizationId'));
+  const membershipId = String(formData.get('membershipId'));
+  const result = await apiFetch(
+    `/organizations/${organizationId}/memberships/${membershipId}/archive`,
+    { method: 'POST' },
+  );
+  if (result.ok) {
+    revalidatePath(`/dashboard/${organizationId}/members`);
+    return { ok: true as const };
+  }
+
+  return { ok: false as const, error: result.error.message };
+}
+
+export async function restoreMemberAction(formData: FormData) {
+  const organizationId = String(formData.get('organizationId'));
+  const membershipId = String(formData.get('membershipId'));
+  const result = await apiFetch(
+    `/organizations/${organizationId}/memberships/${membershipId}/restore`,
     { method: 'POST' },
   );
   if (result.ok) {

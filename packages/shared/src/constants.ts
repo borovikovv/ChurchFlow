@@ -215,6 +215,7 @@ export const MEMBER_MINISTRY = {
 
 export const MEMBER_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 export const DEFAULT_MEMBER_PAGE_SIZE = 10;
+export const MEMBER_TABS = ['active', 'archived'] as const;
 
 export const MEMBER_CSV_TEMPLATE_COLUMNS = [
   'displayName',

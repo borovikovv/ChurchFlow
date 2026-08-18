@@ -6,10 +6,12 @@ import {
   confirmMemberPhotoAction,
   createRelationshipAction,
   deleteRelationshipAction,
+  archiveMemberAction,
   loadMembersAction,
   manageInlineInvitationAction,
   prepareMemberPhotoAction,
   removeMemberAction,
+  restoreMemberAction,
   updateMemberRoleAction,
   updateMemberProfileAction,
 } from './actions';
@@ -18,7 +20,9 @@ import {
   DEFAULT_MEMBER_PAGE_SIZE,
   MEMBER_PAGE_SIZE_OPTIONS,
   organizationMembersAccessFilterSchema,
+  organizationMembersTabSchema,
   type OrganizationMembersAccessFilter,
+  type OrganizationMembersTab,
   organizationMembersTypeFilterSchema,
   type OrganizationMembersTypeFilter,
   memberMinistriesSchema,
@@ -35,6 +39,7 @@ type MembersSearchParams = {
   page?: string;
   pageSize?: string;
   search?: string;
+  tab?: string;
   type?: string;
 };
 
@@ -47,6 +52,10 @@ const emptyMembersPayload: MembersPayload = {
     pageCount: 1,
     pageSize: DEFAULT_MEMBER_PAGE_SIZE,
     total: 0,
+  },
+  counts: {
+    active: 0,
+    archived: 0,
   },
   members: [],
   pendingInvitations: [],
@@ -69,6 +78,7 @@ export default async function MembersDashboardPage({
     page = '1',
     pageSize = String(DEFAULT_MEMBER_PAGE_SIZE),
     search = '',
+    tab = 'active',
     type = 'all',
   } = await searchParams;
   const user = await getCurrentUser();
@@ -77,6 +87,7 @@ export default async function MembersDashboardPage({
   const memberMinistries = parseMemberMinistries(ministries);
   const memberPage = parseMemberPage(page);
   const memberPageSize = parseMemberPageSize(pageSize);
+  const memberTab = parseMemberTab(tab);
   const memberType = parseMemberType(type);
   const memberSearch = parseMemberSearch(search);
   const membersResult = await loadMembersAction({
@@ -85,6 +96,7 @@ export default async function MembersDashboardPage({
     ministries: memberMinistries,
     page: memberPage,
     pageSize: memberPageSize,
+    tab: memberTab,
     type: memberType,
     search: memberSearch,
   });
@@ -112,13 +124,16 @@ export default async function MembersDashboardPage({
         memberPage={memberPage}
         memberPageSize={memberPageSize}
         memberSearch={memberSearch}
+        memberTab={memberTab}
         memberType={memberType}
         organizationId={orgId}
         initialPayload={payload}
         manageInvitation={manageInlineInvitationAction}
         updateProfile={updateMemberProfileAction}
         updateRole={updateMemberRoleAction}
+        archiveMember={archiveMemberAction}
         removeMember={removeMemberAction}
+        restoreMember={restoreMemberAction}
         claimAction={claimAction}
         createRelationship={createRelationshipAction}
         deleteRelationship={deleteRelationshipAction}
@@ -137,6 +152,11 @@ function parseMemberAccess(access: string): OrganizationMembersAccessFilter {
 function parseMemberType(type: string): OrganizationMembersTypeFilter {
   const parsedType = organizationMembersTypeFilterSchema.safeParse(type);
   return parsedType.success ? parsedType.data : 'all';
+}
+
+function parseMemberTab(tab: string): OrganizationMembersTab {
+  const parsedTab = organizationMembersTabSchema.safeParse(tab);
+  return parsedTab.success ? parsedTab.data : 'active';
 }
 
 function parseMemberSearch(search: string): string {

@@ -14,6 +14,7 @@ import type {
   ImportOrganizationMembersCsvResult,
   MemberMinistry,
   OrganizationMembersAccessFilter,
+  OrganizationMembersTab,
   OrganizationMembersTypeFilter,
   UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
@@ -32,6 +33,7 @@ export class MembershipsService {
     organizationId: string,
     actorUserId: string,
     access: OrganizationMembersAccessFilter,
+    tab: OrganizationMembersTab,
     type: OrganizationMembersTypeFilter,
     search: string,
     ministries: MemberMinistry[],
@@ -43,6 +45,7 @@ export class MembershipsService {
       this.membershipsRepository.listForOrganization(
         organizationId,
         access,
+        tab,
         type,
         search,
         ministries,
@@ -53,7 +56,7 @@ export class MembershipsService {
       this.invitationsRepository.listPendingForOrganization(organizationId),
       this.membershipsRepository.findActiveMembership(organizationId, actorUserId),
     ]);
-    const { candidates, members, page: currentPage, total } = membersPage;
+    const { candidates, counts, members, page: currentPage, total } = membersPage;
 
     const canManageProfiles =
       actorMembership?.role === 'OWNER' || actorMembership?.role === 'ADMIN';
@@ -67,6 +70,7 @@ export class MembershipsService {
         total,
         pageCount: Math.max(1, Math.ceil(total / pageSize)),
       },
+      counts,
       memberCandidates: candidates.map((candidate) => ({
         id: candidate.id,
         displayName:
@@ -398,6 +402,89 @@ export class MembershipsService {
       }
       if (error instanceof Error && error.message === 'LAST_OWNER') {
         throw new ConflictException('Cannot remove the last organization owner');
+      }
+
+      throw error;
+    }
+  }
+
+  async archiveMember(organizationId: string, membershipId: string, actorUserId: string) {
+    const actorMembership = await this.membershipsRepository.findActiveMembership(
+      organizationId,
+      actorUserId,
+    );
+    if (!actorMembership || actorMembership.role !== 'OWNER') {
+      throw new ForbiddenException('Only organization owners can archive members');
+    }
+
+    const targetMembership = await this.membershipsRepository.findMembershipByIdForArchiveAction(
+      organizationId,
+      membershipId,
+    );
+    if (!targetMembership) {
+      throw new NotFoundException('Organization member was not found');
+    }
+
+    if (targetMembership.status === 'ARCHIVED') {
+      throw new ConflictException('Member is already archived');
+    }
+
+    if (targetMembership.userId === actorUserId) {
+      throw new ConflictException('Owners cannot archive their own membership');
+    }
+
+    try {
+      return await this.membershipsRepository.archiveMembership({
+        organizationId,
+        membershipId,
+        actorUserId,
+      });
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'ACTOR_NOT_OWNER') {
+        throw new ForbiddenException('Only organization owners can archive members');
+      }
+      if (error instanceof Error && error.message === 'LAST_OWNER') {
+        throw new ConflictException('Cannot archive the last organization owner');
+      }
+
+      throw error;
+    }
+  }
+
+  async restoreMember(organizationId: string, membershipId: string, actorUserId: string) {
+    const actorMembership = await this.membershipsRepository.findActiveMembership(
+      organizationId,
+      actorUserId,
+    );
+    if (!actorMembership || actorMembership.role !== 'OWNER') {
+      throw new ForbiddenException('Only organization owners can restore members');
+    }
+
+    const targetMembership = await this.membershipsRepository.findMembershipByIdForArchiveAction(
+      organizationId,
+      membershipId,
+    );
+    if (!targetMembership) {
+      throw new NotFoundException('Organization member was not found');
+    }
+
+    if (targetMembership.status !== 'ARCHIVED') {
+      throw new ConflictException('Only archived members can be restored');
+    }
+
+    if (targetMembership.userId === actorUserId) {
+      throw new ConflictException('Owners cannot restore their own membership');
+    }
+
+    try {
+      return await this.membershipsRepository.restoreMembership({
+        organizationId,
+        membershipId,
+        actorUserId,
+      });
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'ACTOR_NOT_OWNER') {
+        throw new ForbiddenException('Only organization owners can restore members');
       }
 
       throw error;

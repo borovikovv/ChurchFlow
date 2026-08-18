@@ -5,6 +5,7 @@ import { useCallback, useMemo } from 'react';
 import type {
   OrganizationMembersAccessFilter,
   MemberMinistry,
+  OrganizationMembersTab,
   OrganizationMembersTypeFilter,
 } from '@churchflow/shared';
 import { loadMembersAction } from '../actions';
@@ -18,6 +19,7 @@ export function useMembersQuery({
   page,
   pageSize,
   search,
+  tab,
   type,
 }: {
   access: OrganizationMembersAccessFilter;
@@ -27,6 +29,7 @@ export function useMembersQuery({
   page: number;
   pageSize: number;
   search: string;
+  tab: OrganizationMembersTab;
   type: OrganizationMembersTypeFilter;
 }) {
   const queryClient = useQueryClient();
@@ -42,8 +45,9 @@ export function useMembersQuery({
         ministriesKey,
         page,
         pageSize,
+        tab,
       ] as const,
-    [access, ministriesKey, organizationId, page, pageSize, search, type],
+    [access, ministriesKey, organizationId, page, pageSize, search, tab, type],
   );
   const query = useQuery({
     queryKey,
@@ -54,6 +58,7 @@ export function useMembersQuery({
         ministries,
         page,
         pageSize,
+        tab,
         type,
         search,
       });

@@ -4,6 +4,7 @@ import type {
   CreateManualOrganizationMemberInput,
   MemberMinistry,
   OrganizationMembersAccessFilter,
+  OrganizationMembersTab,
   OrganizationMembersTypeFilter,
   UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
@@ -16,6 +17,7 @@ export class MembershipsRepository {
   async listForOrganization(
     organizationId: string,
     access: OrganizationMembersAccessFilter,
+    tab: OrganizationMembersTab,
     type: OrganizationMembersTypeFilter,
     search: string,
     ministries: MemberMinistry[],
@@ -78,17 +80,40 @@ export class MembershipsRepository {
             },
           }
         : {};
-    const where: Prisma.OrganizationMemberWhereInput = {
+    const lifecycleWhere: Prisma.OrganizationMemberWhereInput = membershipId
+      ? { status: { in: ['ACTIVE', 'SUSPENDED', 'ARCHIVED'] } }
+      : tab === 'archived'
+        ? { status: 'ARCHIVED' }
+        : { status: { in: ['ACTIVE', 'SUSPENDED'] } };
+    const baseWhere: Prisma.OrganizationMemberWhereInput = {
       ...(membershipId ? { id: membershipId } : {}),
       organizationId,
-      status: { in: ['ACTIVE', 'SUSPENDED'] },
       removedAt: null,
-      ...accessWhere[access],
       ...typeWhere[type],
       ...searchWhere,
       ...ministriesWhere,
     };
-    const total = await this.prisma.organizationMember.count({ where });
+    const effectiveAccess = tab === 'archived' ? 'all' : access;
+    const where: Prisma.OrganizationMemberWhereInput = {
+      ...baseWhere,
+      ...lifecycleWhere,
+      ...accessWhere[effectiveAccess],
+    };
+    const [total, activeCount, archivedCount] = await Promise.all([
+      this.prisma.organizationMember.count({ where }),
+      this.prisma.organizationMember.count({
+        where: {
+          ...baseWhere,
+          status: { in: ['ACTIVE', 'SUSPENDED'] },
+        },
+      }),
+      this.prisma.organizationMember.count({
+        where: {
+          ...baseWhere,
+          status: 'ARCHIVED',
+        },
+      }),
+    ]);
     const pageCount = Math.max(1, Math.ceil(total / pageSize));
     const currentPage = Math.min(page, pageCount);
     const skip = (currentPage - 1) * pageSize;
@@ -150,7 +175,13 @@ export class MembershipsRepository {
       orderBy: { createdAt: 'desc' },
     });
 
-    return { candidates, members, page: currentPage, total };
+    return {
+      candidates,
+      counts: { active: activeCount, archived: archivedCount },
+      members,
+      page: currentPage,
+      total,
+    };
   }
 
   async createManualMember(
@@ -577,6 +608,18 @@ export class MembershipsRepository {
     });
   }
 
+  async findMembershipByIdForArchiveAction(organizationId: string, membershipId: string) {
+    return this.prisma.organizationMember.findFirst({
+      where: {
+        id: membershipId,
+        organizationId,
+        status: { in: ['ACTIVE', 'SUSPENDED', 'ARCHIVED'] },
+        removedAt: null,
+      },
+      include: { profile: true, user: true },
+    });
+  }
+
   async listAdminMembershipIds(organizationId: string, excludedUserId?: string | null) {
     const admins = await this.prisma.organizationMember.findMany({
       where: {
@@ -679,6 +722,151 @@ export class MembershipsRepository {
       });
 
       return removed;
+    });
+  }
+
+  async archiveMembership(input: {
+    organizationId: string;
+    membershipId: string;
+    actorUserId: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id
+        FROM organization_members
+        WHERE organization_id = ${input.organizationId}::uuid
+          AND role = 'OWNER'
+          AND status = 'ACTIVE'
+          AND removed_at IS NULL
+        FOR UPDATE
+      `;
+
+      const actor = await tx.organizationMember.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          userId: input.actorUserId,
+          role: 'OWNER',
+          status: 'ACTIVE',
+          removedAt: null,
+        },
+      });
+      if (!actor) {
+        throw new Error('ACTOR_NOT_OWNER');
+      }
+
+      const membership = await tx.organizationMember.findFirst({
+        where: {
+          id: input.membershipId,
+          organizationId: input.organizationId,
+          status: { in: ['ACTIVE', 'SUSPENDED'] },
+          removedAt: null,
+        },
+      });
+      if (!membership) {
+        return null;
+      }
+
+      if (membership.role === 'OWNER') {
+        const ownerCount = await tx.organizationMember.count({
+          where: {
+            organizationId: input.organizationId,
+            role: 'OWNER',
+            status: 'ACTIVE',
+            removedAt: null,
+          },
+        });
+        if (ownerCount <= 1) {
+          throw new Error('LAST_OWNER');
+        }
+      }
+
+      const archivedAt = new Date();
+      const archived = await tx.organizationMember.update({
+        where: { id: membership.id },
+        data: {
+          status: 'ARCHIVED',
+          archivedAt,
+        },
+      });
+
+      await tx.membershipClaim.updateMany({
+        where: { membershipId: membership.id, status: { in: ['PENDING', 'REQUESTED'] } },
+        data: { status: 'REVOKED', revokedAt: archivedAt },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: 'ARCHIVE_MEMBER',
+          entityType: 'OrganizationMember',
+          entityId: archived.id,
+          metadata: {
+            archivedUserId: membership.userId,
+            archivedRole: membership.role,
+            previousStatus: membership.status,
+          },
+        },
+      });
+
+      return archived;
+    });
+  }
+
+  async restoreMembership(input: {
+    organizationId: string;
+    membershipId: string;
+    actorUserId: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const actor = await tx.organizationMember.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          userId: input.actorUserId,
+          role: 'OWNER',
+          status: 'ACTIVE',
+          removedAt: null,
+        },
+      });
+      if (!actor) {
+        throw new Error('ACTOR_NOT_OWNER');
+      }
+
+      const membership = await tx.organizationMember.findFirst({
+        where: {
+          id: input.membershipId,
+          organizationId: input.organizationId,
+          status: 'ARCHIVED',
+          removedAt: null,
+        },
+      });
+      if (!membership) {
+        return null;
+      }
+
+      const restored = await tx.organizationMember.update({
+        where: { id: membership.id },
+        data: {
+          status: 'ACTIVE',
+          archivedAt: null,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: 'RESTORE_MEMBER',
+          entityType: 'OrganizationMember',
+          entityId: restored.id,
+          metadata: {
+            restoredUserId: membership.userId,
+            restoredRole: membership.role,
+          },
+        },
+      });
+
+      return restored;
     });
   }
 

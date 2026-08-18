@@ -1,7 +1,6 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
 import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   MEMBER_MINISTRIES,
   updateOrganizationMemberProfileSchema,
-  type MemberMinistry,
   type UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
 import { useForm } from 'react-hook-form';
@@ -27,103 +25,17 @@ import { FormInput } from '@/components/forms/form-input';
 import { FormSelect } from '@/components/forms/form-select';
 import { FormTextarea } from '@/components/forms/form-textarea';
 import { FormCheckbox } from '@/components/forms/form-checkbox';
-
-type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
-type FormAction = (formData: FormData) => void | Promise<void>;
-type RemoveMemberAction = (formData: FormData) => Promise<{ ok: boolean; error?: string }>;
-
-export interface ProfileUpdateState {
-  updated: boolean;
-  error: string | null;
-}
-
-type ProfileUpdateAction = (
-  state: ProfileUpdateState,
-  formData: FormData,
-) => Promise<ProfileUpdateState>;
-
-type PrepareMemberPhotoAction = (input: {
-  organizationId: string;
-  membershipId: string;
-  filename: string;
-  mimeType: string;
-  byteSize: number;
-}) => Promise<{ ok: boolean; error?: string; assetId?: string; uploadUrl?: string }>;
-
-type ConfirmMemberPhotoAction = (input: {
-  organizationId: string;
-  membershipId: string;
-  assetId: string;
-}) => Promise<{ ok: boolean; error?: string; photoUrl?: string }>;
-
-export interface RoleUpdateState {
-  role: OrganizationRole;
-  updated: boolean;
-  version: number;
-  error: string | null;
-}
-
-type RoleUpdateAction = (state: RoleUpdateState, formData: FormData) => Promise<RoleUpdateState>;
-
-interface EditableMember {
-  id: string;
-  role: OrganizationRole;
-  accountState: string;
-  ministries: MemberMinistry[];
-  profile: {
-    displayName: string;
-    email: string | null;
-    phone: string | null;
-    notes: string | null;
-    memberSince: string | null;
-    birthday: string | null;
-    anniversary: string | null;
-    biography: string | null;
-    familyNotes: string | null;
-    photoUrl: string | null;
-  };
-  activeClaim: {
-    id: string;
-    status: 'PENDING' | 'REQUESTED';
-  } | null;
-  relationships?: Array<{
-    id: string;
-    type: 'SPOUSE' | 'PARENT' | 'CHILD' | 'SIBLING' | 'OTHER';
-    fromMembershipId: string;
-    toMembershipId: string;
-    fromMembership: { id: string; profile: { displayName: string } | null };
-    toMembership: { id: string; profile: { displayName: string } | null };
-  }>;
-}
-
-type MemberRelationship = NonNullable<EditableMember['relationships']>[number];
-type PendingRelationship = {
-  relatedMembershipId: string;
-  type: MemberRelationship['type'];
-};
-type CreateRelationshipAction = (
-  formData: FormData,
-) => Promise<{ ok: true; relationships: MemberRelationship[] } | { ok: false; error?: string }>;
-type DeleteRelationshipAction = (formData: FormData) => Promise<{ ok: boolean; error?: string }>;
-
-export type MemberProfileUpdate = Partial<EditableMember['profile']> & {
-  ministries?: MemberMinistry[];
-};
-
-function memberProfileFormValues(member: EditableMember): UpdateOrganizationMemberProfileInput {
-  return {
-    displayName: member.profile.displayName,
-    email: member.profile.email,
-    phone: member.profile.phone,
-    notes: member.profile.notes,
-    memberSince: member.profile.memberSince?.slice(0, 10) ?? null,
-    birthday: member.profile.birthday?.slice(0, 10) ?? null,
-    anniversary: member.profile.anniversary?.slice(0, 10) ?? null,
-    biography: member.profile.biography,
-    familyNotes: member.profile.familyNotes,
-    ministries: [...member.ministries],
-  };
-}
+import { memberProfileFormValues } from './member-profile-form-values';
+import {
+  type ChangeRoleDialogProps,
+  type EditMemberDialogProps,
+  type GiveMemberAccessActionProps,
+  type MemberActionsProps,
+  type MemberLifecycleActionFormProps,
+  type MemberRelationship,
+  type OrganizationRole,
+  type PendingRelationship,
+} from './member-actions.types';
 
 function MenuIcon({ children }: { children: ReactNode }) {
   return (
@@ -153,23 +65,7 @@ export function EditMemberDialog({
   onOpen,
   onClose,
   renderTrigger,
-}: {
-  member: EditableMember;
-  organizationId: string;
-  action: ProfileUpdateAction;
-  memberCandidates: Array<{ id: string; displayName: string }>;
-  createRelationship: CreateRelationshipAction;
-  deleteRelationship: DeleteRelationshipAction;
-  preparePhoto: PrepareMemberPhotoAction;
-  confirmPhoto: ConfirmMemberPhotoAction;
-  onProfileUpdated: (profile: MemberProfileUpdate) => void;
-  onRelationshipsChanged?: ((relationships?: MemberRelationship[]) => void) | undefined;
-  canManageRelationships: boolean;
-  dialogRef: RefObject<HTMLDialogElement | null>;
-  onOpen: () => void;
-  onClose: () => void;
-  renderTrigger?: ((openDialog: () => void) => ReactNode) | undefined;
-}) {
+}: EditMemberDialogProps) {
   const t = useTranslations('members');
   const commonT = useTranslations('common');
   const titleId = useId();
@@ -654,15 +550,7 @@ function ChangeRoleDialog({
   dialogRef,
   onOpen,
   onClose,
-}: {
-  member: EditableMember;
-  organizationId: string;
-  action: RoleUpdateAction;
-  onRoleUpdated: (role: OrganizationRole) => void;
-  dialogRef: RefObject<HTMLDialogElement | null>;
-  onOpen: () => void;
-  onClose: () => void;
-}) {
+}: ChangeRoleDialogProps) {
   const t = useTranslations('members');
   const commonT = useTranslations('common');
   const titleId = useId();
@@ -749,12 +637,7 @@ function GiveMemberAccessAction({
   member,
   organizationId,
   setOpenDialog,
-}: {
-  accessDialogRef: RefObject<HTMLDialogElement | null>;
-  member: EditableMember;
-  organizationId: string;
-  setOpenDialog: (dialog: 'access' | null) => void;
-}) {
+}: GiveMemberAccessActionProps) {
   return (
     <GiveMemberAccessDialog
       dialogRef={accessDialogRef}
@@ -771,6 +654,36 @@ function GiveMemberAccessAction({
   );
 }
 
+function MemberLifecycleActionForm({
+  action,
+  children,
+  fallbackErrorLabel,
+  member,
+  organizationId,
+  onSuccess,
+  successLabel,
+}: MemberLifecycleActionFormProps) {
+  return (
+    <form
+      className="contents"
+      action={async (formData) => {
+        const result = await action(formData);
+        if (result.ok) {
+          toast.success(successLabel);
+          onSuccess();
+          return;
+        }
+
+        toast.error(result.error ?? fallbackErrorLabel);
+      }}
+    >
+      <input type="hidden" name="organizationId" value={organizationId} />
+      <input type="hidden" name="membershipId" value={member.id} />
+      {children}
+    </form>
+  );
+}
+
 export function MemberActions({
   member,
   organizationId,
@@ -779,7 +692,9 @@ export function MemberActions({
   isCurrentMember,
   updateProfile,
   updateRole,
+  archiveMember,
   removeMember,
+  restoreMember,
   claimAction,
   memberCandidates,
   viewHref,
@@ -791,27 +706,7 @@ export function MemberActions({
   onRelationshipsChanged,
   onRoleUpdated,
   onRemoved,
-}: {
-  member: EditableMember;
-  organizationId: string;
-  canManage: boolean;
-  isOwner: boolean;
-  isCurrentMember: boolean;
-  updateProfile: ProfileUpdateAction;
-  updateRole: RoleUpdateAction;
-  removeMember: RemoveMemberAction;
-  claimAction: FormAction;
-  memberCandidates: Array<{ id: string; displayName: string }>;
-  viewHref?: Route | undefined;
-  createRelationship: CreateRelationshipAction;
-  deleteRelationship: DeleteRelationshipAction;
-  preparePhoto: PrepareMemberPhotoAction;
-  confirmPhoto: ConfirmMemberPhotoAction;
-  onProfileUpdated: (profile: MemberProfileUpdate) => void;
-  onRelationshipsChanged?: ((relationships?: MemberRelationship[]) => void) | undefined;
-  onRoleUpdated: (role: OrganizationRole) => void;
-  onRemoved: () => void;
-}) {
+}: MemberActionsProps) {
   const t = useTranslations('members');
   const commonT = useTranslations('common');
   const router = useRouter();
@@ -819,6 +714,7 @@ export function MemberActions({
   const roleDialogRef = useRef<HTMLDialogElement>(null);
   const accessDialogRef = useRef<HTMLDialogElement>(null);
   const [openDialog, setOpenDialog] = useState<'edit' | 'role' | 'access' | null>(null);
+  const isArchived = member.status === 'ARCHIVED';
 
   const canEditProfile = canManage || isCurrentMember;
   const canEditRelationships = canManage || isCurrentMember;
@@ -862,7 +758,7 @@ export function MemberActions({
           onClose={() => setOpenDialog(null)}
         />
       ) : null}
-      {isOwner ? (
+      {isOwner && !isArchived ? (
         <ChangeRoleDialog
           member={member}
           organizationId={organizationId}
@@ -873,7 +769,7 @@ export function MemberActions({
           onClose={() => setOpenDialog(null)}
         />
       ) : null}
-      {canManage && member.accountState === 'UNCLAIMED' ? (
+      {canManage && !isArchived && member.accountState === 'UNCLAIMED' ? (
         <GiveMemberAccessAction
           accessDialogRef={accessDialogRef}
           member={member}
@@ -881,7 +777,7 @@ export function MemberActions({
           setOpenDialog={setOpenDialog}
         />
       ) : null}
-      {canManage && member.activeClaim ? (
+      {canManage && !isArchived && member.activeClaim ? (
         <form className="contents" action={claimAction}>
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="claimId" value={member.activeClaim.id} />
@@ -924,22 +820,51 @@ export function MemberActions({
           </button>
         </form>
       ) : null}
-      {isOwner && !isCurrentMember ? (
-        <form
-          className="contents"
-          action={async (formData) => {
-            const result = await removeMember(formData);
-            if (result.ok) {
-              toast.success(t('removedMember'));
-              onRemoved();
-              return;
-            }
-
-            toast.error(result.error ?? t('unableToRemoveMember'));
-          }}
+      {isOwner && !isCurrentMember && !isArchived ? (
+        <MemberLifecycleActionForm
+          action={archiveMember}
+          fallbackErrorLabel={t('unableToArchiveMember')}
+          member={member}
+          organizationId={organizationId}
+          onSuccess={onRemoved}
+          successLabel={t('archivedMember')}
         >
-          <input type="hidden" name="organizationId" value={organizationId} />
-          <input type="hidden" name="membershipId" value={member.id} />
+          <ConfirmSubmitButton
+            cancelLabel={commonT('cancel')}
+            confirmLabel={t('archiveMember')}
+            confirmVariant="danger"
+            description={t('archiveMemberDescription', { name: member.profile.displayName })}
+            pendingLabel={t('confirming')}
+            title={t('archiveMemberTitle')}
+            triggerClassName={tableRowActionClassNameFor({ destructive: true })}
+            triggerLabel={t('archiveMember')}
+            variant="ghost"
+          />
+        </MemberLifecycleActionForm>
+      ) : null}
+      {isOwner && !isCurrentMember && isArchived ? (
+        <MemberLifecycleActionForm
+          action={restoreMember}
+          fallbackErrorLabel={t('unableToRestoreMember')}
+          member={member}
+          organizationId={organizationId}
+          onSuccess={onRemoved}
+          successLabel={t('restoredMember')}
+        >
+          <button className={tableRowActionClassNameFor()} type="submit">
+            {t('restoreMember')}
+          </button>
+        </MemberLifecycleActionForm>
+      ) : null}
+      {isOwner && !isCurrentMember && !isArchived ? (
+        <MemberLifecycleActionForm
+          action={removeMember}
+          fallbackErrorLabel={t('unableToRemoveMember')}
+          member={member}
+          organizationId={organizationId}
+          onSuccess={onRemoved}
+          successLabel={t('removedMember')}
+        >
           <ConfirmSubmitButton
             cancelLabel={commonT('cancel')}
             confirmLabel={t('removeMember')}
@@ -951,7 +876,7 @@ export function MemberActions({
             triggerLabel={t('removeMember')}
             variant="ghost"
           />
-        </form>
+        </MemberLifecycleActionForm>
       ) : null}
     </TableRowActions>
   );
