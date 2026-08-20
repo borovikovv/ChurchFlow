@@ -110,6 +110,7 @@ export interface NotificationCreationResult {
   createdCount: number;
   deliveryRecipients: NotificationDeliveryRecipient[];
   notificationByRecipientUserId: Map<string, string>;
+  notifiedMembershipIds: string[];
 }
 
 export interface CreateNotificationsForMembershipsInput {
@@ -161,19 +162,11 @@ export interface ServiceAssignedNotificationInput {
   participantMembershipIds: string[];
 }
 
-export interface TaskAssignedNotificationResult {
-  createdCount: number;
-  deliveryRecipients: NotificationDeliveryRecipient[];
-  notificationByRecipientUserId: Map<string, string>;
-}
+export type TaskAssignedNotificationResult = NotificationCreationResult;
 
-export type ServiceAssignedNotificationResult = TaskAssignedNotificationResult;
+export type ServiceAssignedNotificationResult = NotificationCreationResult;
 
-export interface BirthdayDigestNotificationResult {
-  createdCount: number;
-  deliveryRecipients: NotificationDeliveryRecipient[];
-  notificationByRecipientUserId: Map<string, string>;
-}
+export type BirthdayDigestNotificationResult = NotificationCreationResult;
 
 export interface BirthdayDigestGroup {
   organizationId: string;
@@ -569,19 +562,20 @@ export class NotificationsRepository {
     const inAppRecipients = input.recipients.filter((recipient) =>
       inAppDeliveryEnabled(recipient.preferences, input.preferenceKey),
     );
+    const inAppRecipientUserIds = new Set(inAppRecipients.map((recipient) => recipient.userId));
+    const suppressedRecipients = input.recipients.filter(
+      (recipient) =>
+        !inAppRecipientUserIds.has(recipient.userId) &&
+        serviceDeliveryEnabled(recipient, input.preferenceKey),
+    );
+    const trackedRecipients = [...inAppRecipients, ...suppressedRecipients];
+    if (trackedRecipients.length === 0) return emptyNotificationCreationResult();
 
-    if (inAppRecipients.length === 0) {
-      return {
-        createdCount: 0,
-        deliveryRecipients,
-        notificationByRecipientUserId: new Map(),
-      };
-    }
-
+    const trackedRecipientUserIds = trackedRecipients.map((recipient) => recipient.userId);
     const existingNotifications = await this.prisma.notification.findMany({
       where: {
         organizationId: input.organizationId,
-        recipientUserId: { in: inAppRecipients.map((recipient) => recipient.userId) },
+        recipientUserId: { in: trackedRecipientUserIds },
         type: input.type,
         ...notificationDedupeWhere(input),
         deletedAt: null,
@@ -594,8 +588,16 @@ export class NotificationsRepository {
     const newDeliveryRecipients = deliveryRecipients.filter(
       (recipient) => !existingRecipientIds.has(recipient.userId),
     );
-    const data: Prisma.NotificationCreateManyInput[] = inAppRecipients.flatMap((recipient) => {
+    const notifiedMembershipIds = trackedRecipients.flatMap((recipient) =>
+      !existingRecipientIds.has(recipient.userId) && recipient.membershipId
+        ? [recipient.membershipId]
+        : [],
+    );
+    const suppressedAt = new Date();
+    const data: Prisma.NotificationCreateManyInput[] = trackedRecipients.flatMap((recipient) => {
       if (existingRecipientIds.has(recipient.userId)) return [];
+
+      const suppressedFromInbox = !inAppRecipientUserIds.has(recipient.userId);
 
       return {
         organizationId: input.organizationId,
@@ -608,14 +610,15 @@ export class NotificationsRepository {
         entityType: input.entityType ?? null,
         entityId: input.entityId ?? null,
         dedupeKey: input.dedupeKey ?? null,
+        readAt: suppressedFromInbox ? suppressedAt : null,
+        archivedAt: suppressedFromInbox ? suppressedAt : null,
       };
     });
     if (data.length === 0) {
       const notificationByRecipientUserId = new Map(
-        existingNotifications.map((notification) => [
-          notification.recipientUserId,
-          notification.id,
-        ]),
+        existingNotifications
+          .filter((notification) => inAppRecipientUserIds.has(notification.recipientUserId))
+          .map((notification) => [notification.recipientUserId, notification.id]),
       );
       return {
         createdCount: 0,
@@ -624,6 +627,7 @@ export class NotificationsRepository {
           notificationByRecipientUserId,
         ),
         notificationByRecipientUserId,
+        notifiedMembershipIds,
       };
     }
 
@@ -631,28 +635,24 @@ export class NotificationsRepository {
     const createdNotifications = await this.prisma.notification.findMany({
       where: {
         organizationId: input.organizationId,
-        recipientUserId: { in: inAppRecipients.map((recipient) => recipient.userId) },
+        recipientUserId: { in: trackedRecipientUserIds },
         type: input.type,
         ...notificationDedupeWhere(input),
         deletedAt: null,
       },
       select: { id: true, recipientUserId: true },
     });
+    const notificationByRecipientUserId = new Map(
+      createdNotifications
+        .filter((notification) => inAppRecipientUserIds.has(notification.recipientUserId))
+        .map((notification) => [notification.recipientUserId, notification.id]),
+    );
 
     return {
       createdCount: result.count,
-      notificationByRecipientUserId: new Map(
-        createdNotifications.map((notification) => [notification.recipientUserId, notification.id]),
-      ),
-      deliveryRecipients: withNotificationIds(
-        newDeliveryRecipients,
-        new Map(
-          createdNotifications.map((notification) => [
-            notification.recipientUserId,
-            notification.id,
-          ]),
-        ),
-      ),
+      notificationByRecipientUserId,
+      deliveryRecipients: withNotificationIds(newDeliveryRecipients, notificationByRecipientUserId),
+      notifiedMembershipIds,
     };
   }
 
@@ -787,6 +787,7 @@ function emptyNotificationCreationResult(): TaskAssignedNotificationResult {
     createdCount: 0,
     deliveryRecipients: [],
     notificationByRecipientUserId: new Map(),
+    notifiedMembershipIds: [],
   };
 }
 

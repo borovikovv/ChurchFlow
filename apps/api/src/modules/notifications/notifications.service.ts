@@ -156,7 +156,11 @@ export class NotificationsService {
     const result = await this.notificationsRepository.createTaskAssignedNotifications(input);
     const sentCounts = await this.dispatchToEnabledServices(input, result, 'taskAssignedEnabled');
 
-    return { createdCount: result.createdCount, ...sentCounts };
+    return {
+      createdCount: result.createdCount,
+      notifiedMembershipIds: result.notifiedMembershipIds,
+      ...sentCounts,
+    };
   }
 
   async createServiceAssignedNotifications(input: ServiceAssignedNotificationInput) {
@@ -167,7 +171,11 @@ export class NotificationsService {
       'serviceAssignedEnabled',
     );
 
-    return { createdCount: result.createdCount, ...sentCounts };
+    return {
+      createdCount: result.createdCount,
+      notifiedMembershipIds: result.notifiedMembershipIds,
+      ...sentCounts,
+    };
   }
 
   async createCalendarLinkedNotifications(input: CreateNotificationsForMembershipsInput) {

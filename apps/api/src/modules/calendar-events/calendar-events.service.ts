@@ -102,9 +102,13 @@ export class CalendarEventsService {
   async create(organizationId: string, input: CreateCalendarEventInput, actorUserId: string) {
     try {
       const event = await this.calendarEventsRepository.create(organizationId, input, actorUserId);
-      await this.tryCreateTaskAssignedNotifications(organizationId, event, actorUserId);
-      await this.tryCreateServiceAssignedNotifications(organizationId, event, actorUserId);
-      await this.tryCreateCalendarLinkedNotifications(organizationId, event, actorUserId);
+      const notifiedMembershipIds = new Set<string>([
+        ...(await this.tryCreateTaskAssignedNotifications(organizationId, event, actorUserId)),
+        ...(await this.tryCreateServiceAssignedNotifications(organizationId, event, actorUserId)),
+      ]);
+      await this.tryCreateCalendarLinkedNotifications(organizationId, event, actorUserId, {
+        excludeMembershipIds: notifiedMembershipIds,
+      });
 
       return baseEventToItem(event);
     } catch (error) {
@@ -133,30 +137,45 @@ export class CalendarEventsService {
         input,
         actorUserId,
       );
-      await this.tryCreateTaskAssignedNotifications(organizationId, event, actorUserId, {
-        previousAssigneeMembershipIds:
-          previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.task
-            ? previousAssignmentSnapshot.assignees.map((assignee) => assignee.membershipId)
-            : [],
-        skipUnlessAssigneesChanged:
-          previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.task &&
-          input.assigneeMembershipIds === undefined,
-      });
-      await this.tryCreateServiceAssignedNotifications(organizationId, event, actorUserId, {
-        previousParticipantMembershipIds:
-          previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.service
-            ? (previousAssignmentSnapshot.serviceDetails?.participants
-                .map((participant) => participant.membershipId)
-                .filter((membershipId): membershipId is string => Boolean(membershipId)) ?? [])
-            : [],
-        skipUnlessParticipantsChanged:
-          previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.service &&
-          input.serviceDetails === undefined,
-      });
+      const taskAssignedMembershipIds = await this.tryCreateTaskAssignedNotifications(
+        organizationId,
+        event,
+        actorUserId,
+        {
+          previousAssigneeMembershipIds:
+            previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.task
+              ? previousAssignmentSnapshot.assignees.map((assignee) => assignee.membershipId)
+              : [],
+          skipUnlessAssigneesChanged:
+            previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.task &&
+            input.assigneeMembershipIds === undefined,
+        },
+      );
+      const serviceAssignedMembershipIds = await this.tryCreateServiceAssignedNotifications(
+        organizationId,
+        event,
+        actorUserId,
+        {
+          previousParticipantMembershipIds:
+            previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.service
+              ? (previousAssignmentSnapshot.serviceDetails?.participants
+                  .map((participant) => participant.membershipId)
+                  .filter((membershipId): membershipId is string => Boolean(membershipId)) ?? [])
+              : [],
+          skipUnlessParticipantsChanged:
+            previousAssignmentSnapshot?.type === CALENDAR_EVENT_TYPE.service &&
+            input.serviceDetails === undefined,
+        },
+      );
+      const notifiedMembershipIds = new Set<string>([
+        ...taskAssignedMembershipIds,
+        ...serviceAssignedMembershipIds,
+      ]);
       await this.tryCreateCalendarLinkedNotifications(organizationId, event, actorUserId, {
         previousLinkedMembershipId: previousAssignmentSnapshot?.linkedMembershipId ?? null,
         skipUnlessLinkedMemberChanged:
           previousAssignmentSnapshot !== null && input.linkedMembershipId === undefined,
+        excludeMembershipIds: notifiedMembershipIds,
       });
 
       return baseEventToItem(event);
@@ -325,18 +344,18 @@ export class CalendarEventsService {
       previousAssigneeMembershipIds?: string[];
       skipUnlessAssigneesChanged?: boolean;
     } = {},
-  ) {
-    if (event.type !== CALENDAR_EVENT_TYPE.task) return;
-    if (options.skipUnlessAssigneesChanged) return;
+  ): Promise<string[]> {
+    if (event.type !== CALENDAR_EVENT_TYPE.task) return [];
+    if (options.skipUnlessAssigneesChanged) return [];
 
     const previousAssigneeIds = new Set(options.previousAssigneeMembershipIds ?? []);
     const assigneeMembershipIds = event.assignees
       .map((assignee) => assignee.membershipId)
       .filter((membershipId) => !previousAssigneeIds.has(membershipId));
-    if (assigneeMembershipIds.length === 0) return;
+    if (assigneeMembershipIds.length === 0) return [];
 
     try {
-      await this.notificationsService.createTaskAssignedNotifications({
+      const result = await this.notificationsService.createTaskAssignedNotifications({
         organizationId,
         actorUserId,
         eventId: event.id,
@@ -345,6 +364,8 @@ export class CalendarEventsService {
         url: `/dashboard/${organizationId}/calendar`,
         assigneeMembershipIds,
       });
+
+      return result.notifiedMembershipIds;
     } catch (error: unknown) {
       calendarEventsLogger.error({
         event: 'Task assignment notification creation failed',
@@ -353,6 +374,8 @@ export class CalendarEventsService {
         assigneeMembershipIds,
         error: error instanceof Error ? error.message : String(error),
       });
+
+      return [];
     }
   }
 
@@ -364,19 +387,19 @@ export class CalendarEventsService {
       previousParticipantMembershipIds?: string[];
       skipUnlessParticipantsChanged?: boolean;
     } = {},
-  ) {
-    if (event.type !== CALENDAR_EVENT_TYPE.service) return;
-    if (options.skipUnlessParticipantsChanged) return;
+  ): Promise<string[]> {
+    if (event.type !== CALENDAR_EVENT_TYPE.service) return [];
+    if (options.skipUnlessParticipantsChanged) return [];
 
     const previousParticipantIds = new Set(options.previousParticipantMembershipIds ?? []);
     const participantMembershipIds = (event.serviceDetails?.participants ?? [])
       .map((participant) => participant.membershipId)
       .filter((membershipId): membershipId is string => Boolean(membershipId))
       .filter((membershipId) => !previousParticipantIds.has(membershipId));
-    if (participantMembershipIds.length === 0) return;
+    if (participantMembershipIds.length === 0) return [];
 
     try {
-      await this.notificationsService.createServiceAssignedNotifications({
+      const result = await this.notificationsService.createServiceAssignedNotifications({
         organizationId,
         actorUserId,
         eventId: event.id,
@@ -385,6 +408,8 @@ export class CalendarEventsService {
         url: `/dashboard/${organizationId}/calendar`,
         participantMembershipIds,
       });
+
+      return result.notifiedMembershipIds;
     } catch (error: unknown) {
       calendarEventsLogger.error({
         event: 'Service assignment notification creation failed',
@@ -393,6 +418,8 @@ export class CalendarEventsService {
         participantMembershipIds,
         error: error instanceof Error ? error.message : String(error),
       });
+
+      return [];
     }
   }
 
@@ -403,6 +430,7 @@ export class CalendarEventsService {
     options: {
       previousLinkedMembershipId?: string | null;
       skipUnlessLinkedMemberChanged?: boolean;
+      excludeMembershipIds?: ReadonlySet<string>;
     } = {},
   ) {
     if (options.skipUnlessLinkedMemberChanged) return;
@@ -410,10 +438,12 @@ export class CalendarEventsService {
     if (event.linkedMembershipId === options.previousLinkedMembershipId) return;
 
     try {
-      const recipientMembershipIds =
+      const excludedMembershipIds = options.excludeMembershipIds ?? new Set<string>();
+      const recipientMembershipIds = (
         await this.calendarEventsRepository.listAdminNotificationRecipientMembershipIds(
           organizationId,
-        );
+        )
+      ).filter((membershipId) => !excludedMembershipIds.has(membershipId));
       if (recipientMembershipIds.length === 0) return;
 
       await this.notificationsService.createCalendarLinkedNotifications({
