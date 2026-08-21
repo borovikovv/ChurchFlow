@@ -1,10 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { AUDIT_ENTITY_TYPES } from '@churchflow/shared';
 import type { AuditLogListItem, AuditLogsPage } from '@churchflow/shared';
 import { toast } from 'react-toastify';
 import { Button } from '@/components/ui/button';
+import { FormSelect } from '@/components/forms/form-select';
 import { loadAuditLogsAction } from '../actions';
 import {
   AUDIT_ACTION_KEYS,
@@ -13,6 +16,8 @@ import {
   createAuditDateFormatter,
   auditMetadataSummary,
 } from './audit-log-formatting';
+
+const ALL_ENTITY_TYPES = 'ALL';
 
 export function AuditLogsSection({
   organizationId,
@@ -29,20 +34,29 @@ export function AuditLogsSection({
     AUDIT_ACTION_KEYS.map((action) => [action, t(`auditActions.${action}`)]),
   );
   const auditDateFormatter = createAuditDateFormatter(locale);
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ['audit-logs', organizationId],
+  const [entityType, setEntityType] = useState<string>(ALL_ENTITY_TYPES);
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching } = useInfiniteQuery({
+    queryKey: ['audit-logs', organizationId, entityType],
     queryFn: async ({ pageParam }) => {
-      const result = await loadAuditLogsAction({ organizationId, cursor: pageParam });
+      const result = await loadAuditLogsAction({
+        organizationId,
+        cursor: pageParam,
+        entityType: entityType === ALL_ENTITY_TYPES ? null : entityType,
+      });
       if (!result.ok) {
         throw new Error(result.error);
       }
 
       return result.page;
     },
-    initialData: {
-      pages: [{ items: initialItems, nextCursor: initialNextCursor }],
-      pageParams: [null],
-    },
+    ...(entityType === ALL_ENTITY_TYPES
+      ? {
+          initialData: {
+            pages: [{ items: initialItems, nextCursor: initialNextCursor }],
+            pageParams: [null],
+          },
+        }
+      : {}),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: AuditLogsPage) => lastPage.nextCursor ?? undefined,
     staleTime: 60_000,
@@ -55,13 +69,29 @@ export function AuditLogsSection({
     }
   }
 
-  const items = data.pages.flatMap((page) => page.items);
+  const items = data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <section className="grid gap-4">
-      <div className="grid gap-1">
-        <h2 className="m-0 text-xl">{t('auditLogs')}</h2>
-        <p className="m-0 text-[var(--muted)]">{t('auditLogsDescription')}</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="grid gap-1">
+          <h2 className="m-0 text-xl">{t('auditLogs')}</h2>
+          <p className="m-0 text-[var(--muted)]">{t('auditLogsDescription')}</p>
+        </div>
+        <div className="w-56">
+          <FormSelect
+            label={t('auditEntityTypeFilter')}
+            value={entityType}
+            onChange={(event) => setEntityType(event.currentTarget.value)}
+          >
+            <option value={ALL_ENTITY_TYPES}>{t('auditEntityTypes.ALL')}</option>
+            {AUDIT_ENTITY_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {t(`auditEntityTypes.${type}`)}
+              </option>
+            ))}
+          </FormSelect>
+        </div>
       </div>
       {items.length > 0 ? (
         <ol className="grid gap-0 md:grid-cols-2 md:gap-x-12">
@@ -96,7 +126,7 @@ export function AuditLogsSection({
           ))}
         </ol>
       ) : (
-        <p className="m-0 text-[var(--muted)]">{t('noAuditLogs')}</p>
+        <p className="m-0 text-[var(--muted)]">{isFetching ? t('loading') : t('noAuditLogs')}</p>
       )}
       {hasNextPage ? (
         <div>

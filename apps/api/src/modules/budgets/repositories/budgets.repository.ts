@@ -13,6 +13,11 @@ import {
   type UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  BUDGET_AUDIT_ENTITY_TYPE,
+  buildBudgetAmountChanges,
+  changedCategoryFields,
+} from '../budget-audit-metadata';
 
 const budgetMonthInclude = Prisma.validator<Prisma.BudgetMonthInclude>()({
   entries: {
@@ -110,14 +115,33 @@ export class BudgetsRepository {
         amountUsd: input.amountUsd,
         amountEur: input.amountEur,
       };
+      const previous = await tx.budgetOpeningBalance.findUnique({
+        where: {
+          organizationId_sinceYear: { organizationId, sinceYear: input.sinceYear },
+        },
+        select: { amountUah: true, amountUsd: true, amountEur: true },
+      });
+      const changes = buildBudgetAmountChanges(previous, data);
 
-      return tx.budgetOpeningBalance.upsert({
+      const balance = await tx.budgetOpeningBalance.upsert({
         where: {
           organizationId_sinceYear: { organizationId, sinceYear: input.sinceYear },
         },
         create: { organizationId, sinceYear: input.sinceYear, ...data },
         update: data,
       });
+
+      if (changes.length > 0) {
+        await this.recordBudgetAudit(tx, {
+          organizationId,
+          actorUserId,
+          action: 'UPDATE_BUDGET_OPENING_BALANCE',
+          entityId: balance.id,
+          metadata: { sinceYear: input.sinceYear, changes },
+        });
+      }
+
+      return balance;
     });
   }
 
@@ -142,6 +166,14 @@ export class BudgetsRepository {
           },
         },
         include: budgetMonthInclude,
+      });
+
+      await this.recordBudgetAudit(tx, {
+        organizationId,
+        actorUserId,
+        action: 'CREATE_BUDGET_MONTH',
+        entityId: month.id,
+        metadata: { year: month.year, month: month.month },
       });
 
       return month;
@@ -183,6 +215,14 @@ export class BudgetsRepository {
         });
       }
 
+      await this.recordBudgetAudit(tx, {
+        organizationId,
+        actorUserId,
+        action: 'CREATE_BUDGET_CATEGORY',
+        entityId: category.id,
+        metadata: { name: category.name, group: category.group, type: category.type },
+      });
+
       return category;
     });
   }
@@ -197,14 +237,28 @@ export class BudgetsRepository {
       await this.assertManagingActor(tx, organizationId, actorUserId);
       const category = await tx.budgetCategory.findFirst({
         where: { id: categoryId, organizationId, deletedAt: null },
-        select: { id: true },
+        select: { id: true, name: true, type: true, order: true },
       });
       if (!category) throw new Error('BUDGET_CATEGORY_NOT_FOUND');
 
-      return tx.budgetCategory.update({
+      const changedFields = changedCategoryFields(category, input);
+
+      const updated = await tx.budgetCategory.update({
         where: { id: categoryId },
         data: budgetCategoryUpdateData(input),
       });
+
+      if (changedFields.length > 0) {
+        await this.recordBudgetAudit(tx, {
+          organizationId,
+          actorUserId,
+          action: 'UPDATE_BUDGET_CATEGORY',
+          entityId: updated.id,
+          metadata: { name: updated.name, changedFields },
+        });
+      }
+
+      return updated;
     });
   }
 
@@ -213,15 +267,25 @@ export class BudgetsRepository {
       await this.assertManagingActor(tx, organizationId, actorUserId);
       const category = await tx.budgetCategory.findFirst({
         where: { id: categoryId, organizationId, deletedAt: null },
-        select: { id: true },
+        select: { id: true, name: true },
       });
       if (!category) throw new Error('BUDGET_CATEGORY_NOT_FOUND');
 
       await tx.budgetEntry.deleteMany({ where: { categoryId } });
-      return tx.budgetCategory.update({
+      const deleted = await tx.budgetCategory.update({
         where: { id: categoryId },
         data: { deletedAt: new Date() },
       });
+
+      await this.recordBudgetAudit(tx, {
+        organizationId,
+        actorUserId,
+        action: 'DELETE_BUDGET_CATEGORY',
+        entityId: deleted.id,
+        metadata: { name: category.name },
+      });
+
+      return deleted;
     });
   }
 
@@ -230,11 +294,24 @@ export class BudgetsRepository {
       await this.assertManagingActor(tx, organizationId, actorUserId);
       const month = await tx.budgetMonth.findFirst({
         where: { id: monthId, organizationId },
-        select: { id: true },
+        select: { id: true, year: true, month: true },
       });
       if (!month) throw new Error('BUDGET_MONTH_NOT_FOUND');
 
-      return tx.budgetMonth.delete({ where: { id: monthId }, select: { id: true } });
+      const deleted = await tx.budgetMonth.delete({
+        where: { id: monthId },
+        select: { id: true },
+      });
+
+      await this.recordBudgetAudit(tx, {
+        organizationId,
+        actorUserId,
+        action: 'DELETE_BUDGET_MONTH',
+        entityId: deleted.id,
+        metadata: { year: month.year, month: month.month },
+      });
+
+      return deleted;
     });
   }
 
@@ -248,11 +325,22 @@ export class BudgetsRepository {
   ) {
     return this.prisma.$transaction(async (tx) => {
       await this.assertManagingActor(tx, organizationId, actorUserId);
-      await this.assertMonthAndCategory(tx, organizationId, monthId, categoryId, rowIndex);
+      const { month, category } = await this.assertMonthAndCategory(
+        tx,
+        organizationId,
+        monthId,
+        categoryId,
+        rowIndex,
+      );
 
       const data = budgetEntryData(input);
+      const previous = await tx.budgetEntry.findUnique({
+        where: { monthId_categoryId_rowIndex: { monthId, categoryId, rowIndex } },
+        select: { amountUah: true, amountUsd: true, amountEur: true },
+      });
+      const changes = buildBudgetAmountChanges(previous, data);
 
-      return tx.budgetEntry.upsert({
+      const entry = await tx.budgetEntry.upsert({
         where: { monthId_categoryId_rowIndex: { monthId, categoryId, rowIndex } },
         create: {
           monthId,
@@ -263,6 +351,25 @@ export class BudgetsRepository {
         update: data,
         include: { category: true, notes: true },
       });
+
+      if (changes.length > 0) {
+        await this.recordBudgetAudit(tx, {
+          organizationId,
+          actorUserId,
+          action: 'UPDATE_BUDGET_ENTRY',
+          entityId: entry.id,
+          metadata: {
+            year: month.year,
+            month: month.month,
+            categoryId,
+            categoryName: category.name,
+            rowIndex,
+            changes,
+          },
+        });
+      }
+
+      return entry;
     });
   }
 
@@ -277,7 +384,13 @@ export class BudgetsRepository {
   ) {
     return this.prisma.$transaction(async (tx) => {
       await this.assertManagingActor(tx, organizationId, actorUserId);
-      await this.assertMonthAndCategory(tx, organizationId, monthId, categoryId, rowIndex);
+      const { month, category } = await this.assertMonthAndCategory(
+        tx,
+        organizationId,
+        monthId,
+        categoryId,
+        rowIndex,
+      );
 
       const entry = await tx.budgetEntry.upsert({
         where: { monthId_categoryId_rowIndex: { monthId, categoryId, rowIndex } },
@@ -286,6 +399,10 @@ export class BudgetsRepository {
         select: { id: true },
       });
       const note = input.note?.trim() ?? null;
+      const previousNote = await tx.budgetEntryNote.findUnique({
+        where: { entryId_field: { entryId: entry.id, field } },
+        select: { note: true },
+      });
 
       if (!note) {
         await tx.budgetEntryNote.deleteMany({ where: { entryId: entry.id, field } });
@@ -294,6 +411,25 @@ export class BudgetsRepository {
           where: { entryId_field: { entryId: entry.id, field } },
           create: { entryId: entry.id, field, note },
           update: { note },
+        });
+      }
+
+      if ((previousNote?.note ?? null) !== note) {
+        await this.recordBudgetAudit(tx, {
+          organizationId,
+          actorUserId,
+          action: 'UPDATE_BUDGET_ENTRY_NOTE',
+          entityId: entry.id,
+          metadata: {
+            year: month.year,
+            month: month.month,
+            categoryId,
+            categoryName: category.name,
+            rowIndex,
+            field,
+            hadNote: previousNote !== null,
+            hasNote: note !== null,
+          },
         });
       }
 
@@ -306,7 +442,7 @@ export class BudgetsRepository {
       await this.assertManagingActor(tx, organizationId, actorUserId);
       const month = await tx.budgetMonth.findFirst({
         where: { id: monthId, organizationId },
-        select: { id: true, rowCount: true },
+        select: { id: true, rowCount: true, year: true, month: true },
       });
       if (!month) throw new Error('BUDGET_MONTH_NOT_FOUND');
 
@@ -326,6 +462,19 @@ export class BudgetsRepository {
         data: { rowCount: { increment: 1 } },
       });
 
+      await this.recordBudgetAudit(tx, {
+        organizationId,
+        actorUserId,
+        action: 'ADD_BUDGET_ROW',
+        entityId: month.id,
+        metadata: {
+          year: month.year,
+          month: month.month,
+          rowIndex,
+          rowCount: month.rowCount + 1,
+        },
+      });
+
       return this.findMonth(tx, monthId);
     });
   }
@@ -335,7 +484,7 @@ export class BudgetsRepository {
       await this.assertManagingActor(tx, organizationId, actorUserId);
       const month = await tx.budgetMonth.findFirst({
         where: { id: monthId, organizationId },
-        select: { id: true, rowCount: true },
+        select: { id: true, rowCount: true, year: true, month: true },
       });
       if (!month) throw new Error('BUDGET_MONTH_NOT_FOUND');
       if (month.rowCount <= 1) throw new Error('BUDGET_MONTH_ROW_COUNT_MIN');
@@ -345,6 +494,19 @@ export class BudgetsRepository {
       await tx.budgetMonth.update({
         where: { id: monthId },
         data: { rowCount: { decrement: 1 } },
+      });
+
+      await this.recordBudgetAudit(tx, {
+        organizationId,
+        actorUserId,
+        action: 'REMOVE_BUDGET_ROW',
+        entityId: month.id,
+        metadata: {
+          year: month.year,
+          month: month.month,
+          rowIndex,
+          rowCount: month.rowCount - 1,
+        },
       });
 
       return this.findMonth(tx, monthId);
@@ -358,6 +520,8 @@ export class BudgetsRepository {
     });
   }
 
+  // Seeds the default catalogue on read. Deliberately not audited: it has no acting user and
+  // would add a create event for every category the first time an organization opens the budget.
   private async ensureDefaultCategories(
     organizationId: string,
     tx: Prisma.TransactionClient = this.prisma,
@@ -421,16 +585,40 @@ export class BudgetsRepository {
   ) {
     const month = await tx.budgetMonth.findFirst({
       where: { id: monthId, organizationId },
-      select: { id: true, rowCount: true },
+      select: { id: true, rowCount: true, year: true, month: true },
     });
     if (!month) throw new Error('BUDGET_MONTH_NOT_FOUND');
     if (rowIndex < 0 || rowIndex >= month.rowCount) throw new Error('BUDGET_MONTH_ROW_NOT_FOUND');
 
     const category = await tx.budgetCategory.findFirst({
       where: { id: categoryId, organizationId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (!category) throw new Error('BUDGET_CATEGORY_NOT_FOUND');
+
+    return { month, category };
+  }
+
+  private recordBudgetAudit(
+    tx: Prisma.TransactionClient,
+    input: {
+      organizationId: string;
+      actorUserId: string;
+      action: string;
+      entityId: string;
+      metadata: Prisma.InputJsonObject;
+    },
+  ) {
+    return tx.auditLog.create({
+      data: {
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        action: input.action,
+        entityType: BUDGET_AUDIT_ENTITY_TYPE,
+        entityId: input.entityId,
+        metadata: input.metadata,
+      },
+    });
   }
 
   private async findEntry(tx: Prisma.TransactionClient, entryId: string) {

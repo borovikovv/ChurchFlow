@@ -20,6 +20,12 @@ const notificationSelect = {
   createdAt: true,
 } as const;
 
+const dismissedNotificationWhere: Prisma.NotificationWhereInput[] = [
+  { readAt: { not: null } },
+  { archivedAt: { not: null } },
+  { deletedAt: { not: null } },
+];
+
 const notificationDetailCalendarEventSelect = {
   id: true,
   type: true,
@@ -760,6 +766,59 @@ export class NotificationsRepository {
     });
 
     return { updatedCount: result.count };
+  }
+
+  countExpired(input: { cutoff: Date; onlyDismissed: boolean; excludeDismissedBefore?: Date }) {
+    return this.prisma.notification.count({
+      where: {
+        createdAt: { lt: input.cutoff },
+        ...(input.onlyDismissed ? { OR: dismissedNotificationWhere } : {}),
+        ...(input.excludeDismissedBefore
+          ? {
+              NOT: {
+                AND: [
+                  { createdAt: { lt: input.excludeDismissedBefore } },
+                  { OR: dismissedNotificationWhere },
+                ],
+              },
+            }
+          : {}),
+      },
+    });
+  }
+
+  async purgeExpired(input: {
+    cutoff: Date;
+    onlyDismissed: boolean;
+    batchSize: number;
+    maxBatches: number;
+  }) {
+    const dismissedFilter = input.onlyDismissed
+      ? Prisma.sql`AND ("read_at" IS NOT NULL OR "archived_at" IS NOT NULL OR "deleted_at" IS NOT NULL)`
+      : Prisma.empty;
+    let deletedCount = 0;
+    let batches = 0;
+
+    while (batches < input.maxBatches) {
+      const deleted = await this.prisma.$executeRaw`
+        DELETE FROM "notifications"
+        WHERE "id" IN (
+          SELECT "id"
+          FROM "notifications"
+          WHERE "created_at" < ${input.cutoff.toISOString()}::timestamp
+          ${dismissedFilter}
+          LIMIT ${input.batchSize}
+        )
+      `;
+      batches += 1;
+      deletedCount += deleted;
+
+      if (deleted < input.batchSize) {
+        return { deletedCount, batches, exhausted: false };
+      }
+    }
+
+    return { deletedCount, batches, exhausted: true };
   }
 
   private countUnread(organizationId: string, userId: string) {

@@ -656,6 +656,7 @@ model AuditLog {
   actor        User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt, id])
+  @@index([organizationId, entityType, createdAt, id])
   @@index([actorUserId, createdAt])
   @@map("audit_logs")
 }
@@ -831,6 +832,7 @@ model Notification {
   @@index([recipientUserId, readAt])
   @@index([organizationId, recipientUserId, createdAt])
   @@index([entityType, entityId])
+  @@index([createdAt])
   @@map("notifications")
 }
 

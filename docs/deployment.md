@@ -146,6 +146,14 @@ Required variables for `prod` use the production domains and ports:
 - `TELEGRAM_REDIRECT_URI=https://mychurchflow.org/v1/auth/telegram/callback`
 - the production equivalents of the remaining variables above.
 
+Optional variables with defaults, used by the nightly notification retention job:
+
+- `NOTIFICATIONS_RETENTION_DAYS=365` — deletes every notification older than this.
+- `NOTIFICATIONS_READ_RETENTION_DAYS=180` — deletes read, archived or dismissed notifications older than this.
+- `NOTIFICATIONS_RETENTION_DRY_RUN=false` — set to `true` to log the counts without deleting anything.
+
+Leaving any of the three blank falls back to the default shown above.
+
 `API_INTERNAL_URL` is a Docker-network URL used by Next.js server code and rewrites. Do not use `localhost` for it inside containers.
 Leave `COOKIE_DOMAIN` unset in both environments so auth and Telegram OAuth cookies are host-only.
 

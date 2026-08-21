@@ -23,6 +23,22 @@ const optionalEmailProviderSchema = z.preprocess(
   z.enum(['resend', 'console', 'smtp']).optional(),
 );
 
+const optionalPositiveInt = (defaultValue: number) =>
+  z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.coerce.number().int().positive().default(defaultValue),
+  );
+
+const optionalBooleanFlag = (defaultValue: boolean) =>
+  z
+    .preprocess(
+      (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+      z.enum(['true', 'false', '1', '0', '']).optional(),
+    )
+    .transform((value) =>
+      value === undefined || value === '' ? defaultValue : value === 'true' || value === '1',
+    );
+
 const pemKeySchema = (label: string, keyType: 'PUBLIC' | 'PRIVATE') =>
   z
     .string()
@@ -68,6 +84,9 @@ export const apiEnvSchema = z
       (value) => (value === '' ? undefined : value),
       z.coerce.number().int().positive().optional(),
     ),
+    NOTIFICATIONS_RETENTION_DAYS: optionalPositiveInt(365),
+    NOTIFICATIONS_READ_RETENTION_DAYS: optionalPositiveInt(180),
+    NOTIFICATIONS_RETENTION_DRY_RUN: optionalBooleanFlag(false),
     S3_ENDPOINT: z.string().url(),
     S3_REGION: z.string().min(1),
     S3_BUCKET: z.string().min(1),

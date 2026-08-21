@@ -5,5 +5,6 @@ export class ListAuditLogsQueryDto implements ListAuditLogsQuery {
   static readonly schema = listAuditLogsQuerySchema;
 
   cursor?: string;
+  entityType?: ListAuditLogsQuery['entityType'];
   limit!: number;
 }

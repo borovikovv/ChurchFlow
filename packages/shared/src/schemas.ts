@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { PhoneNumberUtil } from 'google-libphonenumber';
 import {
   APP_LOCALES,
+  AUDIT_ENTITY_TYPES,
   CALENDAR_EVENT_REMINDERS,
   CALENDAR_EVENT_REPEAT_PERIOD,
   CALENDAR_EVENT_REPEAT_PERIODS,
@@ -644,6 +645,7 @@ export const updateOrganizationSchema = z
 
 export const listAuditLogsQuerySchema = z.object({
   cursor: uuidSchema.optional(),
+  entityType: z.enum(AUDIT_ENTITY_TYPES).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
 

@@ -81,6 +81,21 @@ export const NOTIFICATION_TYPES = [
   'ORGANIZATION_ANNOUNCEMENT',
 ] as const;
 
+export const AUDIT_ENTITY_TYPES = [
+  'BirthdayDigest',
+  'Budget',
+  'CalendarEvent',
+  'MediaAsset',
+  'MembershipClaim',
+  'Organization',
+  'OrganizationInvitation',
+  'OrganizationMember',
+  'OrganizationMemberRelationship',
+  'OrganizationRequest',
+  'PrayerRequest',
+  'User',
+] as const;
+
 export const PRAYER_REQUEST_TABS = ['active', 'archived'] as const;
 
 export const DEFAULT_PRAYER_REQUEST_PAGE_SIZE = 10;

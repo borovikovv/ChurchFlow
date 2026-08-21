@@ -21,6 +21,11 @@ import {
   type TaskAssignedNotificationInput,
   type TelegramNotificationBindingRecord,
 } from './repositories/notifications.repository';
+import {
+  NOTIFICATION_RETENTION_BATCH_SIZE,
+  NOTIFICATION_RETENTION_MAX_BATCHES,
+  type NotificationRetentionCutoffs,
+} from './notification-retention';
 import { EmailService } from '../email/email.service';
 import { TelegramBotRepository } from '../telegram-bot/repositories/telegram-bot.repository';
 import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
@@ -250,6 +255,64 @@ export class NotificationsService {
     });
 
     return { organizationsCount: groups.length, createdCount, emailSentCount, telegramSentCount };
+  }
+
+  async purgeExpiredNotifications(input: {
+    cutoffs: NotificationRetentionCutoffs;
+    dryRun: boolean;
+  }) {
+    const tiers = [
+      { name: 'dismissed' as const, cutoff: input.cutoffs.read, onlyDismissed: true },
+      {
+        name: 'all' as const,
+        cutoff: input.cutoffs.all,
+        onlyDismissed: false,
+        excludeDismissedBefore: input.cutoffs.read,
+      },
+    ];
+    const result: Record<'dismissed' | 'all', number> = { dismissed: 0, all: 0 };
+
+    for (const tier of tiers) {
+      if (input.dryRun) {
+        result[tier.name] = await this.notificationsRepository.countExpired({
+          cutoff: tier.cutoff,
+          onlyDismissed: tier.onlyDismissed,
+          ...(tier.excludeDismissedBefore
+            ? { excludeDismissedBefore: tier.excludeDismissedBefore }
+            : {}),
+        });
+        continue;
+      }
+
+      const purged = await this.notificationsRepository.purgeExpired({
+        cutoff: tier.cutoff,
+        onlyDismissed: tier.onlyDismissed,
+        batchSize: NOTIFICATION_RETENTION_BATCH_SIZE,
+        maxBatches: NOTIFICATION_RETENTION_MAX_BATCHES,
+      });
+      result[tier.name] = purged.deletedCount;
+
+      if (purged.exhausted) {
+        this.logger.warn({
+          event: 'Notification retention hit the batch limit before draining the backlog',
+          tier: tier.name,
+          cutoff: tier.cutoff.toISOString(),
+          deletedCount: purged.deletedCount,
+        });
+      }
+    }
+
+    this.logger.log({
+      event: input.dryRun
+        ? 'Notification retention dry run completed'
+        : 'Notification retention completed',
+      dismissedCutoff: input.cutoffs.read.toISOString(),
+      allCutoff: input.cutoffs.all.toISOString(),
+      dismissedCount: result.dismissed,
+      allCount: result.all,
+    });
+
+    return { dryRun: input.dryRun, dismissedCount: result.dismissed, allCount: result.all };
   }
 
   private async dispatchToEnabledServices(

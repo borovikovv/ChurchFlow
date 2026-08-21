@@ -25,6 +25,7 @@ export class AuditService {
       organizationId,
       limit: query.limit,
       ...(query.cursor ? { cursor: query.cursor } : {}),
+      ...(query.entityType ? { entityType: query.entityType } : {}),
     });
     const items = logs.slice(0, query.limit);
     const next = logs.length > query.limit ? logs[query.limit] : null;

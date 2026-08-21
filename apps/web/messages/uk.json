@@ -822,7 +822,35 @@
       "UPDATE_ORGANIZATION_LOGO": "Логотип організації оновлено",
       "UPDATE_ORGANIZATION_PROFILE": "Деталі організації оновлено",
       "UPDATE_PRAYER_REQUEST": "Молитовну потребу оновлено",
-      "ARCHIVE_PRAYER_REQUEST": "Молитовну потребу архівовано"
+      "ARCHIVE_PRAYER_REQUEST": "Молитовну потребу архівовано",
+      "ARCHIVE_MEMBER": "Учасника архівовано",
+      "RESTORE_MEMBER": "Учасника відновлено",
+      "ADD_BUDGET_ROW": "Рядок бюджету додано",
+      "CREATE_BUDGET_CATEGORY": "Категорію бюджету створено",
+      "CREATE_BUDGET_MONTH": "Місяць бюджету створено",
+      "DELETE_BUDGET_CATEGORY": "Категорію бюджету видалено",
+      "DELETE_BUDGET_MONTH": "Місяць бюджету видалено",
+      "REMOVE_BUDGET_ROW": "Рядок бюджету видалено",
+      "UPDATE_BUDGET_CATEGORY": "Категорію бюджету оновлено",
+      "UPDATE_BUDGET_ENTRY": "Комірку бюджету оновлено",
+      "UPDATE_BUDGET_ENTRY_NOTE": "Нотатку бюджету оновлено",
+      "UPDATE_BUDGET_OPENING_BALANCE": "Початковий залишок оновлено"
+    },
+    "auditEntityTypeFilter": "Тип запису",
+    "auditEntityTypes": {
+      "ALL": "Усі типи",
+      "BirthdayDigest": "Дні народження",
+      "Budget": "Бюджет",
+      "CalendarEvent": "Календар",
+      "MediaAsset": "Медіа",
+      "MembershipClaim": "Заявки на участь",
+      "Organization": "Організація",
+      "OrganizationInvitation": "Запрошення",
+      "OrganizationMember": "Учасники",
+      "OrganizationMemberRelationship": "Звʼязки учасників",
+      "OrganizationRequest": "Запити організацій",
+      "PrayerRequest": "Молитовні потреби",
+      "User": "Користувачі"
     }
   },
   "pagination": {

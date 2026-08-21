@@ -23,9 +23,17 @@ export class AuditRepository {
     });
   }
 
-  listForOrganization(input: { organizationId: string; cursor?: string; limit: number }) {
+  listForOrganization(input: {
+    organizationId: string;
+    cursor?: string;
+    entityType?: string;
+    limit: number;
+  }) {
     return this.prisma.auditLog.findMany({
-      where: { organizationId: input.organizationId },
+      where: {
+        organizationId: input.organizationId,
+        ...(input.entityType ? { entityType: input.entityType } : {}),
+      },
       take: input.limit + 1,
       ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

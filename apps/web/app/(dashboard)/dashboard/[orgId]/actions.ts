@@ -10,10 +10,14 @@ const jsonHeaders = { 'content-type': 'application/json' };
 export async function loadAuditLogsAction(input: {
   organizationId: string;
   cursor?: string | null;
+  entityType?: string | null;
 }) {
   const params = new URLSearchParams({ limit: '10' });
   if (input.cursor) {
     params.set('cursor', input.cursor);
+  }
+  if (input.entityType) {
+    params.set('entityType', input.entityType);
   }
 
   const result = await apiFetch<AuditLogsPage>(

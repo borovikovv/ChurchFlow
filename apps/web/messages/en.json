@@ -822,7 +822,35 @@
       "UPDATE_ORGANIZATION_LOGO": "Organization logo updated",
       "UPDATE_ORGANIZATION_PROFILE": "Organization details updated",
       "UPDATE_PRAYER_REQUEST": "Prayer request updated",
-      "ARCHIVE_PRAYER_REQUEST": "Prayer request archived"
+      "ARCHIVE_PRAYER_REQUEST": "Prayer request archived",
+      "ARCHIVE_MEMBER": "Member archived",
+      "RESTORE_MEMBER": "Member restored",
+      "ADD_BUDGET_ROW": "Budget row added",
+      "CREATE_BUDGET_CATEGORY": "Budget category created",
+      "CREATE_BUDGET_MONTH": "Budget month created",
+      "DELETE_BUDGET_CATEGORY": "Budget category deleted",
+      "DELETE_BUDGET_MONTH": "Budget month deleted",
+      "REMOVE_BUDGET_ROW": "Budget row removed",
+      "UPDATE_BUDGET_CATEGORY": "Budget category updated",
+      "UPDATE_BUDGET_ENTRY": "Budget cell updated",
+      "UPDATE_BUDGET_ENTRY_NOTE": "Budget note updated",
+      "UPDATE_BUDGET_OPENING_BALANCE": "Opening balance updated"
+    },
+    "auditEntityTypeFilter": "Record type",
+    "auditEntityTypes": {
+      "ALL": "All types",
+      "BirthdayDigest": "Birthdays",
+      "Budget": "Budget",
+      "CalendarEvent": "Calendar",
+      "MediaAsset": "Media",
+      "MembershipClaim": "Membership claims",
+      "Organization": "Organization",
+      "OrganizationInvitation": "Invitations",
+      "OrganizationMember": "Members",
+      "OrganizationMemberRelationship": "Member relationships",
+      "OrganizationRequest": "Organization requests",
+      "PrayerRequest": "Prayer requests",
+      "User": "Users"
     }
   },
   "pagination": {
