@@ -6,9 +6,8 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Legend,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -36,6 +35,7 @@ type GroupChartItem = {
   group: BudgetGroup;
   income: number;
   label: string;
+  total: number;
 };
 
 export function BudgetCharts({
@@ -95,7 +95,7 @@ export function BudgetCharts({
           months={months}
           rates={rates}
         />
-        <BudgetGroupLines
+        <BudgetGroupBars
           exportMode={exportMode}
           groupLabels={groupLabels}
           groupSummaries={groupSummaries}
@@ -234,7 +234,7 @@ function formatChartAmount(value: number, locale: string): string {
   }).format(value);
 }
 
-function BudgetGroupLines({
+function BudgetGroupBars({
   exportMode,
   groupLabels,
   groupSummaries,
@@ -256,10 +256,10 @@ function BudgetGroupLines({
       </p>
       <div className="flex min-h-72 min-w-0 flex-1 items-end rounded-md border border-[var(--line)] bg-[var(--surface-subtle)] px-2 pb-2 pt-4">
         {exportMode ? (
-          <BudgetGroupLineChart data={data} width={520} />
+          <BudgetGroupBarChart data={data} width={520} />
         ) : (
           <ResponsiveContainer height={240} width="100%">
-            <BudgetGroupLineChart data={data} />
+            <BudgetGroupBarChart data={data} />
           </ResponsiveContainer>
         )}
       </div>
@@ -267,7 +267,7 @@ function BudgetGroupLines({
   );
 }
 
-function BudgetGroupLineChart({
+function BudgetGroupBarChart({
   data,
   width,
 }: {
@@ -278,32 +278,33 @@ function BudgetGroupLineChart({
   const locale = useLocale();
 
   return (
-    <LineChart
+    <BarChart
+      barCategoryGap="20%"
+      barGap={2}
       data={data}
       height={240}
-      margin={{ top: 8, right: 16, bottom: 0, left: 0 }}
+      layout="vertical"
+      margin={{ top: 8, right: 56, bottom: 0, left: 0 }}
       {...(width ? { width } : {})}
     >
-      <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" />
+      <CartesianGrid horizontal={false} stroke="var(--line)" strokeDasharray="3 3" />
       <XAxis
-        angle={-25}
-        axisLine={false}
-        dataKey="label"
-        height={52}
-        interval={0}
-        tick={{ fill: 'var(--muted)', fontSize: 11 }}
-        tickLine={false}
-        textAnchor="end"
-      />
-      <YAxis
         axisLine={false}
         tick={{ fill: 'var(--muted)', fontSize: 12 }}
         tickFormatter={(value) => formatChartAmount(Number(value), locale)}
         tickLine={false}
-        width={64}
+        type="number"
+      />
+      <YAxis
+        axisLine={false}
+        dataKey="label"
+        tick={{ fill: 'var(--muted)', fontSize: 11 }}
+        tickLine={false}
+        type="category"
+        width={112}
       />
       <Tooltip
-        cursor={{ stroke: 'var(--muted)', strokeDasharray: '3 3' }}
+        cursor={{ fill: 'rgba(31,35,40,0.06)' }}
         formatter={(value, name) => [
           formatMoney(Number(value), 'UAH', locale),
           name === 'income' ? t('income') : t('expenses'),
@@ -315,27 +316,37 @@ function BudgetGroupLineChart({
         height={28}
         verticalAlign="top"
       />
-      <Line
-        activeDot={{ r: 5 }}
+      <Bar
         dataKey="income"
-        dot={{ r: 3 }}
+        fill="#10b981"
         isAnimationActive={false}
         name="income"
-        stroke="#10b981"
-        strokeWidth={2}
-        type="monotone"
-      />
-      <Line
-        activeDot={{ r: 5 }}
+        radius={[0, 4, 4, 0]}
+      >
+        <LabelList
+          dataKey="income"
+          fill="var(--muted)"
+          fontSize={11}
+          formatter={(value) => formatChartLabel(value, locale)}
+          position="right"
+        />
+      </Bar>
+      <Bar
         dataKey="expenses"
-        dot={{ r: 3 }}
+        fill="#f43f5e"
         isAnimationActive={false}
         name="expenses"
-        stroke="#f43f5e"
-        strokeWidth={2}
-        type="monotone"
-      />
-    </LineChart>
+        radius={[0, 4, 4, 0]}
+      >
+        <LabelList
+          dataKey="expenses"
+          fill="var(--muted)"
+          fontSize={11}
+          formatter={(value) => formatChartLabel(value, locale)}
+          position="right"
+        />
+      </Bar>
+    </BarChart>
   );
 }
 
@@ -344,10 +355,26 @@ function groupChartData(
   groupLabels: BudgetGroupLabels,
   rates: ExchangeRates | null,
 ): GroupChartItem[] {
-  return groupSummaries.map((summary) => ({
-    expenses: toUahEquivalent(summary.totals.expense, rates) ?? summary.totals.expense.amountUah,
-    group: summary.group,
-    income: toUahEquivalent(summary.totals.income, rates) ?? summary.totals.income.amountUah,
-    label: groupLabels[summary.group],
-  }));
+  return groupSummaries
+    .map((summary) => {
+      const expenses =
+        toUahEquivalent(summary.totals.expense, rates) ?? summary.totals.expense.amountUah;
+      const income =
+        toUahEquivalent(summary.totals.income, rates) ?? summary.totals.income.amountUah;
+      return {
+        expenses,
+        group: summary.group,
+        income,
+        label: groupLabels[summary.group],
+        total: income + expenses,
+      };
+    })
+    .filter((item) => item.total > 0)
+    .sort((a, b) => b.total - a.total);
+}
+
+function formatChartLabel(value: unknown, locale: string): string {
+  const amount = Number(value);
+
+  return amount > 0 ? formatChartAmount(amount, locale) : '';
 }
