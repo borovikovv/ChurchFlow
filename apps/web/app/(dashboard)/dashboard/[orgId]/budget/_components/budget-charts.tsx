@@ -14,8 +14,14 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { BudgetGroup, BudgetMonth, BudgetTotals } from '@churchflow/shared';
-import { formatMoney, type BudgetGroupLabels } from './budget-table-helpers';
+import type {
+  BudgetCurrencyTotals,
+  BudgetGroup,
+  BudgetMonth,
+  BudgetTotals,
+  ExchangeRates,
+} from '@churchflow/shared';
+import { formatMoney, toUahEquivalent, type BudgetGroupLabels } from './budget-table-helpers';
 
 type MonthlyChartItem = {
   balance: number;
@@ -41,6 +47,7 @@ export function BudgetCharts({
   groupSummaries,
   monthNames,
   periodLabel,
+  rates,
   year,
 }: {
   chartRef: RefObject<HTMLDivElement | null> | null;
@@ -51,9 +58,11 @@ export function BudgetCharts({
   groupSummaries: Array<{ group: BudgetGroup; totals: BudgetTotals }>;
   monthNames: string[];
   periodLabel?: string;
+  rates: ExchangeRates | null;
   year: number;
 }) {
   const t = useTranslations('budget');
+  const locale = useLocale();
 
   return (
     <section
@@ -62,7 +71,15 @@ export function BudgetCharts({
     >
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2>{t('budgetCharts', { period: periodLabel ?? year })}</h2>
-        <span className="text-sm text-[var(--muted)]">{t('uahTotals')}</span>
+        <span className="text-right text-sm text-[var(--muted)]">
+          {rates
+            ? t('ratesAsOf', {
+                date: rates.date,
+                eur: formatMoney(rates.eurToUah, 'UAH', locale),
+                usd: formatMoney(rates.usdToUah, 'UAH', locale),
+              })
+            : t('ratesUnavailable')}
+        </span>
       </div>
       <div
         className={
@@ -76,11 +93,13 @@ export function BudgetCharts({
           exportMode={exportMode}
           monthNames={monthNames}
           months={months}
+          rates={rates}
         />
         <BudgetGroupLines
           exportMode={exportMode}
           groupLabels={groupLabels}
           groupSummaries={groupSummaries}
+          rates={rates}
         />
       </div>
     </section>
@@ -92,19 +111,24 @@ function MonthlyBudgetBars({
   exportMode,
   monthNames,
   months,
+  rates,
 }: {
   displayMonths?: number[] | undefined;
   exportMode: boolean;
   monthNames: string[];
   months: BudgetMonth[];
+  rates: ExchangeRates | null;
 }) {
   const t = useTranslations('budget');
   const locale = useLocale();
-  const data = monthlyChartData(months, monthNames, displayMonths);
+  const data = monthlyChartData(months, monthNames, rates, displayMonths);
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <h3 className="mb-3 text-base">{t('monthlyIncomeExpenses')}</h3>
+      <h3 className="mb-1 text-base">{t('monthlyIncomeExpenses')}</h3>
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        {rates ? t('chartConvertedUah') : t('chartUahOnly')}
+      </p>
       <div className="flex min-h-72 min-w-0 flex-1 items-end rounded-md border border-[var(--line)] bg-[var(--surface-subtle)] px-2 pb-2 pt-4">
         {exportMode ? (
           <MonthlyBudgetBarChart data={data} locale={locale} width={520} />
@@ -148,12 +172,12 @@ function MonthlyBudgetBarChart({
         tick={{ fill: 'var(--muted)', fontSize: 12 }}
         tickFormatter={(value) => formatChartAmount(Number(value), locale)}
         tickLine={false}
-        width={44}
+        width={64}
       />
       <Tooltip
         cursor={{ fill: 'rgba(31,35,40,0.06)' }}
         formatter={(value, name) => [
-          formatMoney(Number(value), 'UAH'),
+          formatMoney(Number(value), 'UAH', locale),
           name === 'income' ? t('income') : t('expenses'),
         ]}
         labelFormatter={(label) => `${label}`}
@@ -179,18 +203,28 @@ function MonthlyBudgetBarChart({
 function monthlyChartData(
   months: BudgetMonth[],
   monthNames: string[],
+  rates: ExchangeRates | null,
   displayMonths = Array.from({ length: 12 }, (_, index) => index + 1),
 ): MonthlyChartItem[] {
   return displayMonths.map((monthNumber) => {
     const month = months.find((item) => item.month === monthNumber);
     return {
-      balance: month?.totals.balance.amountUah ?? 0,
-      expenses: month?.totals.expense.amountUah ?? 0,
-      income: month?.totals.income.amountUah ?? 0,
+      balance: monthAmount(month?.totals.balance, rates),
+      expenses: monthAmount(month?.totals.expense, rates),
+      income: monthAmount(month?.totals.income, rates),
       label: monthNames[monthNumber - 1]?.slice(0, 3) ?? String(monthNumber),
       month: monthNumber,
     };
   });
+}
+
+function monthAmount(
+  totals: BudgetCurrencyTotals | undefined,
+  rates: ExchangeRates | null,
+): number {
+  if (!totals) return 0;
+
+  return toUahEquivalent(totals, rates) ?? totals.amountUah;
 }
 
 function formatChartAmount(value: number, locale: string): string {
@@ -204,17 +238,22 @@ function BudgetGroupLines({
   exportMode,
   groupLabels,
   groupSummaries,
+  rates,
 }: {
   exportMode: boolean;
   groupLabels: BudgetGroupLabels;
   groupSummaries: Array<{ group: BudgetGroup; totals: BudgetTotals }>;
+  rates: ExchangeRates | null;
 }) {
   const t = useTranslations('budget');
-  const data = groupChartData(groupSummaries, groupLabels);
+  const data = groupChartData(groupSummaries, groupLabels, rates);
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <h3 className="mb-3 text-base">{t('yearTotalsByGroup')}</h3>
+      <h3 className="mb-1 text-base">{t('yearTotalsByGroup')}</h3>
+      <p className="mb-3 text-xs text-[var(--muted)]">
+        {rates ? t('chartConvertedUah') : t('chartUahOnly')}
+      </p>
       <div className="flex min-h-72 min-w-0 flex-1 items-end rounded-md border border-[var(--line)] bg-[var(--surface-subtle)] px-2 pb-2 pt-4">
         {exportMode ? (
           <BudgetGroupLineChart data={data} width={520} />
@@ -247,34 +286,41 @@ function BudgetGroupLineChart({
     >
       <CartesianGrid stroke="var(--line)" strokeDasharray="3 3" />
       <XAxis
+        angle={-25}
         axisLine={false}
         dataKey="label"
+        height={52}
         interval={0}
         tick={{ fill: 'var(--muted)', fontSize: 11 }}
         tickLine={false}
+        textAnchor="end"
       />
       <YAxis
         axisLine={false}
         tick={{ fill: 'var(--muted)', fontSize: 12 }}
         tickFormatter={(value) => formatChartAmount(Number(value), locale)}
         tickLine={false}
-        width={44}
+        width={64}
       />
       <Tooltip
         cursor={{ stroke: 'var(--muted)', strokeDasharray: '3 3' }}
         formatter={(value, name) => [
-          formatMoney(Number(value), 'UAH'),
+          formatMoney(Number(value), 'UAH', locale),
           name === 'income' ? t('income') : t('expenses'),
         ]}
         labelFormatter={(label) => `${label}`}
       />
-      <Legend height={28} verticalAlign="top" />
+      <Legend
+        formatter={(value) => (value === 'income' ? t('income') : t('expenses'))}
+        height={28}
+        verticalAlign="top"
+      />
       <Line
         activeDot={{ r: 5 }}
         dataKey="income"
         dot={{ r: 3 }}
         isAnimationActive={false}
-        name={t('income')}
+        name="income"
         stroke="#10b981"
         strokeWidth={2}
         type="monotone"
@@ -284,7 +330,7 @@ function BudgetGroupLineChart({
         dataKey="expenses"
         dot={{ r: 3 }}
         isAnimationActive={false}
-        name={t('expenses')}
+        name="expenses"
         stroke="#f43f5e"
         strokeWidth={2}
         type="monotone"
@@ -296,11 +342,12 @@ function BudgetGroupLineChart({
 function groupChartData(
   groupSummaries: Array<{ group: BudgetGroup; totals: BudgetTotals }>,
   groupLabels: BudgetGroupLabels,
+  rates: ExchangeRates | null,
 ): GroupChartItem[] {
   return groupSummaries.map((summary) => ({
-    expenses: summary.totals.expense.amountUah,
+    expenses: toUahEquivalent(summary.totals.expense, rates) ?? summary.totals.expense.amountUah,
     group: summary.group,
-    income: summary.totals.income.amountUah,
+    income: toUahEquivalent(summary.totals.income, rates) ?? summary.totals.income.amountUah,
     label: groupLabels[summary.group],
   }));
 }

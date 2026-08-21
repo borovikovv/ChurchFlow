@@ -2,10 +2,12 @@ import type {
   BudgetEntry,
   BudgetEntryField,
   BudgetMonth,
+  BudgetOpeningBalance,
   BudgetPayload,
   CreateBudgetMonthInput,
   UpdateBudgetEntryInput,
   UpdateBudgetEntryNoteInput,
+  UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 import type { ActionResult } from '../types';
 import type { BudgetAmountField } from './budget-table-helpers';
@@ -42,6 +44,10 @@ export type BudgetManagerProps = {
     field: BudgetEntryField,
     input: UpdateBudgetEntryNoteInput,
   ) => Promise<ActionResult<BudgetEntry>>;
+  updateOpeningBalance: (
+    organizationId: string,
+    input: UpdateBudgetOpeningBalanceInput,
+  ) => Promise<ActionResult<BudgetOpeningBalance>>;
 };
 
 export type BudgetEntryBlurHandler = (

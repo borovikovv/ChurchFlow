@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type {
   BudgetCategory,
+  BudgetOpeningBalance,
   BudgetCurrencyTotals,
   BudgetEntry,
   BudgetGroup,
@@ -18,8 +19,10 @@ import type {
   UpdateBudgetCategoryInput,
   UpdateBudgetEntryInput,
   UpdateBudgetEntryNoteInput,
+  UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 import { BUDGET_GROUPS, budgetEntryFieldSchema } from '@churchflow/shared';
+import { CurrencyRatesService } from '../currency-rates/currency-rates.service';
 import {
   BUDGET_GROUP_ORDER,
   BudgetsRepository,
@@ -32,6 +35,8 @@ const zeroCurrencyTotals = (): BudgetCurrencyTotals => ({
   amountEur: 0,
 });
 
+const EARLIEST_BUDGET_YEAR = 2000;
+
 const zeroTotals = (): BudgetTotals => ({
   income: zeroCurrencyTotals(),
   expense: zeroCurrencyTotals(),
@@ -40,7 +45,10 @@ const zeroTotals = (): BudgetTotals => ({
 
 @Injectable()
 export class BudgetsService {
-  constructor(private readonly budgetsRepository: BudgetsRepository) {}
+  constructor(
+    private readonly budgetsRepository: BudgetsRepository,
+    private readonly currencyRatesService: CurrencyRatesService,
+  ) {}
 
   async list(organizationId: string, year: number, actorUserId: string): Promise<BudgetPayload> {
     const actor = await this.budgetsRepository.findManagingMembership(organizationId, actorUserId);
@@ -61,6 +69,11 @@ export class BudgetsService {
       )
       .sort(compareCategories);
     const monthItems = months.map((month) => mapMonth(month));
+    const yearTotals = sumTotals(monthItems.map((month) => month.totals));
+    const [openingBalance, rates] = await Promise.all([
+      this.resolveOpeningBalance(organizationId, year),
+      this.currencyRatesService.getCurrent(),
+    ]);
 
     return {
       actorRole: actor.role as 'OWNER' | 'ADMIN',
@@ -68,8 +81,54 @@ export class BudgetsService {
       year,
       categories: categoryItems,
       months: monthItems,
-      yearTotals: sumTotals(monthItems.map((month) => month.totals)),
+      yearTotals,
       groupSummaries: buildGroupSummaries(months),
+      openingBalance,
+      rates,
+    };
+  }
+
+  async updateOpeningBalance(
+    organizationId: string,
+    input: UpdateBudgetOpeningBalanceInput,
+    actorUserId: string,
+  ): Promise<BudgetOpeningBalance> {
+    try {
+      await this.budgetsRepository.upsertOpeningBalance(organizationId, input, actorUserId);
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+
+    return this.resolveOpeningBalance(organizationId, input.sinceYear);
+  }
+
+  private async resolveOpeningBalance(
+    organizationId: string,
+    year: number,
+  ): Promise<BudgetOpeningBalance> {
+    const record = await this.budgetsRepository.findOpeningBalance(organizationId, year);
+    const seed = record
+      ? {
+          amountUah: decimalToNumber(record.amountUah),
+          amountUsd: decimalToNumber(record.amountUsd),
+          amountEur: decimalToNumber(record.amountEur),
+        }
+      : zeroCurrencyTotals();
+
+    const movement = await this.budgetsRepository.sumEntriesBetweenYears(
+      organizationId,
+      record?.sinceYear ?? EARLIEST_BUDGET_YEAR,
+      year,
+    );
+
+    const opening = cloneCurrencyTotals(seed);
+    addCurrencyTotalsTo(opening, sumToCurrencyTotals(movement.income));
+    subtractCurrencyTotalsFrom(opening, sumToCurrencyTotals(movement.expense));
+
+    return {
+      sinceYear: record?.sinceYear ?? null,
+      seed: roundCurrencyTotals(seed),
+      opening: roundCurrencyTotals(opening),
     };
   }
 
@@ -336,6 +395,42 @@ function sumTotals(items: BudgetTotals[]): BudgetTotals {
   return roundTotals(totals);
 }
 
+function cloneCurrencyTotals(totals: BudgetCurrencyTotals): BudgetCurrencyTotals {
+  return { ...totals };
+}
+
+function addCurrencyTotalsTo(
+  target: BudgetCurrencyTotals,
+  source: BudgetCurrencyTotals,
+): BudgetCurrencyTotals {
+  target.amountUah += source.amountUah;
+  target.amountUsd += source.amountUsd;
+  target.amountEur += source.amountEur;
+  return target;
+}
+
+function subtractCurrencyTotalsFrom(
+  target: BudgetCurrencyTotals,
+  source: BudgetCurrencyTotals,
+): BudgetCurrencyTotals {
+  target.amountUah -= source.amountUah;
+  target.amountUsd -= source.amountUsd;
+  target.amountEur -= source.amountEur;
+  return target;
+}
+
+function sumToCurrencyTotals(sum: {
+  amountUah: DecimalLike | null;
+  amountUsd: DecimalLike | null;
+  amountEur: DecimalLike | null;
+}): BudgetCurrencyTotals {
+  return {
+    amountUah: sum.amountUah ? decimalToNumber(sum.amountUah) : 0,
+    amountUsd: sum.amountUsd ? decimalToNumber(sum.amountUsd) : 0,
+    amountEur: sum.amountEur ? decimalToNumber(sum.amountEur) : 0,
+  };
+}
+
 function addCurrencyTotals(target: BudgetCurrencyTotals, source: BudgetCurrencyTotals) {
   target.amountUah += source.amountUah;
   target.amountUsd += source.amountUsd;
@@ -373,7 +468,9 @@ function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function decimalToNumber(value: { toString(): string }): number {
+type DecimalLike = { toString(): string };
+
+function decimalToNumber(value: DecimalLike): number {
   return Number(value.toString());
 }
 

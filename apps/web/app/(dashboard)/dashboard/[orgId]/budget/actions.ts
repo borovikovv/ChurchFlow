@@ -6,13 +6,16 @@ import {
   createBudgetMonthSchema,
   listBudgetQuerySchema,
   updateBudgetEntryNoteSchema,
+  updateBudgetOpeningBalanceSchema,
   type BudgetEntry,
   type BudgetEntryField,
   type BudgetMonth,
+  type BudgetOpeningBalance,
   type BudgetPayload,
   type CreateBudgetMonthInput,
   type UpdateBudgetEntryInput,
   type UpdateBudgetEntryNoteInput,
+  type UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 import type { ActionResult } from './types';
 
@@ -151,6 +154,30 @@ export async function removeLastBudgetMonthRowAction(
   const result = await apiFetch<BudgetMonth>(
     `/organizations/${organizationId}/budget/months/${monthId}/rows/last`,
     { method: 'DELETE' },
+  );
+  revalidatePath(budgetPath(organizationId));
+
+  return result.ok ? { ok: true, data: result.data } : { ok: false, error: result.error.message };
+}
+
+export async function updateBudgetOpeningBalanceAction(
+  organizationId: string,
+  input: UpdateBudgetOpeningBalanceInput,
+): Promise<ActionResult<BudgetOpeningBalance>> {
+  'use server';
+  const parsed = updateBudgetOpeningBalanceSchema.safeParse(input);
+  if (!parsed.success) {
+    const messages = await currentBudgetMessages();
+    return { ok: false, error: messages.invalidOpeningBalance };
+  }
+
+  const result = await apiFetch<BudgetOpeningBalance>(
+    `/organizations/${organizationId}/budget/opening-balance`,
+    {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(parsed.data),
+    },
   );
   revalidatePath(budgetPath(organizationId));
 

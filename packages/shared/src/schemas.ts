@@ -258,6 +258,13 @@ export const updateBudgetEntryNoteSchema = z.object({
   note: z.string().trim().max(500).nullable(),
 });
 
+export const updateBudgetOpeningBalanceSchema = z.object({
+  sinceYear: z.coerce.number().int().min(2000).max(2100),
+  amountUah: budgetAmountSchema,
+  amountUsd: budgetAmountSchema,
+  amountEur: budgetAmountSchema,
+});
+
 export const listNotificationsQuerySchema = z.object({
   cursor: uuidSchema.optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),

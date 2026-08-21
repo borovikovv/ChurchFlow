@@ -60,6 +60,7 @@ import type {
   updateBudgetCategorySchema,
   updateBudgetEntrySchema,
   updateBudgetEntryNoteSchema,
+  updateBudgetOpeningBalanceSchema,
   notificationTypeSchema,
   listNotificationsQuerySchema,
   notificationListItemSchema,
@@ -147,6 +148,7 @@ export type CreateBudgetCategoryInput = z.infer<typeof createBudgetCategorySchem
 export type UpdateBudgetCategoryInput = z.infer<typeof updateBudgetCategorySchema>;
 export type UpdateBudgetEntryInput = z.infer<typeof updateBudgetEntrySchema>;
 export type UpdateBudgetEntryNoteInput = z.infer<typeof updateBudgetEntryNoteSchema>;
+export type UpdateBudgetOpeningBalanceInput = z.infer<typeof updateBudgetOpeningBalanceSchema>;
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema>;
 export type NotificationListItem = z.infer<typeof notificationListItemSchema>;
@@ -319,6 +321,18 @@ export interface BudgetGroupSummary {
   totals: BudgetTotals;
 }
 
+export interface ExchangeRates {
+  date: string;
+  usdToUah: number;
+  eurToUah: number;
+}
+
+export interface BudgetOpeningBalance {
+  sinceYear: number | null;
+  seed: BudgetCurrencyTotals;
+  opening: BudgetCurrencyTotals;
+}
+
 export interface BudgetPayload {
   actorRole: 'OWNER' | 'ADMIN';
   canManage: true;
@@ -327,6 +341,8 @@ export interface BudgetPayload {
   months: BudgetMonth[];
   yearTotals: BudgetTotals;
   groupSummaries: BudgetGroupSummary[];
+  openingBalance: BudgetOpeningBalance;
+  rates: ExchangeRates | null;
 }
 
 export interface OrganizationRequestStatusItem {

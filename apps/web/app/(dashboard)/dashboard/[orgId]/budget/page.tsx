@@ -11,6 +11,7 @@ import {
   removeLastBudgetMonthRowAction,
   updateBudgetEntryAction,
   updateBudgetEntryNoteAction,
+  updateBudgetOpeningBalanceAction,
 } from './actions';
 import { BUDGET_START_YEAR, BUDGET_YEAR_LOOKAHEAD } from './constants';
 import { BudgetManager } from './_components/budget-manager';
@@ -54,6 +55,7 @@ export default async function BudgetPage({
           removeLastMonthRow={removeLastBudgetMonthRowAction}
           updateEntry={updateBudgetEntryAction}
           updateEntryNote={updateBudgetEntryNoteAction}
+          updateOpeningBalance={updateBudgetOpeningBalanceAction}
         />
       )}
     </div>

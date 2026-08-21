@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import type { BudgetCategory, BudgetMonth } from '@churchflow/shared';
 import { BudgetCell } from './budget-cell';
@@ -46,11 +46,13 @@ export function BudgetMonthTable({
   onRemoveLastRow: (monthId: string) => void;
 }) {
   const t = useTranslations('budget');
+  const locale = useLocale();
   const columns = spreadsheetColumns(categories, { columns: columnLabels, groups: groupLabels });
   const monthName = monthNames[month.month - 1] ?? String(month.month);
   const lastRowHasData = monthHasDataInRow(month, month.rowCount - 1);
   const rowMutationPending =
     savingKeys.has(`month:${month.id}:row:add`) || savingKeys.has(`month:${month.id}:row:remove`);
+  const isSaving = [...savingKeys].some((key) => key.includes(`:${month.id}:`));
 
   return (
     <div className="grid gap-4">
@@ -63,7 +65,7 @@ export function BudgetMonthTable({
         onDeleteMonth={onDeleteMonth}
         onRemoveLastRow={onRemoveLastRow}
       />
-      <section className="overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--surface)]">
+      <section className="relative overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--surface)]">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1040px] border-collapse text-sm">
             <thead>
@@ -123,7 +125,7 @@ export function BudgetMonthTable({
                     className="border border-[var(--line)] bg-[var(--surface-subtle)] px-2 py-2 text-right font-semibold tabular-nums"
                     key={column.id}
                   >
-                    {formatAmount(columnTotal(month, column))}
+                    {formatAmount(columnTotal(month, column), locale)}
                   </td>
                 ))}
               </tr>
@@ -140,13 +142,13 @@ export function BudgetMonthTable({
                 >
                   <div className="flex flex-wrap gap-x-6 gap-y-2">
                     <span>
-                      {t('income')}: {formatTotalsInline(month.totals.income)}
+                      {t('income')}: {formatTotalsInline(month.totals.income, locale)}
                     </span>
                     <span>
-                      {t('expenses')}: {formatTotalsInline(month.totals.expense)}
+                      {t('expenses')}: {formatTotalsInline(month.totals.expense, locale)}
                     </span>
                     <span>
-                      {t('balance')}: {formatTotalsInline(month.totals.balance)}
+                      {t('balance')}: {formatTotalsInline(month.totals.balance, locale)}
                     </span>
                   </div>
                 </td>
@@ -154,8 +156,8 @@ export function BudgetMonthTable({
             </tfoot>
           </table>
         </div>
-        {savingKeys.size > 0 ? (
-          <p className="m-0 border-t border-[var(--line)] px-3 py-2 text-xs text-[var(--muted)]">
+        {isSaving ? (
+          <p className="pointer-events-none absolute bottom-2 right-2 z-20 m-0 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--muted)] shadow-[var(--shadow)]">
             {t('savingChanges')}
           </p>
         ) : null}
@@ -189,7 +191,7 @@ function BudgetMonthTableHeader({
         <h2 className="pr-3 md:self-end">{t('monthTable', { month: monthName })}</h2>
         <CurrencyTotals
           totals={month.totals.balance}
-          className="mt-1 flex gap-3 text-sm font-semibold underline"
+          className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm font-semibold underline"
         />
       </div>
       <div className="flex flex-wrap items-center gap-2">

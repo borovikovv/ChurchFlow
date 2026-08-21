@@ -10,6 +10,7 @@ import {
   type UpdateBudgetEntryNoteInput,
   type UpdateBudgetCategoryInput,
   type UpdateBudgetEntryInput,
+  type UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 
@@ -66,6 +67,58 @@ export class BudgetsRepository {
         orderBy: [{ year: 'asc' }, { month: 'asc' }],
       }),
     };
+  }
+
+  findOpeningBalance(organizationId: string, year: number) {
+    return this.prisma.budgetOpeningBalance.findFirst({
+      where: { organizationId, sinceYear: { lte: year } },
+      orderBy: { sinceYear: 'desc' },
+    });
+  }
+
+  async sumEntriesBetweenYears(organizationId: string, fromYear: number, toYear: number) {
+    if (toYear <= fromYear) {
+      return { income: zeroAmounts(), expense: zeroAmounts() };
+    }
+
+    const amounts = { amountUah: true, amountUsd: true, amountEur: true } as const;
+    const monthFilter = { organizationId, year: { gte: fromYear, lt: toYear } };
+    const [income, expense] = await Promise.all([
+      this.prisma.budgetEntry.aggregate({
+        _sum: amounts,
+        where: { category: { type: 'INCOME' }, month: monthFilter },
+      }),
+      this.prisma.budgetEntry.aggregate({
+        _sum: amounts,
+        where: { category: { type: 'EXPENSE' }, month: monthFilter },
+      }),
+    ]);
+
+    return { income: income._sum, expense: expense._sum };
+  }
+
+  async upsertOpeningBalance(
+    organizationId: string,
+    input: UpdateBudgetOpeningBalanceInput,
+    actorUserId: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertManagingActor(tx, organizationId, actorUserId);
+
+      const data = {
+        amountUah: input.amountUah,
+        amountUsd: input.amountUsd,
+        amountEur: input.amountEur,
+      };
+
+      return tx.budgetOpeningBalance.upsert({
+        where: {
+          organizationId_sinceYear: { organizationId, sinceYear: input.sinceYear },
+        },
+        create: { organizationId, sinceYear: input.sinceYear, ...data },
+        update: data,
+      });
+    });
   }
 
   async createMonth(organizationId: string, input: CreateBudgetMonthInput, actorUserId: string) {
@@ -448,4 +501,8 @@ function budgetEntryData(input: UpdateBudgetEntryInput): BudgetEntryPatchData {
   if (input.amountUsd !== undefined) data.amountUsd = input.amountUsd;
   if (input.amountEur !== undefined) data.amountEur = input.amountEur;
   return data;
+}
+
+function zeroAmounts() {
+  return { amountUah: null, amountUsd: null, amountEur: null };
 }

@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -20,6 +21,7 @@ import {
   UpdateBudgetCategoryDto,
   UpdateBudgetEntryDto,
   UpdateBudgetEntryNoteDto,
+  UpdateBudgetOpeningBalanceDto,
 } from './dto/budget.dto';
 
 @Controller('organizations/:organizationId/budget')
@@ -34,6 +36,19 @@ export class BudgetsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.budgetsService.list(organizationId, query.year, this.actorUserId(request));
+  }
+
+  @Put('opening-balance')
+  updateOpeningBalance(
+    @Param('organizationId') organizationId: string,
+    @Body() body: UpdateBudgetOpeningBalanceDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.budgetsService.updateOpeningBalance(
+      organizationId,
+      body,
+      this.actorUserId(request),
+    );
   }
 
   @Post('months')

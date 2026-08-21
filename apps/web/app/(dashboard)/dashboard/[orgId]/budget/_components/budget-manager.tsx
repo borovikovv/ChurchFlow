@@ -4,7 +4,7 @@ import { toPng } from 'html-to-image';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { flushSync } from 'react-dom';
-import type { BudgetEntryField, BudgetMonth } from '@churchflow/shared';
+import type { BudgetCurrencyTotals, BudgetEntryField, BudgetMonth } from '@churchflow/shared';
 import type { DateRangeValue } from '@/components/forms/date-range-input';
 import type { ActionResult } from '../types';
 import { AddMonthControls } from './add-month-controls';
@@ -18,8 +18,10 @@ import type { BudgetManagerProps } from './budget-manager-types';
 import { BudgetMonthTable } from './budget-month-table';
 import { YearSummary } from './budget-summary';
 import { BudgetToolbar } from './budget-toolbar';
+import { EditOpeningBalanceDialog } from './edit-opening-balance-dialog';
 import {
   buildGroupSummaries,
+  carryForwardBalance,
   emptyEntry,
   firstAvailableMonth,
   type BudgetColumnLabels,
@@ -40,6 +42,7 @@ export function BudgetManager({
   removeLastMonthRow,
   updateEntry,
   updateEntryNote,
+  updateOpeningBalance,
 }: BudgetManagerProps) {
   const t = useTranslations('budget');
   const locale = useLocale();
@@ -48,6 +51,8 @@ export function BudgetManager({
   const [categories, setCategories] = useState(payload.categories);
   const [months, setMonths] = useState(payload.months);
   const [monthToAdd, setMonthToAdd] = useState(firstAvailableMonth(payload.months));
+  const [openingBalance, setOpeningBalance] = useState(payload.openingBalance);
+  const [rates, setRates] = useState(payload.rates);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exportRange, setExportRange] = useState<DateRangeValue | null>(null);
@@ -56,6 +61,10 @@ export function BudgetManager({
   const [pending, startTransition] = useTransition();
 
   const yearTotals = useMemo(() => sumTotals(months.map((month) => month.totals)), [months]);
+  const closingBalance = useMemo(
+    () => carryForwardBalance(openingBalance.opening, yearTotals.balance),
+    [openingBalance, yearTotals],
+  );
   const groupSummaries = useMemo(
     () => buildGroupSummaries(months, categories),
     [categories, months],
@@ -151,9 +160,19 @@ export function BudgetManager({
       setYear(result.data.year);
       setCategories(result.data.categories);
       setMonths(result.data.months);
+      setOpeningBalance(result.data.openingBalance);
+      setRates(result.data.rates);
       setMonthToAdd(firstAvailableMonth(result.data.months));
       window.history.pushState(null, '', `?year=${result.data.year}`);
     });
+  }
+
+  function handleOpeningBalanceSave(totals: BudgetCurrencyTotals) {
+    runMutation(
+      'budget:opening-balance',
+      () => updateOpeningBalance(organizationId, { sinceYear: year, ...totals }),
+      (updated) => setOpeningBalance(updated),
+    );
   }
 
   function handleAddMonth() {
@@ -306,15 +325,36 @@ export function BudgetManager({
       />
 
       {error ? <p className="form-error">{error}</p> : null}
-      {message ? <p className="text-sm text-[var(--muted)]">{message}</p> : null}
+      <div className="relative h-5">
+        {message ? (
+          <p className="absolute inset-x-0 top-0 m-0 truncate text-sm text-[var(--muted)]">
+            {message}
+          </p>
+        ) : null}
+      </div>
 
-      <YearSummary totals={yearTotals} />
+      <YearSummary
+        closingBalance={closingBalance}
+        openingAction={
+          <EditOpeningBalanceDialog
+            carriedOver={openingBalance.sinceYear !== year}
+            disabled={pending}
+            seed={openingBalance.sinceYear === year ? openingBalance.seed : openingBalance.opening}
+            year={year}
+            onSave={handleOpeningBalanceSave}
+          />
+        }
+        openingBalance={openingBalance.opening}
+        rates={rates}
+        totals={yearTotals}
+      />
       <BudgetCharts
         chartRef={null}
         groupLabels={groupLabels}
         groupSummaries={groupSummaries}
         monthNames={monthNames}
         months={months}
+        rates={rates}
         year={year}
       />
 
@@ -332,6 +372,7 @@ export function BudgetManager({
             monthNames={monthNames}
             months={exportMonths}
             periodLabel={exportPeriodLabel}
+            rates={rates}
             year={year}
           />
         </div>

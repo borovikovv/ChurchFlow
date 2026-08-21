@@ -5,6 +5,7 @@ import {
   updateBudgetCategorySchema,
   updateBudgetEntrySchema,
   updateBudgetEntryNoteSchema,
+  updateBudgetOpeningBalanceSchema,
 } from '@churchflow/shared';
 import type {
   BudgetCategoryType,
@@ -15,6 +16,7 @@ import type {
   UpdateBudgetCategoryInput,
   UpdateBudgetEntryInput,
   UpdateBudgetEntryNoteInput,
+  UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 
 export class ListBudgetQueryDto implements ListBudgetQuery {
@@ -58,4 +60,13 @@ export class UpdateBudgetEntryNoteDto implements UpdateBudgetEntryNoteInput {
   static readonly schema = updateBudgetEntryNoteSchema;
 
   note!: string | null;
+}
+
+export class UpdateBudgetOpeningBalanceDto implements UpdateBudgetOpeningBalanceInput {
+  static readonly schema = updateBudgetOpeningBalanceSchema;
+
+  sinceYear!: number;
+  amountUah!: number;
+  amountUsd!: number;
+  amountEur!: number;
 }

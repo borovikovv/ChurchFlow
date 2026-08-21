@@ -1,4 +1,5 @@
 import {
+  BUDGET_CURRENCIES,
   BUDGET_ENTRY_FIELD,
   BUDGET_GROUPS,
   type BudgetCategory,
@@ -6,6 +7,7 @@ import {
   type BudgetEntry,
   type BudgetEntryField,
   type BudgetGroup,
+  type ExchangeRates,
   type BudgetMonth,
   type BudgetTotals,
 } from '@churchflow/shared';
@@ -30,23 +32,26 @@ export type BudgetSpreadsheetColumn = {
   noteField: BudgetEntryField;
 };
 
-export function formatMoney(value: number, currency: 'UAH' | 'USD' | 'EUR'): string {
-  return new Intl.NumberFormat('en-US', {
+export type BudgetCurrency = (typeof BUDGET_CURRENCIES)[number];
+
+export function formatMoney(value: number, currency: BudgetCurrency, locale: string): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
+    currencyDisplay: 'narrowSymbol',
     maximumFractionDigits: 2,
   }).format(value);
 }
 
-export function formatAmount(value: number): string {
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
+export function formatAmount(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value);
 }
 
-export function formatTotalsInline(totals: BudgetCurrencyTotals): string {
+export function formatTotalsInline(totals: BudgetCurrencyTotals, locale: string): string {
   return [
-    formatMoney(totals.amountUah, 'UAH'),
-    formatMoney(totals.amountUsd, 'USD'),
-    formatMoney(totals.amountEur, 'EUR'),
+    formatMoney(totals.amountUah, 'UAH', locale),
+    formatMoney(totals.amountUsd, 'USD', locale),
+    formatMoney(totals.amountEur, 'EUR', locale),
   ].join(' / ');
 }
 
@@ -178,6 +183,32 @@ export function buildGroupSummaries(months: BudgetMonth[], categories: BudgetCat
       ),
     ),
   }));
+}
+
+export function toUahEquivalent(
+  totals: BudgetCurrencyTotals,
+  rates: ExchangeRates | null,
+): number | null {
+  if (!rates) return null;
+
+  return roundMoney(
+    totals.amountUah + totals.amountUsd * rates.usdToUah + totals.amountEur * rates.eurToUah,
+  );
+}
+
+export function carryForwardBalance(
+  opening: BudgetCurrencyTotals,
+  yearBalance: BudgetCurrencyTotals,
+): BudgetCurrencyTotals {
+  return {
+    amountUah: roundMoney(opening.amountUah + yearBalance.amountUah),
+    amountUsd: roundMoney(opening.amountUsd + yearBalance.amountUsd),
+    amountEur: roundMoney(opening.amountEur + yearBalance.amountEur),
+  };
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 export function sumTotals(items: BudgetTotals[]): BudgetTotals {

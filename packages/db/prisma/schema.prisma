@@ -330,6 +330,7 @@ model Organization {
   notificationPreferences NotificationPreference[]
   budgetCategories        BudgetCategory[]
   budgetMonths            BudgetMonth[]
+  budgetOpeningBalances   BudgetOpeningBalance[]
   prayerRequests          PrayerRequest[]
 
   @@index([status])
@@ -963,6 +964,32 @@ model BudgetEntryNote {
   @@unique([entryId, field])
   @@index([entryId])
   @@map("budget_entry_notes")
+}
+
+model CurrencyRate {
+  date      DateTime @id @db.Date
+  usdToUah  Decimal  @map("usd_to_uah") @db.Decimal(12, 4)
+  eurToUah  Decimal  @map("eur_to_uah") @db.Decimal(12, 4)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("currency_rates")
+}
+
+model BudgetOpeningBalance {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  sinceYear      Int      @map("since_year")
+  amountUah      Decimal  @default(0) @map("amount_uah") @db.Decimal(12, 2)
+  amountUsd      Decimal  @default(0) @map("amount_usd") @db.Decimal(12, 2)
+  amountEur      Decimal  @default(0) @map("amount_eur") @db.Decimal(12, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, sinceYear])
+  @@map("budget_opening_balances")
 }
 
 model ScheduledJobLock {
