@@ -93,7 +93,7 @@ The workflow checks out `github.sha` from the selected `Use workflow from` ref a
 - `ghcr.io/borovikovv/churchflow-api-migrator:<environment>-<github.sha>`
 - `ghcr.io/borovikovv/churchflow-web:<environment>-<github.sha>`
 
-The Web image embeds `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, `API_INTERNAL_URL`, and `JWT_ACCESS_PUBLIC_KEY` at `next build` time. Build the Web image separately for each environment. `TELEGRAM_CLIENT_ID` is runtime-only and is rendered into the server env files, not built into an image.
+The Web image embeds `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, and `API_INTERNAL_URL` at `next build` time. Build the Web image separately for each environment. `TELEGRAM_CLIENT_ID` is runtime-only and is rendered into the server env files, not built into an image.
 
 Prod deploys accept only a `github.sha` reachable from `main` or exactly matching a `v*` release tag.
 
@@ -170,10 +170,6 @@ Required deployment secrets:
 Required API/runtime secrets:
 
 - `DATABASE_URL`, using the Docker network hostname, for example `postgresql://churchflow:<password>@churchflow-postgres:5432/churchflow?schema=public`
-- `JWT_ACCESS_PUBLIC_KEY`
-- `JWT_ACCESS_PRIVATE_KEY`
-- `JWT_REFRESH_PUBLIC_KEY`
-- `JWT_REFRESH_PRIVATE_KEY`
 - `TELEGRAM_CLIENT_SECRET`
 - `S3_ACCESS_KEY_ID`
 - `S3_SECRET_ACCESS_KEY`
@@ -191,9 +187,7 @@ Required when `EMAIL_PROVIDER=smtp`:
 
 - set variables `SMTP_HOST` and `SMTP_PORT`.
 
-JWT PEM secrets may be stored with real newlines, escaped `\n`, or double-escaped `\\n`; the shared env schema normalizes all supported forms. The workflow writes PEM values into env files with escaped newlines so Compose does not need multiline env syntax.
-
-Do not pass private JWT keys, database credentials, Telegram credentials, Resend API keys, or S3/R2 credentials to Docker builds. Only runtime env files receive them.
+Do not pass database credentials, Telegram credentials, Resend API keys, or S3/R2 credentials to Docker builds. Only runtime env files receive them.
 
 ## First Stage Deployment
 

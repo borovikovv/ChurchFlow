@@ -19,7 +19,7 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
    - `cp apps/api/.env.example apps/api/.env`
    - `cp apps/web/.env.example apps/web/.env.local`
    - `cp packages/db/.env.example packages/db/.env`
-3. Fill secrets with real values. Do not use placeholder JWT keys or storage credentials outside local development.
+3. Fill secrets with real values. Do not use placeholder storage or provider credentials outside local development.
 4. Start local services with `docker compose up -d`.
 5. Install dependencies with `pnpm install`.
 6. Generate Prisma Client with `pnpm db:generate`.
@@ -36,8 +36,8 @@ For local Telegram Web Login testing, use the HTTPS proxy in `docs/local-https.m
 - `POST /v1/auth/provider` is retained for generic provider assertions, but active browser auth uses Telegram.
 - Telegram OIDC is available through `GET /v1/auth/telegram/start` and `GET /v1/auth/telegram/callback`.
 - Telegram users are admitted when they match an active membership, an existing platform-admin account, a valid invitation, or an exact organization-onboarding route. Onboarding-only accounts remain tenant-restricted until an approved request creates an active membership.
-- Protected API routes read the access token from `Authorization: Bearer ...` or the `churchflow_access` cookie.
-- `POST /v1/auth/refresh` mints a fresh access token from the httpOnly refresh cookie.
+- Protected API routes read the opaque session token from `Authorization: Bearer ...` or the `churchflow_session` cookie, and resolve it against the `sessions` table on every request.
+- Sessions slide over a 30-day idle window up to a 180-day ceiling; logout and revocation take effect immediately.
 - Platform admins are regular users with `platformRole` set to `ADMIN` or `SUPER_ADMIN`.
 - Organization owners are represented by `OrganizationMember` rows with role `OWNER`.
 - Invitations separate identity binding from delivery. Targeted Telegram invitations use Telegram OIDC `sub`; claimable links are first claimed by an authenticated Telegram user. Email is notification/contact data, not the acceptance identity.
@@ -58,7 +58,7 @@ See `docs/environment.md`, `docs/organization-approval-flow.md`, `docs/platform-
 ## Security Notes
 
 - Browser auth is prepared for httpOnly cookies. Do not add localStorage token storage.
-- JWT payloads contain identity and session ids only; organization permissions must be checked through database membership state. Runtime RLS context is not wired yet.
-- Refresh tokens must be stored only as hashes.
+- Session tokens are opaque and carry nothing; organization permissions must be checked through database membership state. Runtime RLS context is not wired yet.
+- Session tokens must be stored only as hashes.
 - S3/R2 credentials must stay server-side.
 - Private CRM/member data must not be joined into public website queries.

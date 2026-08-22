@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
@@ -26,17 +27,28 @@ export function isPlatformAdminRole(role: PlatformRole | null | undefined): bool
   return role === 'ADMIN' || role === 'SUPER_ADMIN';
 }
 
-export async function hasServerSession(): Promise<boolean> {
+async function hasSessionCookie(): Promise<boolean> {
   const cookieStore = await cookies();
-  // Middleware validates/refreshes the session before application routes execute.
-  // The refresh cookie is only a session candidate; API guards remain authoritative.
-  return cookieStore.has(AUTH_COOKIE_NAMES.access) || cookieStore.has(AUTH_COOKIE_NAMES.refresh);
+
+  return cookieStore.has(AUTH_COOKIE_NAMES.session);
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+// The single source of truth for "who is signed in". Session tokens are opaque, so a
+// cookie alone proves nothing and only the API can answer; the cookie check just spares
+// anonymous visitors a round trip. Cached per request because pages reach this through
+// several helpers and each would otherwise be its own call.
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
+  if (!(await hasSessionCookie())) {
+    return null;
+  }
+
   const result = await apiFetch<CurrentUser>('/users/me');
 
   return result.ok ? result.data : null;
+});
+
+function signedOutRoute(redirectTo: string): Route {
+  return `${APP_ROUTES.signedOut}?redirectTo=${encodeURIComponent(redirectTo)}` as Route;
 }
 
 export async function isPlatformAdmin(): Promise<boolean> {
@@ -50,23 +62,24 @@ interface MembershipClaimStatusRecord {
 }
 
 export async function requireServerSession(redirectTo: string): Promise<void> {
-  if (await hasServerSession()) {
+  if (await getCurrentUser()) {
     return;
   }
 
-  redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}` as Route);
+  redirect(signedOutRoute(redirectTo));
 }
 
 export async function requirePlatformAdmin(redirectTo: string): Promise<void> {
-  if (!(await hasServerSession())) {
-    redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}` as Route);
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect(signedOutRoute(redirectTo));
   }
 
-  if (await isPlatformAdmin()) {
+  if (isPlatformAdminRole(user.platformRole)) {
     return;
   }
 
-  redirect('/' as Route);
+  redirect(APP_ROUTES.home);
 }
 
 export async function getPostLoginRedirect(
@@ -108,8 +121,8 @@ export async function getPostLoginRedirect(
 }
 
 export async function requireAdminOrganizationsAccess(redirectTo: string): Promise<void> {
-  if (!(await hasServerSession())) {
-    redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}` as Route);
+  if (!(await getCurrentUser())) {
+    redirect(signedOutRoute(redirectTo));
   }
 
   const access = await getOrganizationAccessState();

@@ -1,9 +1,12 @@
 import { cookies } from 'next/headers';
-import { AUTH_COOKIE_NAMES, type ApiResult } from '@churchflow/shared';
-import { setCookieHeader } from '@/auth/middleware-session';
+import { type ApiResult } from '@churchflow/shared';
 import { serverEnv } from '@/env/server';
 
 type ApiError = Extract<ApiResult<unknown>, { ok: false }>['error'];
+
+// Callers distinguish "the session is gone" from any other failure by this code:
+// session helpers turn it into a redirect to /signed-out.
+export const UNAUTHENTICATED_ERROR_CODE = 'UNAUTHENTICATED';
 
 async function readJsonBody<T>(response: Response): Promise<T | undefined> {
   const text = await response.text();
@@ -27,18 +30,6 @@ export async function apiFetch<T>(
 
   try {
     response = await sendApiRequest(baseUrl, path, init, cookieHeader);
-
-    if (response.status === 401) {
-      const refreshed = await refreshAccessToken(cookieHeader);
-      if (refreshed) {
-        response = await sendApiRequest(
-          baseUrl,
-          path,
-          init,
-          setCookieHeader(cookieHeader, AUTH_COOKIE_NAMES.access, refreshed.accessToken),
-        );
-      }
-    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'API request failed';
 
@@ -48,6 +39,13 @@ export async function apiFetch<T>(
         code: 'API_UNREACHABLE',
         message,
       },
+    };
+  }
+
+  if (response.status === 401) {
+    return {
+      ok: false,
+      error: { code: UNAUTHENTICATED_ERROR_CODE, message: 'Session is no longer active' },
     };
   }
 
@@ -107,32 +105,4 @@ function sendApiRequest(
     },
     cache: init.cache ?? 'no-store',
   });
-}
-
-async function refreshAccessToken(
-  cookieHeader: string,
-): Promise<{ accessToken: string } | undefined> {
-  const response = await fetch(`${serverEnv.API_INTERNAL_URL}/auth/refresh`, {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      cookie: cookieHeader,
-    },
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    return undefined;
-  }
-
-  const body = (await response.json()) as unknown;
-  if (isRecord(body) && typeof body['accessToken'] === 'string') {
-    return { accessToken: body['accessToken'] };
-  }
-
-  return undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }

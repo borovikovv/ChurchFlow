@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { Suspense } from 'react';
-import { getCurrentUser, hasServerSession } from '@/auth/session';
+import { getCurrentUser } from '@/auth/session';
 import { AppShell } from '@/components/app-shell';
 import {
   getOrganizationAccessState,
@@ -35,8 +35,7 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const hasSession = await hasServerSession();
-  const user = hasSession ? await getCurrentUser() : null;
+  const user = await getCurrentUser();
   const access = user ? await getOrganizationAccessState(user) : null;
   const adminOrganizationIds = adminOrganizationIdsFromAccess(access?.organizations);
   const locale = isAppLocale(user?.locale) ? user.locale : DEFAULT_APP_LOCALE;
