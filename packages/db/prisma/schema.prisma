@@ -30,6 +30,7 @@ enum SessionType {
 
 enum SessionRevokeReason {
   logout
+  user_revoked
   admin
   expired
   user_deleted
@@ -291,10 +292,7 @@ model Session {
   id                String               @id @default(uuid()) @db.Uuid
   userId            String               @map("user_id") @db.Uuid
   type              SessionType          @default(user)
-  // Column keeps its original name so a running API instance survives the migration
-  // step of a deploy. Renaming it needs an expand/contract migration of its own.
-  tokenHash         String               @unique @map("refresh_token_hash")
-  // Written by the session management screens planned on top of this model.
+  tokenHash         String               @unique @map("token_hash")
   deviceName        String?              @map("device_name")
   userAgent         String?              @map("user_agent")
   ipAddress         String?              @map("ip_address")

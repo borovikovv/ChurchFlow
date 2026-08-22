@@ -6,6 +6,7 @@ import { getMessages } from '@/i18n/messages';
 import {
   organizationProfileNotificationsRoute,
   organizationProfileRoute,
+  organizationProfileSessionsRoute,
 } from '@/features/organizations/routes';
 import { NotificationPreferencesForm } from '@/features/notifications/components/notification-preferences-form';
 import { getNotificationPreferences } from '@/features/notifications/server/actions';
@@ -41,6 +42,7 @@ export default async function OrganizationNotificationPreferencesPage({
             label: messages.profile.notifications,
             href: organizationProfileNotificationsRoute(orgId),
           },
+          { label: messages.sessions.title, href: organizationProfileSessionsRoute(orgId) },
         ]}
       />
       {preferencesResult.ok ? (

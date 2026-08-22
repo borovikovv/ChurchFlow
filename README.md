@@ -38,6 +38,7 @@ For local Telegram Web Login testing, use the HTTPS proxy in `docs/local-https.m
 - Telegram users are admitted when they match an active membership, an existing platform-admin account, a valid invitation, or an exact organization-onboarding route. Onboarding-only accounts remain tenant-restricted until an approved request creates an active membership.
 - Protected API routes read the opaque session token from `Authorization: Bearer ...` or the `churchflow_session` cookie, and resolve it against the `sessions` table on every request.
 - Sessions slide over a 30-day idle window up to a 180-day ceiling; logout and revocation take effect immediately.
+- Each session is one device. Signed-in devices are listed under the profile and can be signed out individually or all at once.
 - Platform admins are regular users with `platformRole` set to `ADMIN` or `SUPER_ADMIN`.
 - Organization owners are represented by `OrganizationMember` rows with role `OWNER`.
 - Invitations separate identity binding from delivery. Targeted Telegram invitations use Telegram OIDC `sub`; claimable links are first claimed by an authenticated Telegram user. Email is notification/contact data, not the acceptance identity.

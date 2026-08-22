@@ -152,7 +152,12 @@ Optional variables with defaults, used by the nightly notification retention job
 - `NOTIFICATIONS_READ_RETENTION_DAYS=180` — deletes read, archived or dismissed notifications older than this.
 - `NOTIFICATIONS_RETENTION_DRY_RUN=false` — set to `true` to log the counts without deleting anything.
 
-Leaving any of the three blank falls back to the default shown above.
+Optional variables with defaults, used by the nightly session retention job:
+
+- `SESSIONS_RETENTION_DAYS=30` — deletes sessions that stopped being usable, through expiry or revocation, longer ago than this.
+- `SESSIONS_RETENTION_DRY_RUN=false` — set to `true` to log the count without deleting anything.
+
+Leaving any of these blank falls back to the default shown above.
 
 `API_INTERNAL_URL` is a Docker-network URL used by Next.js server code and rewrites. Do not use `localhost` for it inside containers.
 Leave `COOKIE_DOMAIN` unset in both environments so auth and Telegram OAuth cookies are host-only.

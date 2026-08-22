@@ -37,6 +37,10 @@ is cached per render, so a page that reaches it through several helpers still ma
 A render cannot write cookies, so a rejected visitor is redirected to `/signed-out`. That route
 handler clears the cookies and forwards to `/login`, preserving the page they were trying to reach.
 
+Only a rejected session counts as being signed out. When the API is unreachable or fails for any
+other reason `getCurrentUser` raises instead of returning `null`, because reporting an outage as a
+sign-out would clear a session that is still perfectly valid.
+
 ## Route policy
 
 Public pages are explicitly allowlisted:
@@ -56,11 +60,26 @@ mutations public; guards remain authoritative.
 A new Telegram login is required after logout, session revocation, user deletion, 30 days without
 using the session, 180 days since it was created, or loss of the session cookie.
 
-## Notes for future work
+## Managing devices
 
-- The session token column is still physically named `refresh_token_hash` and is mapped to
-  `tokenHash` in Prisma. Renaming it needs an expand/contract migration because the running API
-  instance reads that column while a deploy applies migrations.
-- `Session.deviceName` exists for the planned session-management screens and is not written yet.
-- Expired sessions are never deleted; a retention job comparable to the notification one is still
-  needed.
+Each session row is one device. `Session.deviceName` is a best-effort label derived from the user
+agent at sign-in, such as `Chrome on macOS`; user agents are self-reported, so an unrecognised one
+simply has no label and nothing treats it as identification.
+
+Three endpoints back the Devices tab in the profile, all of them authenticated:
+
+- `GET /auth/sessions` lists the caller's live sessions, marking their own with `current`. Token
+  hashes never leave the guard: the current session is recognised by id.
+- `DELETE /auth/sessions/:sessionId` signs one device out. The query is scoped by user id, so a
+  session belonging to somebody else is reported as not found rather than refused.
+- `POST /auth/sessions/revoke-others` signs out every other device and keeps the caller signed in.
+
+Revocations made this way are recorded as `user_revoked`, which is what separates them from an
+ordinary `logout` when someone asks why a session ended.
+
+## Retention
+
+A nightly job deletes sessions that stopped being usable longer ago than `SESSIONS_RETENTION_DAYS`,
+whether they expired or were revoked. Rows are kept for that window so recent sign-ins stay visible
+to their owner and to anyone investigating an incident. Deletion runs in batches and the job takes
+the same scheduled-job lock as notification retention. See `docs/deployment.md` for the settings.

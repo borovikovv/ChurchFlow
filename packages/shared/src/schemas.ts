@@ -34,6 +34,16 @@ export const slugSchema = z
   .max(80)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
+export const userSessionSchema = z.object({
+  id: uuidSchema,
+  deviceName: z.string().nullable(),
+  ipAddress: z.string().nullable(),
+  lastUsedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  current: z.boolean(),
+});
+
 export const authProviderSchema = z.enum(['telegram']);
 export const invitationTargetProviderSchema = z.enum([
   'telegram',

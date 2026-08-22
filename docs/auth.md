@@ -37,7 +37,7 @@ Register the exact `TELEGRAM_REDIRECT_URI` and the web origin in BotFather under
 
 Sessions store token hashes, never raw tokens. Browser flows use secure, SameSite, httpOnly cookies.
 
-A session is a single opaque random token: there is no access/refresh pair and no JWT. The token carries no claims, so every request resolves the user by looking up the `sessions` row behind the hash. See `docs/auth-sessions.md` for lifetimes and the web-layer flow.
+A session is a single opaque random token: there is no access/refresh pair and no JWT. The token carries no claims, so every request resolves the user by looking up the `sessions` row behind the hash. See `docs/auth-sessions.md` for lifetimes, device management and the web-layer flow.
 
 Roles and permissions are never carried by the credential. Organization permissions are checked through database membership state in API guards/services. RLS policies exist as a database foundation, but request-scoped RLS context is not wired yet.
 

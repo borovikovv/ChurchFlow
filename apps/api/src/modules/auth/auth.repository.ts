@@ -28,6 +28,16 @@ export interface CreatedSession {
   id: string;
 }
 
+export interface UserSessionRecord {
+  id: string;
+  deviceName: string | null;
+  userAgent: string | null;
+  ipAddress: string | null;
+  lastUsedAt: Date | null;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
 @Injectable()
 export class AuthRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -259,5 +269,82 @@ export class AuthRepository {
     });
 
     return result.count;
+  }
+
+  async listUserSessions(userId: string): Promise<UserSessionRecord[]> {
+    return this.prisma.session.findMany({
+      where: { userId, type: 'user', revokedAt: null, expiresAt: { gt: new Date() } },
+      select: {
+        id: true,
+        deviceName: true,
+        userAgent: true,
+        ipAddress: true,
+        lastUsedAt: true,
+        createdAt: true,
+        expiresAt: true,
+      },
+      orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  // Scoped by userId so one account can never revoke another account's session.
+  async revokeUserSession(
+    sessionId: string,
+    userId: string,
+    reason: SessionRevokeReason,
+  ): Promise<number> {
+    const result = await this.prisma.session.updateMany({
+      where: { id: sessionId, userId, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    });
+
+    return result.count;
+  }
+
+  async revokeOtherUserSessions(
+    userId: string,
+    keptSessionId: string,
+    reason: SessionRevokeReason,
+  ): Promise<number> {
+    const result = await this.prisma.session.updateMany({
+      where: { userId, revokedAt: null, id: { not: keptSessionId } },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    });
+
+    return result.count;
+  }
+
+  async countPurgeableSessions(cutoff: Date): Promise<number> {
+    return this.prisma.session.count({
+      where: { OR: [{ expiresAt: { lt: cutoff } }, { revokedAt: { lt: cutoff } }] },
+    });
+  }
+
+  // `expiresAt` is capped by `absoluteExpiresAt` when the idle window slides, so it is
+  // already the date a session stopped being usable; the ceiling needs no separate check.
+  async purgeSessions(input: { cutoff: Date; batchSize: number; maxBatches: number }) {
+    let deletedCount = 0;
+    let batches = 0;
+
+    while (batches < input.maxBatches) {
+      const deleted = await this.prisma.$executeRaw`
+        DELETE FROM "sessions"
+        WHERE "id" IN (
+          SELECT "id"
+          FROM "sessions"
+          WHERE "expires_at" < ${input.cutoff.toISOString()}::timestamp
+             OR "revoked_at" < ${input.cutoff.toISOString()}::timestamp
+          LIMIT ${input.batchSize}
+        )
+      `;
+      batches += 1;
+      deletedCount += deleted;
+
+      if (deleted < input.batchSize) {
+        return { deletedCount, batches, exhausted: false };
+      }
+    }
+
+    return { deletedCount, batches, exhausted: true };
   }
 }

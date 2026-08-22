@@ -37,8 +37,8 @@ window under a 180-day absolute ceiling, with the idle window advanced at most o
 ## Consequences
 
 Logout, revocation and account deletion take effect on the next request rather than after a token
-expires. Sessions become first-class rows that can carry device metadata, which is what future
-session-management screens need.
+expires. Sessions became first-class rows carrying device metadata, which is what let the Devices
+screen ship with this decision rather than after it.
 
 Every authenticated request costs one indexed lookup. That was already true; the change is that the
 lookup is now the whole of authentication rather than an addition to it.

@@ -3,17 +3,22 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createPublicKey, randomBytes, verify, type JsonWebKey } from 'node:crypto';
 import { z } from 'zod';
+import type { UserSession } from '@churchflow/shared';
+import { deviceLabelFromUserAgent } from '../../common/auth/device-label';
 import {
   SESSION_ABSOLUTE_TTL_SECONDS,
   SESSION_IDLE_TTL_SECONDS,
 } from '../../common/auth/session-policy';
 import { AuthRepository } from './auth.repository';
 import type { providerLoginSchema } from './dto/provider-login.dto';
+import { SESSION_RETENTION_BATCH_SIZE, SESSION_RETENTION_MAX_BATCHES } from './session-retention';
 
 const TELEGRAM_ISSUER = 'https://oauth.telegram.org';
 const TELEGRAM_AUTHORIZATION_URL = 'https://oauth.telegram.org/auth';
@@ -121,6 +126,7 @@ interface CreateSessionInput {
   tokenHash: string;
   expiresAt: Date;
   absoluteExpiresAt: Date;
+  deviceName?: string;
   userAgent?: string;
   ipAddress?: string;
 }
@@ -129,7 +135,16 @@ interface CreatedSession {
   id: string;
 }
 
-type SessionRevokeReason = 'logout' | 'admin' | 'expired' | 'user_deleted';
+type SessionRevokeReason = 'logout' | 'user_revoked' | 'admin' | 'expired' | 'user_deleted';
+
+interface UserSessionRecord {
+  id: string;
+  deviceName: string | null;
+  ipAddress: string | null;
+  lastUsedAt: Date | null;
+  createdAt: Date;
+  expiresAt: Date;
+}
 
 interface AuthRepositoryPort {
   hasPendingTelegramInvitation(providerAccountId: string): Promise<boolean>;
@@ -148,10 +163,29 @@ interface AuthRepositoryPort {
   touchTelegramAccount(accountId: string, username?: string): Promise<AuthRepositoryUser>;
   createSession(input: CreateSessionInput): Promise<CreatedSession>;
   revokeSessionByTokenHash(tokenHash: string, reason: SessionRevokeReason): Promise<number>;
+  listUserSessions(userId: string): Promise<UserSessionRecord[]>;
+  revokeUserSession(
+    sessionId: string,
+    userId: string,
+    reason: SessionRevokeReason,
+  ): Promise<number>;
+  revokeOtherUserSessions(
+    userId: string,
+    keptSessionId: string,
+    reason: SessionRevokeReason,
+  ): Promise<number>;
+  countPurgeableSessions(cutoff: Date): Promise<number>;
+  purgeSessions(input: {
+    cutoff: Date;
+    batchSize: number;
+    maxBatches: number;
+  }): Promise<{ deletedCount: number; exhausted: boolean }>;
 }
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly config: ConfigService,
     @Inject(AuthRepository) private readonly authRepository: AuthRepositoryPort,
@@ -423,6 +457,64 @@ export class AuthService {
     return { ok: true };
   }
 
+  async listSessions(userId: string, currentSessionId: string): Promise<UserSession[]> {
+    const sessions = await this.authRepository.listUserSessions(userId);
+
+    return sessions.map((session) => ({
+      id: session.id,
+      deviceName: session.deviceName,
+      ipAddress: session.ipAddress,
+      lastUsedAt: session.lastUsedAt?.toISOString() ?? null,
+      createdAt: session.createdAt.toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
+      current: session.id === currentSessionId,
+    }));
+  }
+
+  async revokeSession(userId: string, sessionId: string): Promise<{ ok: true }> {
+    const revoked = await this.authRepository.revokeUserSession(sessionId, userId, 'user_revoked');
+    if (revoked === 0) {
+      throw new NotFoundException('Session was not found');
+    }
+
+    return { ok: true };
+  }
+
+  async revokeOtherSessions(
+    userId: string,
+    currentSessionId: string,
+  ): Promise<{ revokedCount: number }> {
+    const revokedCount = await this.authRepository.revokeOtherUserSessions(
+      userId,
+      currentSessionId,
+      'user_revoked',
+    );
+
+    return { revokedCount };
+  }
+
+  async purgeExpiredSessions(input: { cutoff: Date; dryRun: boolean }) {
+    if (input.dryRun) {
+      return { deletedCount: await this.authRepository.countPurgeableSessions(input.cutoff) };
+    }
+
+    const purged = await this.authRepository.purgeSessions({
+      cutoff: input.cutoff,
+      batchSize: SESSION_RETENTION_BATCH_SIZE,
+      maxBatches: SESSION_RETENTION_MAX_BATCHES,
+    });
+
+    if (purged.exhausted) {
+      this.logger.warn({
+        event: 'Session retention hit the batch limit before draining the backlog',
+        cutoff: input.cutoff.toISOString(),
+        deletedCount: purged.deletedCount,
+      });
+    }
+
+    return { deletedCount: purged.deletedCount };
+  }
+
   private async createUserSession(
     userId: string,
     client: SessionClientContext,
@@ -433,12 +525,14 @@ export class AuthService {
     const sessionToken = randomBytes(48).toString('base64url');
     const now = Date.now();
     const absoluteExpiresAt = new Date(now + SESSION_ABSOLUTE_TTL_SECONDS * 1000);
+    const deviceName = deviceLabelFromUserAgent(client.userAgent);
     await this.authRepository.createSession({
       userId,
       type: 'user',
       tokenHash: this.hashToken(sessionToken),
       expiresAt: new Date(now + SESSION_IDLE_TTL_SECONDS * 1000),
       absoluteExpiresAt,
+      ...(deviceName ? { deviceName } : {}),
       ...(client.userAgent ? { userAgent: client.userAgent } : {}),
       ...(client.ipAddress ? { ipAddress: client.ipAddress } : {}),
     });

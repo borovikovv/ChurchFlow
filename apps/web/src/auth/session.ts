@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
 import { AUTH_COOKIE_NAMES, type AppLocale } from '@churchflow/shared';
-import { apiFetch } from '@/api/client';
+import { apiFetch, UNAUTHENTICATED_ERROR_CODE } from '@/api/client';
 import {
   getOrganizationAccessState,
   isOrganizationAdminRole,
@@ -43,8 +43,18 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   }
 
   const result = await apiFetch<CurrentUser>('/users/me');
+  if (result.ok) {
+    return result.data;
+  }
 
-  return result.ok ? result.data : null;
+  // Only a rejected session means "signed out". Any other failure is the API being
+  // unavailable, and reporting that as a sign-out would clear a session that is still
+  // valid, so it surfaces as an error instead.
+  if (result.error.code === UNAUTHENTICATED_ERROR_CODE) {
+    return null;
+  }
+
+  throw new Error(`Could not load the current user: ${result.error.message}`);
 });
 
 function signedOutRoute(redirectTo: string): Route {

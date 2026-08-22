@@ -69,6 +69,8 @@ export const apiEnvSchema = z
     NOTIFICATIONS_RETENTION_DAYS: optionalPositiveInt(365),
     NOTIFICATIONS_READ_RETENTION_DAYS: optionalPositiveInt(180),
     NOTIFICATIONS_RETENTION_DRY_RUN: optionalBooleanFlag(false),
+    SESSIONS_RETENTION_DAYS: optionalPositiveInt(30),
+    SESSIONS_RETENTION_DRY_RUN: optionalBooleanFlag(false),
     S3_ENDPOINT: z.string().url(),
     S3_REGION: z.string().min(1),
     S3_BUCKET: z.string().min(1),

@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser, requireServerSession } from '@/auth/session';
-import { ProfileForm } from '@/features/profile/components/profile-form';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs } from '@/components/ui/tabs';
 import { getMessages } from '@/i18n/messages';
@@ -9,16 +8,18 @@ import {
   organizationProfileRoute,
   organizationProfileSessionsRoute,
 } from '@/features/organizations/routes';
+import { SessionList } from '@/features/sessions/components/session-list';
+import { getSessions } from '@/features/sessions/server/actions';
 
-export default async function OrganizationProfilePage({
+export default async function OrganizationProfileSessionsPage({
   params,
 }: {
   params: Promise<{ orgId: string }>;
 }) {
   const { orgId } = await params;
-  await requireServerSession(`/dashboard/${orgId}/profile`);
+  await requireServerSession(`/dashboard/${orgId}/profile/sessions`);
 
-  const user = await getCurrentUser();
+  const [user, sessionsResult] = await Promise.all([getCurrentUser(), getSessions()]);
   if (!user) {
     redirect('/login');
   }
@@ -26,7 +27,7 @@ export default async function OrganizationProfilePage({
 
   return (
     <main className="stack">
-      <PageHeader title={messages.profile.title} description={messages.profile.description} />
+      <PageHeader title={messages.profile.title} description={messages.sessions.description} />
       <Tabs
         label={messages.profile.settings}
         items={[
@@ -38,16 +39,11 @@ export default async function OrganizationProfilePage({
           { label: messages.sessions.title, href: organizationProfileSessionsRoute(orgId) },
         ]}
       />
-      <div className="stack max-w-xl">
-        <ProfileForm
-          displayName={user.displayName}
-          email={user.email}
-          platformRole={user.platformRole}
-          baptizedAt={user.baptizedAt?.slice(0, 10) ?? null}
-          baptismChurchName={user.baptismChurchName}
-          locale={user.locale}
-        />
-      </div>
+      {sessionsResult.ok ? (
+        <SessionList sessions={sessionsResult.data} locale={user.locale} />
+      ) : (
+        <p className="form-error">{sessionsResult.error.message}</p>
+      )}
     </main>
   );
 }

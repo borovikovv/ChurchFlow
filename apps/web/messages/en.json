@@ -861,5 +861,18 @@
     "page": "Page",
     "of": "of",
     "itemsPerPage": "Items per page"
+  },
+  "sessions": {
+    "title": "Devices",
+    "description": "Places where your ChurchFlow account is currently signed in.",
+    "currentDevice": "this device",
+    "unknownDevice": "Unknown device",
+    "lastUsed": "Last used {value}",
+    "neverUsed": "Not used yet",
+    "signOutDevice": "Sign out",
+    "signingOut": "Signing out...",
+    "signOutOthers": "Sign out {count} other {count, plural, one {device} other {devices}}",
+    "revoked": "Device signed out.",
+    "revokedOthers": "Signed out {count} {count, plural, one {device} other {devices}}."
   }
 }

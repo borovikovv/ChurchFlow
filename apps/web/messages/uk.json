@@ -861,5 +861,18 @@
     "page": "Сторінка",
     "of": "з",
     "itemsPerPage": "Елементів на сторінці"
+  },
+  "sessions": {
+    "title": "Пристрої",
+    "description": "Місця, де зараз виконано вхід у ваш обліковий запис ChurchFlow.",
+    "currentDevice": "цей пристрій",
+    "unknownDevice": "Невідомий пристрій",
+    "lastUsed": "Востаннє використано {value}",
+    "neverUsed": "Ще не використовувався",
+    "signOutDevice": "Вийти",
+    "signingOut": "Виходимо...",
+    "signOutOthers": "Вийти на {count, plural, one {# іншому пристрої} other {# інших пристроях}}",
+    "revoked": "Пристрій вийшов із системи.",
+    "revokedOthers": "Виконано вихід на {count, plural, one {# пристрої} other {# пристроях}}."
   }
 }

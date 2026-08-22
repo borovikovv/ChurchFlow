@@ -1,18 +1,25 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
+  Param,
   Post,
   Query,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { AUTH_COOKIE_NAMES } from '@churchflow/shared';
+import { AUTH_COOKIE_NAMES, type UserSession } from '@churchflow/shared';
 import type { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { sessionCookieOptions } from '../../common/auth/session-cookie';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { AuthService } from './auth.service';
 import { ProviderLoginDto, providerLoginSchema } from './dto/provider-login.dto';
 
@@ -67,6 +74,9 @@ interface AuthControllerService {
     client: SessionClientContext;
   }): Promise<CompleteTelegramLoginResult>;
   logoutByToken(sessionToken: string): Promise<{ ok: true }>;
+  listSessions(userId: string, currentSessionId: string): Promise<UserSession[]>;
+  revokeSession(userId: string, sessionId: string): Promise<{ ok: true }>;
+  revokeOtherSessions(userId: string, currentSessionId: string): Promise<{ revokedCount: number }>;
 }
 
 @Controller('auth')
@@ -167,6 +177,39 @@ export class AuthController {
 
     this.clearAuthCookies(response);
     return { ok: true };
+  }
+
+  @Get('sessions')
+  @UseGuards(SessionAuthGuard)
+  listSessions(@Req() request: AuthenticatedRequest): Promise<UserSession[]> {
+    const auth = this.authContext(request);
+
+    return this.authService.listSessions(auth.userId, auth.sessionId);
+  }
+
+  @Delete('sessions/:sessionId')
+  @UseGuards(SessionAuthGuard)
+  revokeSession(
+    @Param('sessionId') sessionId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<{ ok: true }> {
+    return this.authService.revokeSession(this.authContext(request).userId, sessionId);
+  }
+
+  @Post('sessions/revoke-others')
+  @UseGuards(SessionAuthGuard)
+  revokeOtherSessions(@Req() request: AuthenticatedRequest): Promise<{ revokedCount: number }> {
+    const auth = this.authContext(request);
+
+    return this.authService.revokeOtherSessions(auth.userId, auth.sessionId);
+  }
+
+  private authContext(request: AuthenticatedRequest): { userId: string; sessionId: string } {
+    if (!request.auth) {
+      throw new Error('Authenticated request missing auth payload');
+    }
+
+    return request.auth;
   }
 
   private sessionToken(request: Request): string | undefined {
