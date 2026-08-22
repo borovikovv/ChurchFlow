@@ -209,8 +209,10 @@ Do not pass database credentials, Telegram credentials, Resend API keys, or S3/R
    docker network connect churchflow-internal churchflow-postgres || true
    ```
    The second command may report that the endpoint already exists; that is fine.
-4. Run `Deploy` from the stage branch or tag with:
+4. Run `Deploy` from any branch you want to test with:
    - `environment=stage`
+
+   Stage accepts any branch, so feature branches can be deployed there. `prod` still only accepts `main`.
 5. Verify from the server:
    ```bash
    cd /opt/churchflow/stage

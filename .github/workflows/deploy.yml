@@ -61,7 +61,7 @@ jobs:
 
           case "${{ inputs.environment }}" in
             stage)
-              expected_branch="stage"
+              expected_branch=""
               ;;
             prod)
               expected_branch="main"
@@ -72,9 +72,18 @@ jobs:
               ;;
           esac
 
-          if [[ "$GITHUB_REF_TYPE" != "branch" || "$GITHUB_REF_NAME" != "$expected_branch" ]]; then
+          if [[ "$GITHUB_REF_TYPE" != "branch" ]]; then
+            echo "::error::${{ inputs.environment }} deploys must be dispatched from a branch. Current ref: $GITHUB_REF_TYPE/$GITHUB_REF_NAME."
+            exit 1
+          fi
+
+          if [[ -n "$expected_branch" && "$GITHUB_REF_NAME" != "$expected_branch" ]]; then
             echo "::error::${{ inputs.environment }} deploys must be dispatched from the $expected_branch branch. Current ref: $GITHUB_REF_TYPE/$GITHUB_REF_NAME."
             exit 1
+          fi
+
+          if [[ -z "$expected_branch" ]]; then
+            echo "Deploying ${{ inputs.environment }} from branch $GITHUB_REF_NAME."
           fi
 
       - name: Validate Telegram environment variables
@@ -244,7 +253,7 @@ jobs:
 
           case "${{ inputs.environment }}" in
             stage)
-              expected_branch="stage"
+              expected_branch=""
               ;;
             prod)
               expected_branch="main"
@@ -255,9 +264,18 @@ jobs:
               ;;
           esac
 
-          if [[ "$GITHUB_REF_TYPE" != "branch" || "$GITHUB_REF_NAME" != "$expected_branch" ]]; then
+          if [[ "$GITHUB_REF_TYPE" != "branch" ]]; then
+            echo "::error::${{ inputs.environment }} deploys must be dispatched from a branch. Current ref: $GITHUB_REF_TYPE/$GITHUB_REF_NAME."
+            exit 1
+          fi
+
+          if [[ -n "$expected_branch" && "$GITHUB_REF_NAME" != "$expected_branch" ]]; then
             echo "::error::${{ inputs.environment }} deploys must be dispatched from the $expected_branch branch. Current ref: $GITHUB_REF_TYPE/$GITHUB_REF_NAME."
             exit 1
+          fi
+
+          if [[ -z "$expected_branch" ]]; then
+            echo "Deploying ${{ inputs.environment }} from branch $GITHUB_REF_NAME."
           fi
 
       - name: Validate deployment environment
