@@ -110,8 +110,6 @@ export function EventModal({
     }
   });
 
-  // The parent mounts this component only while the modal is open, so the native dialog has to be
-  // pushed into the top layer on mount. Remounting also keeps `defaultValues` in sync with `form`.
   useEffect(() => {
     dialogRef.current?.showModal();
   }, []);

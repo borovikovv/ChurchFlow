@@ -3,10 +3,6 @@ import { cva } from 'class-variance-authority';
 const dialogBase =
   'fixed inset-0 m-auto max-h-[min(800px,80dvh)] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)] backdrop:backdrop-blur-[1px]';
 
-/**
- * `fullScreenOnMobile` drops the width and height caps below `sm` so long forms get the whole
- * viewport on a phone. It is opt-in: without it a dialog keeps the centred card at every width.
- */
 export const formDialogClassName = cva(dialogBase, {
   variants: {
     size: {

@@ -1,9 +1,9 @@
 'use client';
 
-import type { CalendarEventItem } from '@churchflow/shared';
+import type { CalendarEventItem, CalendarEventType } from '@churchflow/shared';
 import { useLocale, useTranslations } from 'next-intl';
 import { Checkbox } from '@/components/ui/checkbox';
-import { EVENT_TYPE_STYLES } from './calendar-constants';
+import { EVENT_TYPES, EVENT_TYPE_STYLES } from './calendar-constants';
 import { formatDateLabel } from './calendar-date-utils';
 
 export function CalendarSidebar({
@@ -11,14 +11,18 @@ export function CalendarSidebar({
   selectedDate,
   selectedDateEvents,
   selectedDateTasks,
+  visibleTypes,
   onEventOpen,
+  onFilterToggle,
   onTaskToggle,
 }: {
   canManage: boolean;
   selectedDate: string;
   selectedDateEvents: CalendarEventItem[];
   selectedDateTasks: CalendarEventItem[];
+  visibleTypes: CalendarEventType[];
   onEventOpen: (event: CalendarEventItem) => void;
+  onFilterToggle: (type: CalendarEventType) => void;
   onTaskToggle: (event: CalendarEventItem, completed: boolean) => void;
 }) {
   const t = useTranslations('calendar');
@@ -28,8 +32,18 @@ export function CalendarSidebar({
     <aside className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm">
       <h2>{t('nextUp')}</h2>
       <p className="mb-3 text-sm">{t('selectedDayAgenda')}</p>
+      <div className="grid gap-1.5">
+        {EVENT_TYPES.map((type) => (
+          <Checkbox
+            checked={visibleTypes.includes(type.value)}
+            key={type.value}
+            label={t(`eventTypeGroups.${type.value}`)}
+            onChange={() => onFilterToggle(type.value)}
+          />
+        ))}
+      </div>
 
-      <div className="mb-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-xs text-[var(--muted)]">
+      <div className="my-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-xs text-[var(--muted)]">
         <span className="h-px bg-[var(--line-muted)]" />
         <span>{formatDateLabel(selectedDate, locale)}</span>
         <span className="h-px bg-[var(--line-muted)]" />

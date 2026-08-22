@@ -5,10 +5,7 @@ import { useId, useRef, type ReactNode, type RefObject } from 'react';
 import { Button, type ButtonVariant } from '@/components/ui/button';
 import { formDialogClassName, formDialogLayoutClassName } from './form-dialog.styles';
 
-export type FormDialogSize = 'sm' | 'md' | 'lg';
-
 export function FormDialog({
-  bodyClassName,
   footer,
   fullScreenOnMobile = false,
   size = 'sm',
@@ -22,11 +19,9 @@ export function FormDialog({
   onOpen,
   onClose,
 }: {
-  bodyClassName?: string;
   footer?: ReactNode;
   fullScreenOnMobile?: boolean;
-  size?: FormDialogSize;
-  /** Omit to render no trigger; the dialog is then opened through `dialogRef`. */
+  size?: 'sm' | 'md' | 'lg';
   triggerLabel?: ReactNode;
   triggerVariant?: ButtonVariant;
   triggerClassName?: string;
@@ -79,15 +74,7 @@ export function FormDialog({
               ×
             </button>
           </header>
-          <div
-            className={
-              bodyClassName
-                ? `min-h-0 overflow-y-auto ${bodyClassName}`
-                : 'min-h-0 overflow-y-auto p-5'
-            }
-          >
-            {children}
-          </div>
+          <div className="min-h-0 overflow-y-auto p-5">{children}</div>
           <footer className="flex flex-col-reverse items-stretch gap-2 border-t border-[var(--line)] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-end sm:pb-5">
             {footer ?? (
               <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>

@@ -8,7 +8,7 @@ import type { DatesSetArg, EventClickArg, EventContentArg, EventInput } from '@f
 import ukLocale from '@fullcalendar/core/locales/uk';
 import { toPng } from 'html-to-image';
 import { useLocale, useTranslations } from 'next-intl';
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'react-toastify';
 import type { CalendarEventItem, CalendarEventsPayload } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
@@ -16,20 +16,19 @@ import { useIsMobile } from '@/hooks/use-is-mobile';
 import { NotificationDetailModal } from '@/features/notifications/components/notification-detail-modal';
 import {
   CALENDAR_TYPE,
+  EVENT_TYPES,
+  EVENT_TYPE_DOT_STYLES,
   FULL_CALENDAR_VIEW,
   TRANSPARENT_IMAGE_PLACEHOLDER,
   type CalendarView,
 } from './calendar-constants';
-import { CalendarDayStrip } from './calendar-day-strip';
 import { eventForm, newEventForm, toDateInputValue } from './calendar-date-utils';
 import { renderEventContent } from './calendar-event-content';
-import { CalendarFilters } from './calendar-filters';
-import { CalendarToolbar } from './calendar-toolbar';
+import { CalendarViewSwitch } from './calendar-view-switch';
 import { formPayload } from './calendar-form-utils';
 import { CalendarPreviewModal } from './calendar-preview-modal';
 import { CalendarSidebar } from './calendar-sidebar';
 import { EventModal } from './event-modal';
-import { useCalendarView } from '../_hooks/use-calendar-view';
 import type { CalendarFormState, CalendarManagerActions } from './calendar-types';
 import styles from './calendar-manager.module.css';
 
@@ -38,7 +37,6 @@ export function CalendarManager({
   initialPayload,
   initialRange,
   initialSelectedDate,
-  initialView,
   loadEvents,
   updatePreferences,
   createEvent,
@@ -52,14 +50,11 @@ export function CalendarManager({
   initialPayload: CalendarEventsPayload;
   initialRange: { rangeStart: string; rangeEnd: string };
   initialSelectedDate: string;
-  initialView: CalendarView;
 } & CalendarManagerActions) {
   const t = useTranslations('calendar');
   const locale = useLocale();
   const isMobile = useIsMobile();
   const fullCalendarLocale = locale === 'uk' ? ukLocale : undefined;
-  const { calendarRef, changeView, goNext, goPrev, goToday, gotoDate, setTitle, title, view } =
-    useCalendarView(initialView);
   const [events, setEvents] = useState(initialPayload.events);
   const [members, setMembers] = useState(initialPayload.members);
   const [visibleTypes, setVisibleTypes] = useState(initialPayload.preferences.visibleEventTypes);
@@ -70,7 +65,10 @@ export function CalendarManager({
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<CalendarView>('month');
   const [isPending, startTransition] = useTransition();
+  const calendarRef = useRef<FullCalendar>(null);
+  const mobileWeekViewApplied = useRef(false);
   const printRef = useRef<HTMLDivElement>(null);
   const lastRangeKey = useRef('');
   const canManage = initialPayload.canManage;
@@ -245,29 +243,28 @@ export function CalendarManager({
     };
     const key = `${nextRange.rangeStart}:${nextRange.rangeEnd}:${visibleTypes.join(',')}`;
     setRange(nextRange);
-    setTitle(arg.view.title);
-    // Keep the agenda on a day the timed views actually show; month view keeps its own selection.
-    if (view !== 'month') {
-      const firstVisibleDay = toDateInputValue(arg.start);
-      const lastVisibleDay = toDateInputValue(new Date(arg.end.getTime() - 1));
-      if (selectedDate < firstVisibleDay || selectedDate > lastVisibleDay) {
-        setSelectedDate(firstVisibleDay);
-      }
-    }
     if (lastRangeKey.current === key) return;
     lastRangeKey.current = key;
     void refreshEvents(nextRange);
   }
 
-  function handleDaySelect(date: string) {
-    // gotoDate first: its synchronous datesSet may reset the selection, and this write must win.
-    gotoDate(`${date}T12:00`);
-    setSelectedDate(date);
+  function handleViewChange(nextView: CalendarView) {
+    setView(nextView);
+    calendarRef.current?.getApi().changeView(FULL_CALENDAR_VIEW[nextView]);
   }
 
+  useEffect(() => {
+    if (!isMobile || mobileWeekViewApplied.current) return;
+    mobileWeekViewApplied.current = true;
+    const timer = setTimeout(() => handleViewChange('week'), 0);
+
+    return () => clearTimeout(timer);
+  }, [isMobile]);
+
   function handleDateClick(arg: DateClickArg) {
-    setSelectedDate(arg.dateStr);
-    openCreate(arg.dateStr);
+    const date = toDateInputValue(arg.date);
+    setSelectedDate(date);
+    openCreate(date);
   }
 
   function handleEventClick(arg: EventClickArg) {
@@ -289,65 +286,73 @@ export function CalendarManager({
   }
 
   return (
-    <div className="grid gap-4 md:min-h-[680px] xl:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="grid min-h-[680px] gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
       <div className="order-2 min-w-0 xl:order-none">
         <CalendarSidebar
           canManage={canManage}
           selectedDate={selectedDate}
           selectedDateEvents={selectedDateEvents}
           selectedDateTasks={selectedDateTasks}
+          visibleTypes={visibleTypes}
           onEventOpen={openEdit}
+          onFilterToggle={(type) => void toggleFilter(type)}
           onTaskToggle={(event, completed) => void toggleTask(event, completed)}
         />
       </div>
 
       <section className="order-1 min-w-0 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm xl:order-none">
-        <CalendarToolbar
-          actions={
-            <>
-              {canManage ? (
-                <Button onClick={() => openCreate(selectedDate)}>{t('newEvent')}</Button>
-              ) : null}
-              <Button type="button" variant="secondary" onClick={() => setPreviewOpen(true)}>
-                {t('previewPng')}
-              </Button>
-              {isPending ? (
-                <span className="text-sm text-[var(--muted)]">{t('updatingCalendar')}</span>
-              ) : null}
-            </>
-          }
-          onNext={goNext}
-          onPrev={goPrev}
-          onToday={goToday}
-          onViewChange={changeView}
-          title={title}
-          view={view}
-        />
-        <CalendarFilters visibleTypes={visibleTypes} onToggle={(type) => void toggleFilter(type)} />
-        {view === 'month' ? null : (
-          <CalendarDayStrip selectedDate={selectedDate} onSelect={handleDaySelect} />
-        )}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {canManage ? (
+              <Button onClick={() => openCreate(selectedDate)}>{t('newEvent')}</Button>
+            ) : null}
+            <Button type="button" variant="secondary" onClick={() => setPreviewOpen(true)}>
+              {t('previewPng')}
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            {EVENT_TYPES.map((type) => (
+              <span
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--muted)]"
+                key={type.value}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`h-2.5 w-2.5 rounded-full ${EVENT_TYPE_DOT_STYLES[type.value]}`}
+                />
+                {t(`eventTypes.${type.value}`)}
+              </span>
+            ))}
+            {isPending ? (
+              <span className="text-sm text-[var(--muted)]">{t('updatingCalendar')}</span>
+            ) : null}
+          </div>
+        </div>
         {error ? <p className="form-error mb-3">{error}</p> : null}
+        <CalendarViewSwitch value={view} onChange={handleViewChange} />
         <div className={styles['calendarRoot']}>
           <FullCalendar
-            allDaySlot
             datesSet={handleDatesSet}
             dateClick={handleDateClick}
             eventClick={handleEventClick}
             eventContent={handleEventContent}
             events={calendarEvents}
             firstDay={1}
-            headerToolbar={false}
-            dayMaxEvents={isMobile ? 2 : 4}
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: '',
+            }}
+            buttonText={{ today: t('today') }}
+            dayMaxEvents={4}
             height="auto"
-            initialView={FULL_CALENDAR_VIEW[initialView]}
+            initialView="dayGridMonth"
             {...(fullCalendarLocale ? { locale: fullCalendarLocale } : {})}
             moreLinkClick="popover"
             nowIndicator
             plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
             ref={calendarRef}
             scrollTime="08:00:00"
-            slotDuration="01:00:00"
           />
         </div>
       </section>

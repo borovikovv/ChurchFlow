@@ -5,7 +5,6 @@ import type {
   UpdatePrayerRequestInput,
 } from '@churchflow/shared';
 
-/** Shared by the desktop table and the mobile card list, which render the same collection. */
 export interface PrayerRequestsListProps {
   disabled: boolean;
   payload: PrayerRequestsPayload;

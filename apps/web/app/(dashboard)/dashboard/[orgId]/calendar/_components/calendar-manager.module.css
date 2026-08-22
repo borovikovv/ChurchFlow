@@ -146,7 +146,7 @@
 }
 
 .calendarRoot :global(.fc .fc-timegrid-slot) {
-  height: 42px;
+  height: 40px;
 }
 
 .calendarRoot :global(.fc .fc-timegrid-slot-label-cushion),
@@ -156,37 +156,13 @@
   font-weight: 600;
 }
 
-.calendarRoot :global(.fc .fc-timegrid-now-indicator-line) {
-  border-color: var(--danger);
-}
-
+.calendarRoot :global(.fc .fc-timegrid-now-indicator-line),
 .calendarRoot :global(.fc .fc-timegrid-now-indicator-arrow) {
   border-color: var(--danger);
-  color: var(--danger);
 }
 
 .calendarRoot :global(.fc .fc-timegrid-event) {
   border: 0;
   background: transparent;
   box-shadow: none;
-}
-
-@media (max-width: 767px) {
-  .calendarRoot :global(.fc .fc-daygrid-day-frame) {
-    min-height: clamp(72px, 11vh, 108px);
-    padding: 4px 3px 4px 1px;
-  }
-
-  .calendarRoot :global(.fc .fc-daygrid-day-events) {
-    margin-top: 15px;
-  }
-
-  .calendarRoot :global(.fc .fc-col-header-cell-cushion),
-  .calendarRoot :global(.fc .fc-daygrid-day-number) {
-    font-size: 11px;
-  }
-
-  .calendarRoot :global(.fc .fc-timegrid-slot) {
-    height: 36px;
-  }
 }
