@@ -1,10 +1,10 @@
 import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
 import { UsersService } from './users.service';
 import { UpdateCurrentUserProfileDto } from './dto/update-current-user-profile.dto';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard)
+@UseGuards(SessionAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -14,12 +14,12 @@ export class UsersController {
       throw new Error('Authenticated request missing auth payload');
     }
 
-    return this.usersService.findProfile(request.auth.sub);
+    return this.usersService.findProfile(request.auth.userId);
   }
 
   @Patch('me')
   async updateMe(@Body() body: UpdateCurrentUserProfileDto, @Req() request: AuthenticatedRequest) {
     if (!request.auth) throw new Error('Authenticated request missing auth payload');
-    return this.usersService.updateProfile(request.auth.sub, body);
+    return this.usersService.updateProfile(request.auth.userId, body);
   }
 }

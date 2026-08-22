@@ -10,7 +10,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import { CalendarEventsService } from './calendar-events.service';
 import {
@@ -22,7 +22,7 @@ import {
 } from './dto/calendar-event.dto';
 
 @Controller('organizations/:organizationId/calendar-events')
-@UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
 export class CalendarEventsController {
   constructor(private readonly calendarEventsService: CalendarEventsService) {}
 
@@ -101,7 +101,7 @@ export class CalendarEventsController {
   }
 
   private actorUserId(request: AuthenticatedRequest): string {
-    const userId = request.auth?.sub;
+    const userId = request.auth?.userId;
     if (!userId) {
       throw new Error('Authenticated request missing auth payload');
     }

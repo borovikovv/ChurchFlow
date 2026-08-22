@@ -3,21 +3,18 @@ import {
   Controller,
   Get,
   Inject,
-  InternalServerErrorException,
   Post,
   Query,
   Req,
   Res,
-  UnauthorizedException,
-  UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AUTH_COOKIE_NAMES } from '@churchflow/shared';
 import type { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { sessionCookieOptions } from '../../common/auth/session-cookie';
 import { AuthService } from './auth.service';
 import { ProviderLoginDto, providerLoginSchema } from './dto/provider-login.dto';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
 
 const TELEGRAM_STATE_COOKIE = 'churchflow_telegram_state';
 const TELEGRAM_VERIFIER_COOKIE = 'churchflow_telegram_verifier';
@@ -31,12 +28,6 @@ interface AuthUserResult {
   platformRole: string;
 }
 
-interface RefreshAccessTokenResult {
-  accessToken: string;
-  accessTokenExpiresAt: Date;
-  user: AuthUserResult;
-}
-
 interface BeginTelegramLoginResult {
   authorizationUrl: string;
   state: string;
@@ -47,10 +38,8 @@ interface BeginTelegramLoginResult {
 
 interface CompleteTelegramLoginResult {
   user: AuthUserResult;
-  accessToken: string;
-  refreshToken: string;
-  accessTokenExpiresAt: Date;
-  refreshTokenExpiresAt: Date;
+  sessionToken: string;
+  sessionExpiresAt: Date;
   redirectTo: string;
 }
 
@@ -58,6 +47,11 @@ interface ProviderLoginRequest {
   provider: 'telegram';
   providerToken: string;
   redirectTo?: string;
+}
+
+interface SessionClientContext {
+  userAgent?: string;
+  ipAddress?: string;
 }
 
 interface AuthControllerService {
@@ -70,32 +64,9 @@ interface AuthControllerService {
     codeVerifier: string;
     expectedNonce: string;
     redirectTo?: string;
+    client: SessionClientContext;
   }): Promise<CompleteTelegramLoginResult>;
-  refreshAccessToken(refreshToken: string): Promise<RefreshAccessTokenResult>;
-  logout(sessionId: string): Promise<{ ok: true }>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isAuthUserResult(value: unknown): value is RefreshAccessTokenResult['user'] {
-  return (
-    isRecord(value) &&
-    typeof value['id'] === 'string' &&
-    (typeof value['email'] === 'string' || value['email'] === null) &&
-    (typeof value['displayName'] === 'string' || value['displayName'] === null) &&
-    typeof value['platformRole'] === 'string'
-  );
-}
-
-function isRefreshAccessTokenResult(value: unknown): value is RefreshAccessTokenResult {
-  return (
-    isRecord(value) &&
-    typeof value['accessToken'] === 'string' &&
-    value['accessTokenExpiresAt'] instanceof Date &&
-    isAuthUserResult(value['user'])
-  );
+  logoutByToken(sessionToken: string): Promise<{ ok: true }>;
 }
 
 @Controller('auth')
@@ -170,13 +141,9 @@ export class AuthController {
         codeVerifier,
         expectedNonce,
         ...(redirectTo ? { redirectTo } : {}),
+        client: this.sessionClientContext(request),
       });
-      this.setAuthCookies(response, {
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-        accessTokenExpiresAt: result.accessTokenExpiresAt,
-        refreshTokenExpiresAt: result.refreshTokenExpiresAt,
-      });
+      this.setAuthCookies(response, result);
       response.redirect(new URL(result.redirectTo, this.webAppUrl).toString());
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'Telegram login failed';
@@ -184,72 +151,56 @@ export class AuthController {
     }
   }
 
-  @Post('refresh')
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  async refresh(
+  // Deliberately unguarded: a session that already lapsed must still be able to log out,
+  // otherwise the browser keeps a cookie it can never clear. Revocation is best effort,
+  // clearing the cookies is not.
+  @Post('logout')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<RefreshAccessTokenResult> {
-    const refreshToken = this.parseCookies(request.headers.cookie)[AUTH_COOKIE_NAMES.refresh];
-    if (!refreshToken) {
-      this.clearAuthCookies(response);
-      throw new UnauthorizedException('Missing refresh token');
-    }
-
-    try {
-      const serviceResult = (await this.authService.refreshAccessToken(refreshToken)) as unknown;
-      if (!isRefreshAccessTokenResult(serviceResult)) {
-        throw new InternalServerErrorException('Invalid refresh response');
-      }
-
-      const result: RefreshAccessTokenResult = serviceResult;
-      response.cookie(AUTH_COOKIE_NAMES.access, result.accessToken, {
-        ...this.cookieOptions,
-        expires: result.accessTokenExpiresAt,
-      });
-
-      return result;
-    } catch (caught: unknown) {
-      if (caught instanceof UnauthorizedException) {
-        this.clearAuthCookies(response);
-      }
-      throw caught;
-    }
-  }
-
-  @Post('logout')
-  @UseGuards(JwtAuthGuard)
-  async logout(
-    @Req() request: AuthenticatedRequest,
-    @Res({ passthrough: true }) response: Response,
   ): Promise<{ ok: true }> {
-    if (request.auth) {
-      await this.authService.logout(request.auth.sid);
+    const token = this.sessionToken(request);
+    if (token) {
+      await this.authService.logoutByToken(token);
     }
+
     this.clearAuthCookies(response);
     return { ok: true };
   }
 
+  private sessionToken(request: Request): string | undefined {
+    const bearer = request.headers.authorization?.replace(/^Bearer\s+/i, '');
+    if (bearer) {
+      return bearer;
+    }
+
+    return this.parseCookies(request.headers.cookie)[AUTH_COOKIE_NAMES.session];
+  }
+
+  private sessionClientContext(request: Request): SessionClientContext {
+    const userAgent = request.headers['user-agent'];
+    const ipAddress = request.ip;
+
+    return {
+      ...(userAgent ? { userAgent } : {}),
+      ...(ipAddress ? { ipAddress } : {}),
+    };
+  }
+
   private setAuthCookies(
     response: Response,
-    input: {
-      accessToken: string;
-      refreshToken: string;
-      accessTokenExpiresAt: Date;
-      refreshTokenExpiresAt: Date;
-    },
+    input: { sessionToken: string; sessionExpiresAt: Date },
   ): void {
-    response.cookie(AUTH_COOKIE_NAMES.access, input.accessToken, {
+    response.cookie(AUTH_COOKIE_NAMES.session, input.sessionToken, {
       ...this.cookieOptions,
-      expires: input.accessTokenExpiresAt,
-    });
-    response.cookie(AUTH_COOKIE_NAMES.refresh, input.refreshToken, {
-      ...this.cookieOptions,
-      expires: input.refreshTokenExpiresAt,
+      expires: input.sessionExpiresAt,
     });
   }
 
   private clearAuthCookies(response: Response): void {
+    response.clearCookie(AUTH_COOKIE_NAMES.session, this.cookieOptions);
+    // Cookies from the previous access/refresh scheme, cleared so a stale pair cannot linger.
     response.clearCookie(AUTH_COOKIE_NAMES.access, this.cookieOptions);
     response.clearCookie(AUTH_COOKIE_NAMES.refresh, this.cookieOptions);
   }
@@ -287,16 +238,7 @@ export class AuthController {
   }
 
   private get cookieOptions(): CookieOptions {
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN')?.trim();
-    const isHttpsApp = this.webAppUrl.startsWith('https://');
-
-    return {
-      httpOnly: true,
-      sameSite: 'lax' as const,
-      secure: isHttpsApp || this.config.get<string>('NODE_ENV') === 'production',
-      path: '/',
-      ...(cookieDomain ? { domain: cookieDomain } : {}),
-    };
+    return sessionCookieOptions(this.config);
   }
 
   private get telegramCookieOptions(): CookieOptions {

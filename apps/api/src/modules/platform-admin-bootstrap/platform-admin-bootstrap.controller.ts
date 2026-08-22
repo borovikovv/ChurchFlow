@@ -1,6 +1,6 @@
 import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
 import {
   ConsumePlatformAdminBootstrapDto,
   consumePlatformAdminBootstrapSchema,
@@ -19,13 +19,13 @@ export class PlatformAdminBootstrapController {
   }
 
   @Post('consume')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async consume(
     @Body() body: ConsumePlatformAdminBootstrapDto,
     @Req() request: AuthenticatedRequest,
   ) {
-    const userId = request.auth?.sub;
+    const userId = request.auth?.userId;
     if (!userId) {
       throw new Error('Authenticated request missing auth payload');
     }

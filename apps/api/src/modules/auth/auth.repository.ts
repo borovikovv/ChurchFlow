@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type PlatformRole } from '@churchflow/db';
+import { Prisma, type PlatformRole, type SessionRevokeReason } from '@churchflow/db';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface AuthRepositoryUser {
@@ -22,14 +22,6 @@ export interface TelegramLoginAccountState {
   hasPendingOrganizationRequest: boolean;
   hasMembershipClaim: boolean;
   isPlatformAdmin: boolean;
-}
-
-export interface SessionWithUser {
-  id: string;
-  userId: string;
-  expiresAt: Date;
-  revokedAt: Date | null;
-  user: AuthRepositoryUserWithDeletedAt;
 }
 
 export interface CreatedSession {
@@ -259,52 +251,13 @@ export class AuthRepository {
     return { id: session.id };
   }
 
-  async findSession(sessionId: string): Promise<SessionWithUser | null> {
-    return this.prisma.session.findUnique({
-      where: { id: sessionId },
-      select: {
-        id: true,
-        userId: true,
-        expiresAt: true,
-        revokedAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            displayName: true,
-            platformRole: true,
-            deletedAt: true,
-          },
-        },
-      },
+  // updateMany so revoking an unknown or already revoked token is a no-op rather than a throw.
+  async revokeSessionByTokenHash(tokenHash: string, reason: SessionRevokeReason): Promise<number> {
+    const result = await this.prisma.session.updateMany({
+      where: { tokenHash, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: reason },
     });
-  }
 
-  async findSessionByRefreshTokenHash(refreshTokenHash: string): Promise<SessionWithUser | null> {
-    return this.prisma.session.findFirst({
-      where: { refreshTokenHash },
-      select: {
-        id: true,
-        userId: true,
-        expiresAt: true,
-        revokedAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            displayName: true,
-            platformRole: true,
-            deletedAt: true,
-          },
-        },
-      },
-    });
-  }
-
-  async revokeSession(sessionId: string) {
-    return this.prisma.session.update({
-      where: { id: sessionId },
-      data: { revokedAt: new Date() },
-    });
+    return result.count;
   }
 }

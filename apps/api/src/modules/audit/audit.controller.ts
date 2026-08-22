@@ -1,10 +1,10 @@
 import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
 import { AuditService } from './audit.service';
 import { ListAuditLogsQueryDto } from './dto/list-audit-logs-query.dto';
 
 @Controller('organizations/:organizationId/audit-logs')
-@UseGuards(JwtAuthGuard)
+@UseGuards(SessionAuthGuard)
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
@@ -22,6 +22,6 @@ export class AuditController {
       throw new Error('Authenticated request missing auth payload');
     }
 
-    return request.auth.sub;
+    return request.auth.userId;
   }
 }

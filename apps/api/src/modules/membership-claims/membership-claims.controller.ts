@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { membershipClaimTokenSchema } from '@churchflow/shared';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import { MembershipClaimTokenDto } from './dto/membership-claim-token.dto';
 import { MembershipClaimsService } from './membership-claims.service';
@@ -17,20 +17,20 @@ export class MembershipClaimsController {
   }
 
   @Post('membership-claims/request')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   request(@Body() body: MembershipClaimTokenDto, @Req() request: AuthenticatedRequest) {
     return this.service.request(body.token, this.actor(request));
   }
 
   @Get('membership-claims/status')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   status(@Req() request: AuthenticatedRequest) {
     return this.service.status(this.actor(request));
   }
 
   @Post('organizations/:organizationId/memberships/:membershipId/claim')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   generate(
     @Param('organizationId') organizationId: string,
     @Param('membershipId') membershipId: string,
@@ -40,7 +40,7 @@ export class MembershipClaimsController {
   }
 
   @Post('organizations/:organizationId/membership-claims/:claimId/refresh')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   refresh(
     @Param('organizationId') organizationId: string,
     @Param('claimId') claimId: string,
@@ -50,7 +50,7 @@ export class MembershipClaimsController {
   }
 
   @Post('organizations/:organizationId/membership-claims/:claimId/revoke')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   revoke(
     @Param('organizationId') organizationId: string,
     @Param('claimId') claimId: string,
@@ -60,7 +60,7 @@ export class MembershipClaimsController {
   }
 
   @Post('organizations/:organizationId/membership-claims/:claimId/approve')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   approve(
     @Param('organizationId') organizationId: string,
     @Param('claimId') claimId: string,
@@ -70,7 +70,7 @@ export class MembershipClaimsController {
   }
 
   @Post('organizations/:organizationId/membership-claims/:claimId/reject')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   reject(
     @Param('organizationId') organizationId: string,
     @Param('claimId') claimId: string,
@@ -80,7 +80,7 @@ export class MembershipClaimsController {
   }
 
   private actor(request: AuthenticatedRequest): string {
-    const actorUserId = request.auth?.sub;
+    const actorUserId = request.auth?.userId;
     if (!actorUserId) throw new Error('Authenticated request missing auth payload');
     return actorUserId;
   }

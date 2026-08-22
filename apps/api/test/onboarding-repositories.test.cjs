@@ -428,21 +428,116 @@ test('duplicate direct organization slug is exposed as conflict', async () => {
   );
 });
 
-test('restricted requester has no tenant access without active membership', async () => {
-  const guard = new OrganizationAccessGuard(
-    {
-      user: { findUnique: async () => ({ platformRole: 'USER', deletedAt: null }) },
-      organizationMember: { findFirst: async () => null },
-    },
-    { getAllAndOverride: () => undefined },
-  );
-  const context = {
+function organizationAccessContext() {
+  return {
     switchToHttp: () => ({
-      getRequest: () => ({ auth: { sub: 'user-1' }, params: { organizationId: 'org-1' } }),
+      getRequest: () => ({ auth: { userId: 'user-1' }, params: { organizationId: 'org-1' } }),
     }),
     getHandler: () => null,
     getClass: () => null,
   };
+}
 
-  await assert.rejects(guard.canActivate(context), /Organization access is required/);
+test('restricted requester has no tenant access without active membership', async () => {
+  const guard = new OrganizationAccessGuard(
+    {
+      user: {
+        findUnique: async () => ({ platformRole: 'USER', deletedAt: null, memberships: [] }),
+      },
+    },
+    { getAllAndOverride: () => undefined },
+  );
+
+  await assert.rejects(guard.canActivate(organizationAccessContext()), /Organization access is required/);
+});
+
+test('a member is authorized with a single query that also scopes the organization', async () => {
+  const calls = [];
+  const guard = new OrganizationAccessGuard(
+    {
+      user: {
+        findUnique: async (args) => {
+          calls.push(args);
+          return {
+            platformRole: 'USER',
+            deletedAt: null,
+            memberships: [{ role: 'MEMBER', permissions: ['members.manage'] }],
+          };
+        },
+      },
+      organizationMember: {
+        findFirst: async () => {
+          throw new Error('membership must not be looked up separately');
+        },
+      },
+      organization: {
+        findFirst: async () => {
+          throw new Error('organization must not be looked up for a member');
+        },
+      },
+    },
+    { getAllAndOverride: () => 'members.manage' },
+  );
+
+  assert.equal(await guard.canActivate(organizationAccessContext()), true);
+  assert.equal(calls.length, 1);
+  const membershipFilter = calls[0].select.memberships.where;
+  assert.equal(membershipFilter.organizationId, 'org-1');
+  assert.equal(membershipFilter.status, 'ACTIVE');
+  assert.equal(membershipFilter.removedAt, null);
+  assert.deepEqual(membershipFilter.organization, { status: 'ACTIVE', deletedAt: null });
+});
+
+test('a member without the required permission is refused', async () => {
+  const guard = new OrganizationAccessGuard(
+    {
+      user: {
+        findUnique: async () => ({
+          platformRole: 'USER',
+          deletedAt: null,
+          memberships: [{ role: 'MEMBER', permissions: ['media.manage'] }],
+        }),
+      },
+    },
+    { getAllAndOverride: () => 'members.manage' },
+  );
+
+  await assert.rejects(
+    guard.canActivate(organizationAccessContext()),
+    /Organization permission is required/,
+  );
+});
+
+test('a deleted user is rejected as unauthenticated, not merely forbidden', async () => {
+  const guard = new OrganizationAccessGuard(
+    {
+      user: {
+        findUnique: async () => ({
+          platformRole: 'USER',
+          deletedAt: new Date(),
+          memberships: [],
+        }),
+      },
+    },
+    { getAllAndOverride: () => undefined },
+  );
+
+  await assert.rejects(
+    guard.canActivate(organizationAccessContext()),
+    /Authenticated user was not found/,
+  );
+});
+
+test('a platform admin still has to reach a live organization', async () => {
+  const guard = new OrganizationAccessGuard(
+    {
+      user: {
+        findUnique: async () => ({ platformRole: 'ADMIN', deletedAt: null, memberships: [] }),
+      },
+      organization: { findFirst: async () => null },
+    },
+    { getAllAndOverride: () => undefined },
+  );
+
+  await assert.rejects(guard.canActivate(organizationAccessContext()), /Organization access is required/);
 });

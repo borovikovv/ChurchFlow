@@ -1,4 +1,5 @@
 export const AUTH_COOKIE_NAMES = {
+  session: 'churchflow_session',
   access: 'churchflow_access',
   refresh: 'churchflow_refresh',
 } as const;

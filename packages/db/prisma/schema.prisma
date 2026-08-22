@@ -28,6 +28,13 @@ enum SessionType {
   service
 }
 
+enum SessionRevokeReason {
+  logout
+  admin
+  expired
+  user_deleted
+}
+
 enum OrganizationRole {
   OWNER
   ADMIN
@@ -281,21 +288,27 @@ model AuthAccount {
 }
 
 model Session {
-  id               String      @id @default(uuid()) @db.Uuid
-  userId           String      @map("user_id") @db.Uuid
-  type             SessionType @default(user)
-  refreshTokenHash String      @map("refresh_token_hash")
-  userAgent        String?     @map("user_agent")
-  ipAddress        String?     @map("ip_address")
-  expiresAt        DateTime    @map("expires_at")
-  revokedAt        DateTime?   @map("revoked_at")
-  createdAt        DateTime    @default(now()) @map("created_at")
-  updatedAt        DateTime    @updatedAt @map("updated_at")
+  id                String               @id @default(uuid()) @db.Uuid
+  userId            String               @map("user_id") @db.Uuid
+  type              SessionType          @default(user)
+  // Column keeps its original name so a running API instance survives the migration
+  // step of a deploy. Renaming it needs an expand/contract migration of its own.
+  tokenHash         String               @unique @map("refresh_token_hash")
+  // Written by the session management screens planned on top of this model.
+  deviceName        String?              @map("device_name")
+  userAgent         String?              @map("user_agent")
+  ipAddress         String?              @map("ip_address")
+  lastUsedAt        DateTime?            @map("last_used_at")
+  expiresAt         DateTime             @map("expires_at")
+  absoluteExpiresAt DateTime             @map("absolute_expires_at")
+  revokedAt         DateTime?            @map("revoked_at")
+  revokedReason     SessionRevokeReason? @map("revoked_reason")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
-  @@index([refreshTokenHash])
   @@map("sessions")
 }
 
