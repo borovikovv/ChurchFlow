@@ -31,7 +31,6 @@ export interface CreatedSession {
 export interface UserSessionRecord {
   id: string;
   deviceName: string | null;
-  userAgent: string | null;
   ipAddress: string | null;
   lastUsedAt: Date | null;
   createdAt: Date;
@@ -277,7 +276,6 @@ export class AuthRepository {
       select: {
         id: true,
         deviceName: true,
-        userAgent: true,
         ipAddress: true,
         lastUsedAt: true,
         createdAt: true,
@@ -294,7 +292,7 @@ export class AuthRepository {
     reason: SessionRevokeReason,
   ): Promise<number> {
     const result = await this.prisma.session.updateMany({
-      where: { id: sessionId, userId, revokedAt: null },
+      where: { id: sessionId, userId, type: 'user', revokedAt: null },
       data: { revokedAt: new Date(), revokedReason: reason },
     });
 
@@ -307,7 +305,7 @@ export class AuthRepository {
     reason: SessionRevokeReason,
   ): Promise<number> {
     const result = await this.prisma.session.updateMany({
-      where: { userId, revokedAt: null, id: { not: keptSessionId } },
+      where: { userId, type: 'user', revokedAt: null, id: { not: keptSessionId } },
       data: { revokedAt: new Date(), revokedReason: reason },
     });
 

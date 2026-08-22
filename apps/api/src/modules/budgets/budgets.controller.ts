@@ -11,7 +11,10 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import { BudgetsService } from './budgets.service';
 import {

@@ -1,6 +1,9 @@
 import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import {
   ConsumePlatformAdminBootstrapDto,
   consumePlatformAdminBootstrapSchema,

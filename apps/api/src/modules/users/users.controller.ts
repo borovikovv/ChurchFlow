@@ -1,5 +1,8 @@
 import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
-import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { UsersService } from './users.service';
 import { UpdateCurrentUserProfileDto } from './dto/update-current-user-profile.dto';
 

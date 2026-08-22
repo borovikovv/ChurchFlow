@@ -51,7 +51,8 @@ export interface BeginTelegramLoginResult {
 export interface CompleteTelegramLoginResult {
   user: AuthUserResult;
   sessionToken: string;
-  // Absolute ceiling of the session: how long the cookie may live at most.
+  // Idle window, which is what the cookie tracks. The row's ceiling is separate and the
+  // web layer rolls this forward on every page view.
   sessionExpiresAt: Date;
   redirectTo: string;
 }
@@ -524,20 +525,20 @@ export class AuthService {
   }> {
     const sessionToken = randomBytes(48).toString('base64url');
     const now = Date.now();
-    const absoluteExpiresAt = new Date(now + SESSION_ABSOLUTE_TTL_SECONDS * 1000);
+    const expiresAt = new Date(now + SESSION_IDLE_TTL_SECONDS * 1000);
     const deviceName = deviceLabelFromUserAgent(client.userAgent);
     await this.authRepository.createSession({
       userId,
       type: 'user',
       tokenHash: this.hashToken(sessionToken),
-      expiresAt: new Date(now + SESSION_IDLE_TTL_SECONDS * 1000),
-      absoluteExpiresAt,
+      expiresAt,
+      absoluteExpiresAt: new Date(now + SESSION_ABSOLUTE_TTL_SECONDS * 1000),
       ...(deviceName ? { deviceName } : {}),
       ...(client.userAgent ? { userAgent: client.userAgent } : {}),
       ...(client.ipAddress ? { ipAddress: client.ipAddress } : {}),
     });
 
-    return { sessionToken, sessionExpiresAt: absoluteExpiresAt };
+    return { sessionToken, sessionExpiresAt: expiresAt };
   }
 
   private async exchangeTelegramCode(

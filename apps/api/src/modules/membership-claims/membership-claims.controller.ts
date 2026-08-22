@@ -1,7 +1,10 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { membershipClaimTokenSchema } from '@churchflow/shared';
-import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import { MembershipClaimTokenDto } from './dto/membership-claim-token.dto';
 import { MembershipClaimsService } from './membership-claims.service';

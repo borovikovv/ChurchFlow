@@ -1,5 +1,6 @@
--- Additive only: the API instance still running during a deploy keeps reading
--- "refresh_token_hash", so the column is mapped in Prisma rather than renamed.
+-- Additive only, so applying it cannot disturb a running API instance. Note that the
+-- rename in 20260822160000 ships in the same release and is not backward compatible,
+-- so that window is not actually protected any more.
 CREATE TYPE "SessionRevokeReason" AS ENUM ('logout', 'admin', 'expired', 'user_deleted');
 
 ALTER TABLE "sessions"

@@ -43,17 +43,7 @@ function createGuard(session, calls = {}) {
       },
     },
   };
-  const config = {
-    get: (key) => (key === 'NODE_ENV' ? 'production' : undefined),
-    getOrThrow: (key) => {
-      if (key === 'WEB_APP_URL') {
-        return 'https://stage.mychurchflow.org';
-      }
-      throw new Error(`Unexpected guard config key: ${key}`);
-    },
-  };
-
-  return new SessionAuthGuard(prisma, config);
+  return new SessionAuthGuard(prisma);
 }
 
 class FakeResponse {
@@ -179,33 +169,18 @@ test('a session used for the first time is touched immediately', async () => {
   assert.equal(calls.update.length, 1);
 });
 
-test('a touched cookie session gets its cookie re-issued for the new idle window', async () => {
+// The API's Set-Cookie cannot reach the browser: pages call the API from the Next server,
+// which drops it. Rolling the cookie is the web middleware's job, so the guard must not
+// pretend to do it here.
+test('the guard never writes cookies, only session rows', async () => {
   const calls = {};
   const guard = createGuard(activeSession({ lastUsedAt: null }), calls);
   const response = new FakeResponse();
 
   await guard.canActivate(executionContext(cookieRequest('opaque-session-token'), response));
 
-  assert.equal(response.cookies.length, 1);
-  const [cookie] = response.cookies;
-  assert.equal(cookie.name, 'churchflow_session');
-  assert.equal(cookie.value, 'opaque-session-token');
-  assert.equal(cookie.options.httpOnly, true);
-  assert.equal(cookie.options.path, '/');
-  assert.equal(
-    cookie.options.expires.getTime(),
-    calls.update[0].data.expiresAt.getTime(),
-    'the cookie must expire with the idle window it was just given',
-  );
-});
-
-test('a bearer client is not handed a cookie it never sent', async () => {
-  const guard = createGuard(activeSession({ lastUsedAt: null }));
-  const response = new FakeResponse();
-
-  await guard.canActivate(executionContext(bearerRequest('opaque-session-token'), response));
-
-  assert.equal(response.cookies.length, 0);
+  assert.equal(calls.update.length, 1);
+  assert.deepEqual(response.cookies, []);
 });
 
 test('sliding never pushes the idle window past the absolute ceiling', () => {

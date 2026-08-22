@@ -16,6 +16,7 @@ import { AUTH_COOKIE_NAMES, type UserSession } from '@churchflow/shared';
 import type { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { sessionCookieOptions } from '../../common/auth/session-cookie';
+import { sessionTokenFromRequest } from '../../common/auth/session-token';
 import {
   SessionAuthGuard,
   type AuthenticatedRequest,
@@ -170,7 +171,7 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<{ ok: true }> {
-    const token = this.sessionToken(request);
+    const token = sessionTokenFromRequest(request);
     if (token) {
       await this.authService.logoutByToken(token);
     }
@@ -210,15 +211,6 @@ export class AuthController {
     }
 
     return request.auth;
-  }
-
-  private sessionToken(request: Request): string | undefined {
-    const bearer = request.headers.authorization?.replace(/^Bearer\s+/i, '');
-    if (bearer) {
-      return bearer;
-    }
-
-    return this.parseCookies(request.headers.cookie)[AUTH_COOKIE_NAMES.session];
   }
 
   private sessionClientContext(request: Request): SessionClientContext {

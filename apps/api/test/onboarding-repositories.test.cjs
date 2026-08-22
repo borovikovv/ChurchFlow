@@ -448,7 +448,10 @@ test('restricted requester has no tenant access without active membership', asyn
     { getAllAndOverride: () => undefined },
   );
 
-  await assert.rejects(guard.canActivate(organizationAccessContext()), /Organization access is required/);
+  await assert.rejects(
+    guard.canActivate(organizationAccessContext()),
+    /Organization access is required/,
+  );
 });
 
 test('a member is authorized with a single query that also scopes the organization', async () => {
@@ -539,5 +542,8 @@ test('a platform admin still has to reach a live organization', async () => {
     { getAllAndOverride: () => undefined },
   );
 
-  await assert.rejects(guard.canActivate(organizationAccessContext()), /Organization access is required/);
+  await assert.rejects(
+    guard.canActivate(organizationAccessContext()),
+    /Organization access is required/,
+  );
 });

@@ -212,7 +212,12 @@ test('revoking another account session changes nothing', async () => {
   const count = await repository.revokeUserSession(OTHER_SESSION_ID, USER_ID, 'user_revoked');
 
   assert.equal(count, 0);
-  assert.deepEqual(args.where, { id: OTHER_SESSION_ID, userId: USER_ID, revokedAt: null });
+  assert.deepEqual(args.where, {
+    id: OTHER_SESSION_ID,
+    userId: USER_ID,
+    type: 'user',
+    revokedAt: null,
+  });
 });
 
 test('signing out other devices excludes the current session', async () => {
@@ -231,6 +236,7 @@ test('signing out other devices excludes the current session', async () => {
 
   assert.deepEqual(args.where, {
     userId: USER_ID,
+    type: 'user',
     revokedAt: null,
     id: { not: CURRENT_SESSION_ID },
   });

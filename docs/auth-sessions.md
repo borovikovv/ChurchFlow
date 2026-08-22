@@ -10,8 +10,11 @@ a session by reading the row behind it.
 - `Session.expiresAt` is a sliding 30-day idle window. `Session.absoluteExpiresAt` is a hard 180-day
   ceiling that sliding never crosses.
 - The idle window is pushed forward at most once every 24 hours, so ordinary reads do not turn into
-  database writes. The cookie is re-issued with the same expiry at that moment, which means a
-  browser that stops visiting drops the cookie exactly when the session stops being usable.
+  database writes.
+- The cookie carries the same idle window and is re-issued on every page view, so a browser that
+  stops visiting drops it at roughly the moment the session stops being usable. The API cannot do
+  this itself: pages reach it from the Next server, which never forwards its `Set-Cookie` to the
+  browser, so the web middleware owns rolling the cookie forward.
 - Revocation is immediate. Logout, and any future session-management action, take effect on the very
   next request because there is no cached credential to outlive them.
 

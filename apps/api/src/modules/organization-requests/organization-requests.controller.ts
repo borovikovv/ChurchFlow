@@ -2,7 +2,10 @@ import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } fro
 import { Throttle } from '@nestjs/throttler';
 import type { OrganizationRequestStatus } from '@churchflow/db';
 import { organizationRequestStatusSchema } from '@churchflow/shared';
-import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { PlatformAdminGuard } from '../../common/guards/platform-admin.guard';
 import { ApproveOrganizationRequestDto } from './dto/approve-organization-request.dto';
 import { CreateOrganizationRequestDto } from './dto/create-organization-request.dto';

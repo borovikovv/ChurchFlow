@@ -874,5 +874,10 @@
     "signOutOthers": "Sign out {count} other {count, plural, one {device} other {devices}}",
     "revoked": "Device signed out.",
     "revokedOthers": "Signed out {count} {count, plural, one {device} other {devices}}."
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "description": "ChurchFlow could not be reached. Your session is still active — try again in a moment.",
+    "retry": "Try again"
   }
 }

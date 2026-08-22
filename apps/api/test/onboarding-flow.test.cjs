@@ -71,6 +71,8 @@ function createSessionAuthService(repository) {
   );
 }
 
+const CONTROLLER_SESSION_EXPIRES_AT = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
 function createAuthController(
   cookieDomain,
   webAppUrl = 'https://stage.mychurchflow.org',
@@ -93,7 +95,7 @@ function createAuthController(
         platformRole: 'USER',
       },
       sessionToken: 'session-token',
-      sessionExpiresAt: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
+      sessionExpiresAt: CONTROLLER_SESSION_EXPIRES_AT,
       redirectTo: input.redirectTo ?? '/dashboard/stage',
     }),
     ...overrides,
@@ -184,8 +186,8 @@ test('new session stores only the token hash, a 30-day idle window and a 180-day
   assert.ok(createdSession.absoluteExpiresAt.getTime() >= before + 180 * 24 * 60 * 60 * 1000);
   assert.equal(
     result.sessionExpiresAt.getTime(),
-    createdSession.absoluteExpiresAt.getTime(),
-    'the cookie must live as long as the session ceiling, not the idle window',
+    createdSession.expiresAt.getTime(),
+    'the cookie tracks the idle window; a ceiling-length cookie would outlive the session',
   );
 });
 
@@ -372,6 +374,12 @@ for (const [label, cookieDomain] of [
     assert.deepEqual(
       callbackResponse.cookies.map(({ name }) => name),
       ['churchflow_session'],
+    );
+    const [sessionCookie] = callbackResponse.cookies;
+    assert.equal(
+      sessionCookie.options.expires.getTime(),
+      CONTROLLER_SESSION_EXPIRES_AT.getTime(),
+      'the login cookie must expire with the session it was issued for',
     );
     for (const operation of callbackResponse.cookies) {
       assertSecureCookiePolicy(operation.options);

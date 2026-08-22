@@ -24,12 +24,14 @@ function loadTypeScript(relativePath, dependencies = {}) {
 }
 
 const routePolicy = loadTypeScript('apps/web/src/auth/route-policy.ts');
+const SESSION_IDLE_TTL_SECONDS = 30 * 24 * 60 * 60;
 const sharedEdge = {
   AUTH_COOKIE_NAMES: {
     session: 'churchflow_session',
     access: 'churchflow_access',
     refresh: 'churchflow_refresh',
   },
+  SESSION_IDLE_TTL_SECONDS,
 };
 
 test('route policy explicitly allows public pages and defaults new pages to protected', () => {
@@ -125,7 +127,10 @@ function requestFor(url, cookies = {}) {
     url,
     nextUrl: new URL(url),
     headers: new Headers(),
-    cookies: { has: (name) => Object.hasOwn(cookies, name) },
+    cookies: {
+      has: (name) => Object.hasOwn(cookies, name),
+      get: (name) => (Object.hasOwn(cookies, name) ? { value: cookies[name] } : undefined),
+    },
   };
 }
 
@@ -169,25 +174,53 @@ test('cookies from the previous access/refresh scheme do not count as a session'
   assert.equal(response.details.url.searchParams.get('redirectTo'), '/dashboard/org');
 });
 
-test('middleware never calls the API or writes cookies', () => {
+test('middleware never calls the API', () => {
   const originalFetch = global.fetch;
   global.fetch = () => {
     throw new Error('middleware must not reach the API');
   };
 
   try {
-    const responses = [
-      middlewareModule.middleware(
-        requestFor('https://churchflow.test/dashboard/org', { churchflow_session: 'token' }),
-      ),
-      middlewareModule.middleware(requestFor('https://churchflow.test/dashboard/org')),
-      middlewareModule.middleware(requestFor('https://churchflow.test/login')),
-    ];
-
-    for (const response of responses) {
-      assert.deepEqual(response.cookies.operations, []);
-    }
+    middlewareModule.middleware(
+      requestFor('https://churchflow.test/dashboard/org', { churchflow_session: 'token' }),
+    );
+    middlewareModule.middleware(requestFor('https://churchflow.test/dashboard/org'));
+    middlewareModule.middleware(requestFor('https://churchflow.test/login'));
   } finally {
     global.fetch = originalFetch;
+  }
+});
+
+// The API cannot roll the cookie: pages reach it from the Next server, which drops its
+// Set-Cookie. If middleware stopped doing this the cookie would keep its sign-in expiry
+// and an active visitor would be signed out on the idle window's original deadline.
+test('a session cookie is rolled forward on every page view', () => {
+  const originalWebUrl = process.env.NEXT_PUBLIC_WEB_URL;
+  process.env.NEXT_PUBLIC_WEB_URL = 'https://churchflow.test';
+  const before = Date.now();
+  const response = middlewareModule.middleware(
+    requestFor('https://churchflow.test/dashboard/org', {
+      churchflow_session: 'opaque-session-token',
+    }),
+  );
+
+  assert.equal(response.kind, 'next');
+  assert.equal(response.cookies.operations.length, 1);
+  const [operation] = response.cookies.operations;
+  assert.equal(operation.name, 'churchflow_session');
+  assert.equal(operation.value, 'opaque-session-token');
+  assert.equal(operation.options.httpOnly, true);
+  assert.equal(operation.options.sameSite, 'lax');
+  assert.equal(operation.options.secure, true);
+  assert.equal(operation.options.path, '/');
+  assert.equal(Object.hasOwn(operation.options, 'domain'), false);
+  assert.ok(operation.options.expires.getTime() >= before + SESSION_IDLE_TTL_SECONDS * 1000 - 1000);
+});
+
+test('a visitor without a session cookie is never handed one', () => {
+  for (const url of ['https://churchflow.test/login', 'https://churchflow.test/dashboard/org']) {
+    const response = middlewareModule.middleware(requestFor(url));
+
+    assert.deepEqual(response.cookies.operations, [], url);
   }
 });

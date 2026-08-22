@@ -1,7 +1,10 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { invitationTokenQuerySchema } from '@churchflow/shared';
-import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CreateOrganizationInvitationDto } from './dto/create-organization-invitation.dto';
 import { InvitationsService } from './invitations.service';

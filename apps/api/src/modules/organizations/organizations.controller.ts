@@ -12,7 +12,10 @@ import {
 } from '@nestjs/common';
 import { createOrganizationSchema, organizationStatusSchema } from '@churchflow/shared';
 import type { OrganizationStatus } from '@churchflow/db';
-import { SessionAuthGuard, type AuthenticatedRequest } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { PlatformAdminGuard } from '../../common/guards/platform-admin.guard';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { ListAdminOrganizationWorkspaceQueryDto } from './dto/list-admin-organization-workspace-query.dto';

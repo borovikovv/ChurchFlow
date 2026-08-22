@@ -1,4 +1,7 @@
-export const SESSION_IDLE_TTL_SECONDS = 30 * 24 * 60 * 60;
+import { SESSION_IDLE_TTL_SECONDS } from '@churchflow/shared';
+
+export { SESSION_IDLE_TTL_SECONDS };
+
 export const SESSION_ABSOLUTE_TTL_SECONDS = 180 * 24 * 60 * 60;
 export const SESSION_TOUCH_INTERVAL_SECONDS = 24 * 60 * 60;
 

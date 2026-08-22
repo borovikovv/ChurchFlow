@@ -4,6 +4,10 @@ export const AUTH_COOKIE_NAMES = {
   refresh: 'churchflow_refresh',
 } as const;
 
+// The idle window a session slides over. The API owns the session row, but the web layer
+// re-issues the cookie with the same window on every page view, so both must agree.
+export const SESSION_IDLE_TTL_SECONDS = 30 * 24 * 60 * 60;
+
 export const APP_LOCALES = ['en', 'uk'] as const;
 export const DEFAULT_APP_LOCALE = 'en';
 
