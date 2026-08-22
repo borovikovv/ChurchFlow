@@ -10,7 +10,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { ORG_PERMISSIONS } from '@churchflow/shared';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { AuthenticatedRequest } from './jwt-auth.guard';
+import type { AuthenticatedRequest } from './session-auth.guard';
 
 export type OrganizationPermission = (typeof ORG_PERMISSIONS)[keyof typeof ORG_PERMISSIONS];
 
@@ -28,7 +28,7 @@ export class OrganizationAccessGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const userId = request.auth?.sub;
+    const userId = request.auth?.userId;
     if (!userId) {
       throw new UnauthorizedException('Missing authenticated user');
     }
@@ -43,8 +43,28 @@ export class OrganizationAccessGuard implements CanActivate {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { platformRole: true, deletedAt: true },
+      select: {
+        platformRole: true,
+        deletedAt: true,
+        memberships: {
+          where: {
+            organizationId,
+            status: 'ACTIVE',
+            removedAt: null,
+            organization: {
+              status: 'ACTIVE',
+              deletedAt: null,
+            },
+          },
+          select: {
+            role: true,
+            permissions: true,
+          },
+          take: 1,
+        },
+      },
     });
+
     if (!user || user.deletedAt !== null) {
       throw new UnauthorizedException('Authenticated user was not found');
     }
@@ -61,23 +81,7 @@ export class OrganizationAccessGuard implements CanActivate {
       return true;
     }
 
-    const membership = await this.prisma.organizationMember.findFirst({
-      where: {
-        organizationId,
-        userId,
-        status: 'ACTIVE',
-        removedAt: null,
-        organization: {
-          status: 'ACTIVE',
-          deletedAt: null,
-        },
-      },
-      select: {
-        role: true,
-        permissions: true,
-      },
-    });
-
+    const membership = user.memberships[0];
     if (!membership) {
       throw new ForbiddenException('Organization access is required');
     }

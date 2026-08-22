@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { Metadata, Route } from 'next';
 import { redirect } from 'next/navigation';
 import { apiFetch } from '@/api/client';
-import { hasServerSession } from '@/auth/session';
+import { getCurrentUser } from '@/auth/session';
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -51,7 +51,7 @@ export default async function PlatformAdminBootstrapPage({
       })
     : null;
   const state = result?.ok ? result.data : null;
-  const isSignedIn = await hasServerSession();
+  const isSignedIn = (await getCurrentUser()) !== null;
 
   return (
     <main className="section auth-section">

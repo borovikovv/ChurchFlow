@@ -1,6 +1,12 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { AuthenticatedRequest } from './jwt-auth.guard';
+import type { AuthenticatedRequest } from './session-auth.guard';
 
 @Injectable()
 export class PlatformAdminGuard implements CanActivate {
@@ -8,7 +14,7 @@ export class PlatformAdminGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const userId = request.auth?.sub;
+    const userId = request.auth?.userId;
 
     if (!userId) {
       throw new UnauthorizedException('Missing authenticated user');
@@ -16,7 +22,7 @@ export class PlatformAdminGuard implements CanActivate {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { platformRole: true, deletedAt: true }
+      select: { platformRole: true, deletedAt: true },
     });
 
     if (!user || user.deletedAt !== null) {

@@ -1,2 +1,4 @@
-export { AUTH_COOKIE_NAMES } from '../../../../packages/shared/src/constants';
-export { normalizePem } from '../../../../packages/shared/src/pem';
+export {
+  AUTH_COOKIE_NAMES,
+  SESSION_IDLE_TTL_SECONDS,
+} from '../../../../packages/shared/src/constants';

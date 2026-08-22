@@ -1,23 +1,28 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
-  InternalServerErrorException,
+  Param,
   Post,
   Query,
   Req,
   Res,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { AUTH_COOKIE_NAMES } from '@churchflow/shared';
+import { AUTH_COOKIE_NAMES, type UserSession } from '@churchflow/shared';
 import type { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { sessionCookieOptions } from '../../common/auth/session-cookie';
+import { sessionTokenFromRequest } from '../../common/auth/session-token';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { AuthService } from './auth.service';
 import { ProviderLoginDto, providerLoginSchema } from './dto/provider-login.dto';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
 
 const TELEGRAM_STATE_COOKIE = 'churchflow_telegram_state';
 const TELEGRAM_VERIFIER_COOKIE = 'churchflow_telegram_verifier';
@@ -31,12 +36,6 @@ interface AuthUserResult {
   platformRole: string;
 }
 
-interface RefreshAccessTokenResult {
-  accessToken: string;
-  accessTokenExpiresAt: Date;
-  user: AuthUserResult;
-}
-
 interface BeginTelegramLoginResult {
   authorizationUrl: string;
   state: string;
@@ -47,10 +46,8 @@ interface BeginTelegramLoginResult {
 
 interface CompleteTelegramLoginResult {
   user: AuthUserResult;
-  accessToken: string;
-  refreshToken: string;
-  accessTokenExpiresAt: Date;
-  refreshTokenExpiresAt: Date;
+  sessionToken: string;
+  sessionExpiresAt: Date;
   redirectTo: string;
 }
 
@@ -58,6 +55,11 @@ interface ProviderLoginRequest {
   provider: 'telegram';
   providerToken: string;
   redirectTo?: string;
+}
+
+interface SessionClientContext {
+  userAgent?: string;
+  ipAddress?: string;
 }
 
 interface AuthControllerService {
@@ -70,32 +72,12 @@ interface AuthControllerService {
     codeVerifier: string;
     expectedNonce: string;
     redirectTo?: string;
+    client: SessionClientContext;
   }): Promise<CompleteTelegramLoginResult>;
-  refreshAccessToken(refreshToken: string): Promise<RefreshAccessTokenResult>;
-  logout(sessionId: string): Promise<{ ok: true }>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isAuthUserResult(value: unknown): value is RefreshAccessTokenResult['user'] {
-  return (
-    isRecord(value) &&
-    typeof value['id'] === 'string' &&
-    (typeof value['email'] === 'string' || value['email'] === null) &&
-    (typeof value['displayName'] === 'string' || value['displayName'] === null) &&
-    typeof value['platformRole'] === 'string'
-  );
-}
-
-function isRefreshAccessTokenResult(value: unknown): value is RefreshAccessTokenResult {
-  return (
-    isRecord(value) &&
-    typeof value['accessToken'] === 'string' &&
-    value['accessTokenExpiresAt'] instanceof Date &&
-    isAuthUserResult(value['user'])
-  );
+  logoutByToken(sessionToken: string): Promise<{ ok: true }>;
+  listSessions(userId: string, currentSessionId: string): Promise<UserSession[]>;
+  revokeSession(userId: string, sessionId: string): Promise<{ ok: true }>;
+  revokeOtherSessions(userId: string, currentSessionId: string): Promise<{ revokedCount: number }>;
 }
 
 @Controller('auth')
@@ -170,13 +152,9 @@ export class AuthController {
         codeVerifier,
         expectedNonce,
         ...(redirectTo ? { redirectTo } : {}),
+        client: this.sessionClientContext(request),
       });
-      this.setAuthCookies(response, {
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
-        accessTokenExpiresAt: result.accessTokenExpiresAt,
-        refreshTokenExpiresAt: result.refreshTokenExpiresAt,
-      });
+      this.setAuthCookies(response, result);
       response.redirect(new URL(result.redirectTo, this.webAppUrl).toString());
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'Telegram login failed';
@@ -184,72 +162,76 @@ export class AuthController {
     }
   }
 
-  @Post('refresh')
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
-  async refresh(
+  @Post('logout')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<RefreshAccessTokenResult> {
-    const refreshToken = this.parseCookies(request.headers.cookie)[AUTH_COOKIE_NAMES.refresh];
-    if (!refreshToken) {
-      this.clearAuthCookies(response);
-      throw new UnauthorizedException('Missing refresh token');
-    }
-
-    try {
-      const serviceResult = (await this.authService.refreshAccessToken(refreshToken)) as unknown;
-      if (!isRefreshAccessTokenResult(serviceResult)) {
-        throw new InternalServerErrorException('Invalid refresh response');
-      }
-
-      const result: RefreshAccessTokenResult = serviceResult;
-      response.cookie(AUTH_COOKIE_NAMES.access, result.accessToken, {
-        ...this.cookieOptions,
-        expires: result.accessTokenExpiresAt,
-      });
-
-      return result;
-    } catch (caught: unknown) {
-      if (caught instanceof UnauthorizedException) {
-        this.clearAuthCookies(response);
-      }
-      throw caught;
-    }
-  }
-
-  @Post('logout')
-  @UseGuards(JwtAuthGuard)
-  async logout(
-    @Req() request: AuthenticatedRequest,
-    @Res({ passthrough: true }) response: Response,
   ): Promise<{ ok: true }> {
-    if (request.auth) {
-      await this.authService.logout(request.auth.sid);
+    const token = sessionTokenFromRequest(request);
+    if (token) {
+      await this.authService.logoutByToken(token);
     }
+
     this.clearAuthCookies(response);
     return { ok: true };
   }
 
+  @Get('sessions')
+  @UseGuards(SessionAuthGuard)
+  listSessions(@Req() request: AuthenticatedRequest): Promise<UserSession[]> {
+    const auth = this.authContext(request);
+
+    return this.authService.listSessions(auth.userId, auth.sessionId);
+  }
+
+  @Delete('sessions/:sessionId')
+  @UseGuards(SessionAuthGuard)
+  revokeSession(
+    @Param('sessionId') sessionId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<{ ok: true }> {
+    return this.authService.revokeSession(this.authContext(request).userId, sessionId);
+  }
+
+  @Post('sessions/revoke-others')
+  @UseGuards(SessionAuthGuard)
+  revokeOtherSessions(@Req() request: AuthenticatedRequest): Promise<{ revokedCount: number }> {
+    const auth = this.authContext(request);
+
+    return this.authService.revokeOtherSessions(auth.userId, auth.sessionId);
+  }
+
+  private authContext(request: AuthenticatedRequest): { userId: string; sessionId: string } {
+    if (!request.auth) {
+      throw new Error('Authenticated request missing auth payload');
+    }
+
+    return request.auth;
+  }
+
+  private sessionClientContext(request: Request): SessionClientContext {
+    const userAgent = request.headers['user-agent'];
+    const ipAddress = request.ip;
+
+    return {
+      ...(userAgent ? { userAgent } : {}),
+      ...(ipAddress ? { ipAddress } : {}),
+    };
+  }
+
   private setAuthCookies(
     response: Response,
-    input: {
-      accessToken: string;
-      refreshToken: string;
-      accessTokenExpiresAt: Date;
-      refreshTokenExpiresAt: Date;
-    },
+    input: { sessionToken: string; sessionExpiresAt: Date },
   ): void {
-    response.cookie(AUTH_COOKIE_NAMES.access, input.accessToken, {
+    response.cookie(AUTH_COOKIE_NAMES.session, input.sessionToken, {
       ...this.cookieOptions,
-      expires: input.accessTokenExpiresAt,
-    });
-    response.cookie(AUTH_COOKIE_NAMES.refresh, input.refreshToken, {
-      ...this.cookieOptions,
-      expires: input.refreshTokenExpiresAt,
+      expires: input.sessionExpiresAt,
     });
   }
 
   private clearAuthCookies(response: Response): void {
+    response.clearCookie(AUTH_COOKIE_NAMES.session, this.cookieOptions);
     response.clearCookie(AUTH_COOKIE_NAMES.access, this.cookieOptions);
     response.clearCookie(AUTH_COOKIE_NAMES.refresh, this.cookieOptions);
   }
@@ -287,16 +269,7 @@ export class AuthController {
   }
 
   private get cookieOptions(): CookieOptions {
-    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN')?.trim();
-    const isHttpsApp = this.webAppUrl.startsWith('https://');
-
-    return {
-      httpOnly: true,
-      sameSite: 'lax' as const,
-      secure: isHttpsApp || this.config.get<string>('NODE_ENV') === 'production',
-      path: '/',
-      ...(cookieDomain ? { domain: cookieDomain } : {}),
-    };
+    return sessionCookieOptions(this.config);
   }
 
   private get telegramCookieOptions(): CookieOptions {

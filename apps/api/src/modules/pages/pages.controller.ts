@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ORG_PERMISSIONS } from '@churchflow/shared';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
   RequireOrganizationPermission,
@@ -26,14 +26,14 @@ export class PagesController {
   }
 
   @Get('organizations/:organizationId/pages')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async dashboardPages(@Param('organizationId') organizationId: string) {
     return this.pagesService.listDashboardPages(organizationId);
   }
 
   @Get('organizations/:organizationId/pages/:pageId')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async dashboardPage(
     @Param('organizationId') organizationId: string,
@@ -43,14 +43,14 @@ export class PagesController {
   }
 
   @Post('organizations/:organizationId/pages')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async createPage(@Param('organizationId') organizationId: string, @Body() body: UpsertPageDto) {
     return this.pagesService.createPage(organizationId, body);
   }
 
   @Patch('organizations/:organizationId/pages/:pageId')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async updatePage(
     @Param('organizationId') organizationId: string,
@@ -61,7 +61,7 @@ export class PagesController {
   }
 
   @Post('organizations/:organizationId/pages/:pageId/publish')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async setPagePublished(
     @Param('organizationId') organizationId: string,
@@ -72,7 +72,7 @@ export class PagesController {
   }
 
   @Post('organizations/:organizationId/pages/:pageId/sections')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async createSection(
     @Param('organizationId') organizationId: string,
@@ -83,7 +83,7 @@ export class PagesController {
   }
 
   @Patch('organizations/:organizationId/sections/:sectionId')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async updateSection(
     @Param('organizationId') organizationId: string,
@@ -94,7 +94,7 @@ export class PagesController {
   }
 
   @Delete('organizations/:organizationId/sections/:sectionId')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async deleteSection(
     @Param('organizationId') organizationId: string,
@@ -104,7 +104,7 @@ export class PagesController {
   }
 
   @Post('organizations/:organizationId/pages/:pageId/sections/reorder')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async reorderSections(
     @Param('organizationId') organizationId: string,

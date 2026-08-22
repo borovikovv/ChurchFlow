@@ -1,20 +1,11 @@
 const assert = require('node:assert/strict');
-const { generateKeyPairSync } = require('node:crypto');
 const test = require('node:test');
 const { apiEnvSchema } = require('@churchflow/shared');
-
-const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-const publicPem = publicKey.export({ type: 'spki', format: 'pem' });
-const privatePem = privateKey.export({ type: 'pkcs8', format: 'pem' });
 
 function apiEnv(overrides = {}) {
   return {
     NODE_ENV: 'test',
     DATABASE_URL: 'postgresql://churchflow:churchflow@localhost:5432/churchflow?schema=public',
-    JWT_ACCESS_PUBLIC_KEY: publicPem,
-    JWT_ACCESS_PRIVATE_KEY: privatePem,
-    JWT_REFRESH_PUBLIC_KEY: publicPem,
-    JWT_REFRESH_PRIVATE_KEY: privatePem,
     WEB_APP_URL: 'https://churchflow.test',
     PLATFORM_ADMIN_EMAIL: 'admin@churchflow.test',
     S3_ENDPOINT: 'https://storage.churchflow.test',

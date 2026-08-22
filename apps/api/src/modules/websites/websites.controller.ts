@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ORG_PERMISSIONS } from '@churchflow/shared';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
   RequireOrganizationPermission,
@@ -19,14 +19,14 @@ export class WebsitesController {
   }
 
   @Get('organizations/:organizationId/website')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async dashboardWebsite(@Param('organizationId') organizationId: string) {
     return this.websitesService.findByOrganizationId(organizationId);
   }
 
   @Patch('organizations/:organizationId/website')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async updateSettings(
     @Param('organizationId') organizationId: string,
@@ -36,7 +36,7 @@ export class WebsitesController {
   }
 
   @Post('organizations/:organizationId/website/publish')
-  @UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async setPublished(
     @Param('organizationId') organizationId: string,

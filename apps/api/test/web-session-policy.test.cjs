@@ -1,5 +1,4 @@
 const assert = require('node:assert/strict');
-const { generateKeyPairSync, sign } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -25,35 +24,22 @@ function loadTypeScript(relativePath, dependencies = {}) {
 }
 
 const routePolicy = loadTypeScript('apps/web/src/auth/route-policy.ts');
+const SESSION_IDLE_TTL_SECONDS = 30 * 24 * 60 * 60;
 const sharedEdge = {
-  AUTH_COOKIE_NAMES: { access: 'churchflow_access', refresh: 'churchflow_refresh' },
-  normalizePem: (value) => value,
+  AUTH_COOKIE_NAMES: {
+    session: 'churchflow_session',
+    access: 'churchflow_access',
+    refresh: 'churchflow_refresh',
+  },
+  SESSION_IDLE_TTL_SECONDS,
 };
-const sessionHelpers = loadTypeScript('apps/web/src/auth/middleware-session.ts', {
-  '@/shared/edge': sharedEdge,
-});
-const webJwtKeys = generateKeyPairSync('rsa', { modulusLength: 2048 });
-const webPublicKeyPem = webJwtKeys.publicKey.export({ type: 'spki', format: 'pem' });
-
-function signedAccessToken(exp) {
-  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({ exp })).toString('base64url');
-  const signature = sign('RSA-SHA256', Buffer.from(`${header}.${payload}`), webJwtKeys.privateKey);
-  return `${header}.${payload}.${signature.toString('base64url')}`;
-}
-
-function tamperedSignatureToken(token) {
-  const [header, payload, signature] = token.split('.');
-  const replacement = signature.startsWith('A') ? 'B' : 'A';
-
-  return `${header}.${payload}.${replacement}${signature.slice(1)}`;
-}
 
 test('route policy explicitly allows public pages and defaults new pages to protected', () => {
   for (const pathname of [
     '/',
     '/login',
     '/o/church',
+    '/signed-out',
     '/invitations/accept?token=value',
     '/member-claims/accept?token=value',
     '/platform-admin/bootstrap?token=value',
@@ -94,33 +80,14 @@ test('route policy excludes Next internals, API paths and static assets', () => 
   }
 });
 
-test('session helpers verify signature and safely replace the current request cookie', async () => {
-  const validToken = signedAccessToken(1_100);
-  const modifiedToken = tamperedSignatureToken(validToken);
-
-  assert.equal(await sessionHelpers.isAccessTokenFresh(validToken, webPublicKeyPem, 1_000), true);
+test('a redirect target cannot be pointed outside this application', () => {
   assert.equal(
-    await sessionHelpers.isAccessTokenFresh(signedAccessToken(1_004), webPublicKeyPem, 1_000),
-    false,
-  );
-  assert.equal(
-    await sessionHelpers.isAccessTokenFresh(modifiedToken, webPublicKeyPem, 1_000),
-    false,
-  );
-  assert.equal(await sessionHelpers.isAccessTokenFresh('invalid', webPublicKeyPem, 1_000), false);
-  assert.equal(
-    sessionHelpers.setCookieHeader(
-      'other=value; churchflow_access=old',
-      'churchflow_access',
-      'new',
-    ),
-    'other=value; churchflow_access=new',
-  );
-  assert.equal(
-    sessionHelpers.internalRedirectTarget('/dashboard/org', '?tab=members'),
+    routePolicy.internalRedirectTarget('/dashboard/org', '?tab=members'),
     '/dashboard/org?tab=members',
   );
-  assert.equal(sessionHelpers.internalRedirectTarget('//evil.example', '?x=1'), '/?x=1');
+  assert.equal(routePolicy.internalRedirectTarget('//evil.example', '?x=1'), '/?x=1');
+  assert.equal(routePolicy.internalRedirectTarget('https://evil.example', ''), '/');
+  assert.equal(routePolicy.internalRedirectTarget('/dashboard', 'tab=members'), '/dashboard');
 });
 
 class FakeCookies {
@@ -151,117 +118,41 @@ class FakeNextResponse {
 
 const middlewareModule = loadTypeScript('apps/web/middleware.ts', {
   'next/server': { NextResponse: FakeNextResponse },
-  '@churchflow/shared': sharedEdge,
   './src/shared/edge': sharedEdge,
   './src/auth/route-policy': routePolicy,
-  './src/auth/middleware-session': sessionHelpers,
 });
 
 function requestFor(url, cookies = {}) {
-  const parsed = new URL(url);
-  const cookieHeader = Object.entries(cookies)
-    .map(([name, value]) => `${name}=${value}`)
-    .join('; ');
-
   return {
     url,
-    nextUrl: parsed,
-    headers: new Headers(cookieHeader ? { cookie: cookieHeader } : {}),
-    cookies: { get: (name) => (cookies[name] ? { value: cookies[name] } : undefined) },
+    nextUrl: new URL(url),
+    headers: new Headers(),
+    cookies: {
+      has: (name) => Object.hasOwn(cookies, name),
+      get: (name) => (Object.hasOwn(cookies, name) ? { value: cookies[name] } : undefined),
+    },
   };
 }
 
-test('middleware injects refreshed access into current request and response cookie', async () => {
-  const originalFetch = global.fetch;
-  const originalPublicKey = process.env.JWT_ACCESS_PUBLIC_KEY;
-  process.env.JWT_ACCESS_PUBLIC_KEY = webPublicKeyPem;
-  global.fetch = async () => ({
-    ok: true,
-    json: async () => ({
-      accessToken: 'new-access-token',
-      accessTokenExpiresAt: new Date(Date.now() + 900_000).toISOString(),
-    }),
-  });
-
-  try {
-    const validToken = signedAccessToken(Math.floor(Date.now() / 1000) + 900);
-    const modifiedToken = tamperedSignatureToken(validToken);
-    const response = await middlewareModule.middleware(
-      requestFor('https://churchflow.test/dashboard/org', {
-        churchflow_access: modifiedToken,
-        churchflow_refresh: 'valid-refresh-token',
-      }),
+test('a request carrying a session cookie is passed through', () => {
+  for (const url of [
+    'https://churchflow.test/dashboard/org',
+    'https://churchflow.test/login',
+    'https://churchflow.test/future-page',
+  ]) {
+    const response = middlewareModule.middleware(
+      requestFor(url, { churchflow_session: 'opaque-session-token' }),
     );
 
-    assert.equal(response.kind, 'next');
-    assert.match(
-      response.details.request.headers.get('cookie'),
-      /churchflow_access=new-access-token/,
-    );
-    assert.equal(response.cookies.operations[0].name, 'churchflow_access');
-    assert.equal(response.cookies.operations[0].value, 'new-access-token');
-  } finally {
-    global.fetch = originalFetch;
-    if (originalPublicKey === undefined) delete process.env.JWT_ACCESS_PUBLIC_KEY;
-    else process.env.JWT_ACCESS_PUBLIC_KEY = originalPublicKey;
+    assert.equal(response.kind, 'next', url);
   }
 });
 
-for (const [label, cookieDomain] of [
-  ['missing COOKIE_DOMAIN', undefined],
-  ['empty COOKIE_DOMAIN', ''],
-  ['blank COOKIE_DOMAIN', '   '],
-]) {
-  test(`middleware refresh Set-Cookie is host-only with ${label}`, async () => {
-    const originalFetch = global.fetch;
-    const originalPublicKey = process.env.JWT_ACCESS_PUBLIC_KEY;
-    const originalCookieDomain = process.env.COOKIE_DOMAIN;
-    process.env.JWT_ACCESS_PUBLIC_KEY = webPublicKeyPem;
-    if (cookieDomain === undefined) {
-      delete process.env.COOKIE_DOMAIN;
-    } else {
-      process.env.COOKIE_DOMAIN = cookieDomain;
-    }
-    global.fetch = async () => ({
-      ok: true,
-      json: async () => ({
-        accessToken: 'new-access-token',
-        accessTokenExpiresAt: new Date(Date.now() + 900_000).toISOString(),
-      }),
-    });
-
-    try {
-      const response = await middlewareModule.middleware(
-        requestFor('https://stage.mychurchflow.org/dashboard/org', {
-          churchflow_access: 'invalid-access-token',
-          churchflow_refresh: 'valid-refresh-token',
-        }),
-      );
-
-      assert.equal(response.kind, 'next');
-      const options = response.cookies.operations[0].options;
-      assert.equal(options.httpOnly, true);
-      assert.equal(options.secure, true);
-      assert.equal(options.sameSite, 'lax');
-      assert.equal(options.path, '/');
-      assert.equal(Object.hasOwn(options, 'domain'), false);
-    } finally {
-      global.fetch = originalFetch;
-      if (originalPublicKey === undefined) delete process.env.JWT_ACCESS_PUBLIC_KEY;
-      else process.env.JWT_ACCESS_PUBLIC_KEY = originalPublicKey;
-      if (originalCookieDomain === undefined) delete process.env.COOKIE_DOMAIN;
-      else process.env.COOKIE_DOMAIN = originalCookieDomain;
-    }
-  });
-}
-
-test('middleware handles anonymous public routes and protects unknown routes without loops', async () => {
-  const publicResponse = await middlewareModule.middleware(
-    requestFor('https://churchflow.test/login'),
-  );
+test('an anonymous visitor reaches public routes and is sent to login from protected ones', () => {
+  const publicResponse = middlewareModule.middleware(requestFor('https://churchflow.test/login'));
   assert.equal(publicResponse.kind, 'next');
 
-  const protectedResponse = await middlewareModule.middleware(
+  const protectedResponse = middlewareModule.middleware(
     requestFor('https://churchflow.test/future-page?tab=one'),
   );
   assert.equal(protectedResponse.kind, 'redirect');
@@ -271,33 +162,65 @@ test('middleware handles anonymous public routes and protects unknown routes wit
   );
 });
 
-test('failed refresh continues public route anonymously but redirects protected route', async () => {
+test('cookies from the previous access/refresh scheme do not count as a session', () => {
+  const response = middlewareModule.middleware(
+    requestFor('https://churchflow.test/dashboard/org', {
+      churchflow_access: 'stale-access-token',
+      churchflow_refresh: 'stale-refresh-token',
+    }),
+  );
+
+  assert.equal(response.kind, 'redirect');
+  assert.equal(response.details.url.searchParams.get('redirectTo'), '/dashboard/org');
+});
+
+test('middleware never calls the API', () => {
   const originalFetch = global.fetch;
-  global.fetch = async () => ({ ok: false });
+  global.fetch = () => {
+    throw new Error('middleware must not reach the API');
+  };
 
   try {
-    const publicResponse = await middlewareModule.middleware(
-      requestFor('https://churchflow.test/member-claims/accept?token=claim', {
-        churchflow_refresh: 'invalid-refresh',
-      }),
+    middlewareModule.middleware(
+      requestFor('https://churchflow.test/dashboard/org', { churchflow_session: 'token' }),
     );
-    assert.equal(publicResponse.kind, 'next');
-    assert.deepEqual(
-      publicResponse.cookies.operations.map(({ name }) => name),
-      ['churchflow_access', 'churchflow_refresh'],
-    );
-
-    const protectedResponse = await middlewareModule.middleware(
-      requestFor('https://churchflow.test/organization-request/status', {
-        churchflow_refresh: 'invalid-refresh',
-      }),
-    );
-    assert.equal(protectedResponse.kind, 'redirect');
-    assert.equal(
-      protectedResponse.details.url.searchParams.get('redirectTo'),
-      '/organization-request/status',
-    );
+    middlewareModule.middleware(requestFor('https://churchflow.test/dashboard/org'));
+    middlewareModule.middleware(requestFor('https://churchflow.test/login'));
   } finally {
     global.fetch = originalFetch;
+  }
+});
+
+// The API cannot roll the cookie: pages reach it from the Next server, which drops its
+// Set-Cookie. If middleware stopped doing this the cookie would keep its sign-in expiry
+// and an active visitor would be signed out on the idle window's original deadline.
+test('a session cookie is rolled forward on every page view', () => {
+  const originalWebUrl = process.env.NEXT_PUBLIC_WEB_URL;
+  process.env.NEXT_PUBLIC_WEB_URL = 'https://churchflow.test';
+  const before = Date.now();
+  const response = middlewareModule.middleware(
+    requestFor('https://churchflow.test/dashboard/org', {
+      churchflow_session: 'opaque-session-token',
+    }),
+  );
+
+  assert.equal(response.kind, 'next');
+  assert.equal(response.cookies.operations.length, 1);
+  const [operation] = response.cookies.operations;
+  assert.equal(operation.name, 'churchflow_session');
+  assert.equal(operation.value, 'opaque-session-token');
+  assert.equal(operation.options.httpOnly, true);
+  assert.equal(operation.options.sameSite, 'lax');
+  assert.equal(operation.options.secure, true);
+  assert.equal(operation.options.path, '/');
+  assert.equal(Object.hasOwn(operation.options, 'domain'), false);
+  assert.ok(operation.options.expires.getTime() >= before + SESSION_IDLE_TTL_SECONDS * 1000 - 1000);
+});
+
+test('a visitor without a session cookie is never handed one', () => {
+  for (const url of ['https://churchflow.test/login', 'https://churchflow.test/dashboard/org']) {
+    const response = middlewareModule.middleware(requestFor(url));
+
+    assert.deepEqual(response.cookies.operations, [], url);
   }
 });

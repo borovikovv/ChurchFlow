@@ -1,10 +1,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { getPostLoginRedirect, hasServerSession } from '@/auth/session';
+import { getCurrentUser, getPostLoginRedirect } from '@/auth/session';
 import { redirect } from 'next/navigation';
 
 export default async function HomePage() {
-  if (await hasServerSession()) {
+  if (await getCurrentUser()) {
     redirect(await getPostLoginRedirect());
   }
 

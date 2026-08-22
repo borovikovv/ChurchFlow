@@ -2,7 +2,10 @@ import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } fro
 import { Throttle } from '@nestjs/throttler';
 import type { OrganizationRequestStatus } from '@churchflow/db';
 import { organizationRequestStatusSchema } from '@churchflow/shared';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { PlatformAdminGuard } from '../../common/guards/platform-admin.guard';
 import { ApproveOrganizationRequestDto } from './dto/approve-organization-request.dto';
 import { CreateOrganizationRequestDto } from './dto/create-organization-request.dto';
@@ -14,40 +17,40 @@ export class OrganizationRequestsController {
   constructor(private readonly organizationRequestsService: OrganizationRequestsService) {}
 
   @Post('organization-requests')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async create(@Body() body: CreateOrganizationRequestDto, @Req() request: AuthenticatedRequest) {
     return this.organizationRequestsService.create(body, this.getActorUserId(request));
   }
 
   @Get('organization-requests/mine')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   async mine(@Req() request: AuthenticatedRequest) {
     return this.organizationRequestsService.listMine(this.getActorUserId(request));
   }
 
   @Post('organization-requests/:id/resubmit')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async resubmit(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.organizationRequestsService.resubmit(id, this.getActorUserId(request));
   }
 
   @Post('organization-requests/:id/resend-notification')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async resendNotification(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.organizationRequestsService.resendNotification(id, this.getActorUserId(request));
   }
 
   @Delete('organization-requests/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   async deleteFromHistory(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.organizationRequestsService.deleteFromHistory(id, this.getActorUserId(request));
   }
 
   @Get('admin/organization-requests')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async list(@Query('status') status?: string) {
     const parsedStatus: OrganizationRequestStatus | undefined = status
       ? organizationRequestStatusSchema.parse(status)
@@ -56,13 +59,13 @@ export class OrganizationRequestsController {
   }
 
   @Get('admin/organization-requests/:id')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async get(@Param('id') id: string) {
     return this.organizationRequestsService.get(id);
   }
 
   @Post('admin/organization-requests/:id/approve')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async approve(
     @Param('id') id: string,
     @Body() body: ApproveOrganizationRequestDto,
@@ -72,7 +75,7 @@ export class OrganizationRequestsController {
   }
 
   @Post('admin/organization-requests/:id/reject')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async reject(
     @Param('id') id: string,
     @Body() body: RejectOrganizationRequestDto,
@@ -82,7 +85,7 @@ export class OrganizationRequestsController {
   }
 
   private getActorUserId(request: AuthenticatedRequest): string {
-    const userId = request.auth?.sub;
+    const userId = request.auth?.userId;
     if (!userId) {
       throw new Error('Authenticated request missing auth payload');
     }

@@ -439,15 +439,8 @@
     },
     "views": {
       "month": "Month",
-      "week": "Week",
-      "day": "Day"
-    },
-    "viewLabel": "Calendar view",
-    "previousPeriod": "Previous period",
-    "nextPeriod": "Next period",
-    "filtersLabel": "Event type filters",
-    "calendarNavigation": "Calendar navigation",
-    "selectDay": "Select {date}"
+      "week": "Week"
+    }
   },
   "budget": {
     "title": "Budget",
@@ -872,5 +865,23 @@
     "page": "Page",
     "of": "of",
     "itemsPerPage": "Items per page"
+  },
+  "sessions": {
+    "title": "Devices",
+    "description": "Places where your ChurchFlow account is currently signed in.",
+    "currentDevice": "this device",
+    "unknownDevice": "Unknown device",
+    "lastUsed": "Last used {value}",
+    "neverUsed": "Not used yet",
+    "signOutDevice": "Sign out",
+    "signingOut": "Signing out...",
+    "signOutOthers": "Sign out {count} other {count, plural, one {device} other {devices}}",
+    "revoked": "Device signed out.",
+    "revokedOthers": "Signed out {count} {count, plural, one {device} other {devices}}."
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "description": "ChurchFlow could not be reached. Your session is still active — try again in a moment.",
+    "retry": "Try again"
   }
 }

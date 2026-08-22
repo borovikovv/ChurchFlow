@@ -12,7 +12,10 @@ import {
 } from '@nestjs/common';
 import { createOrganizationSchema, organizationStatusSchema } from '@churchflow/shared';
 import type { OrganizationStatus } from '@churchflow/db';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { PlatformAdminGuard } from '../../common/guards/platform-admin.guard';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { ListAdminOrganizationWorkspaceQueryDto } from './dto/list-admin-organization-workspace-query.dto';
@@ -20,7 +23,7 @@ import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsService } from './organizations.service';
 
 @Controller()
-@UseGuards(JwtAuthGuard)
+@UseGuards(SessionAuthGuard)
 export class OrganizationsController {
   constructor(private readonly organizationsService: OrganizationsService) {}
 
@@ -30,7 +33,7 @@ export class OrganizationsController {
   }
 
   @Get('/admin/organizations')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async listAdmin(@Query('status') status?: string) {
     const parsedStatus: OrganizationStatus | undefined = status
       ? organizationStatusSchema.parse(status)
@@ -51,50 +54,50 @@ export class OrganizationsController {
   }
 
   @Get('/admin/organizations/:id')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async getAdmin(@Param('id') id: string) {
     return this.organizationsService.getAdmin(id);
   }
 
   @Post('/admin/organizations/:id/archive')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async archive(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.organizationsService.archive(id, this.getActorUserId(request));
   }
 
   @Post('/admin/organizations/:id/suspend')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async suspend(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.organizationsService.suspend(id, this.getActorUserId(request));
   }
 
   @Post('/admin/organizations/:id/restore')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async restore(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.organizationsService.restore(id, this.getActorUserId(request));
   }
 
   @Post('/admin/organizations/:id/delete-soft')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async deleteSoft(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.organizationsService.deleteSoft(id, this.getActorUserId(request));
   }
 
   @Delete('/admin/organizations/:id')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async delete(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.organizationsService.deleteSoft(id, this.getActorUserId(request));
   }
 
   @Post('organizations')
-  @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async create(@Body() body: CreateOrganizationDto, @Req() request: AuthenticatedRequest) {
     const auth = request.auth;
     if (!auth) {
       throw new Error('Authenticated request missing auth payload');
     }
 
-    return this.organizationsService.create(createOrganizationSchema.parse(body), auth.sub);
+    return this.organizationsService.create(createOrganizationSchema.parse(body), auth.userId);
   }
 
   @Patch('/organizations/:organizationId')
@@ -107,7 +110,7 @@ export class OrganizationsController {
   }
 
   private getActorUserId(request: AuthenticatedRequest): string {
-    const userId = request.auth?.sub;
+    const userId = request.auth?.userId;
     if (!userId) {
       throw new Error('Authenticated request missing auth payload');
     }

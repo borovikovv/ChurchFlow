@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type PlatformRole } from '@churchflow/db';
+import { Prisma, type PlatformRole, type SessionRevokeReason } from '@churchflow/db';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface AuthRepositoryUser {
@@ -24,16 +24,17 @@ export interface TelegramLoginAccountState {
   isPlatformAdmin: boolean;
 }
 
-export interface SessionWithUser {
-  id: string;
-  userId: string;
-  expiresAt: Date;
-  revokedAt: Date | null;
-  user: AuthRepositoryUserWithDeletedAt;
-}
-
 export interface CreatedSession {
   id: string;
+}
+
+export interface UserSessionRecord {
+  id: string;
+  deviceName: string | null;
+  ipAddress: string | null;
+  lastUsedAt: Date | null;
+  createdAt: Date;
+  expiresAt: Date;
 }
 
 @Injectable()
@@ -259,52 +260,85 @@ export class AuthRepository {
     return { id: session.id };
   }
 
-  async findSession(sessionId: string): Promise<SessionWithUser | null> {
-    return this.prisma.session.findUnique({
-      where: { id: sessionId },
+  async revokeSessionByTokenHash(tokenHash: string, reason: SessionRevokeReason): Promise<number> {
+    const result = await this.prisma.session.updateMany({
+      where: { tokenHash, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    });
+
+    return result.count;
+  }
+
+  async listUserSessions(userId: string): Promise<UserSessionRecord[]> {
+    return this.prisma.session.findMany({
+      where: { userId, type: 'user', revokedAt: null, expiresAt: { gt: new Date() } },
       select: {
         id: true,
-        userId: true,
+        deviceName: true,
+        ipAddress: true,
+        lastUsedAt: true,
+        createdAt: true,
         expiresAt: true,
-        revokedAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            displayName: true,
-            platformRole: true,
-            deletedAt: true,
-          },
-        },
       },
+      orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }],
     });
   }
 
-  async findSessionByRefreshTokenHash(refreshTokenHash: string): Promise<SessionWithUser | null> {
-    return this.prisma.session.findFirst({
-      where: { refreshTokenHash },
-      select: {
-        id: true,
-        userId: true,
-        expiresAt: true,
-        revokedAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            displayName: true,
-            platformRole: true,
-            deletedAt: true,
-          },
-        },
-      },
+  async revokeUserSession(
+    sessionId: string,
+    userId: string,
+    reason: SessionRevokeReason,
+  ): Promise<number> {
+    const result = await this.prisma.session.updateMany({
+      where: { id: sessionId, userId, type: 'user', revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    });
+
+    return result.count;
+  }
+
+  async revokeOtherUserSessions(
+    userId: string,
+    keptSessionId: string,
+    reason: SessionRevokeReason,
+  ): Promise<number> {
+    const result = await this.prisma.session.updateMany({
+      where: { userId, type: 'user', revokedAt: null, id: { not: keptSessionId } },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    });
+
+    return result.count;
+  }
+
+  async countPurgeableSessions(cutoff: Date): Promise<number> {
+    return this.prisma.session.count({
+      where: { OR: [{ expiresAt: { lt: cutoff } }, { revokedAt: { lt: cutoff } }] },
     });
   }
 
-  async revokeSession(sessionId: string) {
-    return this.prisma.session.update({
-      where: { id: sessionId },
-      data: { revokedAt: new Date() },
-    });
+  async purgeSessions(input: { cutoff: Date; batchSize: number; maxBatches: number }) {
+    let deletedCount = 0;
+    let batches = 0;
+
+    while (batches < input.maxBatches) {
+      const deleted = await this.prisma.$executeRaw`
+        DELETE FROM "sessions"
+        WHERE "id" IN (
+          SELECT "id"
+          FROM "sessions"
+          WHERE "expires_at" < ${input.cutoff.toISOString()}::timestamp
+             OR "revoked_at" < ${input.cutoff.toISOString()}::timestamp
+          LIMIT ${input.batchSize}
+        )
+      `;
+      batches += 1;
+      deletedCount += deleted;
+
+      if (deleted < input.batchSize) {
+        return { deletedCount, batches, exhausted: false };
+      }
+    }
+
+    return { deletedCount, batches, exhausted: true };
   }
 }

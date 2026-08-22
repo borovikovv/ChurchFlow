@@ -8,7 +8,7 @@ Platform admin access is separate from organization membership.
 - `ADMIN`: can review organization requests and manage organization lifecycle.
 - `SUPER_ADMIN`: same as admin for MVP, reserved for higher-trust platform operations.
 
-The API enforces platform admin access with `PlatformAdminGuard`, which currently checks `User.platformRole` after `JwtAuthGuard` populates `request.auth`.
+The API enforces platform admin access with `PlatformAdminGuard`, which currently checks `User.platformRole` after `SessionAuthGuard` populates `request.auth`.
 
 ## Bootstrap
 

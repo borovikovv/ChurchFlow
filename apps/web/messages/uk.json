@@ -439,15 +439,8 @@
     },
     "views": {
       "month": "Місяць",
-      "week": "Тиждень",
-      "day": "День"
-    },
-    "viewLabel": "Вигляд календаря",
-    "previousPeriod": "Попередній період",
-    "nextPeriod": "Наступний період",
-    "filtersLabel": "Фільтри типів подій",
-    "calendarNavigation": "Навігація календарем",
-    "selectDay": "Обрати {date}"
+      "week": "Тиждень"
+    }
   },
   "budget": {
     "title": "Бюджет",
@@ -872,5 +865,23 @@
     "page": "Сторінка",
     "of": "з",
     "itemsPerPage": "Елементів на сторінці"
+  },
+  "sessions": {
+    "title": "Пристрої",
+    "description": "Місця, де зараз виконано вхід у ваш обліковий запис ChurchFlow.",
+    "currentDevice": "цей пристрій",
+    "unknownDevice": "Невідомий пристрій",
+    "lastUsed": "Востаннє використано {value}",
+    "neverUsed": "Ще не використовувався",
+    "signOutDevice": "Вийти",
+    "signingOut": "Виходимо...",
+    "signOutOthers": "Вийти на {count, plural, one {# іншому пристрої} other {# інших пристроях}}",
+    "revoked": "Пристрій вийшов із системи.",
+    "revokedOthers": "Виконано вихід на {count, plural, one {# пристрої} other {# пристроях}}."
+  },
+  "errors": {
+    "title": "Щось пішло не так",
+    "description": "Не вдалося зв'язатися з ChurchFlow. Ваша сесія лишається активною — спробуйте ще раз за мить.",
+    "retry": "Спробувати ще раз"
   }
 }

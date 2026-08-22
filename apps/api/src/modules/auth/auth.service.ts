@@ -3,24 +3,23 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  createHash,
-  createPublicKey,
-  randomBytes,
-  sign,
-  verify,
-  type JsonWebKey,
-} from 'node:crypto';
+import { createHash, createPublicKey, randomBytes, verify, type JsonWebKey } from 'node:crypto';
 import { z } from 'zod';
-import { jwtPayloadSchema, normalizePem } from '@churchflow/shared';
+import type { UserSession } from '@churchflow/shared';
+import { deviceLabelFromUserAgent } from '../../common/auth/device-label';
+import {
+  SESSION_ABSOLUTE_TTL_SECONDS,
+  SESSION_IDLE_TTL_SECONDS,
+} from '../../common/auth/session-policy';
 import { AuthRepository } from './auth.repository';
 import type { providerLoginSchema } from './dto/provider-login.dto';
+import { SESSION_RETENTION_BATCH_SIZE, SESSION_RETENTION_MAX_BATCHES } from './session-retention';
 
-const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
-const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const TELEGRAM_ISSUER = 'https://oauth.telegram.org';
 const TELEGRAM_AUTHORIZATION_URL = 'https://oauth.telegram.org/auth';
 const TELEGRAM_TOKEN_URL = 'https://oauth.telegram.org/token';
@@ -36,10 +35,9 @@ export interface AuthUserResult {
   platformRole: string;
 }
 
-export interface RefreshAccessTokenResult {
-  accessToken: string;
-  accessTokenExpiresAt: Date;
-  user: AuthUserResult;
+export interface SessionClientContext {
+  userAgent?: string;
+  ipAddress?: string;
 }
 
 export interface BeginTelegramLoginResult {
@@ -52,17 +50,9 @@ export interface BeginTelegramLoginResult {
 
 export interface CompleteTelegramLoginResult {
   user: AuthUserResult;
-  accessToken: string;
-  refreshToken: string;
-  accessTokenExpiresAt: Date;
-  refreshTokenExpiresAt: Date;
+  sessionToken: string;
+  sessionExpiresAt: Date;
   redirectTo: string;
-}
-
-interface AuthJwtPayload {
-  sub: string;
-  sid: string;
-  type: 'access' | 'refresh';
 }
 
 interface TelegramIdTokenClaims {
@@ -129,25 +119,30 @@ interface RequestedRedirectPolicyInput {
   hasMembershipClaimRedirect: boolean;
 }
 
-interface SessionWithUser {
-  id: string;
-  userId: string;
-  expiresAt: Date;
-  revokedAt: Date | null;
-  user: AuthRepositoryUser & {
-    deletedAt: Date | null;
-  };
-}
-
 interface CreateSessionInput {
   userId: string;
   type: 'user' | 'service';
-  refreshTokenHash: string;
+  tokenHash: string;
   expiresAt: Date;
+  absoluteExpiresAt: Date;
+  deviceName?: string;
+  userAgent?: string;
+  ipAddress?: string;
 }
 
 interface CreatedSession {
   id: string;
+}
+
+type SessionRevokeReason = 'logout' | 'user_revoked' | 'admin' | 'expired' | 'user_deleted';
+
+interface UserSessionRecord {
+  id: string;
+  deviceName: string | null;
+  ipAddress: string | null;
+  lastUsedAt: Date | null;
+  createdAt: Date;
+  expiresAt: Date;
 }
 
 interface AuthRepositoryPort {
@@ -166,13 +161,30 @@ interface AuthRepositoryPort {
   }): Promise<AuthRepositoryUser>;
   touchTelegramAccount(accountId: string, username?: string): Promise<AuthRepositoryUser>;
   createSession(input: CreateSessionInput): Promise<CreatedSession>;
-  findSession(sessionId: string): Promise<SessionWithUser | null>;
-  findSessionByRefreshTokenHash(refreshTokenHash: string): Promise<SessionWithUser | null>;
-  revokeSession(sessionId: string): Promise<unknown>;
+  revokeSessionByTokenHash(tokenHash: string, reason: SessionRevokeReason): Promise<number>;
+  listUserSessions(userId: string): Promise<UserSessionRecord[]>;
+  revokeUserSession(
+    sessionId: string,
+    userId: string,
+    reason: SessionRevokeReason,
+  ): Promise<number>;
+  revokeOtherUserSessions(
+    userId: string,
+    keptSessionId: string,
+    reason: SessionRevokeReason,
+  ): Promise<number>;
+  countPurgeableSessions(cutoff: Date): Promise<number>;
+  purgeSessions(input: {
+    cutoff: Date;
+    batchSize: number;
+    maxBatches: number;
+  }): Promise<{ deletedCount: number; exhausted: boolean }>;
 }
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly config: ConfigService,
     @Inject(AuthRepository) private readonly authRepository: AuthRepositoryPort,
@@ -216,6 +228,7 @@ export class AuthService {
     codeVerifier: string;
     expectedNonce: string;
     redirectTo?: string;
+    client: SessionClientContext;
   }): Promise<CompleteTelegramLoginResult> {
     if (input.state !== input.expectedState) {
       throw new BadRequestException('Invalid Telegram login state');
@@ -229,7 +242,7 @@ export class AuthService {
       redirectTo,
     );
 
-    const session = await this.createUserSession(user.id);
+    const session = await this.createUserSession(user.id, input.client);
 
     return {
       user,
@@ -438,97 +451,92 @@ export class AuthService {
     };
   }
 
-  async verifyAccessToken(token: string): Promise<AuthJwtPayload> {
-    const payload = this.verifyJwt(token);
-    if (payload.type !== 'access') {
-      throw new UnauthorizedException('Invalid token type');
-    }
-
-    const session = await this.authRepository.findSession(payload.sid);
-    if (
-      !session ||
-      session.userId !== payload.sub ||
-      session.user.deletedAt !== null ||
-      session.revokedAt !== null ||
-      session.expiresAt.getTime() <= Date.now()
-    ) {
-      throw new UnauthorizedException('Session is no longer active');
-    }
-
-    return payload;
-  }
-
-  async refreshAccessToken(refreshToken: string): Promise<RefreshAccessTokenResult> {
-    const session = await this.authRepository.findSessionByRefreshTokenHash(
-      this.hashToken(refreshToken),
-    );
-    if (
-      !session ||
-      session.user.deletedAt !== null ||
-      session.revokedAt !== null ||
-      session.expiresAt.getTime() <= Date.now()
-    ) {
-      throw new UnauthorizedException('Refresh session is no longer active');
-    }
-
-    const accessTokenExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
-    const accessToken = this.signJwt(
-      {
-        sub: session.userId,
-        sid: session.id,
-        type: 'access',
-      },
-      ACCESS_TOKEN_TTL_SECONDS,
-    );
-
-    return {
-      accessToken,
-      accessTokenExpiresAt,
-      user: {
-        id: session.user.id,
-        email: session.user.email,
-        displayName: session.user.displayName,
-        platformRole: session.user.platformRole,
-      },
-    };
-  }
-
-  async logout(sessionId: string): Promise<{ ok: true }> {
-    await this.authRepository.revokeSession(sessionId);
+  async logoutByToken(sessionToken: string): Promise<{ ok: true }> {
+    await this.authRepository.revokeSessionByTokenHash(this.hashToken(sessionToken), 'logout');
     return { ok: true };
   }
 
-  private async createUserSession(userId: string): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    accessTokenExpiresAt: Date;
-    refreshTokenExpiresAt: Date;
-  }> {
-    const refreshToken = randomBytes(48).toString('base64url');
-    const refreshTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000);
-    const session = await this.authRepository.createSession({
-      userId,
-      type: 'user',
-      refreshTokenHash: this.hashToken(refreshToken),
-      expiresAt: refreshTokenExpiresAt,
-    });
+  async listSessions(userId: string, currentSessionId: string): Promise<UserSession[]> {
+    const sessions = await this.authRepository.listUserSessions(userId);
 
-    const accessTokenExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
-    const accessToken = this.signJwt(
-      {
-        sub: userId,
-        sid: session.id,
-        type: 'access',
-      },
-      ACCESS_TOKEN_TTL_SECONDS,
+    return sessions.map((session) => ({
+      id: session.id,
+      deviceName: session.deviceName,
+      ipAddress: session.ipAddress,
+      lastUsedAt: session.lastUsedAt?.toISOString() ?? null,
+      createdAt: session.createdAt.toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
+      current: session.id === currentSessionId,
+    }));
+  }
+
+  async revokeSession(userId: string, sessionId: string): Promise<{ ok: true }> {
+    const revoked = await this.authRepository.revokeUserSession(sessionId, userId, 'user_revoked');
+    if (revoked === 0) {
+      throw new NotFoundException('Session was not found');
+    }
+
+    return { ok: true };
+  }
+
+  async revokeOtherSessions(
+    userId: string,
+    currentSessionId: string,
+  ): Promise<{ revokedCount: number }> {
+    const revokedCount = await this.authRepository.revokeOtherUserSessions(
+      userId,
+      currentSessionId,
+      'user_revoked',
     );
 
-    return {
-      accessToken,
-      refreshToken,
-      accessTokenExpiresAt,
-      refreshTokenExpiresAt,
-    };
+    return { revokedCount };
+  }
+
+  async purgeExpiredSessions(input: { cutoff: Date; dryRun: boolean }) {
+    if (input.dryRun) {
+      return { deletedCount: await this.authRepository.countPurgeableSessions(input.cutoff) };
+    }
+
+    const purged = await this.authRepository.purgeSessions({
+      cutoff: input.cutoff,
+      batchSize: SESSION_RETENTION_BATCH_SIZE,
+      maxBatches: SESSION_RETENTION_MAX_BATCHES,
+    });
+
+    if (purged.exhausted) {
+      this.logger.warn({
+        event: 'Session retention hit the batch limit before draining the backlog',
+        cutoff: input.cutoff.toISOString(),
+        deletedCount: purged.deletedCount,
+      });
+    }
+
+    return { deletedCount: purged.deletedCount };
+  }
+
+  private async createUserSession(
+    userId: string,
+    client: SessionClientContext,
+  ): Promise<{
+    sessionToken: string;
+    sessionExpiresAt: Date;
+  }> {
+    const sessionToken = randomBytes(48).toString('base64url');
+    const now = Date.now();
+    const expiresAt = new Date(now + SESSION_IDLE_TTL_SECONDS * 1000);
+    const deviceName = deviceLabelFromUserAgent(client.userAgent);
+    await this.authRepository.createSession({
+      userId,
+      type: 'user',
+      tokenHash: this.hashToken(sessionToken),
+      expiresAt,
+      absoluteExpiresAt: new Date(now + SESSION_ABSOLUTE_TTL_SECONDS * 1000),
+      ...(deviceName ? { deviceName } : {}),
+      ...(client.userAgent ? { userAgent: client.userAgent } : {}),
+      ...(client.ipAddress ? { ipAddress: client.ipAddress } : {}),
+    });
+
+    return { sessionToken, sessionExpiresAt: expiresAt };
   }
 
   private async exchangeTelegramCode(
@@ -721,54 +729,8 @@ export class AuthService {
     return typeof value === 'object' && value !== null;
   }
 
-  private signJwt(payload: AuthJwtPayload, expiresInSeconds: number): string {
-    const now = Math.floor(Date.now() / 1000);
-    const header = this.base64UrlJson({ alg: 'RS256', typ: 'JWT' });
-    const body = this.base64UrlJson({ ...payload, iat: now, exp: now + expiresInSeconds });
-    const signature = sign('RSA-SHA256', Buffer.from(`${header}.${body}`), this.privateKey);
-
-    return `${header}.${body}.${signature.toString('base64url')}`;
-  }
-
-  private verifyJwt(token: string): AuthJwtPayload {
-    const [header, body, signature] = token.split('.');
-    if (!header || !body || !signature) {
-      throw new UnauthorizedException('Invalid access token');
-    }
-
-    const isValid = verify(
-      'RSA-SHA256',
-      Buffer.from(`${header}.${body}`),
-      this.publicKey,
-      Buffer.from(signature, 'base64url'),
-    );
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid access token');
-    }
-
-    let decoded: unknown;
-    try {
-      decoded = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as unknown;
-    } catch {
-      throw new UnauthorizedException('Invalid access token');
-    }
-
-    const result = jwtPayloadSchema
-      .extend({ exp: z.number().int().positive(), iat: z.number().int().positive().optional() })
-      .safeParse(decoded);
-    if (!result.success || result.data.exp <= Math.floor(Date.now() / 1000)) {
-      throw new UnauthorizedException('Expired access token');
-    }
-
-    return jwtPayloadSchema.parse(result.data);
-  }
-
   private hashToken(rawToken: string): string {
     return createHash('sha256').update(rawToken).digest('hex');
-  }
-
-  private base64UrlJson(value: unknown): string {
-    return Buffer.from(JSON.stringify(value)).toString('base64url');
   }
 
   private normalizeRedirectTo(value?: string): string | undefined {
@@ -808,14 +770,6 @@ export class AuthService {
       const codePoint = character.codePointAt(0);
       return character === '\\' || codePoint === undefined || codePoint <= 31 || codePoint === 127;
     });
-  }
-
-  private get privateKey(): string {
-    return normalizePem(this.config.getOrThrow<string>('JWT_ACCESS_PRIVATE_KEY'));
-  }
-
-  private get publicKey(): string {
-    return normalizePem(this.config.getOrThrow<string>('JWT_ACCESS_PUBLIC_KEY'));
   }
 
   private get telegramClientId(): string {

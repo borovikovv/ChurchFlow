@@ -14,7 +14,10 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import { MembershipsService } from './memberships.service';
 import { UpdateMembershipRoleDto } from './dto/update-membership-role.dto';
@@ -30,7 +33,7 @@ interface UploadedCsvFile {
 }
 
 @Controller('organizations/:organizationId/memberships')
-@UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
 export class MembershipsController {
   constructor(private readonly membershipsService: MembershipsService) {}
 
@@ -200,7 +203,7 @@ export class MembershipsController {
   }
 
   private getActorUserId(request: AuthenticatedRequest): string {
-    const userId = request.auth?.sub;
+    const userId = request.auth?.userId;
     if (!userId) {
       throw new Error('Authenticated request missing auth payload');
     }

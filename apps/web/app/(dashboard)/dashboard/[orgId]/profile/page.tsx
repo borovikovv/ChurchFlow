@@ -7,6 +7,7 @@ import { getMessages } from '@/i18n/messages';
 import {
   organizationProfileNotificationsRoute,
   organizationProfileRoute,
+  organizationProfileSessionsRoute,
 } from '@/features/organizations/routes';
 
 export default async function OrganizationProfilePage({
@@ -34,6 +35,7 @@ export default async function OrganizationProfilePage({
             label: messages.profile.notifications,
             href: organizationProfileNotificationsRoute(orgId),
           },
+          { label: messages.sessions.title, href: organizationProfileSessionsRoute(orgId) },
         ]}
       />
       <div className="stack max-w-xl">
