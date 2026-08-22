@@ -6,11 +6,13 @@ import { useState, type ComponentProps } from 'react';
 import { InviteAppUserForm } from '@/components/members/invite-app-user-form';
 import { MemberActions, MemberRoleStatus } from '@/components/members/member-actions';
 import { FormDialog } from '@/components/ui/form-dialog';
+import { CardList } from '@/components/ui/card-list';
 import { DataTable } from '@/components/ui/data-table';
 import { createDataTablePagination } from '@/components/ui/data-table-pagination';
 import { Tabs } from '@/components/ui/tabs';
 import type { MembersPayload, OrganizationMember } from '../types';
 import { CreateMemberDialog } from './create-member-dialog';
+import { MemberCard } from './member-card';
 import { MemberCsvActions } from './member-csv-actions';
 import { MemberAvatar } from './member-avatar';
 import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
@@ -133,6 +135,51 @@ export function MembersManager({
     tab: 'archived',
     type: preservedType,
   });
+  const renderMemberActions = (member: OrganizationMember) => (
+    <MemberActions
+      {...actions}
+      member={member}
+      organizationId={organizationId}
+      viewHref={organizationMemberRoute(organizationId, member.id)}
+      canManage={canManage}
+      isOwner={isOwner}
+      isCurrentMember={member.id === payload.actorMembershipId}
+      memberCandidates={memberCandidates}
+      onProfileUpdated={(updates) => {
+        void updates;
+        refreshMembers();
+      }}
+      onRoleUpdated={(role) => {
+        void role;
+        refreshMembers();
+      }}
+      onRemoved={() => {
+        refreshMembers();
+      }}
+    />
+  );
+  const membersPagination = createDataTablePagination({
+    labels: {
+      firstPageLabel: paginationT('firstPage'),
+      itemLabel: paginationT('page'),
+      lastPageLabel: paginationT('lastPage'),
+      nextPageLabel: paginationT('nextPage'),
+      ofLabel: paginationT('of'),
+      pageSizeLabel: paginationT('itemsPerPage'),
+      previousPageLabel: paginationT('previousPage'),
+    },
+    page: payload.pagination.page,
+    pageSize: payload.pagination.pageSize,
+    pageSizeOptions: [...MEMBER_PAGE_SIZE_OPTIONS],
+    preserveParams: {
+      access: preservedAccess,
+      ministries: preservedMinistries,
+      search: preservedSearch,
+      tab: preservedTab,
+      type: preservedType,
+    },
+    total: payload.pagination.total,
+  });
   const columns: Array<ColumnDef<OrganizationMember>> = [
     {
       accessorFn: (member) => member.profile.displayName,
@@ -193,33 +240,7 @@ export function MembersManager({
     {
       id: 'actions',
       header: '',
-      cell: ({ row }) => {
-        const member = row.original;
-
-        return (
-          <MemberActions
-            {...actions}
-            member={member}
-            organizationId={organizationId}
-            viewHref={organizationMemberRoute(organizationId, member.id)}
-            canManage={canManage}
-            isOwner={isOwner}
-            isCurrentMember={member.id === payload.actorMembershipId}
-            memberCandidates={memberCandidates}
-            onProfileUpdated={(updates) => {
-              void updates;
-              refreshMembers();
-            }}
-            onRoleUpdated={(role) => {
-              void role;
-              refreshMembers();
-            }}
-            onRemoved={() => {
-              refreshMembers();
-            }}
-          />
-        );
-      },
+      cell: ({ row }) => renderMemberActions(row.original),
       meta: {
         headerClassName: 'w-11',
         cellClassName: 'w-11',
@@ -347,36 +368,33 @@ export function MembersManager({
 
       <section className="stack min-w-0">
         <h2>{t('organizationMembers')}</h2>
-        <DataTable
-          columns={columns}
-          data={members}
-          emptyMessage={t('emptyFilter')}
-          getRowHref={(member) => organizationMemberRoute(organizationId, member.id)}
-          getRowClassName={(member) => (member.status === 'ARCHIVED' ? 'opacity-75' : undefined)}
-          pagination={createDataTablePagination({
-            labels: {
-              firstPageLabel: paginationT('firstPage'),
-              itemLabel: paginationT('page'),
-              lastPageLabel: paginationT('lastPage'),
-              nextPageLabel: paginationT('nextPage'),
-              ofLabel: paginationT('of'),
-              pageSizeLabel: paginationT('itemsPerPage'),
-              previousPageLabel: paginationT('previousPage'),
-            },
-            page: payload.pagination.page,
-            pageSize: payload.pagination.pageSize,
-            pageSizeOptions: [...MEMBER_PAGE_SIZE_OPTIONS],
-            preserveParams: {
-              access: preservedAccess,
-              ministries: preservedMinistries,
-              search: preservedSearch,
-              tab: preservedTab,
-              type: preservedType,
-            },
-            total: payload.pagination.total,
-          })}
-          tableClassName="min-w-[860px]"
-        />
+        <div className="md:hidden">
+          <CardList
+            data={members}
+            emptyMessage={t('emptyFilter')}
+            getCardClassName={(member) => (member.status === 'ARCHIVED' ? 'opacity-75' : undefined)}
+            getCardKey={(member) => member.id}
+            pagination={membersPagination}
+            renderCard={(member) => (
+              <MemberCard
+                actions={renderMemberActions(member)}
+                member={member}
+                viewHref={organizationMemberRoute(organizationId, member.id)}
+              />
+            )}
+          />
+        </div>
+        <div className="hidden md:block">
+          <DataTable
+            columns={columns}
+            data={members}
+            emptyMessage={t('emptyFilter')}
+            getRowHref={(member) => organizationMemberRoute(organizationId, member.id)}
+            getRowClassName={(member) => (member.status === 'ARCHIVED' ? 'opacity-75' : undefined)}
+            pagination={membersPagination}
+            tableClassName="min-w-[860px]"
+          />
+        </div>
       </section>
     </>
   );

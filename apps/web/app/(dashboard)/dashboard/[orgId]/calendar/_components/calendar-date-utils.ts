@@ -1,5 +1,5 @@
 import type { CalendarEventItem } from '@churchflow/shared';
-import { CALENDAR_REPEAT, CALENDAR_TYPE } from './calendar-constants';
+import { CALENDAR_REPEAT, CALENDAR_TYPE, type CalendarView } from './calendar-constants';
 import type { CalendarFormState, CalendarServiceFormPerson } from './calendar-types';
 
 export function newEventForm(date: string): CalendarFormState {
@@ -108,6 +108,41 @@ export function formatMonthLabel(value: string, locale = 'en-US'): string {
     month: 'long',
     year: 'numeric',
   }).format(new Date(value));
+}
+
+/** Monday-based, matching FullCalendar's `firstDay={1}`. */
+export function startOfWeek(date: Date): Date {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const weekday = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - weekday);
+  return start;
+}
+
+export function calendarViewRange(
+  view: CalendarView,
+  reference: Date,
+): { rangeStart: string; rangeEnd: string } {
+  const start =
+    view === 'month'
+      ? new Date(reference.getFullYear(), reference.getMonth(), 1)
+      : view === 'week'
+        ? startOfWeek(reference)
+        : new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
+  const end = new Date(start);
+  if (view === 'month') end.setMonth(end.getMonth() + 1);
+  else if (view === 'week') end.setDate(end.getDate() + 7);
+  else end.setDate(end.getDate() + 1);
+
+  return { rangeStart: start.toISOString(), rangeEnd: end.toISOString() };
+}
+
+export function weekDays(date: Date): Date[] {
+  const start = startOfWeek(date);
+  return Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(start);
+    day.setDate(day.getDate() + index);
+    return day;
+  });
 }
 
 export function daysInRange(rangeStart: string, rangeEnd: string): Date[] {

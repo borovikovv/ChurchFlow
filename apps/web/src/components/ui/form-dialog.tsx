@@ -3,9 +3,15 @@
 import { useTranslations } from 'next-intl';
 import { useId, useRef, type ReactNode, type RefObject } from 'react';
 import { Button, type ButtonVariant } from '@/components/ui/button';
+import { formDialogClassName, formDialogLayoutClassName } from './form-dialog.styles';
+
+export type FormDialogSize = 'sm' | 'md' | 'lg';
 
 export function FormDialog({
+  bodyClassName,
   footer,
+  fullScreenOnMobile = false,
+  size = 'sm',
   triggerLabel,
   triggerVariant = 'secondary',
   triggerClassName,
@@ -16,12 +22,16 @@ export function FormDialog({
   onOpen,
   onClose,
 }: {
+  bodyClassName?: string;
   footer?: ReactNode;
-  triggerLabel: ReactNode;
+  fullScreenOnMobile?: boolean;
+  size?: FormDialogSize;
+  /** Omit to render no trigger; the dialog is then opened through `dialogRef`. */
+  triggerLabel?: ReactNode;
   triggerVariant?: ButtonVariant;
   triggerClassName?: string;
   triggerDisabled?: boolean;
-  title: string;
+  title: ReactNode;
   children: ReactNode;
   dialogRef?: RefObject<HTMLDialogElement | null>;
   onOpen?: () => void;
@@ -34,28 +44,30 @@ export function FormDialog({
 
   return (
     <>
-      <Button
-        className={triggerClassName}
-        disabled={triggerDisabled}
-        type="button"
-        variant={triggerVariant}
-        onClick={() => {
-          onOpen?.();
-          dialogRef.current?.showModal();
-        }}
-      >
-        {triggerLabel}
-      </Button>
+      {triggerLabel !== undefined ? (
+        <Button
+          className={triggerClassName}
+          disabled={triggerDisabled}
+          type="button"
+          variant={triggerVariant}
+          onClick={() => {
+            onOpen?.();
+            dialogRef.current?.showModal();
+          }}
+        >
+          {triggerLabel}
+        </Button>
+      ) : null}
       <dialog
         aria-labelledby={titleId}
-        className="fixed inset-0 m-auto max-h-[min(800px,80dvh)] w-[min(480px,calc(100%-32px))] max-w-none rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)] backdrop:backdrop-blur-[1px]"
+        className={formDialogClassName({ fullScreenOnMobile, size })}
         onClose={onClose}
         onClick={(event) => {
           if (event.target === event.currentTarget) event.currentTarget.close();
         }}
         ref={dialogRef}
       >
-        <div className="grid max-h-[min(800px,80dvh)] grid-rows-[auto_minmax(0,1fr)_auto]">
+        <div className={formDialogLayoutClassName({ fullScreenOnMobile })}>
           <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
             <h2 id={titleId}>{title}</h2>
             <button
@@ -67,8 +79,16 @@ export function FormDialog({
               ×
             </button>
           </header>
-          <div className="min-h-0 overflow-y-auto p-5">{children}</div>
-          <footer className="flex justify-end border-t border-[var(--line)] p-5">
+          <div
+            className={
+              bodyClassName
+                ? `min-h-0 overflow-y-auto ${bodyClassName}`
+                : 'min-h-0 overflow-y-auto p-5'
+            }
+          >
+            {children}
+          </div>
+          <footer className="flex flex-col-reverse items-stretch gap-2 border-t border-[var(--line)] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-end sm:pb-5">
             {footer ?? (
               <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
                 {t('cancel')}

@@ -436,7 +436,18 @@
       "thu": "Thu",
       "tue": "Tue",
       "wed": "Wed"
-    }
+    },
+    "views": {
+      "month": "Month",
+      "week": "Week",
+      "day": "Day"
+    },
+    "viewLabel": "Calendar view",
+    "previousPeriod": "Previous period",
+    "nextPeriod": "Next period",
+    "filtersLabel": "Event type filters",
+    "calendarNavigation": "Calendar navigation",
+    "selectDay": "Select {date}"
   },
   "budget": {
     "title": "Budget",

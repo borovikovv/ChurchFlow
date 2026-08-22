@@ -3,17 +3,13 @@
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
-import type {
-  ArchivePrayerRequestInput,
-  PrayerRequestItem,
-  PrayerRequestsPayload,
-  UpdatePrayerRequestInput,
-} from '@churchflow/shared';
+import type { PrayerRequestItem } from '@churchflow/shared';
 import { PRAYER_REQUEST_PAGE_SIZE_OPTIONS } from '@churchflow/shared';
 import { DataTable } from '@/components/ui/data-table';
 import { createDataTablePagination } from '@/components/ui/data-table-pagination';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PrayerRequestActions } from './prayer-request-actions';
+import type { PrayerRequestsListProps } from './prayer-requests-list.types';
 import styles from './prayer-requests-manager.module.css';
 
 export function PrayerRequestsTable({
@@ -23,14 +19,7 @@ export function PrayerRequestsTable({
   onArchive,
   onRestore,
   onDelete,
-}: {
-  disabled: boolean;
-  payload: PrayerRequestsPayload;
-  onUpdate: (requestId: string, request: UpdatePrayerRequestInput) => void;
-  onArchive: (requestId: string, request: ArchivePrayerRequestInput) => void;
-  onRestore: (requestId: string) => void;
-  onDelete: (request: PrayerRequestItem) => Promise<void>;
-}) {
+}: PrayerRequestsListProps) {
   const t = useTranslations('prayerRequests');
   const paginationT = useTranslations('pagination');
   const locale = useLocale();

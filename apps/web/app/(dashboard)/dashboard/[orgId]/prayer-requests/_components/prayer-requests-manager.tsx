@@ -13,6 +13,8 @@ import type {
 import { Tabs } from '@/components/ui/tabs';
 import { organizationPrayerRequestsRoute } from '@/features/organizations/routes';
 import { PrayerRequestFormDialog } from './prayer-request-form-dialog';
+import { PrayerRequestsCardList } from './prayer-requests-card-list';
+import type { PrayerRequestsListProps } from './prayer-requests-list.types';
 import { PrayerRequestsTable } from './prayer-requests-table';
 import styles from './prayer-requests-manager.module.css';
 
@@ -92,6 +94,29 @@ export function PrayerRequestsManager({
     setPayload(result.payload);
   }
 
+  const listProps: PrayerRequestsListProps = {
+    disabled: isPending,
+    payload,
+    onUpdate: (requestId, request) => {
+      mutate(updateRequest({ organizationId, requestId, request }));
+    },
+    onArchive: (requestId, request) => {
+      mutate(archiveRequest({ organizationId, requestId, request }));
+    },
+    onRestore: (requestId) => {
+      mutate(restoreRequest({ organizationId, requestId }));
+    },
+    onDelete: async (request) => {
+      setError(null);
+      const result = await deleteRequest({ organizationId, requestId: request.id });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      await refreshPayload();
+    },
+  };
+
   return (
     <section className={cx(styles['manager'], 'stack min-w-0')}>
       <div className="flex min-w-0 flex-col justify-between gap-3 md:flex-row md:items-start">
@@ -126,28 +151,12 @@ export function PrayerRequestsManager({
 
       {error ? <p className="form-error">{error}</p> : null}
 
-      <PrayerRequestsTable
-        disabled={isPending}
-        payload={payload}
-        onUpdate={(requestId, request) => {
-          mutate(updateRequest({ organizationId, requestId, request }));
-        }}
-        onArchive={(requestId, request) => {
-          mutate(archiveRequest({ organizationId, requestId, request }));
-        }}
-        onRestore={(requestId) => {
-          mutate(restoreRequest({ organizationId, requestId }));
-        }}
-        onDelete={async (request) => {
-          setError(null);
-          const result = await deleteRequest({ organizationId, requestId: request.id });
-          if (!result.ok) {
-            setError(result.error);
-            return;
-          }
-          await refreshPayload();
-        }}
-      />
+      <div className="md:hidden">
+        <PrayerRequestsCardList {...listProps} />
+      </div>
+      <div className="hidden md:block">
+        <PrayerRequestsTable {...listProps} />
+      </div>
     </section>
   );
 }

@@ -17,16 +17,8 @@ import {
   updateCalendarPreferencesAction,
 } from './actions';
 import { CalendarManager } from './_components/calendar-manager';
-
-function initialRange(now = new Date()) {
-  const rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-  return {
-    rangeStart: rangeStart.toISOString(),
-    rangeEnd: rangeEnd.toISOString(),
-  };
-}
+import { CALENDAR_VIEW_PARAM, parseCalendarView } from './_components/calendar-constants';
+import { calendarViewRange } from './_components/calendar-date-utils';
 
 function dateInputValue(value: Date): string {
   return value.toISOString().slice(0, 10);
@@ -34,14 +26,19 @@ function dateInputValue(value: Date): string {
 
 export default async function CalendarDashboardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orgId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { orgId } = await params;
+  const resolvedSearchParams = await searchParams;
+  const viewParam = resolvedSearchParams[CALENDAR_VIEW_PARAM];
+  const view = parseCalendarView(typeof viewParam === 'string' ? viewParam : undefined);
   const user = await getCurrentUser();
   const messages = getMessages(user?.locale ?? 'en');
   const now = new Date();
-  const range = initialRange(now);
+  const range = calendarViewRange(view, now);
   const query = new URLSearchParams({
     rangeStart: range.rangeStart,
     rangeEnd: range.rangeEnd,
@@ -71,6 +68,7 @@ export default async function CalendarDashboardPage({
         initialPayload={payload}
         initialRange={range}
         initialSelectedDate={dateInputValue(now)}
+        initialView={view}
         loadEvents={loadCalendarEventsAction}
         updatePreferences={updateCalendarPreferencesAction}
         createEvent={createCalendarEventAction}

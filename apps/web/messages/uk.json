@@ -436,7 +436,18 @@
       "thu": "Чт",
       "tue": "Вт",
       "wed": "Ср"
-    }
+    },
+    "views": {
+      "month": "Місяць",
+      "week": "Тиждень",
+      "day": "День"
+    },
+    "viewLabel": "Вигляд календаря",
+    "previousPeriod": "Попередній період",
+    "nextPeriod": "Наступний період",
+    "filtersLabel": "Фільтри типів подій",
+    "calendarNavigation": "Навігація календарем",
+    "selectDay": "Обрати {date}"
   },
   "budget": {
     "title": "Бюджет",
