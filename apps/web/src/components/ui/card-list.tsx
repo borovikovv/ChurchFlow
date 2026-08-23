@@ -44,7 +44,7 @@ export function CardList<TData>({
           return (
             <li
               className={[
-                'relative flex min-w-0 flex-col gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[rgba(9,105,218,0.15)]',
+                'relative flex min-w-0 flex-col gap-3 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-sm focus-within:border-[var(--accent-mobile)] focus-within:ring-2 focus-within:ring-[rgba(22,163,74,0.15)]',
                 cardClassName ?? '',
               ]
                 .filter(Boolean)

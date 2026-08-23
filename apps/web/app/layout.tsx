@@ -48,6 +48,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <QueryProvider>
             {user ? (
               <AppShell
+                avatarUrl={user.avatarUrl}
                 canOpenAdmin={access?.canOpenAdmin ?? false}
                 budgetOrganizationIds={adminOrganizationIds}
                 displayName={user.displayName ?? user.email ?? messages.common.churchFlowUser}

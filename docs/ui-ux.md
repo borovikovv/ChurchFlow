@@ -5,7 +5,9 @@
 - Authenticated product screens use a persistent left sidebar and full-width content area.
 - Public and authentication screens keep the compact public header.
 - Platform-level navigation and organization-level navigation stay visually separate.
-- On small screens the sidebar becomes a horizontal navigation region above the content.
+- Below 768px the sidebar is replaced by a fixed bottom tab bar carrying the primary destinations, with the remaining destinations in a "More" bottom sheet.
+- The mobile header carries the notification bell and an account menu holding profile, admin and sign out.
+- Mobile styling is scoped to `md:` utilities or the `max-width: 767.98px` block in `globals.css`; desktop rendering must stay unchanged.
 
 ## Reusable components
 

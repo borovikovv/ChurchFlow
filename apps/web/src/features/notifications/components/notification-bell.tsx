@@ -190,15 +190,25 @@ export function NotificationBell({ organizationId }: { organizationId: string })
                 {unreadCount > 0 ? t('unreadSummary', { count: unreadCount }) : t('allCaughtUp')}
               </p>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              className="min-h-8 px-2 py-1 text-xs"
-              disabled={unreadCount === 0 || markingAllRead}
-              onClick={handleMarkAllRead}
-            >
-              {t('markAllAsRead')}
-            </Button>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                className="min-h-8 px-2 py-1 text-xs"
+                disabled={unreadCount === 0 || markingAllRead}
+                onClick={handleMarkAllRead}
+              >
+                {t('markAllAsRead')}
+              </Button>
+              <button
+                aria-label={t('close')}
+                className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)] md:hidden"
+                type="button"
+                onClick={() => setOpen(false)}
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           {error ? (

@@ -4,13 +4,19 @@ import type { Route } from 'next';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { FormInput } from '@/components/forms/form-input';
+import { SearchIcon } from '@/components/icons/action-icons';
+
+const SEARCH_INPUT_CLASS_NAME =
+  'h-12 w-full rounded-full pl-11 md:h-8 md:rounded-[var(--radius)] md:pl-3';
 
 export function MemberSearchInput({
+  className,
   label,
   placeholder,
   search,
   preserveParams,
 }: {
+  className?: string | undefined;
   label: string;
   placeholder: string;
   search: string;
@@ -44,9 +50,10 @@ export function MemberSearchInput({
   }, [pathname, preserveParams, router, search, value]);
 
   return (
-    <div className="w-full min-w-0">
+    <div className={['relative w-full min-w-0', className].filter(Boolean).join(' ')}>
+      <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--muted)] md:hidden" />
       <FormInput
-        className="h-8 w-full"
+        className={SEARCH_INPUT_CLASS_NAME}
         fieldClassName="m-0 min-w-0"
         label={label}
         labelClassName="sr-only"

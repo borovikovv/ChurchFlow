@@ -3,15 +3,7 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { validateMemberPhoto } from '@/components/members/member-photo-upload';
-
-function organizationInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-}
+import { displayNameInitials } from '@/lib/initials';
 
 export function OrganizationLogo({
   name,
@@ -42,7 +34,7 @@ export function OrganizationLogo({
       aria-hidden="true"
       className={`${className} grid place-items-center rounded-lg border border-[var(--line)] bg-[var(--surface-subtle)] font-semibold text-[var(--accent)]`}
     >
-      {organizationInitials(name) || 'CF'}
+      {displayNameInitials(name) || 'CF'}
     </div>
   );
 }

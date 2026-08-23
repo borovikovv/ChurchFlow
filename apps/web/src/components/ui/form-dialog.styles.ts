@@ -12,7 +12,7 @@ export const formDialogClassName = cva(dialogBase, {
     },
     fullScreenOnMobile: {
       false: '',
-      true: 'max-sm:h-dvh max-sm:max-h-none max-sm:w-full max-sm:rounded-none',
+      true: 'max-md:h-dvh max-md:max-h-none max-md:w-full max-md:rounded-none',
     },
   },
   defaultVariants: {
@@ -27,7 +27,7 @@ export const formDialogLayoutClassName = cva(
     variants: {
       fullScreenOnMobile: {
         false: '',
-        true: 'max-sm:h-full max-sm:max-h-none',
+        true: 'max-md:h-full max-md:max-h-none',
       },
     },
     defaultVariants: {

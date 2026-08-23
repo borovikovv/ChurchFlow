@@ -62,21 +62,31 @@
     "title": "Request an organization"
   },
   "navigation": {
+    "accountMenu": "Account menu",
     "accountNavigation": "Account navigation",
     "applicationNavigation": "Application navigation",
     "budget": "Budget",
     "calendar": "Calendar",
     "createOrganization": "Create organization",
+    "descriptions": {
+      "budget": "Organization finances and expenses",
+      "prayerRequests": "Prayer requests and answers",
+      "profile": "View and edit personal details",
+      "website": "Manage the organization website"
+    },
     "home": "Home",
     "main": "Main",
     "members": "Members",
+    "more": "More",
+    "openAccountMenu": "Open account menu",
     "prayerRequests": "Prayers",
-    "navigationMenu": "Navigation menu",
-    "openNavigationMenu": "Open navigation menu",
     "profile": "Profile",
     "requestAccess": "Request access",
-    "signedInAs": "Signed in as",
     "signIn": "Sign in",
+    "signOut": "Sign out of the app",
+    "signOutDescription": "End the current session",
+    "signedInAs": "Signed in as",
+    "signingOut": "Signing out…",
     "website": "Website"
   },
   "profile": {
@@ -213,6 +223,7 @@
     "emptyFilter": "No members match this filter.",
     "editMember": "Edit member",
     "editProfile": "Edit profile",
+    "filters": "Filters",
     "familyNotes": "Family notes",
     "familyRelationships": "Family relationships",
     "generateAccessLink": "Generate access link",
@@ -236,6 +247,7 @@
     "backToMembers": "Back to members",
     "member": "Member",
     "memberDetails": "Member details",
+    "memberActionsTitle": "Add members",
     "memberSince": "Member since",
     "memberTabsLabel": "Member lists",
     "ministry": {

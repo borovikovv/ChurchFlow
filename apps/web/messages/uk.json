@@ -62,21 +62,31 @@
     "title": "Запит на створення організації"
   },
   "navigation": {
+    "accountMenu": "Меню акаунта",
     "accountNavigation": "Навігація акаунта",
     "applicationNavigation": "Навігація застосунку",
     "budget": "Бюджет",
     "calendar": "Календар",
     "createOrganization": "Створити організацію",
+    "descriptions": {
+      "budget": "Фінанси та витрати організації",
+      "prayerRequests": "Молитовні запити та відповіді",
+      "profile": "Перегляд та редагування особистих даних",
+      "website": "Керування сайтом організації"
+    },
     "home": "Головна",
     "main": "Головна навігація",
     "members": "Учасники",
+    "more": "Ще",
+    "openAccountMenu": "Відкрити меню акаунта",
     "prayerRequests": "Молитви",
-    "navigationMenu": "Меню навігації",
-    "openNavigationMenu": "Відкрити меню навігації",
     "profile": "Профіль",
     "requestAccess": "Запитати доступ",
-    "signedInAs": "Ви увійшли як",
     "signIn": "Увійти",
+    "signOut": "Вийти з застосунку",
+    "signOutDescription": "Завершити поточну сесію",
+    "signedInAs": "Ви увійшли як",
+    "signingOut": "Вихід…",
     "website": "Сайт"
   },
   "profile": {
@@ -213,6 +223,7 @@
     "emptyFilter": "Немає учасників для цього фільтра.",
     "editMember": "Редагувати учасника",
     "editProfile": "Редагувати профіль",
+    "filters": "Фільтри",
     "familyNotes": "Нотатки про сім'ю",
     "familyRelationships": "Родинні зв'язки",
     "generateAccessLink": "Згенерувати посилання доступу",
@@ -236,6 +247,7 @@
     "backToMembers": "Назад до учасників",
     "member": "член церкви",
     "memberDetails": "Деталі учасника",
+    "memberActionsTitle": "Додати учасників",
     "memberSince": "Учасник з",
     "memberTabsLabel": "Списки учасників",
     "ministry": {

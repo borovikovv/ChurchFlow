@@ -7,8 +7,9 @@ import type { ReactNode } from 'react';
 import { MemberRoleStatus } from '@/components/members/member-actions';
 import { StatusBadge } from '@/components/ui/status-badge';
 import type { OrganizationMember } from '../types';
-import { MemberAvatar } from './member-avatar';
-import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
+import { Avatar } from '@/components/ui/avatar';
+import { MailIcon, PhoneIcon } from '@/components/icons/action-icons';
+import { MemberIdentitySummary } from './member-summary';
 
 export function MemberCard({
   actions,
@@ -23,13 +24,14 @@ export function MemberCard({
 
   return (
     <>
-      <Link className="absolute inset-0 rounded-[var(--radius)]" href={viewHref}>
+      <Link className="absolute inset-0 rounded-xl" href={viewHref}>
         <span className="sr-only">{t('viewMember')}</span>
       </Link>
       <div className="flex min-w-0 items-start gap-3">
-        <MemberAvatar
+        <Avatar
           displayName={member.profile.displayName}
           url={member.profile.photoUrl}
+          fallback="initials"
           size="md"
         />
         <div className="min-w-0 flex-1">
@@ -41,7 +43,7 @@ export function MemberCard({
         </div>
         {actions}
       </div>
-      <MemberContactSummary profile={member.profile} />
+      <MemberCardContact email={member.profile.email} phone={member.profile.phone} />
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <StatusBadge
           status={member.accountState}
@@ -58,4 +60,26 @@ export function MemberCard({
       ) : null}
     </>
   );
+}
+
+function MemberCardContact({ email, phone }: { email: string | null; phone: string | null }) {
+  if (phone) {
+    return (
+      <span className="flex min-w-0 items-center gap-1.5 text-[var(--muted)]">
+        <PhoneIcon className="h-4 w-4" />
+        <span className="truncate">{phone}</span>
+      </span>
+    );
+  }
+
+  if (email) {
+    return (
+      <span className="flex min-w-0 items-center gap-1.5 text-[var(--muted)]">
+        <MailIcon className="h-4 w-4" />
+        <span className="truncate">{email}</span>
+      </span>
+    );
+  }
+
+  return null;
 }
