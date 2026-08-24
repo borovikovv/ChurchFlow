@@ -274,6 +274,29 @@ test('unknown Telegram user is admitted from the organization request route', as
   assert.equal(result.user.platformRole, 'USER');
 });
 
+test('an admitted Telegram user gets the locale matching the browser language', async () => {
+  const created = [];
+  const repository = createAuthRepository({
+    createTelegramUserForAdmission: async (input) => {
+      created.push(input.locale);
+      return {
+        id: 'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
+        email: null,
+        displayName: 'New User',
+        platformRole: 'USER',
+      };
+    },
+  });
+  const service = createAuthService(repository);
+
+  await service.resolveTelegramLoginUser(telegramClaims, '/organization-request', 'uk-UA,uk;q=0.9');
+  await service.resolveTelegramLoginUser(telegramClaims, '/organization-request', 'ru-RU,ru;q=0.9');
+  await service.resolveTelegramLoginUser(telegramClaims, '/organization-request', 'en-US,en;q=0.9');
+  await service.resolveTelegramLoginUser(telegramClaims, '/organization-request');
+
+  assert.deepEqual(created, ['uk', 'uk', 'en', 'en']);
+});
+
 test('unknown Telegram user is rejected by ordinary login', async () => {
   const service = createAuthService(createAuthRepository());
 
@@ -390,6 +413,45 @@ for (const [label, cookieDomain] of [
     }
   });
 }
+
+test('Telegram callback forwards the browser Accept-Language header', async () => {
+  let forwarded;
+  const controller = createAuthController(undefined, 'https://stage.mychurchflow.org', {
+    completeTelegramLogin: async (input) => {
+      forwarded = input.acceptLanguage;
+      return {
+        user: {
+          id: 'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
+          email: null,
+          displayName: 'Stage User',
+          platformRole: 'USER',
+        },
+        sessionToken: 'session-token',
+        sessionExpiresAt: CONTROLLER_SESSION_EXPIRES_AT,
+        redirectTo: '/dashboard/stage',
+      };
+    },
+  });
+
+  await controller.completeTelegramLogin(
+    'telegram-code',
+    'state',
+    undefined,
+    {
+      headers: {
+        'accept-language': 'uk-UA,uk;q=0.9',
+        cookie: cookieHeader({
+          churchflow_telegram_state: 'state',
+          churchflow_telegram_verifier: 'verifier',
+          churchflow_telegram_nonce: 'nonce',
+        }),
+      },
+    },
+    new FakeResponse(),
+  );
+
+  assert.equal(forwarded, 'uk-UA,uk;q=0.9');
+});
 
 test('Telegram callback redirects to the configured stage web origin', async () => {
   const controller = createAuthController(undefined, 'https://stage.mychurchflow.org');

@@ -10,7 +10,11 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHash, createPublicKey, randomBytes, verify, type JsonWebKey } from 'node:crypto';
 import { z } from 'zod';
-import type { UserSession } from '@churchflow/shared';
+import {
+  resolveAppLocaleFromAcceptLanguage,
+  type AppLocale,
+  type UserSession,
+} from '@churchflow/shared';
 import { deviceLabelFromUserAgent } from '../../common/auth/device-label';
 import {
   SESSION_ABSOLUTE_TTL_SECONDS,
@@ -158,6 +162,7 @@ interface AuthRepositoryPort {
     displayName?: string;
     username?: string;
     avatarUrl?: string;
+    locale?: AppLocale;
   }): Promise<AuthRepositoryUser>;
   touchTelegramAccount(accountId: string, username?: string): Promise<AuthRepositoryUser>;
   createSession(input: CreateSessionInput): Promise<CreatedSession>;
@@ -228,6 +233,7 @@ export class AuthService {
     codeVerifier: string;
     expectedNonce: string;
     redirectTo?: string;
+    acceptLanguage?: string;
     client: SessionClientContext;
   }): Promise<CompleteTelegramLoginResult> {
     if (input.state !== input.expectedState) {
@@ -240,6 +246,7 @@ export class AuthService {
     const { user, defaultRedirectTo, useRequestedRedirect } = await this.resolveTelegramLoginUser(
       claims,
       redirectTo,
+      input.acceptLanguage,
     );
 
     const session = await this.createUserSession(user.id, input.client);
@@ -254,6 +261,7 @@ export class AuthService {
   private async resolveTelegramLoginUser(
     claims: TelegramIdTokenClaims,
     redirectTo?: string,
+    acceptLanguage?: string,
   ): Promise<TelegramLoginResolution> {
     const hasPendingInvitation = await this.authRepository.hasPendingTelegramInvitation(claims.sub);
     const hasClaimableInvitationRedirect =
@@ -282,6 +290,7 @@ export class AuthService {
           ...(claims.name ? { displayName: claims.name } : {}),
           ...(claims.preferred_username ? { username: claims.preferred_username } : {}),
           ...(claims.picture ? { avatarUrl: claims.picture } : {}),
+          locale: resolveAppLocaleFromAcceptLanguage(acceptLanguage),
         });
       } catch (error: unknown) {
         if (error instanceof Error && error.message === 'TELEGRAM_ACCOUNT_INACTIVE') {
