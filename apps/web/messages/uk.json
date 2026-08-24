@@ -876,7 +876,9 @@
     "previousPage": "Попередня сторінка",
     "page": "Сторінка",
     "of": "з",
-    "itemsPerPage": "Елементів на сторінці"
+    "itemsPerPage": "Елементів на сторінці",
+    "loadMore": "Завантажити ще",
+    "loadingMore": "Завантаження…"
   },
   "sessions": {
     "title": "Пристрої",

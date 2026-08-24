@@ -24,6 +24,7 @@ export class MembershipsRepository {
     page: number,
     pageSize: number,
     membershipId?: string,
+    cursor?: string,
   ) {
     const now = new Date();
     const accessWhere: Record<
@@ -115,10 +116,9 @@ export class MembershipsRepository {
       }),
     ]);
     const pageCount = Math.max(1, Math.ceil(total / pageSize));
-    const currentPage = Math.min(page, pageCount);
-    const skip = (currentPage - 1) * pageSize;
+    const currentPage = cursor ? page : Math.min(page, pageCount);
 
-    const members = await this.prisma.organizationMember.findMany({
+    const rows = await this.prisma.organizationMember.findMany({
       where,
       include: {
         profile: true,
@@ -157,10 +157,12 @@ export class MembershipsRepository {
           take: 1,
         },
       },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: pageSize,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : { skip: (currentPage - 1) * pageSize }),
+      take: pageSize + 1,
     });
+    const members = rows.slice(0, pageSize);
+    const nextCursor = rows.length > pageSize ? (members[pageSize - 1]?.id ?? null) : null;
     const candidates = await this.prisma.organizationMember.findMany({
       where: {
         organizationId,
@@ -179,6 +181,7 @@ export class MembershipsRepository {
       candidates,
       counts: { active: activeCount, archived: archivedCount },
       members,
+      nextCursor,
       page: currentPage,
       total,
     };

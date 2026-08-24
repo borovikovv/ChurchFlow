@@ -17,6 +17,8 @@ import {
   BOTTOM_SHEET_LAYOUT_CLASS_NAME,
 } from './bottom-sheet.styles';
 
+const INTERACTIVE_SELECTOR =
+  'a, button, input, select, textarea, label, [role="button"], [role="option"], [role="listbox"]';
 const DRAG_START_THRESHOLD = 8;
 const DRAG_CLOSE_DISTANCE = 96;
 const DRAG_CLOSE_VELOCITY = 0.5;
@@ -81,6 +83,8 @@ export function BottomSheet({
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    // Dragging captures the pointer, which cancels the click on whatever it started on.
+    if ((event.target as Element | null)?.closest(INTERACTIVE_SELECTOR)) return;
 
     const scroller = scrollRef.current;
     const startsInScrollableContent =

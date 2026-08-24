@@ -41,6 +41,7 @@ export function PrayerRequestsManager({
   loadRequests: (input: {
     organizationId: string;
     tab: PrayerRequestTab;
+    cursor?: string;
     page: number;
     pageSize: number;
   }) => Promise<LoadResult>;
@@ -152,7 +153,11 @@ export function PrayerRequestsManager({
       {error ? <p className="form-error">{error}</p> : null}
 
       <div className="md:hidden">
-        <PrayerRequestsCardList {...listProps} />
+        <PrayerRequestsCardList
+          {...listProps}
+          loadRequests={loadRequests}
+          organizationId={organizationId}
+        />
       </div>
       <div className="hidden md:block">
         <PrayerRequestsTable {...listProps} />

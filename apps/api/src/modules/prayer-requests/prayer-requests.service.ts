@@ -36,6 +36,7 @@ export class PrayerRequestsService {
       tab: query.tab,
       page: query.page,
       pageSize: query.pageSize,
+      ...(query.cursor ? { cursor: query.cursor } : {}),
     });
 
     return {
@@ -49,6 +50,7 @@ export class PrayerRequestsService {
         pageSize: query.pageSize,
         total: page.total,
         pageCount: Math.max(1, Math.ceil(page.total / query.pageSize)),
+        nextCursor: page.nextCursor,
       },
     };
   }

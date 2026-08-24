@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import type { ComponentProps } from 'react';
 import { InviteAppUserForm } from '@/components/members/invite-app-user-form';
 import { MemberActions, MemberRoleStatus } from '@/components/members/member-actions';
-import { CardList } from '@/components/ui/card-list';
 import { DataTable } from '@/components/ui/data-table';
 import { createDataTablePagination } from '@/components/ui/data-table-pagination';
 import { Tabs } from '@/components/ui/tabs';
@@ -13,6 +12,7 @@ import type { MembersPayload, OrganizationMember } from '../types';
 import type { MembersFiltersProps } from './members-filters.types';
 import { MemberCard } from './member-card';
 import { MembersActions } from './members-actions';
+import { MembersCardList } from './members-card-list';
 import { MembersFilters } from './members-filters';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
@@ -149,6 +149,25 @@ export function MembersManager({
       }}
     />
   );
+  const membersQuery = {
+    organizationId,
+    access: memberAccess,
+    ministries: memberMinistries,
+    page: memberPage,
+    pageSize: memberPageSize,
+    search: memberSearch,
+    tab: memberTab,
+    type: memberType,
+  };
+  const membersCardListKey = [
+    memberAccess,
+    memberMinistries.join('|'),
+    memberPage,
+    memberPageSize,
+    memberSearch,
+    memberTab,
+    memberType,
+  ].join(':');
   const membersPagination = createDataTablePagination({
     labels: {
       firstPageLabel: paginationT('firstPage'),
@@ -308,12 +327,11 @@ export function MembersManager({
       <section className="stack min-w-0">
         <h2>{t('organizationMembers')}</h2>
         <div className="md:hidden">
-          <CardList
-            data={members}
+          <MembersCardList
             emptyMessage={t('emptyFilter')}
-            getCardClassName={(member) => (member.status === 'ARCHIVED' ? 'opacity-75' : undefined)}
-            getCardKey={(member) => member.id}
-            pagination={membersPagination}
+            key={membersCardListKey}
+            payload={payload}
+            query={membersQuery}
             renderCard={(member) => (
               <MemberCard
                 actions={renderMemberActions(member)}

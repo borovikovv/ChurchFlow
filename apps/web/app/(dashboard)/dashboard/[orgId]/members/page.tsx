@@ -53,6 +53,7 @@ const emptyMembersPayload: MembersPayload = {
     pageCount: 1,
     pageSize: DEFAULT_MEMBER_PAGE_SIZE,
     total: 0,
+    nextCursor: null,
   },
   counts: {
     active: 0,

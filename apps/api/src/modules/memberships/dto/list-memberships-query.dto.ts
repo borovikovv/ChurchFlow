@@ -5,6 +5,7 @@ export class ListMembershipsQueryDto implements ListOrganizationMembersQuery {
   static readonly schema = listOrganizationMembersQuerySchema;
 
   access!: ListOrganizationMembersQuery['access'];
+  cursor!: ListOrganizationMembersQuery['cursor'];
   membershipId!: ListOrganizationMembersQuery['membershipId'];
   ministries!: ListOrganizationMembersQuery['ministries'];
   page!: ListOrganizationMembersQuery['page'];

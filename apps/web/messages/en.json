@@ -876,7 +876,9 @@
     "previousPage": "Previous page",
     "page": "Page",
     "of": "of",
-    "itemsPerPage": "Items per page"
+    "itemsPerPage": "Items per page",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…"
   },
   "sessions": {
     "title": "Devices",

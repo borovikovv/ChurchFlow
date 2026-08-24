@@ -3,6 +3,7 @@
 import type { Route } from 'next';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { Button } from './button';
 import type { DataTablePagination } from './data-table';
 
 type CardListPagination = Pick<
@@ -16,11 +17,20 @@ type CardListPagination = Pick<
   | 'total'
 >;
 
+export interface CardListLoadMore {
+  hasMore: boolean;
+  isLoading: boolean;
+  label: string;
+  loadingLabel: string;
+  onLoadMore: () => void;
+}
+
 export function CardList<TData>({
   data,
   emptyMessage,
   getCardClassName,
   getCardKey,
+  loadMore,
   pagination,
   renderCard,
 }: {
@@ -28,6 +38,7 @@ export function CardList<TData>({
   emptyMessage: string;
   getCardClassName?: (row: TData) => string | undefined;
   getCardKey: (row: TData) => string;
+  loadMore?: CardListLoadMore | undefined;
   pagination?: CardListPagination | undefined;
   renderCard: (row: TData) => ReactNode;
 }) {
@@ -56,8 +67,34 @@ export function CardList<TData>({
           );
         })}
       </ul>
-      {pagination ? <CardListPaginationControls {...pagination} /> : null}
+      {loadMore ? (
+        <CardListLoadMoreControl {...loadMore} />
+      ) : pagination ? (
+        <CardListPaginationControls {...pagination} />
+      ) : null}
     </div>
+  );
+}
+
+function CardListLoadMoreControl({
+  hasMore,
+  isLoading,
+  label,
+  loadingLabel,
+  onLoadMore,
+}: CardListLoadMore) {
+  if (!hasMore) return null;
+
+  return (
+    <Button
+      className="min-h-11 w-full"
+      disabled={isLoading}
+      type="button"
+      variant="secondary"
+      onClick={onLoadMore}
+    >
+      {isLoading ? loadingLabel : label}
+    </Button>
   );
 }
 

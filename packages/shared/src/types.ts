@@ -269,6 +269,7 @@ export interface PrayerRequestsPayload {
     pageSize: number;
     total: number;
     pageCount: number;
+    nextCursor: string | null;
   };
 }
 

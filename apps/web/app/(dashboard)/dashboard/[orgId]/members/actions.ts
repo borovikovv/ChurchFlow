@@ -35,6 +35,7 @@ function membersUrl(organizationId: string, params?: Record<string, string>): Ro
 export async function loadMembersAction(input: {
   organizationId: string;
   access: OrganizationMembersAccessFilter;
+  cursor?: string;
   membershipId?: string;
   ministries: MemberMinistry[];
   page: number;
@@ -56,6 +57,9 @@ export async function loadMembersAction(input: {
   }
   if (input.membershipId) {
     params.set('membershipId', input.membershipId);
+  }
+  if (input.cursor) {
+    params.set('cursor', input.cursor);
   }
 
   const result = await apiFetch<MembersPayload>(

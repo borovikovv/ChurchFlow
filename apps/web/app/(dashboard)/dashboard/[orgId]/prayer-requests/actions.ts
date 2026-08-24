@@ -19,6 +19,7 @@ function prayerRequestsPath(organizationId: string) {
 export async function loadPrayerRequestsAction(input: {
   organizationId: string;
   tab: PrayerRequestTab;
+  cursor?: string;
   page: number;
   pageSize: number;
 }) {
@@ -26,6 +27,7 @@ export async function loadPrayerRequestsAction(input: {
     tab: input.tab,
     page: input.page,
     pageSize: input.pageSize,
+    ...(input.cursor ? { cursor: input.cursor } : {}),
   });
   if (!parsedQuery.success) return { ok: false as const, error: 'Invalid filters.' };
 
@@ -34,6 +36,9 @@ export async function loadPrayerRequestsAction(input: {
     page: String(parsedQuery.data.page),
     pageSize: String(parsedQuery.data.pageSize),
   });
+  if (parsedQuery.data.cursor) {
+    query.set('cursor', parsedQuery.data.cursor);
+  }
   const result = await apiFetch<PrayerRequestsPayload>(
     `/organizations/${input.organizationId}/prayer-requests?${query}`,
   );

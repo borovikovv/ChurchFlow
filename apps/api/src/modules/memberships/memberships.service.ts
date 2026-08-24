@@ -40,6 +40,7 @@ export class MembershipsService {
     page: number,
     pageSize: number,
     membershipId?: string,
+    cursor?: string,
   ) {
     const [membersPage, pendingInvitations, actorMembership] = await Promise.all([
       this.membershipsRepository.listForOrganization(
@@ -52,11 +53,12 @@ export class MembershipsService {
         page,
         pageSize,
         membershipId,
+        cursor,
       ),
       this.invitationsRepository.listPendingForOrganization(organizationId),
       this.membershipsRepository.findActiveMembership(organizationId, actorUserId),
     ]);
-    const { candidates, counts, members, page: currentPage, total } = membersPage;
+    const { candidates, counts, members, nextCursor, page: currentPage, total } = membersPage;
 
     const canManageProfiles =
       actorMembership?.role === 'OWNER' || actorMembership?.role === 'ADMIN';
@@ -69,6 +71,7 @@ export class MembershipsService {
         pageSize,
         total,
         pageCount: Math.max(1, Math.ceil(total / pageSize)),
+        nextCursor,
       },
       counts,
       memberCandidates: candidates.map((candidate) => ({

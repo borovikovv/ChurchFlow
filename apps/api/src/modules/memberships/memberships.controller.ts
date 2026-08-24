@@ -54,6 +54,7 @@ export class MembershipsController {
       query.page,
       query.pageSize,
       query.membershipId,
+      query.cursor,
     );
   }
 

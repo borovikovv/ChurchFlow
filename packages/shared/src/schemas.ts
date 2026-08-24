@@ -93,6 +93,7 @@ const memberMinistriesQuerySchema = z.preprocess((value) => {
 
 export const listOrganizationMembersQuerySchema = z.object({
   access: organizationMembersAccessFilterSchema.default('all'),
+  cursor: uuidSchema.optional(),
   membershipId: uuidSchema.optional(),
   tab: organizationMembersTabSchema.default('active'),
   type: organizationMembersTypeFilterSchema.default('all'),
@@ -485,6 +486,7 @@ export const prayerRequestTabSchema = z.enum(PRAYER_REQUEST_TABS);
 
 export const listPrayerRequestsQuerySchema = z.object({
   tab: prayerRequestTabSchema.default('active'),
+  cursor: uuidSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce
     .number()
