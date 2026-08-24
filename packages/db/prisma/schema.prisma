@@ -573,6 +573,7 @@ model OrganizationWebsite {
   pages        WebsitePage[]
   domains      WebsiteDomain[]
 
+  @@unique([id, organizationId])
   @@index([organizationId])
   @@index([logoAssetId])
   @@map("organization_websites")
@@ -591,11 +592,13 @@ model WebsitePage {
   updatedAt      DateTime   @updatedAt @map("updated_at")
   deletedAt      DateTime?  @map("deleted_at")
 
-  website  OrganizationWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  website  OrganizationWebsite @relation(fields: [websiteId, organizationId], references: [id, organizationId], onDelete: Cascade)
   sections WebsiteSection[]
 
   @@unique([websiteId, slug])
+  @@unique([id, organizationId])
   @@index([organizationId, status])
+  @@index([websiteId, organizationId])
   @@index([websiteId, status])
   @@map("website_pages")
 }
@@ -611,9 +614,10 @@ model WebsiteSection {
   updatedAt      DateTime           @updatedAt @map("updated_at")
   deletedAt      DateTime?          @map("deleted_at")
 
-  page WebsitePage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  page WebsitePage @relation(fields: [pageId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([organizationId])
+  @@index([pageId, organizationId])
   @@index([pageId, order])
   @@map("website_sections")
 }
@@ -629,10 +633,11 @@ model WebsiteDomain {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  website OrganizationWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  website OrganizationWebsite @relation(fields: [websiteId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([websiteId])
+  @@index([websiteId, organizationId])
   @@map("website_domains")
 }
 
@@ -937,6 +942,7 @@ model BudgetCategory {
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   entries      BudgetEntry[]
 
+  @@unique([id, organizationId])
   @@index([organizationId, group, order])
   @@index([organizationId, deletedAt])
   @@map("budget_categories")
@@ -955,14 +961,16 @@ model BudgetMonth {
   entries      BudgetEntry[]
 
   @@unique([organizationId, year, month])
+  @@unique([id, organizationId])
   @@index([organizationId, year])
   @@map("budget_months")
 }
 
 model BudgetEntry {
   id         String   @id @default(uuid()) @db.Uuid
-  monthId    String   @map("month_id") @db.Uuid
-  categoryId String   @map("category_id") @db.Uuid
+  monthId        String @map("month_id") @db.Uuid
+  categoryId     String @map("category_id") @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
   rowIndex   Int      @default(0) @map("row_index")
   amountUah  Decimal  @default(0) @map("amount_uah") @db.Decimal(12, 2)
   amountUsd  Decimal  @default(0) @map("amount_usd") @db.Decimal(12, 2)
@@ -971,12 +979,14 @@ model BudgetEntry {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  month    BudgetMonth       @relation(fields: [monthId], references: [id], onDelete: Cascade)
-  category BudgetCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  month    BudgetMonth       @relation(fields: [monthId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  category BudgetCategory    @relation(fields: [categoryId, organizationId], references: [id, organizationId], onDelete: Cascade)
   notes    BudgetEntryNote[]
 
   @@unique([monthId, categoryId, rowIndex])
   @@index([categoryId])
+  @@index([monthId, organizationId])
+  @@index([categoryId, organizationId])
   @@index([monthId, rowIndex])
   @@map("budget_entries")
 }

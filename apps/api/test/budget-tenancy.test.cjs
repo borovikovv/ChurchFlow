@@ -152,6 +152,7 @@ test('entry update identifies the cell by month, category and row index', async 
   assert.equal(upsert.args.create.monthId, MONTH_ID);
   assert.equal(upsert.args.create.categoryId, CATEGORY_ID);
   assert.equal(upsert.args.create.rowIndex, 3);
+  assert.equal(upsert.args.create.organizationId, ORGANIZATION_ID);
 });
 
 test('entry note update runs the same ownership checks as the entry itself', async () => {
@@ -182,7 +183,12 @@ test('adding a month row seeds one entry per category of that organization', asy
   const createMany = writes.find((entry) => entry.operation === 'budgetEntry.createMany');
   assert.ok(createMany);
   assert.deepEqual(createMany.args.data, [
-    { monthId: MONTH_ID, categoryId: CATEGORY_ID, rowIndex: ROW_COUNT },
+    {
+      monthId: MONTH_ID,
+      categoryId: CATEGORY_ID,
+      rowIndex: ROW_COUNT,
+      organizationId: ORGANIZATION_ID,
+    },
   ]);
 });
 

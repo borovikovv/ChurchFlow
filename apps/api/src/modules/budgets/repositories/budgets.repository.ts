@@ -60,6 +60,7 @@ export class BudgetsRepository {
     ]);
 
     await this.ensureMonthEntries(
+      organizationId,
       months,
       categories.map((category) => category.id),
     );
@@ -209,6 +210,7 @@ export class BudgetsRepository {
             createBlankEntryRows([category.id], month.rowCount).map((entry) => ({
               ...entry,
               monthId: month.id,
+              organizationId,
             })),
           ),
           skipDuplicates: true,
@@ -346,6 +348,7 @@ export class BudgetsRepository {
           monthId,
           categoryId,
           rowIndex,
+          organizationId,
           ...data,
         },
         update: data,
@@ -394,7 +397,7 @@ export class BudgetsRepository {
 
       const entry = await tx.budgetEntry.upsert({
         where: { monthId_categoryId_rowIndex: { monthId, categoryId, rowIndex } },
-        create: { monthId, categoryId, rowIndex },
+        create: { monthId, categoryId, rowIndex, organizationId },
         update: {},
         select: { id: true },
       });
@@ -453,7 +456,12 @@ export class BudgetsRepository {
       const rowIndex = month.rowCount;
       if (categories.length > 0) {
         await tx.budgetEntry.createMany({
-          data: categories.map((category) => ({ monthId, categoryId: category.id, rowIndex })),
+          data: categories.map((category) => ({
+            monthId,
+            categoryId: category.id,
+            rowIndex,
+            organizationId,
+          })),
           skipDuplicates: true,
         });
       }
@@ -559,6 +567,7 @@ export class BudgetsRepository {
   }
 
   private async ensureMonthEntries(
+    organizationId: string,
     months: Array<{ id: string; rowCount: number }>,
     categoryIds: string[],
     tx: Prisma.TransactionClient = this.prisma,
@@ -570,6 +579,7 @@ export class BudgetsRepository {
         createBlankEntryRows(categoryIds, month.rowCount).map((entry) => ({
           ...entry,
           monthId: month.id,
+          organizationId,
         })),
       ),
       skipDuplicates: true,
