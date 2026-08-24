@@ -492,6 +492,39 @@ jobs:
             "$SSH_USER@$SSH_HOST" \
             "install -d -m 700 '$DEPLOY_DIR'"
 
+      - name: Reclaim remote disk space
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/churchflow_deploy -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$SSH_HOST" \
+            "DEPLOY_DIR='$DEPLOY_DIR' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+
+          backup_retention=10
+          backup_dir="$DEPLOY_DIR/backups"
+          stale_backups=""
+
+          echo "Reclaiming disk space before deployment."
+
+          if [[ -d "$backup_dir" ]]; then
+            stale_backups="$(ls -1t "$backup_dir"/*.dump 2>/dev/null | tail -n "+$((backup_retention + 1))" || true)"
+            if [[ -n "$stale_backups" ]]; then
+              echo "Removing database backups beyond the newest $backup_retention."
+              printf '%s\n' "$stale_backups" | xargs -r rm -f
+            fi
+          fi
+
+          echo "Removing unused Docker images older than 48 hours."
+          docker image prune --all --force --filter 'until=48h' || true
+          docker builder prune --all --force || true
+
+          docker system df || true
+          REMOTE
+
       - name: Check remote disk space
         shell: bash
         env:
@@ -892,9 +925,6 @@ jobs:
             show_safe_diagnostics
             exit 1
           fi
-
-          echo "Removing unused Docker images older than 7 days."
-          docker image prune --all --force --filter 'until=168h' || true
 
           echo "__CHURCHFLOW_DEPLOYMENT_SUMMARY_BEGIN__"
           {
