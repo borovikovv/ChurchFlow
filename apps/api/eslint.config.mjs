@@ -20,7 +20,6 @@ export default [
         module: 'writable',
         process: 'readonly',
         require: 'readonly',
-        setTimeout: 'readonly',
         URL: 'readonly'
       }
     },

@@ -1,11 +1,10 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { resolve } from 'node:path';
 import { apiEnvSchema } from '@churchflow/shared';
 import { PrismaModule } from './prisma/prisma.module';
-import { RequestContextMiddleware } from './common/context/request-context.middleware';
 import { UserLocaleModule } from './common/locale/user-locale.module';
 import { EmailModule } from './modules/email/email.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -67,8 +66,4 @@ import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.
     HealthModule,
   ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestContextMiddleware).forRoutes('*');
-  }
-}
+export class AppModule {}

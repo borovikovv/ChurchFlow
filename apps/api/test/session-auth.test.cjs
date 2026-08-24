@@ -3,9 +3,6 @@ const { createHash } = require('node:crypto');
 const test = require('node:test');
 const { SessionAuthGuard } = require('../dist/common/guards/session-auth.guard.js');
 const {
-  RequestContextService,
-} = require('../dist/common/context/request-context.service.js');
-const {
   SESSION_IDLE_TTL_SECONDS,
   SESSION_TOUCH_INTERVAL_SECONDS,
   sessionIdleExpiresAt,
@@ -46,7 +43,7 @@ function createGuard(session, calls = {}) {
       },
     },
   };
-  return new SessionAuthGuard(prisma, new RequestContextService());
+  return new SessionAuthGuard(prisma);
 }
 
 class FakeResponse {

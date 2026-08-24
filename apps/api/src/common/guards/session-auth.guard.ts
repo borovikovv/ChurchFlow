@@ -1,7 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
-import { RequestContextService } from '../context/request-context.service';
 import { hashOpaqueToken, sessionTokenFromRequest } from '../auth/session-token';
 import { sessionIdleExpiresAt, shouldTouchSession } from '../auth/session-policy';
 
@@ -16,10 +15,7 @@ export interface AuthenticatedRequest extends Request {
 
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly context: RequestContextService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
@@ -64,7 +60,6 @@ export class SessionAuthGuard implements CanActivate {
     }
 
     request.auth = { userId: session.userId, sessionId: session.id };
-    this.context.setUserId(session.userId);
     return true;
   }
 }
