@@ -10,6 +10,11 @@ on:
         options:
           - stage
           - prod
+      allow_destructive_migrations:
+        description: Allow pending production migrations that contain destructive SQL
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -26,6 +31,7 @@ env:
   MIGRATOR_IMAGE: ghcr.io/borovikovv/churchflow-api-migrator:${{ inputs.environment }}-${{ github.sha }}
   WEB_IMAGE: ghcr.io/borovikovv/churchflow-web:${{ inputs.environment }}-${{ github.sha }}
   INTERNAL_NETWORK: churchflow-internal
+  ALLOW_DESTRUCTIVE_MIGRATIONS: ${{ inputs.allow_destructive_migrations }}
 
 jobs:
   build:
@@ -617,7 +623,7 @@ jobs:
           remote_output="$(mktemp)"
           ssh -i ~/.ssh/churchflow_deploy -o StrictHostKeyChecking=accept-new \
             "$SSH_USER@$SSH_HOST" \
-            "DEPLOY_DIR='$DEPLOY_DIR' DEPLOY_ENV='$DEPLOY_ENV' GHCR_USERNAME='$GHCR_USERNAME' COMMIT_SHA='$COMMIT_SHA' IMAGE_TAG='$IMAGE_TAG' API_IMAGE='$API_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' WEB_IMAGE='$WEB_IMAGE' INTERNAL_NETWORK='$INTERNAL_NETWORK' API_CONTAINER_NAME='$API_CONTAINER_NAME' WEB_CONTAINER_NAME='$WEB_CONTAINER_NAME' API_HOST_PORT='$API_HOST_PORT' WEB_HOST_PORT='$WEB_HOST_PORT' GITHUB_REF_NAME='$GITHUB_REF_NAME' GITHUB_REF_TYPE='$GITHUB_REF_TYPE' bash -s" <<'REMOTE' | tee "$remote_output"
+            "DEPLOY_DIR='$DEPLOY_DIR' DEPLOY_ENV='$DEPLOY_ENV' ALLOW_DESTRUCTIVE_MIGRATIONS='$ALLOW_DESTRUCTIVE_MIGRATIONS' GHCR_USERNAME='$GHCR_USERNAME' COMMIT_SHA='$COMMIT_SHA' IMAGE_TAG='$IMAGE_TAG' API_IMAGE='$API_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' WEB_IMAGE='$WEB_IMAGE' INTERNAL_NETWORK='$INTERNAL_NETWORK' API_CONTAINER_NAME='$API_CONTAINER_NAME' WEB_CONTAINER_NAME='$WEB_CONTAINER_NAME' API_HOST_PORT='$API_HOST_PORT' WEB_HOST_PORT='$WEB_HOST_PORT' GITHUB_REF_NAME='$GITHUB_REF_NAME' GITHUB_REF_TYPE='$GITHUB_REF_TYPE' bash -s" <<'REMOTE' | tee "$remote_output"
           set -Eeuo pipefail
           cd "$DEPLOY_DIR"
 
@@ -684,6 +690,7 @@ jobs:
             docker compose --env-file .env -f compose.yaml --profile migrations run --rm --no-deps \
               --entrypoint node \
               -e DEPLOY_ENV="$DEPLOY_ENV" \
+              -e ALLOW_DESTRUCTIVE_MIGRATIONS="$ALLOW_DESTRUCTIVE_MIGRATIONS" \
               migrator - <<'NODE'
           const fs = require('node:fs');
           const path = require('node:path');
@@ -731,9 +738,20 @@ jobs:
               });
 
               if (destructivePending.length > 0) {
-                console.error('Production deployment blocked because pending migrations contain potentially destructive SQL:');
-                for (const name of destructivePending) console.error(`- ${name}`);
-                process.exit(1);
+                const allowDestructive = process.env.ALLOW_DESTRUCTIVE_MIGRATIONS === 'true';
+                const report = allowDestructive ? console.warn : console.error;
+
+                report(
+                  allowDestructive
+                    ? 'Pending migrations contain potentially destructive SQL. Continuing because this run explicitly allowed destructive migrations:'
+                    : 'Production deployment blocked because pending migrations contain potentially destructive SQL:',
+                );
+                for (const name of destructivePending) report(`- ${name}`);
+
+                if (!allowDestructive) {
+                  report('Re-dispatch the workflow with allow_destructive_migrations enabled once the data loss is reviewed and accepted.');
+                  process.exit(1);
+                }
               }
 
               console.log(`Pending migrations checked: ${pending.length}`);
@@ -980,6 +998,7 @@ jobs:
             echo "- Migrator image: \`${MIGRATOR_IMAGE}\`"
             echo "- Web image: \`${WEB_IMAGE}\`"
             echo "- Remote directory: \`${DEPLOY_DIR}\`"
+            echo "- Destructive migrations allowed: \`${ALLOW_DESTRUCTIVE_MIGRATIONS}\`"
             echo ""
             cat deployment-summary.md
           } >> "$GITHUB_STEP_SUMMARY"
