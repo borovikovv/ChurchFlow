@@ -1129,7 +1129,7 @@
     }
 
     .app-main.with-tab-bar {
-      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 92px);
     }
 
     .ui-tab.active {

@@ -10,10 +10,13 @@ import { MoreNavigationSheet } from '@/components/more-navigation-sheet';
 import { isNavPathActive } from '@/lib/nav-active';
 import { navItemsInGroup } from '@/lib/nav-groups';
 
-const TAB_CLASS_NAME =
-  'flex flex-1 cursor-pointer flex-col items-center gap-0.5 border-0 bg-transparent px-1 py-1.5 text-[11px] leading-tight font-semibold';
+const NAV_CLASS_NAME =
+  'fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+10px)] z-40 flex items-stretch rounded-[24px] border border-[rgba(255,255,255,0.55)] bg-[color-mix(in_srgb,var(--surface)_50%,transparent)] px-1.5 py-2 shadow-[0_12px_32px_rgba(31,35,40,0.14),0_1px_2px_rgba(31,35,40,0.08),inset_0_1px_0_rgba(255,255,255,0.7),inset_0_-1px_0_rgba(255,255,255,0.25)] backdrop-blur-[28px] backdrop-saturate-[200%] backdrop-brightness-[1.08] md:hidden';
 
-const TAB_ICON_CLASS_NAME = 'h-5 w-5';
+const TAB_CLASS_NAME =
+  'flex flex-1 cursor-pointer flex-col items-center gap-1 rounded-[18px] border-0 bg-transparent px-1 py-1 text-[11px] leading-tight font-semibold';
+
+const TAB_ICON_CLASS_NAME = 'h-6 w-6';
 
 function tabClassName(active: boolean): string {
   return `${TAB_CLASS_NAME} ${active ? 'text-[var(--accent-mobile)]' : 'text-[var(--muted)]'}`;
@@ -32,10 +35,7 @@ export function MobileTabBar({ items }: { items: AppNavItem[] }) {
 
   return (
     <>
-      <nav
-        aria-label={t('main')}
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-[var(--line)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] md:hidden"
-      >
+      <nav aria-label={t('main')} className={NAV_CLASS_NAME}>
         {primaryItems.map((item) => {
           const ItemIcon = item.icon;
           const active = isNavPathActive(pathname, item.href, item.exact);
