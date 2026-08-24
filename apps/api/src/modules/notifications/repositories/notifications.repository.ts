@@ -5,14 +5,23 @@ import type {
   ListNotificationsQuery,
   UpdateNotificationPreferencesInput,
 } from '@churchflow/shared';
+import { appLocaleOrFallback, DEFAULT_APP_LOCALE, type AppLocale } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  renderNotificationBody,
+  renderNotificationTitle,
+  type NotificationBodyMessage,
+  type NotificationTitleKey,
+} from '../notification-messages';
 
 const notificationSelect = {
   id: true,
   organizationId: true,
   type: true,
   title: true,
+  titleKey: true,
   body: true,
+  bodyMessage: true,
   url: true,
   entityType: true,
   entityId: true,
@@ -109,6 +118,7 @@ export interface NotificationDeliveryRecipient {
   email: string | null;
   emailEnabled: boolean;
   telegramEnabled: boolean;
+  locale: AppLocale;
   notificationId: string | null;
 }
 
@@ -125,8 +135,8 @@ export interface CreateNotificationsForMembershipsInput {
   recipientMembershipIds: string[];
   type: NotificationType;
   preferenceKey: NotificationPreferenceKey;
-  title: string;
-  body: string | null;
+  titleKey: NotificationTitleKey;
+  bodyMessage: NotificationBodyMessage | null;
   url: string | null;
   entityType?: string | null;
   entityId?: string | null;
@@ -139,8 +149,8 @@ export interface CreateNotificationsForUsersInput {
   recipientUserIds: string[];
   type: NotificationType;
   preferenceKey: NotificationPreferenceKey;
-  title: string;
-  body: string | null;
+  titleKey: NotificationTitleKey;
+  bodyMessage: NotificationBodyMessage | null;
   url: string | null;
   entityType?: string | null;
   entityId?: string | null;
@@ -152,8 +162,8 @@ export interface TaskAssignedNotificationInput {
   organizationId: string;
   actorUserId: string;
   eventId: string;
-  title: string;
-  body: string;
+  titleKey: NotificationTitleKey;
+  bodyMessage: NotificationBodyMessage;
   url: string;
   assigneeMembershipIds: string[];
 }
@@ -162,8 +172,8 @@ export interface ServiceAssignedNotificationInput {
   organizationId: string;
   actorUserId: string;
   eventId: string;
-  title: string;
-  body: string;
+  titleKey: NotificationTitleKey;
+  bodyMessage: NotificationBodyMessage;
   url: string;
   participantMembershipIds: string[];
 }
@@ -195,7 +205,7 @@ export class NotificationsRepository {
         removedAt: null,
         organization: { status: 'ACTIVE', deletedAt: null },
       },
-      select: { id: true },
+      select: { id: true, user: { select: { locale: true } } },
     });
   }
 
@@ -255,8 +265,8 @@ export class NotificationsRepository {
       recipientMembershipIds: input.assigneeMembershipIds,
       type: 'TASK_ASSIGNED',
       preferenceKey: 'taskAssignedEnabled',
-      title: input.title,
-      body: input.body,
+      titleKey: input.titleKey,
+      bodyMessage: input.bodyMessage,
       url: input.url,
       entityType: 'CalendarEvent',
       entityId: input.eventId,
@@ -272,8 +282,8 @@ export class NotificationsRepository {
       recipientMembershipIds: input.participantMembershipIds,
       type: 'SERVICE_ASSIGNED',
       preferenceKey: 'serviceAssignedEnabled',
-      title: input.title,
-      body: input.body,
+      titleKey: input.titleKey,
+      bodyMessage: input.bodyMessage,
       url: input.url,
       entityType: 'CalendarEvent',
       entityId: input.eventId,
@@ -302,6 +312,7 @@ export class NotificationsRepository {
         user: {
           select: {
             email: true,
+            locale: true,
             deletedAt: true,
             notificationPreferences: {
               where: { organizationId: input.organizationId },
@@ -326,6 +337,7 @@ export class NotificationsRepository {
         email: user.email,
         emailEnabled: Boolean(preferences?.emailEnabled),
         telegramEnabled: Boolean(preferences?.telegramEnabled),
+        locale: appLocaleOrFallback(user.locale),
         preferences,
       };
     });
@@ -358,6 +370,7 @@ export class NotificationsRepository {
       select: {
         id: true,
         email: true,
+        locale: true,
         notificationPreferences: {
           where: { organizationId: input.organizationId },
           select: notificationPreferenceSelect,
@@ -386,6 +399,7 @@ export class NotificationsRepository {
         email: user.email,
         emailEnabled: Boolean(preferences?.emailEnabled),
         telegramEnabled: Boolean(preferences?.telegramEnabled),
+        locale: appLocaleOrFallback(user.locale),
         preferences,
       };
     });
@@ -515,8 +529,8 @@ export class NotificationsRepository {
   async createBirthdayDigestNotifications(input: {
     organizationId: string;
     recipientUserIds: string[];
-    title: string;
-    body: string;
+    titleKey: NotificationTitleKey;
+    bodyMessage: NotificationBodyMessage;
     url: string;
     dedupeKey: string;
   }): Promise<BirthdayDigestNotificationResult> {
@@ -527,8 +541,8 @@ export class NotificationsRepository {
       recipientUserIds,
       type: 'BIRTHDAY_DIGEST',
       preferenceKey: 'birthdayDigestEnabled',
-      title: input.title,
-      body: input.body,
+      titleKey: input.titleKey,
+      bodyMessage: input.bodyMessage,
       url: input.url,
       entityType: 'BirthdayDigest',
       dedupeKey: input.dedupeKey,
@@ -539,8 +553,8 @@ export class NotificationsRepository {
     organizationId: string;
     type: NotificationType;
     preferenceKey: NotificationPreferenceKey;
-    title: string;
-    body: string | null;
+    titleKey: NotificationTitleKey;
+    bodyMessage: NotificationBodyMessage | null;
     url: string | null;
     entityType?: string | null;
     entityId?: string | null;
@@ -551,6 +565,7 @@ export class NotificationsRepository {
       email: string | null;
       emailEnabled: boolean;
       telegramEnabled: boolean;
+      locale: AppLocale;
       preferences: NotificationPreferenceRecord | undefined;
     }>;
   }): Promise<NotificationCreationResult> {
@@ -563,6 +578,7 @@ export class NotificationsRepository {
         email: recipient.email,
         emailEnabled: recipient.emailEnabled,
         telegramEnabled: recipient.telegramEnabled,
+        locale: recipient.locale,
         notificationId: null,
       }));
     const inAppRecipients = input.recipients.filter((recipient) =>
@@ -610,8 +626,12 @@ export class NotificationsRepository {
         recipientUserId: recipient.userId,
         recipientMembershipId: recipient.membershipId,
         type: input.type,
-        title: input.title,
-        body: input.body,
+        title: renderNotificationTitle(input.titleKey, DEFAULT_APP_LOCALE),
+        titleKey: input.titleKey,
+        body: input.bodyMessage
+          ? renderNotificationBody(input.bodyMessage, DEFAULT_APP_LOCALE)
+          : null,
+        bodyMessage: input.bodyMessage ?? Prisma.JsonNull,
         url: input.url,
         entityType: input.entityType ?? null,
         entityId: input.entityId ?? null,

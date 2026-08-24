@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { appLocaleOrFallback, type AppLocale } from '@churchflow/shared';
 import type {
   ListNotificationsQuery,
   NotificationDetail,
@@ -26,6 +27,14 @@ import {
   NOTIFICATION_RETENTION_MAX_BATCHES,
   type NotificationRetentionCutoffs,
 } from './notification-retention';
+import {
+  isNotificationTitleKey,
+  parseNotificationBodyMessage,
+  renderNotificationBody,
+  renderNotificationTitle,
+  type NotificationBodyMessage,
+  type NotificationTitleKey,
+} from './notification-messages';
 import { EmailService } from '../email/email.service';
 import { TelegramBotRepository } from '../telegram-bot/repositories/telegram-bot.repository';
 import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
@@ -56,10 +65,11 @@ export class NotificationsService {
       return { items: [], nextCursor: null, unreadCount: 0 };
     }
 
+    const locale = membershipLocale(membership);
     const page = await this.notificationsRepository.listForUser(organizationId, actorUserId, query);
 
     return {
-      items: page.items.map(notificationToItem),
+      items: page.items.map((notification) => notificationToItem(notification, locale)),
       nextCursor: page.nextCursor,
       unreadCount: page.unreadCount,
     };
@@ -77,10 +87,13 @@ export class NotificationsService {
       return { recentItems: [], unreadCount: 0 };
     }
 
+    const locale = membershipLocale(membership);
     const summary = await this.notificationsRepository.summaryForUser(organizationId, actorUserId);
 
     return {
-      recentItems: summary.recentItems.map(notificationToItem),
+      recentItems: summary.recentItems.map((notification) =>
+        notificationToItem(notification, locale),
+      ),
       unreadCount: summary.unreadCount,
     };
   }
@@ -107,7 +120,7 @@ export class NotificationsService {
       throw new NotFoundException('Notification was not found');
     }
 
-    return notificationToDetail(notification);
+    return notificationToDetail(notification, membershipLocale(membership));
   }
 
   async preferencesForOrganization(
@@ -219,13 +232,17 @@ export class NotificationsService {
     let telegramSentCount = 0;
 
     for (const group of groups) {
-      const title = birthdayDigestTitle(group);
-      const body = birthdayDigestBody(group);
+      const titleKey = birthdayDigestTitleKey(group);
+      const bodyMessage: NotificationBodyMessage = {
+        key: 'birthdayDigest',
+        birthdays: group.birthdays,
+        anniversaries: group.anniversaries,
+      };
       const result = await this.notificationsRepository.createBirthdayDigestNotifications({
         organizationId: group.organizationId,
         recipientUserIds: group.recipientUserIds,
-        title,
-        body,
+        titleKey,
+        bodyMessage,
         url: `/dashboard/${group.organizationId}/calendar`,
         dedupeKey: `birthday-digest:${digestDate}`,
       });
@@ -234,8 +251,8 @@ export class NotificationsService {
       const sentCounts = await this.dispatchToEnabledServices(
         {
           organizationId: group.organizationId,
-          title,
-          body,
+          titleKey,
+          bodyMessage,
           url: `/dashboard/${group.organizationId}/calendar`,
         },
         result,
@@ -318,8 +335,8 @@ export class NotificationsService {
   private async dispatchToEnabledServices(
     input: {
       organizationId: string;
-      title: string;
-      body: string | null;
+      titleKey: NotificationTitleKey;
+      bodyMessage: NotificationBodyMessage | null;
       url: string | null;
     },
     result: NotificationCreationResult,
@@ -343,10 +360,13 @@ export class NotificationsService {
                 await this.emailService.sendNotificationEmail({
                   email: recipient.email ?? '',
                   organizationName: organization.name,
-                  title: input.title,
-                  body: input.body,
+                  title: renderNotificationTitle(input.titleKey, recipient.locale),
+                  body: input.bodyMessage
+                    ? renderNotificationBody(input.bodyMessage, recipient.locale)
+                    : null,
                   url: input.url,
                   notificationId: recipient.notificationId,
+                  locale: recipient.locale,
                 });
                 return true;
               } catch (error: unknown) {
@@ -367,23 +387,29 @@ export class NotificationsService {
       {
         name: 'telegram' as const,
         deliver: async () => {
-          const deliveries = await this.telegramBotRepository.getNotificationTelegramDeliveries({
+          const targets = await this.telegramBotRepository.getNotificationTelegramDeliveries({
             organizationId: input.organizationId,
             recipientUserIds: result.deliveryRecipients
               .filter((recipient) => recipient.telegramEnabled)
               .map((recipient) => recipient.userId),
             notificationByRecipientUserId: result.notificationByRecipientUserId,
-            title: input.title,
-            body: input.body,
             url: input.url,
             preferenceKey,
           });
 
           await Promise.all(
-            deliveries.map((delivery) => this.telegramBotService.deliverNotification(delivery)),
+            targets.map((target) =>
+              this.telegramBotService.deliverNotification({
+                ...target,
+                title: renderNotificationTitle(input.titleKey, target.locale),
+                body: input.bodyMessage
+                  ? renderNotificationBody(input.bodyMessage, target.locale)
+                  : null,
+              }),
+            ),
           );
 
-          return deliveries.length;
+          return targets.length;
         },
       },
     ];
@@ -428,7 +454,7 @@ export class NotificationsService {
       throw new NotFoundException('Notification was not found');
     }
 
-    return notificationToItem(notification);
+    return notificationToItem(notification, membershipLocale(membership));
   }
 
   async markAllRead(organizationId: string, actorUserId: string) {
@@ -472,13 +498,22 @@ function isActiveTelegramBinding(binding: TelegramNotificationBindingRecord | nu
   return Boolean(binding && binding.enabled && !binding.blockedAt && !binding.revokedAt);
 }
 
-function notificationToItem(notification: NotificationRecord): NotificationListItem {
+function membershipLocale(membership: { user: { locale: string } | null }): AppLocale {
+  return appLocaleOrFallback(membership.user?.locale);
+}
+
+function notificationToItem(
+  notification: NotificationRecord,
+  locale: AppLocale,
+): NotificationListItem {
   return {
     id: notification.id,
     organizationId: notification.organizationId,
     type: notification.type,
-    title: notification.title,
-    body: notification.body,
+    title: isNotificationTitleKey(notification.titleKey)
+      ? renderNotificationTitle(notification.titleKey, locale)
+      : notification.title,
+    body: notificationBodyText(notification, locale),
     url: notification.url,
     entityType: notification.entityType,
     entityId: notification.entityId,
@@ -487,9 +522,21 @@ function notificationToItem(notification: NotificationRecord): NotificationListI
   };
 }
 
-function notificationToDetail(notification: NotificationDetailRecord): NotificationDetail {
+function notificationBodyText(
+  notification: { body: string | null; bodyMessage: unknown },
+  locale: AppLocale,
+): string | null {
+  const message = parseNotificationBodyMessage(notification.bodyMessage);
+
+  return message ? renderNotificationBody(message, locale) : notification.body;
+}
+
+function notificationToDetail(
+  notification: NotificationDetailRecord,
+  locale: AppLocale,
+): NotificationDetail {
   return {
-    ...notificationToItem(notification),
+    ...notificationToItem(notification, locale),
     calendarEvent: notification.calendarEvent
       ? calendarEventToNotificationDetail(notification.calendarEvent)
       : null,
@@ -529,26 +576,16 @@ function memberDisplayName(member: {
   return member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? 'Member';
 }
 
-function birthdayDigestTitle(group: { birthdays: string[]; anniversaries: string[] }): string {
+function birthdayDigestTitleKey(group: {
+  birthdays: string[];
+  anniversaries: string[];
+}): NotificationTitleKey {
   if (group.birthdays.length > 0 && group.anniversaries.length > 0) {
-    return 'Birthdays and anniversaries today';
+    return 'birthdayDigestBirthdaysAndAnniversaries';
   }
-  if (group.anniversaries.length > 0) return 'Anniversaries today';
-  return 'Birthdays today';
-}
+  if (group.anniversaries.length > 0) return 'birthdayDigestAnniversaries';
 
-function birthdayDigestBody(group: { birthdays: string[]; anniversaries: string[] }): string {
-  const sections = [
-    milestoneDigestSection('Birthdays', group.birthdays),
-    milestoneDigestSection('Anniversaries', group.anniversaries),
-  ].filter((section): section is string => Boolean(section));
-
-  return sections.join('\n');
-}
-
-function milestoneDigestSection(label: string, names: string[]): string | null {
-  if (names.length === 0) return null;
-  return `${label}: ${names.join(', ')}`;
+  return 'birthdayDigestBirthdays';
 }
 
 function formatDateKey(value: Date): string {

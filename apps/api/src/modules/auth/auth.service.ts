@@ -16,6 +16,7 @@ import {
   type UserSession,
 } from '@churchflow/shared';
 import { deviceLabelFromUserAgent } from '../../common/auth/device-label';
+import { hashOpaqueToken } from '../../common/auth/session-token';
 import {
   SESSION_ABSOLUTE_TTL_SECONDS,
   SESSION_IDLE_TTL_SECONDS,
@@ -373,7 +374,7 @@ export class AuthService {
       return Promise.resolve(false);
     }
 
-    return this.authRepository.hasValidClaimableInvitationTokenHash(this.hashToken(token));
+    return this.authRepository.hasValidClaimableInvitationTokenHash(hashOpaqueToken(token));
   }
 
   private hasValidPlatformAdminBootstrapRedirect(redirectTo?: string): Promise<boolean> {
@@ -382,13 +383,13 @@ export class AuthService {
       return Promise.resolve(false);
     }
 
-    return this.authRepository.hasValidPlatformAdminBootstrapTokenHash(this.hashToken(token));
+    return this.authRepository.hasValidPlatformAdminBootstrapTokenHash(hashOpaqueToken(token));
   }
 
   private hasValidMembershipClaimRedirect(redirectTo?: string): Promise<boolean> {
     const token = this.extractTokenFromRedirect(redirectTo, '/member-claims/accept');
     if (!token) return Promise.resolve(false);
-    return this.authRepository.hasValidMembershipClaimTokenHash(this.hashToken(token));
+    return this.authRepository.hasValidMembershipClaimTokenHash(hashOpaqueToken(token));
   }
 
   private extractInvitationTokenFromRedirect(redirectTo?: string): string | null {
@@ -461,7 +462,7 @@ export class AuthService {
   }
 
   async logoutByToken(sessionToken: string): Promise<{ ok: true }> {
-    await this.authRepository.revokeSessionByTokenHash(this.hashToken(sessionToken), 'logout');
+    await this.authRepository.revokeSessionByTokenHash(hashOpaqueToken(sessionToken), 'logout');
     return { ok: true };
   }
 
@@ -537,7 +538,7 @@ export class AuthService {
     await this.authRepository.createSession({
       userId,
       type: 'user',
-      tokenHash: this.hashToken(sessionToken),
+      tokenHash: hashOpaqueToken(sessionToken),
       expiresAt,
       absoluteExpiresAt: new Date(now + SESSION_ABSOLUTE_TTL_SECONDS * 1000),
       ...(deviceName ? { deviceName } : {}),
@@ -736,10 +737,6 @@ export class AuthService {
 
   private isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
-  }
-
-  private hashToken(rawToken: string): string {
-    return createHash('sha256').update(rawToken).digest('hex');
   }
 
   private normalizeRedirectTo(value?: string): string | undefined {

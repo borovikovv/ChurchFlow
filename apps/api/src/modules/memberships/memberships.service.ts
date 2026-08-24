@@ -7,6 +7,10 @@ import {
 } from '@nestjs/common';
 import { InvitationsRepository } from '../invitations/repositories/invitations.repository';
 import { NotificationsService } from '../notifications/notifications.service';
+import type {
+  NotificationBodyMessage,
+  NotificationTitleKey,
+} from '../notifications/notification-messages';
 import type { OrganizationRole } from '@churchflow/db';
 import type {
   CreateOrganizationMemberRelationshipInput,
@@ -224,8 +228,8 @@ export class MembershipsService {
         organizationId,
         actorUserId,
         type: 'MEMBER_ADDED',
-        title: 'Member added',
-        body: `${memberDisplayName(member)} was added to the organization.`,
+        titleKey: 'memberAdded',
+        bodyMessage: { key: 'memberAdded', memberName: memberDisplayName(member) },
         entityId: member.id,
       });
 
@@ -270,8 +274,8 @@ export class MembershipsService {
           organizationId,
           actorUserId,
           type: 'MEMBER_ADDED',
-          title: 'Members imported',
-          body: `${String(members.length)} members were imported to the organization.`,
+          titleKey: 'membersImported',
+          bodyMessage: { key: 'membersImported', memberCount: members.length },
           entityId: members[0]?.id ?? null,
           dedupeKey: `members-import:${actorUserId}:${String(Date.now())}`,
         });
@@ -392,8 +396,8 @@ export class MembershipsService {
           organizationId,
           actorUserId,
           type: 'MEMBER_REMOVED',
-          title: 'Member removed',
-          body: `${memberDisplayName(targetMembership)} was removed from the organization.`,
+          titleKey: 'memberRemoved',
+          bodyMessage: { key: 'memberRemoved', memberName: memberDisplayName(targetMembership) },
           entityId: removed.id,
         });
       }
@@ -498,8 +502,8 @@ export class MembershipsService {
     organizationId: string;
     actorUserId: string;
     type: 'MEMBER_ADDED' | 'MEMBER_REMOVED';
-    title: string;
-    body: string;
+    titleKey: NotificationTitleKey;
+    bodyMessage: NotificationBodyMessage;
     entityId: string | null;
     dedupeKey?: string;
   }) {
@@ -514,8 +518,8 @@ export class MembershipsService {
         recipientMembershipIds,
         type: input.type,
         preferenceKey: 'organizationUpdatesEnabled',
-        title: input.title,
-        body: input.body,
+        titleKey: input.titleKey,
+        bodyMessage: input.bodyMessage,
         url: `/dashboard/${input.organizationId}/members`,
         entityType: 'OrganizationMember',
         entityId: input.entityId,
@@ -531,6 +535,6 @@ export class MembershipsService {
 function memberDisplayName(member: {
   profile?: { displayName: string } | null;
   user?: { displayName: string | null; email: string | null } | null;
-}) {
-  return member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? 'Member';
+}): string | null {
+  return member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? null;
 }

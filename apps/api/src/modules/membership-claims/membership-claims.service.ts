@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { Prisma } from '@churchflow/db';
+import { UserLocaleService } from '../../common/locale/user-locale.service';
 import { EmailService } from '../email/email.service';
 import { MembershipClaimsRepository } from './repositories/membership-claims.repository';
 
@@ -21,6 +22,7 @@ export class MembershipClaimsService {
   constructor(
     private readonly repository: MembershipClaimsRepository,
     private readonly emailService: EmailService,
+    private readonly userLocaleService: UserLocaleService,
   ) {}
 
   async validate(rawToken: string) {
@@ -84,9 +86,11 @@ export class MembershipClaimsService {
 
     const claimUrl = this.emailService.buildMembershipClaimUrl(rawToken);
     const email = result.profile?.email;
+    const memberLocale = await this.userLocaleService.forRecipient(email, actorUserId);
     const emailSent = email
       ? await this.trySendEmail(() =>
           this.emailService.sendMembershipClaimEmail({
+            locale: memberLocale,
             email,
             organizationName: result.organizationName,
             token: rawToken,

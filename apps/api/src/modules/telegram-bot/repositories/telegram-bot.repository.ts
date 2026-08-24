@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type OrganizationRole } from '@churchflow/db';
-import { CALENDAR_EVENT_REPEAT_PERIOD } from '@churchflow/shared';
+import {
+  appLocaleOrFallback,
+  CALENDAR_EVENT_REPEAT_PERIOD,
+  type AppLocale,
+} from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 const upcomingServiceInclude = {
@@ -39,14 +43,18 @@ export interface ActiveTelegramOrganizationRecord {
   role: OrganizationRole;
 }
 
-export interface TelegramNotificationDelivery {
+export interface TelegramNotificationTarget {
   notificationId: string | null;
   organizationName: string;
   recipientUserId: string;
   chatId: string;
+  locale: AppLocale;
+  url: string | null;
+}
+
+export interface TelegramNotificationDelivery extends TelegramNotificationTarget {
   title: string;
   body: string | null;
-  url: string | null;
 }
 
 export type TelegramNotificationPreferenceKey =
@@ -206,57 +214,13 @@ export class TelegramBotRepository {
     });
   }
 
-  async getTaskAssignedTelegramDeliveries(input: {
-    organizationId: string;
-    recipientUserIds: string[];
-    notificationByRecipientUserId: Map<string, string>;
-    title: string;
-    body: string | null;
-    url: string | null;
-  }): Promise<TelegramNotificationDelivery[]> {
-    return this.getNotificationTelegramDeliveries({
-      ...input,
-      preferenceKey: 'taskAssignedEnabled',
-    });
-  }
-
-  async getServiceAssignedTelegramDeliveries(input: {
-    organizationId: string;
-    recipientUserIds: string[];
-    notificationByRecipientUserId: Map<string, string>;
-    title: string;
-    body: string | null;
-    url: string | null;
-  }): Promise<TelegramNotificationDelivery[]> {
-    return this.getNotificationTelegramDeliveries({
-      ...input,
-      preferenceKey: 'serviceAssignedEnabled',
-    });
-  }
-
-  async getBirthdayDigestTelegramDeliveries(input: {
-    organizationId: string;
-    recipientUserIds: string[];
-    notificationByRecipientUserId: Map<string, string>;
-    title: string;
-    body: string | null;
-    url: string | null;
-  }): Promise<TelegramNotificationDelivery[]> {
-    return this.getNotificationTelegramDeliveries({
-      ...input,
-      preferenceKey: 'birthdayDigestEnabled',
-    });
-  }
-
   async getNotificationTelegramDeliveries(input: {
     organizationId: string;
     recipientUserIds: string[];
     notificationByRecipientUserId: Map<string, string>;
-    title: string;
-    body: string | null;
     url: string | null;
     preferenceKey: TelegramNotificationPreferenceKey;
-  }): Promise<TelegramNotificationDelivery[]> {
+  }): Promise<TelegramNotificationTarget[]> {
     if (input.recipientUserIds.length === 0) return [];
 
     const organization = await this.prisma.organization.findFirst({
@@ -285,6 +249,7 @@ export class TelegramBotRepository {
       select: {
         userId: true,
         telegramChatId: true,
+        user: { select: { locale: true } },
       },
     });
 
@@ -293,17 +258,14 @@ export class TelegramBotRepository {
       organizationName: organization.name,
       recipientUserId: binding.userId,
       chatId: binding.telegramChatId,
-      title: input.title,
-      body: input.body,
+      locale: appLocaleOrFallback(binding.user.locale),
       url: input.url,
     }));
   }
 
   async getPlatformAdminTelegramDeliveries(input: {
-    title: string;
-    body: string | null;
     url: string | null;
-  }): Promise<TelegramNotificationDelivery[]> {
+  }): Promise<TelegramNotificationTarget[]> {
     const bindings = await this.prisma.telegramNotificationBinding.findMany({
       where: {
         enabled: true,
@@ -317,6 +279,7 @@ export class TelegramBotRepository {
       select: {
         userId: true,
         telegramChatId: true,
+        user: { select: { locale: true } },
       },
     });
 
@@ -325,8 +288,7 @@ export class TelegramBotRepository {
       organizationName: 'ChurchFlow',
       recipientUserId: binding.userId,
       chatId: binding.telegramChatId,
-      title: input.title,
-      body: input.body,
+      locale: appLocaleOrFallback(binding.user.locale),
       url: input.url,
     }));
   }

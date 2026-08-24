@@ -169,8 +169,12 @@ export class PrayerRequestsService {
         recipientMembershipIds,
         type: 'PRAYER_REQUEST_CREATED',
         preferenceKey: 'organizationUpdatesEnabled',
-        title: 'New prayer request',
-        body: `${authorDisplayName(request)} asked for prayer: ${request.title}`,
+        titleKey: 'prayerRequestCreated',
+        bodyMessage: {
+          key: 'prayerRequestCreated',
+          authorName: authorName(request),
+          requestTitle: request.title,
+        },
         url: `/dashboard/${organizationId}/prayer-requests`,
         entityType: 'PrayerRequest',
         entityId: request.id,
@@ -215,13 +219,17 @@ function requestToItem(request: PrayerRequestRecord, actor: PrayerRequestActor):
 }
 
 function authorDisplayName(request: PrayerRequestRecord): string {
+  return authorName(request) ?? 'Member';
+}
+
+function authorName(request: PrayerRequestRecord): string | null {
   return (
     request.authorMembership?.profile?.displayName ??
     request.authorMembership?.user?.displayName ??
     request.authorMembership?.user?.email ??
     request.author?.displayName ??
     request.author?.email ??
-    'Member'
+    null
   );
 }
 

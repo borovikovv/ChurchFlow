@@ -26,6 +26,10 @@ function appLocaleFromLanguageTag(tag: string): AppLocale | null {
   return isAppLocale(normalized) ? normalized : null;
 }
 
+export function appLocaleOrFallback(value: string | null | undefined): AppLocale {
+  return typeof value === 'string' && isAppLocale(value) ? value : DEFAULT_APP_LOCALE;
+}
+
 export function resolveAppLocaleFromAcceptLanguage(header: string | undefined): AppLocale {
   if (!header) {
     return DEFAULT_APP_LOCALE;

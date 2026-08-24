@@ -823,7 +823,9 @@ model Notification {
   recipientMembershipId String?          @map("recipient_membership_id") @db.Uuid
   type                  NotificationType
   title                 String
+  titleKey              String?          @map("title_key") @db.VarChar(64)
   body                  String?
+  bodyMessage           Json?            @map("body_message")
   url                   String?
   entityType            String?          @map("entity_type")
   entityId              String?          @map("entity_id") @db.Uuid

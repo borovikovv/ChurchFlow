@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { resolve } from 'node:path';
 import { apiEnvSchema } from '@churchflow/shared';
 import { PrismaModule } from './prisma/prisma.module';
+import { UserLocaleModule } from './common/locale/user-locale.module';
 import { EmailModule } from './modules/email/email.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -42,6 +43,7 @@ import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.
     ]),
     ScheduleModule.forRoot(),
     PrismaModule,
+    UserLocaleModule,
     EmailModule,
     AuditModule,
     PlatformAdminBootstrapModule,

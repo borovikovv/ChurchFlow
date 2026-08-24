@@ -5,6 +5,7 @@ import {
   Get,
   Inject,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Req,
@@ -192,7 +193,7 @@ export class AuthController {
   @Delete('sessions/:sessionId')
   @UseGuards(SessionAuthGuard)
   revokeSession(
-    @Param('sessionId') sessionId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Req() request: AuthenticatedRequest,
   ): Promise<{ ok: true }> {
     return this.authService.revokeSession(this.authContext(request).userId, sessionId);
