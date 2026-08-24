@@ -20,10 +20,10 @@ export class UpdateNotificationPreferencesDto implements UpdateNotificationPrefe
   inAppEnabled!: boolean;
   emailEnabled!: boolean;
   telegramEnabled!: boolean;
-  taskAssignedEnabled!: boolean;
-  serviceAssignedEnabled!: boolean;
+  assignmentsEnabled!: boolean;
   remindersEnabled!: boolean;
   birthdayDigestEnabled!: boolean;
+  prayerRequestsEnabled!: boolean;
   organizationUpdatesEnabled!: boolean;
   timeZone?: string | null;
 }

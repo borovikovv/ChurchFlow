@@ -10,8 +10,13 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHash, createPublicKey, randomBytes, verify, type JsonWebKey } from 'node:crypto';
 import { z } from 'zod';
-import type { UserSession } from '@churchflow/shared';
+import {
+  resolveAppLocaleFromAcceptLanguage,
+  type AppLocale,
+  type UserSession,
+} from '@churchflow/shared';
 import { deviceLabelFromUserAgent } from '../../common/auth/device-label';
+import { hashOpaqueToken } from '../../common/auth/session-token';
 import {
   SESSION_ABSOLUTE_TTL_SECONDS,
   SESSION_IDLE_TTL_SECONDS,
@@ -158,6 +163,7 @@ interface AuthRepositoryPort {
     displayName?: string;
     username?: string;
     avatarUrl?: string;
+    locale?: AppLocale;
   }): Promise<AuthRepositoryUser>;
   touchTelegramAccount(accountId: string, username?: string): Promise<AuthRepositoryUser>;
   createSession(input: CreateSessionInput): Promise<CreatedSession>;
@@ -228,6 +234,7 @@ export class AuthService {
     codeVerifier: string;
     expectedNonce: string;
     redirectTo?: string;
+    acceptLanguage?: string;
     client: SessionClientContext;
   }): Promise<CompleteTelegramLoginResult> {
     if (input.state !== input.expectedState) {
@@ -240,6 +247,7 @@ export class AuthService {
     const { user, defaultRedirectTo, useRequestedRedirect } = await this.resolveTelegramLoginUser(
       claims,
       redirectTo,
+      input.acceptLanguage,
     );
 
     const session = await this.createUserSession(user.id, input.client);
@@ -254,6 +262,7 @@ export class AuthService {
   private async resolveTelegramLoginUser(
     claims: TelegramIdTokenClaims,
     redirectTo?: string,
+    acceptLanguage?: string,
   ): Promise<TelegramLoginResolution> {
     const hasPendingInvitation = await this.authRepository.hasPendingTelegramInvitation(claims.sub);
     const hasClaimableInvitationRedirect =
@@ -282,6 +291,7 @@ export class AuthService {
           ...(claims.name ? { displayName: claims.name } : {}),
           ...(claims.preferred_username ? { username: claims.preferred_username } : {}),
           ...(claims.picture ? { avatarUrl: claims.picture } : {}),
+          locale: resolveAppLocaleFromAcceptLanguage(acceptLanguage),
         });
       } catch (error: unknown) {
         if (error instanceof Error && error.message === 'TELEGRAM_ACCOUNT_INACTIVE') {
@@ -364,7 +374,7 @@ export class AuthService {
       return Promise.resolve(false);
     }
 
-    return this.authRepository.hasValidClaimableInvitationTokenHash(this.hashToken(token));
+    return this.authRepository.hasValidClaimableInvitationTokenHash(hashOpaqueToken(token));
   }
 
   private hasValidPlatformAdminBootstrapRedirect(redirectTo?: string): Promise<boolean> {
@@ -373,13 +383,13 @@ export class AuthService {
       return Promise.resolve(false);
     }
 
-    return this.authRepository.hasValidPlatformAdminBootstrapTokenHash(this.hashToken(token));
+    return this.authRepository.hasValidPlatformAdminBootstrapTokenHash(hashOpaqueToken(token));
   }
 
   private hasValidMembershipClaimRedirect(redirectTo?: string): Promise<boolean> {
     const token = this.extractTokenFromRedirect(redirectTo, '/member-claims/accept');
     if (!token) return Promise.resolve(false);
-    return this.authRepository.hasValidMembershipClaimTokenHash(this.hashToken(token));
+    return this.authRepository.hasValidMembershipClaimTokenHash(hashOpaqueToken(token));
   }
 
   private extractInvitationTokenFromRedirect(redirectTo?: string): string | null {
@@ -452,7 +462,7 @@ export class AuthService {
   }
 
   async logoutByToken(sessionToken: string): Promise<{ ok: true }> {
-    await this.authRepository.revokeSessionByTokenHash(this.hashToken(sessionToken), 'logout');
+    await this.authRepository.revokeSessionByTokenHash(hashOpaqueToken(sessionToken), 'logout');
     return { ok: true };
   }
 
@@ -528,7 +538,7 @@ export class AuthService {
     await this.authRepository.createSession({
       userId,
       type: 'user',
-      tokenHash: this.hashToken(sessionToken),
+      tokenHash: hashOpaqueToken(sessionToken),
       expiresAt,
       absoluteExpiresAt: new Date(now + SESSION_ABSOLUTE_TTL_SECONDS * 1000),
       ...(deviceName ? { deviceName } : {}),
@@ -727,10 +737,6 @@ export class AuthService {
 
   private isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
-  }
-
-  private hashToken(rawToken: string): string {
-    return createHash('sha256').update(rawToken).digest('hex');
   }
 
   private normalizeRedirectTo(value?: string): string | undefined {

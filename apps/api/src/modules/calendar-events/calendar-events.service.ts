@@ -24,11 +24,16 @@ import {
   CalendarRecurrenceError,
   expandCalendarEventOccurrences,
   getOccurrenceStarts,
-  validTimeZoneOrFallback,
 } from './recurrence/calendar-recurrence';
+import { validTimeZoneOrFallback } from '../../common/time/date-time';
 import { NotificationsService } from '../notifications/notifications.service';
+import type {
+  NotificationBodyMessage,
+  NotificationTitleKey,
+} from '../notifications/notification-messages';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const NOTIFICATION_FALLBACK_TIME_ZONE = 'Europe/Kyiv';
 const REMINDER_WINDOW_MS = 5 * 60 * 1000;
 const REMINDER_LOOKAHEAD_MS = 7 * MILLISECONDS_PER_DAY;
 const calendarEventsLogger = new Logger('CalendarEventsService');
@@ -282,8 +287,13 @@ export class CalendarEventsService {
                 recipientMembershipIds: scheduledRecipientMembershipIds,
                 type: reminderNotificationType(event),
                 preferenceKey: 'remindersEnabled',
-                title: calendarNotificationTitle(event, schedule.kind),
-                body: calendarNotificationBody(event, occurrenceStart, timeZone, schedule.kind),
+                titleKey: calendarNotificationTitleKey(event, schedule.kind),
+                bodyMessage: calendarNotificationBody(
+                  event,
+                  occurrenceStart,
+                  timeZone,
+                  schedule.kind,
+                ),
                 url: `/dashboard/${event.organizationId}/calendar`,
                 entityType: 'CalendarEvent',
                 entityId: event.id,
@@ -359,8 +369,8 @@ export class CalendarEventsService {
         organizationId,
         actorUserId,
         eventId: event.id,
-        title: 'You were assigned a task',
-        body: taskAssignedNotificationBody(event),
+        titleKey: 'taskAssigned',
+        bodyMessage: eventStartsAtBody(event),
         url: `/dashboard/${organizationId}/calendar`,
         assigneeMembershipIds,
       });
@@ -403,8 +413,8 @@ export class CalendarEventsService {
         organizationId,
         actorUserId,
         eventId: event.id,
-        title: 'You were assigned to a service',
-        body: serviceAssignedNotificationBody(event),
+        titleKey: 'serviceAssigned',
+        bodyMessage: eventStartsAtBody(event),
         url: `/dashboard/${organizationId}/calendar`,
         participantMembershipIds,
       });
@@ -452,8 +462,8 @@ export class CalendarEventsService {
         recipientMembershipIds,
         type: 'CALENDAR_EVENT_LINKED',
         preferenceKey: 'organizationUpdatesEnabled',
-        title: 'Calendar event linked to member',
-        body: calendarLinkedNotificationBody(event),
+        titleKey: 'calendarEventLinked',
+        bodyMessage: calendarLinkedNotificationBody(event),
         url: `/dashboard/${organizationId}/calendar`,
         entityType: 'CalendarEvent',
         entityId: event.id,
@@ -476,48 +486,52 @@ function formatDateOnly(value: Date | null): string | null {
   return value.toISOString().slice(0, 10);
 }
 
-function taskAssignedNotificationBody(event: CalendarEventRecord): string {
-  return `${event.title} starts at ${formatNotificationDateTime(event.startsAt)}.`;
+function eventStartsAtBody(event: CalendarEventRecord): NotificationBodyMessage {
+  return {
+    key: 'eventStartsAt',
+    eventTitle: event.title,
+    startsAt: event.startsAt.toISOString(),
+    timeZone: NOTIFICATION_FALLBACK_TIME_ZONE,
+  };
 }
 
-function serviceAssignedNotificationBody(event: CalendarEventRecord): string {
-  return `${event.title} starts at ${formatNotificationDateTime(event.startsAt)}.`;
+function calendarLinkedNotificationBody(event: CalendarEventRecord): NotificationBodyMessage {
+  return {
+    key: 'calendarEventLinked',
+    memberName: event.linkedMembership ? memberDisplayName(event.linkedMembership) : null,
+    eventTitle: event.title,
+    startsAt: event.startsAt.toISOString(),
+    timeZone: NOTIFICATION_FALLBACK_TIME_ZONE,
+  };
 }
 
-function calendarLinkedNotificationBody(event: CalendarEventRecord): string {
-  const linkedMemberName = event.linkedMembership
-    ? memberDisplayName(event.linkedMembership)
-    : 'A member';
-  return `${linkedMemberName} was linked to ${event.title}, starting at ${formatNotificationDateTime(
-    event.startsAt,
-  )}.`;
+function memberDisplayName(
+  member: NonNullable<CalendarEventRecord['linkedMembership']>,
+): string | null {
+  return member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? null;
 }
 
-function memberDisplayName(member: NonNullable<CalendarEventRecord['linkedMembership']>): string {
-  return member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? 'Member';
+function reminderNotificationTitleKey(event: CalendarEventRecord): NotificationTitleKey {
+  if (event.type === CALENDAR_EVENT_TYPE.task) return 'taskReminder';
+  if (event.type === CALENDAR_EVENT_TYPE.service) return 'serviceReminder';
+  return 'calendarReminder';
 }
 
-function reminderNotificationTitle(event: CalendarEventRecord): string {
-  if (event.type === CALENDAR_EVENT_TYPE.task) return 'Task reminder';
-  if (event.type === CALENDAR_EVENT_TYPE.service) return 'Service reminder';
-  return 'Calendar reminder';
+function eventNotificationTitleKey(event: CalendarEventRecord): NotificationTitleKey {
+  if (event.type === CALENDAR_EVENT_TYPE.task) return 'taskDue';
+  if (event.type === CALENDAR_EVENT_TYPE.service) return 'serviceStarts';
+  if (event.type === CALENDAR_EVENT_TYPE.birthday) return 'birthday';
+  if (event.type === CALENDAR_EVENT_TYPE.anniversary) return 'anniversary';
+  return 'calendarEvent';
 }
 
-function eventNotificationTitle(event: CalendarEventRecord): string {
-  if (event.type === CALENDAR_EVENT_TYPE.task) return 'Task due';
-  if (event.type === CALENDAR_EVENT_TYPE.service) return 'Service starts';
-  if (event.type === CALENDAR_EVENT_TYPE.birthday) return 'Birthday';
-  if (event.type === CALENDAR_EVENT_TYPE.anniversary) return 'Anniversary';
-  return 'Calendar event';
-}
-
-function calendarNotificationTitle(
+function calendarNotificationTitleKey(
   event: CalendarEventRecord,
   scheduleKind: CalendarNotificationSchedule['kind'],
-): string {
+): NotificationTitleKey {
   return scheduleKind === 'reminder'
-    ? reminderNotificationTitle(event)
-    : eventNotificationTitle(event);
+    ? reminderNotificationTitleKey(event)
+    : eventNotificationTitleKey(event);
 }
 
 function calendarNotificationBody(
@@ -525,12 +539,13 @@ function calendarNotificationBody(
   occurrenceStart: Date,
   timeZone: string,
   scheduleKind: CalendarNotificationSchedule['kind'],
-): string {
-  if (scheduleKind === 'event') {
-    return `${event.title} is scheduled for ${formatNotificationDateTime(occurrenceStart, timeZone)}.`;
-  }
-
-  return `${event.title} starts at ${formatNotificationDateTime(occurrenceStart, timeZone)}.`;
+): NotificationBodyMessage {
+  return {
+    key: scheduleKind === 'event' ? 'eventScheduledFor' : 'eventStartsAt',
+    eventTitle: event.title,
+    startsAt: occurrenceStart.toISOString(),
+    timeZone,
+  };
 }
 
 function reminderNotificationType(event: CalendarEventRecord) {
@@ -650,17 +665,6 @@ function groupReminderRecipientsByTimeZone(
   }
 
   return groups;
-}
-
-function formatNotificationDateTime(value: Date, timeZone = 'Europe/Kyiv'): string {
-  return new Intl.DateTimeFormat('uk-UA', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: validTimeZoneOrFallback(timeZone),
-  }).format(value);
 }
 
 function memberSummary(

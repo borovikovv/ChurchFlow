@@ -68,7 +68,7 @@ export function CalendarManager({
   const [view, setView] = useState<CalendarView>('month');
   const [isPending, startTransition] = useTransition();
   const calendarRef = useRef<FullCalendar>(null);
-  const mobileWeekViewApplied = useRef(false);
+  const appliedViewport = useRef<boolean | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const lastRangeKey = useRef('');
   const canManage = initialPayload.canManage;
@@ -253,10 +253,12 @@ export function CalendarManager({
     calendarRef.current?.getApi().changeView(FULL_CALENDAR_VIEW[nextView]);
   }
 
+  // The view switch is mobile-only, so a week view has to be reverted once the viewport
+  // grows, otherwise desktop is left in week view with no control to leave it.
   useEffect(() => {
-    if (!isMobile || mobileWeekViewApplied.current) return;
-    mobileWeekViewApplied.current = true;
-    const timer = setTimeout(() => handleViewChange('week'), 0);
+    if (appliedViewport.current === isMobile) return undefined;
+    appliedViewport.current = isMobile;
+    const timer = setTimeout(() => handleViewChange(isMobile ? 'week' : 'month'), 0);
 
     return () => clearTimeout(timer);
   }, [isMobile]);

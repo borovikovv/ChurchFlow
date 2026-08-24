@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+
 const { MembershipsService } = require('../dist/modules/memberships/memberships.service.js');
+
 const {
   MembershipClaimsService,
 } = require('../dist/modules/membership-claims/membership-claims.service.js');
@@ -10,6 +12,14 @@ const {
 const {
   MembershipClaimsRepository,
 } = require('../dist/modules/membership-claims/repositories/membership-claims.repository.js');
+
+function createUserLocaleService(locale = 'en') {
+  return {
+    forUser: async () => locale,
+    forEmail: async () => null,
+    forRecipient: async () => locale,
+  };
+}
 
 test('manual member repository atomically creates profile and audit without User', async () => {
   const captured = {};
@@ -240,6 +250,7 @@ test('membership claim generation stores a hash and returns only the raw URL', a
       buildMembershipClaimUrl: (token) =>
         `https://churchflow.test/member-claims/accept?token=${token}`,
     },
+    createUserLocaleService(),
   );
 
   const result = await service.generate('organization', 'membership', 'owner');
@@ -264,6 +275,7 @@ test('membership claim email failure does not fail the persisted claim', async (
         `https://churchflow.test/member-claims/accept?token=${token}`,
       sendMembershipClaimEmail: async () => Promise.reject(new Error('provider unavailable')),
     },
+    createUserLocaleService(),
   );
 
   const result = await service.generate('organization', 'membership', 'owner');
@@ -292,6 +304,7 @@ test('public membership claim validation does not expose member PII or Telegram 
       }),
     },
     {},
+    createUserLocaleService(),
   );
 
   const result = await service.validate('raw-token-that-is-long-enough-for-validation');
@@ -321,6 +334,7 @@ test('revoked membership claim is invalid for public validation', async () => {
       }),
     },
     {},
+    createUserLocaleService(),
   );
 
   assert.deepEqual(await service.validate('raw-token-that-is-long-enough-for-validation'), {
@@ -332,6 +346,7 @@ test('duplicate membership during claim approval returns a conflict', async () =
   const service = new MembershipClaimsService(
     { approve: async () => ({ conflict: true, expired: false }) },
     {},
+    createUserLocaleService(),
   );
 
   await assert.rejects(
@@ -341,7 +356,11 @@ test('duplicate membership during claim approval returns a conflict', async () =
 });
 
 test('expired membership claim request is rejected after expiry is persisted', async () => {
-  const service = new MembershipClaimsService({ request: async () => ({ expired: true }) }, {});
+  const service = new MembershipClaimsService(
+    { request: async () => ({ expired: true }) },
+    {},
+    createUserLocaleService(),
+  );
 
   await assert.rejects(
     service.request('raw-token-that-is-long-enough-for-validation', 'claimant'),

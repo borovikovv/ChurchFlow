@@ -12,6 +12,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { Prisma, type InvitationTargetProvider, type OrganizationRole } from '@churchflow/db';
 import type { CreateOrganizationInvitationInput } from '@churchflow/shared';
 import { AuditService } from '../audit/audit.service';
+import { UserLocaleService } from '../../common/locale/user-locale.service';
 import { EmailService } from '../email/email.service';
 import { InvitationsRepository } from './repositories/invitations.repository';
 
@@ -46,6 +47,7 @@ export class InvitationsService {
     private readonly invitationsRepository: InvitationsRepository,
     private readonly emailService: EmailService,
     private readonly auditService: AuditService,
+    private readonly userLocaleService: UserLocaleService,
   ) {}
 
   createRawInvitationToken(): { rawToken: string; tokenHash: string } {
@@ -123,9 +125,11 @@ export class InvitationsService {
     const acceptUrl = this.emailService.buildOrganizationInvitationUrl(token.rawToken);
 
     const notificationEmail = input.email;
+    const inviteeLocale = await this.userLocaleService.forRecipient(notificationEmail, actorUserId);
     const emailSent = notificationEmail
       ? await this.trySendEmail(() =>
           this.emailService.sendOrganizationInvitationEmail({
+            locale: inviteeLocale,
             email: notificationEmail,
             organizationName: organization.name,
             role: input.role,
@@ -360,8 +364,10 @@ export class InvitationsService {
       throw new NotFoundException('Pending invitation was not found');
     }
 
+    const inviteeLocale = await this.userLocaleService.forRecipient(notificationEmail, actorUserId);
     const emailSent = await this.trySendEmail(() =>
       this.emailService.sendOrganizationInvitationEmail({
+        locale: inviteeLocale,
         email: notificationEmail,
         organizationName: invitation.organization.name,
         role: invitation.role,

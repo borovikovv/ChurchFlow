@@ -5,6 +5,7 @@ import {
   Get,
   Inject,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Req,
@@ -72,6 +73,7 @@ interface AuthControllerService {
     codeVerifier: string;
     expectedNonce: string;
     redirectTo?: string;
+    acceptLanguage?: string;
     client: SessionClientContext;
   }): Promise<CompleteTelegramLoginResult>;
   logoutByToken(sessionToken: string): Promise<{ ok: true }>;
@@ -137,6 +139,8 @@ export class AuthController {
     const expectedNonce = cookies[TELEGRAM_NONCE_COOKIE];
     const redirectTo = cookies[TELEGRAM_REDIRECT_COOKIE];
 
+    const acceptLanguage = request.headers['accept-language'];
+
     this.clearTelegramCookies(response);
 
     if (error || !code || !state || !expectedState || !codeVerifier || !expectedNonce) {
@@ -152,6 +156,7 @@ export class AuthController {
         codeVerifier,
         expectedNonce,
         ...(redirectTo ? { redirectTo } : {}),
+        ...(acceptLanguage ? { acceptLanguage } : {}),
         client: this.sessionClientContext(request),
       });
       this.setAuthCookies(response, result);
@@ -188,7 +193,7 @@ export class AuthController {
   @Delete('sessions/:sessionId')
   @UseGuards(SessionAuthGuard)
   revokeSession(
-    @Param('sessionId') sessionId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Req() request: AuthenticatedRequest,
   ): Promise<{ ok: true }> {
     return this.authService.revokeSession(this.authContext(request).userId, sessionId);

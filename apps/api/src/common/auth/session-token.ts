@@ -11,7 +11,7 @@ export function sessionTokenFromRequest(request: Request): string | undefined {
   return parseCookies(request.headers.cookie)[AUTH_COOKIE_NAMES.session];
 }
 
-export function hashSessionToken(token: string): string {
+export function hashOpaqueToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 

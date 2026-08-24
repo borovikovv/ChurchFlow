@@ -1,4 +1,5 @@
 import { CALENDAR_EVENT_REPEAT_PERIOD, type CalendarEventRepeatPeriod } from '@churchflow/shared';
+import { validTimeZoneOrFallback } from '../../../common/time/date-time';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const DAILY_REPEAT_STEP_DAYS = 1;
@@ -195,16 +196,6 @@ export function zonedDateParts(value: Date, timeZone: string | null | undefined)
     minute: parts['minute'] ?? value.getUTCMinutes(),
     second: parts['second'] ?? value.getUTCSeconds(),
   };
-}
-
-export function validTimeZoneOrFallback(timeZone: string | null | undefined): string {
-  const candidate = timeZone || 'UTC';
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date());
-    return candidate;
-  } catch {
-    return 'UTC';
-  }
 }
 
 function firstOccurrenceInRange(

@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+
 const { createHash, generateKeyPairSync, sign } = require('node:crypto');
 const { AuthController } = require('../dist/modules/auth/auth.controller.js');
 const { AuthService } = require('../dist/modules/auth/auth.service.js');
@@ -9,6 +10,14 @@ const {
 } = require('../dist/modules/organization-requests/organization-requests.service.js');
 const { InvitationsService } = require('../dist/modules/invitations/invitations.service.js');
 const { MembershipsService } = require('../dist/modules/memberships/memberships.service.js');
+
+function createUserLocaleService(locale = 'en') {
+  return {
+    forUser: async () => locale,
+    forEmail: async () => null,
+    forRecipient: async () => locale,
+  };
+}
 
 const telegramClaims = {
   iss: 'https://oauth.telegram.org',
@@ -274,6 +283,29 @@ test('unknown Telegram user is admitted from the organization request route', as
   assert.equal(result.user.platformRole, 'USER');
 });
 
+test('an admitted Telegram user gets the locale matching the browser language', async () => {
+  const created = [];
+  const repository = createAuthRepository({
+    createTelegramUserForAdmission: async (input) => {
+      created.push(input.locale);
+      return {
+        id: 'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
+        email: null,
+        displayName: 'New User',
+        platformRole: 'USER',
+      };
+    },
+  });
+  const service = createAuthService(repository);
+
+  await service.resolveTelegramLoginUser(telegramClaims, '/organization-request', 'uk-UA,uk;q=0.9');
+  await service.resolveTelegramLoginUser(telegramClaims, '/organization-request', 'ru-RU,ru;q=0.9');
+  await service.resolveTelegramLoginUser(telegramClaims, '/organization-request', 'en-US,en;q=0.9');
+  await service.resolveTelegramLoginUser(telegramClaims, '/organization-request');
+
+  assert.deepEqual(created, ['uk', 'uk', 'en', 'en']);
+});
+
 test('unknown Telegram user is rejected by ordinary login', async () => {
   const service = createAuthService(createAuthRepository());
 
@@ -390,6 +422,45 @@ for (const [label, cookieDomain] of [
     }
   });
 }
+
+test('Telegram callback forwards the browser Accept-Language header', async () => {
+  let forwarded;
+  const controller = createAuthController(undefined, 'https://stage.mychurchflow.org', {
+    completeTelegramLogin: async (input) => {
+      forwarded = input.acceptLanguage;
+      return {
+        user: {
+          id: 'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
+          email: null,
+          displayName: 'Stage User',
+          platformRole: 'USER',
+        },
+        sessionToken: 'session-token',
+        sessionExpiresAt: CONTROLLER_SESSION_EXPIRES_AT,
+        redirectTo: '/dashboard/stage',
+      };
+    },
+  });
+
+  await controller.completeTelegramLogin(
+    'telegram-code',
+    'state',
+    undefined,
+    {
+      headers: {
+        'accept-language': 'uk-UA,uk;q=0.9',
+        cookie: cookieHeader({
+          churchflow_telegram_state: 'state',
+          churchflow_telegram_verifier: 'verifier',
+          churchflow_telegram_nonce: 'nonce',
+        }),
+      },
+    },
+    new FakeResponse(),
+  );
+
+  assert.equal(forwarded, 'uk-UA,uk;q=0.9');
+});
 
 test('Telegram callback redirects to the configured stage web origin', async () => {
   const controller = createAuthController(undefined, 'https://stage.mychurchflow.org');
@@ -558,7 +629,13 @@ test('an expired pending request no longer blocks a new request', async () => {
         requestedBy: { accounts: [{ providerAccountId: 'telegram-user-1' }] },
       }),
     },
-    { sendOrganizationRequestAdminEmail: async () => undefined },
+    {
+      platformAdminEmail: 'admin@churchflow.test',
+      sendOrganizationRequestAdminEmail: async () => undefined,
+    },
+    undefined,
+    undefined,
+    createUserLocaleService(),
   );
 
   const result = await service.create(
@@ -586,11 +663,14 @@ test('email failure does not fail a committed organization request', async () =>
       }),
     },
     {
+      platformAdminEmail: 'admin@churchflow.test',
       sendOrganizationRequestAdminEmail: async () => {
         throw new Error('Email provider unavailable');
       },
     },
-    { record: async () => undefined },
+    undefined,
+    undefined,
+    createUserLocaleService(),
   );
 
   const result = await service.create(
@@ -621,10 +701,14 @@ test('expired request resubmission returns a new pending request and sends admin
       }),
     },
     {
+      platformAdminEmail: 'admin@churchflow.test',
       sendOrganizationRequestAdminEmail: async (input) => {
         notification = input;
       },
     },
+    undefined,
+    undefined,
+    createUserLocaleService(),
   );
 
   const result = await service.resubmit('expired-request', 'requester');
@@ -644,6 +728,7 @@ test('claimable invitation cannot grant an elevated role', async () => {
     },
     {},
     {},
+    createUserLocaleService(),
   );
 
   await assert.rejects(
@@ -727,6 +812,7 @@ test('expired invitation cannot be accepted', async () => {
     },
     {},
     {},
+    createUserLocaleService(),
   );
 
   await assert.rejects(service.accept('raw-invitation-token', 'user'), /Invitation has expired/);
@@ -758,6 +844,7 @@ test('targeted invitation requires the matching Telegram account', async () => {
     },
     {},
     {},
+    createUserLocaleService(),
   );
 
   await assert.rejects(
@@ -780,6 +867,7 @@ test('invitation email failure still returns the generated link', async () => {
       },
     },
     { record: async () => undefined },
+    createUserLocaleService(),
   );
 
   const result = await service.createForOrganization(

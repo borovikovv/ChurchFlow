@@ -67,7 +67,7 @@ export class PrayerRequestsService {
       actor,
       request: input,
     });
-    await this.tryNotifyManagersAboutCreatedRequest(organizationId, actorUserId, request);
+    await this.tryNotifyMembersAboutCreatedRequest(organizationId, actorUserId, request);
 
     return requestToItem(request, actor);
   }
@@ -155,31 +155,34 @@ export class PrayerRequestsService {
     return actor;
   }
 
-  private async tryNotifyManagersAboutCreatedRequest(
+  private async tryNotifyMembersAboutCreatedRequest(
     organizationId: string,
     actorUserId: string,
     request: PrayerRequestRecord,
   ): Promise<void> {
     try {
       const recipientMembershipIds =
-        await this.prayerRequestsRepository.listManagerMembershipIds(organizationId);
+        await this.prayerRequestsRepository.listNotifiableMembershipIds(organizationId);
       await this.notificationsService.createPrayerRequestCreatedNotifications({
         organizationId,
         actorUserId,
         recipientMembershipIds,
         type: 'PRAYER_REQUEST_CREATED',
-        preferenceKey: 'organizationUpdatesEnabled',
-        title: 'New prayer request',
-        body: `${authorDisplayName(request)} asked for prayer: ${request.title}`,
+        preferenceKey: 'prayerRequestsEnabled',
+        titleKey: 'prayerRequestCreated',
+        bodyMessage: {
+          key: 'prayerRequestCreated',
+          authorName: authorName(request),
+          requestTitle: request.title,
+        },
         url: `/dashboard/${organizationId}/prayer-requests`,
         entityType: 'PrayerRequest',
         entityId: request.id,
         dedupeKey: `prayer-request-created:${request.id}`,
-        adminOnly: true,
       });
     } catch (error: unknown) {
       this.logger.warn({
-        event: 'Prayer request manager notification failed',
+        event: 'Prayer request member notification failed',
         organizationId,
         prayerRequestId: request.id,
         error: error instanceof Error ? error.message : String(error),
@@ -215,13 +218,17 @@ function requestToItem(request: PrayerRequestRecord, actor: PrayerRequestActor):
 }
 
 function authorDisplayName(request: PrayerRequestRecord): string {
+  return authorName(request) ?? 'Member';
+}
+
+function authorName(request: PrayerRequestRecord): string | null {
   return (
     request.authorMembership?.profile?.displayName ??
     request.authorMembership?.user?.displayName ??
     request.authorMembership?.user?.email ??
     request.author?.displayName ??
     request.author?.email ??
-    'Member'
+    null
   );
 }
 

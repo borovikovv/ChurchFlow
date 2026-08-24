@@ -14,7 +14,12 @@ import type {
   ResubmitOrganizationRequestResult,
 } from '@churchflow/shared';
 import { slugSchema } from '@churchflow/shared';
+import { UserLocaleService } from '../../common/locale/user-locale.service';
 import { EmailService } from '../email/email.service';
+import {
+  renderPlatformAdminOrganizationRequestBody,
+  renderPlatformAdminOrganizationRequestTitle,
+} from '../notifications/notification-messages';
 import { TelegramBotRepository } from '../telegram-bot/repositories/telegram-bot.repository';
 import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
 import {
@@ -130,6 +135,7 @@ export interface OrganizationRequestDetail extends OrganizationRequestListItem {
 export interface RejectedOrganizationRequest {
   organizationName: string;
   contactEmail: string | null;
+  requestedByUserId: string | null;
 }
 
 export interface ApprovedOrganizationRequest {
@@ -196,6 +202,7 @@ export class OrganizationRequestsService {
     private readonly emailService: EmailService,
     private readonly telegramBotRepository: TelegramBotRepository,
     private readonly telegramBotService: TelegramBotService,
+    private readonly userLocaleService: UserLocaleService,
   ) {}
 
   async create(input: CreateOrganizationRequestInput, requestedByUserId: string) {
@@ -363,9 +370,14 @@ export class OrganizationRequestsService {
       staleBefore,
     });
     const contactEmail = request.contactEmail;
+    const requesterLocale = await this.userLocaleService.forRecipient(
+      contactEmail,
+      request.requestedByUserId,
+    );
     const notificationSent = contactEmail
       ? await this.trySendEmail(() =>
           this.emailService.sendOrganizationRequestApprovedEmail({
+            locale: requesterLocale,
             email: contactEmail,
             organizationName: result.organization.name,
             organizationId: result.organization.id,
@@ -420,8 +432,13 @@ export class OrganizationRequestsService {
     let notificationSent = false;
     if (request.contactEmail) {
       const contactEmail = request.contactEmail;
+      const requesterLocale = await this.userLocaleService.forRecipient(
+        contactEmail,
+        request.requestedByUserId,
+      );
       notificationSent = await this.trySendEmail(() =>
         this.emailService.sendOrganizationRequestRejectedEmail({
+          locale: requesterLocale,
           email: contactEmail,
           organizationName: request.organizationName,
           rejectionReason: input.rejectionReason,
@@ -440,11 +457,14 @@ export class OrganizationRequestsService {
     const requestedTelegramAccountId =
       request.requestedBy?.accounts[0]?.providerAccountId ?? 'linked Telegram account';
 
-    const title = `New organization request: ${request.organizationName}`;
-    const body = `Contact: ${request.contactName}${request.contactEmail ? ` <${request.contactEmail}>` : ''}`;
     const url = `/admin/organization-requests/${request.id}`;
+    const platformAdminLocale = await this.userLocaleService.forRecipient(
+      this.emailService.platformAdminEmail,
+      null,
+    );
     const emailSent = await this.trySendEmail(() =>
       this.emailService.sendOrganizationRequestAdminEmail({
+        locale: platformAdminLocale,
         requestId: request.id,
         organizationName: request.organizationName,
         contactName: request.contactName,
@@ -455,23 +475,43 @@ export class OrganizationRequestsService {
         message: request.message,
       }),
     );
-    const telegramSent = await this.trySendPlatformAdminTelegram({ title, body, url });
+    const telegramSent = await this.trySendPlatformAdminTelegram({
+      organizationName: request.organizationName,
+      contactName: request.contactName,
+      contactEmail: request.contactEmail,
+      url,
+    });
 
     return emailSent || telegramSent;
   }
 
   private async trySendPlatformAdminTelegram(input: {
-    title: string;
-    body: string | null;
+    organizationName: string;
+    contactName: string;
+    contactEmail: string | null;
     url: string | null;
   }): Promise<boolean> {
     try {
-      const deliveries = await this.telegramBotRepository.getPlatformAdminTelegramDeliveries(input);
+      const targets = await this.telegramBotRepository.getPlatformAdminTelegramDeliveries({
+        url: input.url,
+      });
       await Promise.all(
-        deliveries.map((delivery) => this.telegramBotService.deliverNotification(delivery)),
+        targets.map((target) =>
+          this.telegramBotService.deliverNotification({
+            ...target,
+            title: renderPlatformAdminOrganizationRequestTitle(
+              { organizationName: input.organizationName },
+              target.locale,
+            ),
+            body: renderPlatformAdminOrganizationRequestBody(
+              { contactName: input.contactName, contactEmail: input.contactEmail },
+              target.locale,
+            ),
+          }),
+        ),
       );
 
-      return deliveries.length > 0;
+      return targets.length > 0;
     } catch (error: unknown) {
       this.logger.error(
         'Platform admin Telegram delivery failed after the business operation was committed',

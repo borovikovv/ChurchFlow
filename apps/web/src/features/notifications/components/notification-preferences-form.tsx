@@ -254,43 +254,22 @@ export function NotificationPreferencesForm({
           <PreferenceRow
             offLabel={t('off')}
             onLabel={t('on')}
-            title={t('taskAssignments')}
-            description={t('taskAssignmentsDescription')}
-            checked={values.taskAssignedEnabled}
+            title={t('assignments')}
+            description={t('assignmentsDescription')}
+            checked={values.assignmentsEnabled}
           >
             <Checkbox
               disabled={preferencesPending}
               label={checkboxStateLabel(
-                values.taskAssignedEnabled,
-                savingPreference === 'taskAssignedEnabled',
+                values.assignmentsEnabled,
+                savingPreference === 'assignmentsEnabled',
                 {
                   disabled: t('disabled'),
                   enabled: t('enabled'),
                   saving: t('saving'),
                 },
               )}
-              {...registerPreference('taskAssignedEnabled')}
-            />
-          </PreferenceRow>
-          <PreferenceRow
-            offLabel={t('off')}
-            onLabel={t('on')}
-            title={t('serviceAssignments')}
-            description={t('serviceAssignmentsDescription')}
-            checked={values.serviceAssignedEnabled}
-          >
-            <Checkbox
-              disabled={preferencesPending}
-              label={checkboxStateLabel(
-                values.serviceAssignedEnabled,
-                savingPreference === 'serviceAssignedEnabled',
-                {
-                  disabled: t('disabled'),
-                  enabled: t('enabled'),
-                  saving: t('saving'),
-                },
-              )}
-              {...registerPreference('serviceAssignedEnabled')}
+              {...registerPreference('assignmentsEnabled')}
             />
           </PreferenceRow>
           <PreferenceRow
@@ -333,6 +312,27 @@ export function NotificationPreferencesForm({
                 },
               )}
               {...registerPreference('birthdayDigestEnabled')}
+            />
+          </PreferenceRow>
+          <PreferenceRow
+            offLabel={t('off')}
+            onLabel={t('on')}
+            title={t('prayerRequests')}
+            description={t('prayerRequestsDescription')}
+            checked={values.prayerRequestsEnabled}
+          >
+            <Checkbox
+              disabled={preferencesPending}
+              label={checkboxStateLabel(
+                values.prayerRequestsEnabled,
+                savingPreference === 'prayerRequestsEnabled',
+                {
+                  disabled: t('disabled'),
+                  enabled: t('enabled'),
+                  saving: t('saving'),
+                },
+              )}
+              {...registerPreference('prayerRequestsEnabled')}
             />
           </PreferenceRow>
           <PreferenceRow
@@ -434,10 +434,10 @@ function toFormValues(
     inAppEnabled: preferences.inAppEnabled,
     emailEnabled: Boolean(userEmail) && preferences.emailEnabled,
     telegramEnabled: preferences.telegram.enabled && preferences.telegramEnabled,
-    taskAssignedEnabled: preferences.taskAssignedEnabled,
-    serviceAssignedEnabled: preferences.serviceAssignedEnabled,
+    assignmentsEnabled: preferences.assignmentsEnabled,
     remindersEnabled: preferences.remindersEnabled,
     birthdayDigestEnabled: preferences.birthdayDigestEnabled,
+    prayerRequestsEnabled: preferences.prayerRequestsEnabled,
     organizationUpdatesEnabled: preferences.organizationUpdatesEnabled,
     timeZone: preferences.timeZone ?? browserTimeZone(),
   };

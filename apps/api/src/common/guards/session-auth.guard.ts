@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
-import { hashSessionToken, sessionTokenFromRequest } from '../auth/session-token';
+import { hashOpaqueToken, sessionTokenFromRequest } from '../auth/session-token';
 import { sessionIdleExpiresAt, shouldTouchSession } from '../auth/session-policy';
 
 export interface AuthContext {
@@ -26,7 +26,7 @@ export class SessionAuthGuard implements CanActivate {
     }
 
     const session = await this.prisma.session.findUnique({
-      where: { tokenHash: hashSessionToken(token) },
+      where: { tokenHash: hashOpaqueToken(token) },
       select: {
         id: true,
         userId: true,

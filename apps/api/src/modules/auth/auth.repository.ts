@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type PlatformRole, type SessionRevokeReason } from '@churchflow/db';
+import type { AppLocale } from '@churchflow/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface AuthRepositoryUser {
@@ -207,6 +208,7 @@ export class AuthRepository {
     displayName?: string;
     username?: string;
     avatarUrl?: string;
+    locale?: AppLocale;
   }): Promise<AuthRepositoryUser> {
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -214,6 +216,7 @@ export class AuthRepository {
           data: {
             ...(input.displayName ? { displayName: input.displayName } : {}),
             ...(input.avatarUrl ? { avatarUrl: input.avatarUrl } : {}),
+            ...(input.locale ? { locale: input.locale } : {}),
           },
           select: {
             id: true,

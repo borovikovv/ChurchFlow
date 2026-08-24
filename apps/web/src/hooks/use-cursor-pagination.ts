@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 export type CursorPageResult<TItem> =
   | { ok: true; cursor: string | null; items: TItem[] }
@@ -23,8 +23,21 @@ export function useCursorPagination<TItem>({
   loadPage: (cursor: string) => Promise<CursorPageResult<TItem>>;
 }) {
   const [loadedPages, setLoadedPages] = useState<Array<LoadedPage<TItem>>>([]);
+  const [loadedFor, setLoadedFor] = useState(initialItems);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadToken = useRef(0);
+
+  // A new first page means the rows behind it shifted, so pages fetched against the
+  // previous data would keep rendering items that were archived, removed or deleted.
+  if (loadedFor !== initialItems) {
+    loadToken.current += 1;
+    setLoadedFor(initialItems);
+    setLoadedPages([]);
+    setIsLoading(false);
+    setError(null);
+  }
+
   const lastLoadedPage = loadedPages.at(-1);
   const nextCursor = lastLoadedPage ? lastLoadedPage.cursor : initialCursor;
   const items = useMemo(() => {
@@ -43,9 +56,12 @@ export function useCursorPagination<TItem>({
   const loadMore = () => {
     if (!nextCursor || isLoading) return;
 
+    const token = loadToken.current;
     setIsLoading(true);
     setError(null);
     void loadPage(nextCursor).then((result) => {
+      if (token !== loadToken.current) return;
+
       setIsLoading(false);
       if (!result.ok) {
         setError(result.error);

@@ -330,10 +330,10 @@ export const updateNotificationPreferencesSchema = z.object({
   inAppEnabled: z.boolean(),
   emailEnabled: z.boolean(),
   telegramEnabled: z.boolean(),
-  taskAssignedEnabled: z.boolean(),
-  serviceAssignedEnabled: z.boolean(),
+  assignmentsEnabled: z.boolean(),
   remindersEnabled: z.boolean(),
   birthdayDigestEnabled: z.boolean(),
+  prayerRequestsEnabled: z.boolean(),
   organizationUpdatesEnabled: z.boolean(),
   timeZone: z.string().trim().min(1).max(64).nullable().optional(),
 });

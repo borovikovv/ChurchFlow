@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { Suspense } from 'react';
-import { getCurrentUser } from '@/auth/session';
+import { headers } from 'next/headers';
+import { getCurrentUser, type CurrentUser } from '@/auth/session';
 import { AppShell } from '@/components/app-shell';
 import {
   getOrganizationAccessState,
@@ -12,7 +13,7 @@ import { PublicAppHeader } from '@/components/public-app-header';
 import { QueryProvider } from '@/components/query-provider';
 import { ServiceWorkerRegistration } from '@/components/service-worker-registration';
 import { ToastProvider } from '@/components/toast-provider';
-import { DEFAULT_APP_LOCALE, isAppLocale } from '@/i18n/locales';
+import { isAppLocale, resolveAppLocaleFromAcceptLanguage, type AppLocale } from '@/i18n/locales';
 import { getMessages } from '@/i18n/messages';
 import 'react-toastify/dist/ReactToastify.css';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -38,7 +39,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const user = await getCurrentUser();
   const access = user ? await getOrganizationAccessState(user) : null;
   const adminOrganizationIds = adminOrganizationIdsFromAccess(access?.organizations);
-  const locale = isAppLocale(user?.locale) ? user.locale : DEFAULT_APP_LOCALE;
+  const locale = await resolveLocale(user);
   const messages = getMessages(locale);
 
   return (
@@ -71,6 +72,16 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </body>
     </html>
   );
+}
+
+async function resolveLocale(user: CurrentUser | null): Promise<AppLocale> {
+  if (isAppLocale(user?.locale)) {
+    return user.locale;
+  }
+
+  const requestHeaders = await headers();
+
+  return resolveAppLocaleFromAcceptLanguage(requestHeaders.get('accept-language') ?? undefined);
 }
 
 function adminOrganizationIdsFromAccess(

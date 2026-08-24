@@ -823,7 +823,9 @@ model Notification {
   recipientMembershipId String?          @map("recipient_membership_id") @db.Uuid
   type                  NotificationType
   title                 String
+  titleKey              String?          @map("title_key") @db.VarChar(64)
   body                  String?
+  bodyMessage           Json?            @map("body_message")
   url                   String?
   entityType            String?          @map("entity_type")
   entityId              String?          @map("entity_id") @db.Uuid
@@ -854,10 +856,10 @@ model NotificationPreference {
   inAppEnabled               Boolean  @default(true) @map("in_app_enabled")
   emailEnabled               Boolean  @default(false) @map("email_enabled")
   telegramEnabled            Boolean  @default(false) @map("telegram_enabled")
-  taskAssignedEnabled        Boolean  @default(true) @map("task_assigned_enabled")
-  serviceAssignedEnabled     Boolean  @default(true) @map("service_assigned_enabled")
+  assignmentsEnabled         Boolean  @default(true) @map("assignments_enabled")
   remindersEnabled           Boolean  @default(true) @map("reminders_enabled")
   birthdayDigestEnabled      Boolean  @default(true) @map("birthday_digest_enabled")
+  prayerRequestsEnabled      Boolean  @default(true) @map("prayer_requests_enabled")
   organizationUpdatesEnabled Boolean  @default(true) @map("organization_updates_enabled")
   timeZone                   String?  @map("time_zone") @db.VarChar(64)
   createdAt                  DateTime @default(now()) @map("created_at")
