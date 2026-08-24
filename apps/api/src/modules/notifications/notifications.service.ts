@@ -172,7 +172,7 @@ export class NotificationsService {
 
   async createTaskAssignedNotifications(input: TaskAssignedNotificationInput) {
     const result = await this.notificationsRepository.createTaskAssignedNotifications(input);
-    const sentCounts = await this.dispatchToEnabledServices(input, result, 'taskAssignedEnabled');
+    const sentCounts = await this.dispatchToEnabledServices(input, result, 'assignmentsEnabled');
 
     return {
       createdCount: result.createdCount,
@@ -183,11 +183,7 @@ export class NotificationsService {
 
   async createServiceAssignedNotifications(input: ServiceAssignedNotificationInput) {
     const result = await this.notificationsRepository.createServiceAssignedNotifications(input);
-    const sentCounts = await this.dispatchToEnabledServices(
-      input,
-      result,
-      'serviceAssignedEnabled',
-    );
+    const sentCounts = await this.dispatchToEnabledServices(input, result, 'assignmentsEnabled');
 
     return {
       createdCount: result.createdCount,
@@ -478,10 +474,10 @@ function preferencesToResponse(
     inAppEnabled: preferences.inAppEnabled,
     emailEnabled: preferences.emailEnabled,
     telegramEnabled: preferences.telegramEnabled && isActiveTelegramBinding(telegramBinding),
-    taskAssignedEnabled: preferences.taskAssignedEnabled,
-    serviceAssignedEnabled: preferences.serviceAssignedEnabled,
+    assignmentsEnabled: preferences.assignmentsEnabled,
     remindersEnabled: preferences.remindersEnabled,
     birthdayDigestEnabled: preferences.birthdayDigestEnabled,
+    prayerRequestsEnabled: preferences.prayerRequestsEnabled,
     organizationUpdatesEnabled: preferences.organizationUpdatesEnabled,
     timeZone: preferences.timeZone,
     telegram: {

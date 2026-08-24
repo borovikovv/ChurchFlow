@@ -255,11 +255,10 @@ export class PrayerRequestsRepository {
     });
   }
 
-  async listManagerMembershipIds(organizationId: string): Promise<string[]> {
+  async listNotifiableMembershipIds(organizationId: string): Promise<string[]> {
     const memberships = await this.prisma.organizationMember.findMany({
       where: {
         organizationId,
-        role: { in: ['OWNER', 'ADMIN'] },
         status: 'ACTIVE',
         removedAt: null,
         userId: { not: null },

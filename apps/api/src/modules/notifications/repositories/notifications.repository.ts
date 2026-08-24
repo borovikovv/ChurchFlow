@@ -87,10 +87,10 @@ const notificationPreferenceSelect = {
   inAppEnabled: true,
   emailEnabled: true,
   telegramEnabled: true,
-  taskAssignedEnabled: true,
-  serviceAssignedEnabled: true,
+  assignmentsEnabled: true,
   remindersEnabled: true,
   birthdayDigestEnabled: true,
+  prayerRequestsEnabled: true,
   organizationUpdatesEnabled: true,
   timeZone: true,
 } as const;
@@ -107,10 +107,10 @@ export type TelegramNotificationBindingRecord = {
 };
 
 export type NotificationPreferenceKey =
-  | 'taskAssignedEnabled'
-  | 'serviceAssignedEnabled'
+  | 'assignmentsEnabled'
   | 'remindersEnabled'
   | 'birthdayDigestEnabled'
+  | 'prayerRequestsEnabled'
   | 'organizationUpdatesEnabled';
 
 export interface NotificationDeliveryRecipient {
@@ -264,7 +264,7 @@ export class NotificationsRepository {
       actorUserId: input.actorUserId,
       recipientMembershipIds: input.assigneeMembershipIds,
       type: 'TASK_ASSIGNED',
-      preferenceKey: 'taskAssignedEnabled',
+      preferenceKey: 'assignmentsEnabled',
       titleKey: input.titleKey,
       bodyMessage: input.bodyMessage,
       url: input.url,
@@ -281,7 +281,7 @@ export class NotificationsRepository {
       actorUserId: input.actorUserId,
       recipientMembershipIds: input.participantMembershipIds,
       type: 'SERVICE_ASSIGNED',
-      preferenceKey: 'serviceAssignedEnabled',
+      preferenceKey: 'assignmentsEnabled',
       titleKey: input.titleKey,
       bodyMessage: input.bodyMessage,
       url: input.url,

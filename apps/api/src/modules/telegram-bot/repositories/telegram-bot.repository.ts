@@ -58,10 +58,10 @@ export interface TelegramNotificationDelivery extends TelegramNotificationTarget
 }
 
 export type TelegramNotificationPreferenceKey =
-  | 'taskAssignedEnabled'
-  | 'serviceAssignedEnabled'
+  | 'assignmentsEnabled'
   | 'remindersEnabled'
   | 'birthdayDigestEnabled'
+  | 'prayerRequestsEnabled'
   | 'organizationUpdatesEnabled';
 
 @Injectable()
@@ -159,10 +159,10 @@ export class TelegramBotRepository {
             notificationPreferences: {
               select: {
                 telegramEnabled: true,
-                taskAssignedEnabled: true,
-                serviceAssignedEnabled: true,
+                assignmentsEnabled: true,
                 remindersEnabled: true,
                 birthdayDigestEnabled: true,
+                prayerRequestsEnabled: true,
                 organizationUpdatesEnabled: true,
                 organization: { select: { name: true } },
               },

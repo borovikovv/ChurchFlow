@@ -67,7 +67,7 @@ export class PrayerRequestsService {
       actor,
       request: input,
     });
-    await this.tryNotifyManagersAboutCreatedRequest(organizationId, actorUserId, request);
+    await this.tryNotifyMembersAboutCreatedRequest(organizationId, actorUserId, request);
 
     return requestToItem(request, actor);
   }
@@ -155,20 +155,20 @@ export class PrayerRequestsService {
     return actor;
   }
 
-  private async tryNotifyManagersAboutCreatedRequest(
+  private async tryNotifyMembersAboutCreatedRequest(
     organizationId: string,
     actorUserId: string,
     request: PrayerRequestRecord,
   ): Promise<void> {
     try {
       const recipientMembershipIds =
-        await this.prayerRequestsRepository.listManagerMembershipIds(organizationId);
+        await this.prayerRequestsRepository.listNotifiableMembershipIds(organizationId);
       await this.notificationsService.createPrayerRequestCreatedNotifications({
         organizationId,
         actorUserId,
         recipientMembershipIds,
         type: 'PRAYER_REQUEST_CREATED',
-        preferenceKey: 'organizationUpdatesEnabled',
+        preferenceKey: 'prayerRequestsEnabled',
         titleKey: 'prayerRequestCreated',
         bodyMessage: {
           key: 'prayerRequestCreated',
@@ -179,11 +179,10 @@ export class PrayerRequestsService {
         entityType: 'PrayerRequest',
         entityId: request.id,
         dedupeKey: `prayer-request-created:${request.id}`,
-        adminOnly: true,
       });
     } catch (error: unknown) {
       this.logger.warn({
-        event: 'Prayer request manager notification failed',
+        event: 'Prayer request member notification failed',
         organizationId,
         prayerRequestId: request.id,
         error: error instanceof Error ? error.message : String(error),
