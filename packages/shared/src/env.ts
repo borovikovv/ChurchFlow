@@ -42,6 +42,12 @@ export const apiEnvSchema = z
     NODE_ENV: nodeEnvSchema,
     PORT: z.coerce.number().int().positive().default(4000),
     DATABASE_URL: z.string().url(),
+    // Підключення застосунку роллю без прав власника, щоб на неї діяли політики
+    // RLS. Поки не задано, застосунок ходить як власник і політики його не стосуються.
+    DATABASE_APP_URL: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().url().optional(),
+    ),
     COOKIE_DOMAIN: optionalTrimmedNonEmptyString,
     WEB_APP_URL: z.string().url(),
     PLATFORM_ADMIN_EMAIL: z.string().email(),
