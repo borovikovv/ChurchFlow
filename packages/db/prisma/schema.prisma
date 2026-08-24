@@ -202,6 +202,7 @@ enum MemberMinistry {
   CHAPLAIN
   CHILDREN
   YOUTH
+  MEDIA
 }
 
 model User {

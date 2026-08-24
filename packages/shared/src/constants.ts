@@ -213,6 +213,7 @@ export const MEMBER_MINISTRIES = [
   'CHAPLAIN',
   'CHILDREN',
   'YOUTH',
+  'MEDIA',
 ] as const;
 
 export const MEMBER_MINISTRY = {
@@ -226,6 +227,7 @@ export const MEMBER_MINISTRY = {
   chaplain: 'CHAPLAIN',
   children: 'CHILDREN',
   youth: 'YOUTH',
+  media: 'MEDIA',
 } as const;
 
 export const MEMBER_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;

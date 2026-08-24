@@ -1,0 +1,1 @@
+ALTER TYPE "MemberMinistry" ADD VALUE IF NOT EXISTS 'MEDIA';
