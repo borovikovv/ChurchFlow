@@ -44,7 +44,7 @@ test('relationships reject self links before persistence', async () => {
     $transaction: (callback) =>
       callback({
         organizationMember: {
-          findFirst: async () => ({ id: 'manager' }),
+          findFirst: async () => ({ id: 'manager', role: 'OWNER' }),
           findMany: async () => [],
         },
       }),
