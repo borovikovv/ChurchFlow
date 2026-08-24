@@ -492,6 +492,61 @@ jobs:
             "$SSH_USER@$SSH_HOST" \
             "install -d -m 700 '$DEPLOY_DIR'"
 
+      - name: Check remote disk space
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/churchflow_deploy -o StrictHostKeyChecking=accept-new \
+            "$SSH_USER@$SSH_HOST" \
+            "DEPLOY_DIR='$DEPLOY_DIR' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+
+          MIN_FREE_INODES=10000
+
+          require_free_space() {
+            local path="$1"
+            local min_mib="$2"
+            local label="$3"
+            local free_mib
+            local free_inodes
+
+            free_mib="$(df -PBM "$path" | awk 'NR == 2 { sub(/M$/, "", $4); print $4 }')"
+            free_inodes="$(df -Pi "$path" | awk 'NR == 2 { print $4 }')"
+
+            if [[ ! "$free_mib" =~ ^[0-9]+$ ]]; then
+              echo "Could not determine free disk space for $label ($path)."
+              df -h "$path" || true
+              exit 1
+            fi
+
+            echo "$label ($path): ${free_mib} MiB free, ${free_inodes:-unknown} inodes free."
+
+            if (( free_mib < min_mib )); then
+              echo "Not enough free disk space for $label. Required ${min_mib} MiB, available ${free_mib} MiB."
+              df -h "$path" || true
+              du -sh "$DEPLOY_DIR/backups" 2>/dev/null || true
+              docker system df || true
+              exit 1
+            fi
+
+            if [[ "$free_inodes" =~ ^[0-9]+$ ]] && (( free_inodes < MIN_FREE_INODES )); then
+              echo "Not enough free inodes for $label. Required ${MIN_FREE_INODES}, available ${free_inodes}."
+              df -i "$path" || true
+              exit 1
+            fi
+          }
+
+          require_free_space "$DEPLOY_DIR" 1024 "deployment directory"
+
+          docker_root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
+          if [[ -n "$docker_root" && -d "$docker_root" ]]; then
+            require_free_space "$docker_root" 4096 "Docker storage"
+          fi
+          REMOTE
+
       - name: Upload deployment files
         shell: bash
         env:
@@ -667,6 +722,8 @@ jobs:
             local backup_dir
             local backup_file
             local timestamp
+            local backup_retention=10
+            local stale_backups
 
             db_env_file="$(mktemp)"
             parse_database_url "$db_env_file"
@@ -702,6 +759,12 @@ jobs:
 
             chmod 600 "$backup_file"
             echo "Database backup created: $backup_file"
+
+            stale_backups="$(ls -1t "$backup_dir"/*.dump 2>/dev/null | tail -n "+$((backup_retention + 1))" || true)"
+            if [[ -n "$stale_backups" ]]; then
+              echo "Removing database backups beyond the newest $backup_retention."
+              printf '%s\n' "$stale_backups" | xargs -r rm -f
+            fi
           }
 
           check_pending_migrations_safe_for_prod
@@ -829,6 +892,9 @@ jobs:
             show_safe_diagnostics
             exit 1
           fi
+
+          echo "Removing unused Docker images older than 7 days."
+          docker image prune --all --force --filter 'until=168h' || true
 
           echo "__CHURCHFLOW_DEPLOYMENT_SUMMARY_BEGIN__"
           {
