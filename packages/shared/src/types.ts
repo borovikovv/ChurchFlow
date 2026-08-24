@@ -6,7 +6,6 @@ import type {
   createManualOrganizationMemberSchema,
   importOrganizationMembersCsvResultSchema,
   createOrganizationRequestSchema,
-  jwtPayloadSchema,
   auditLogListItemSchema,
   auditLogsPageSchema,
   listAuditLogsQuerySchema,
@@ -72,10 +71,11 @@ import type {
   telegramNotificationLinkSchema,
   updateNotificationPreferencesSchema,
   appLocaleSchema,
+  userSessionSchema,
 } from './schemas.js';
 
 export type UUID = string;
-export type JwtPayload = z.infer<typeof jwtPayloadSchema>;
+export type UserSession = z.infer<typeof userSessionSchema>;
 export type Organization = z.infer<typeof organizationSchema>;
 export type OrganizationWebsite = z.infer<typeof organizationWebsiteSchema>;
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
@@ -269,6 +269,7 @@ export interface PrayerRequestsPayload {
     pageSize: number;
     total: number;
     pageCount: number;
+    nextCursor: string | null;
   };
 }
 

@@ -2,17 +2,19 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import { useTranslations } from 'next-intl';
-import { useState, type ComponentProps } from 'react';
+import type { ComponentProps } from 'react';
 import { InviteAppUserForm } from '@/components/members/invite-app-user-form';
 import { MemberActions, MemberRoleStatus } from '@/components/members/member-actions';
-import { FormDialog } from '@/components/ui/form-dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { createDataTablePagination } from '@/components/ui/data-table-pagination';
 import { Tabs } from '@/components/ui/tabs';
 import type { MembersPayload, OrganizationMember } from '../types';
-import { CreateMemberDialog } from './create-member-dialog';
-import { MemberCsvActions } from './member-csv-actions';
-import { MemberAvatar } from './member-avatar';
+import type { MembersFiltersProps } from './members-filters.types';
+import { MemberCard } from './member-card';
+import { MembersActions } from './members-actions';
+import { MembersCardList } from './members-card-list';
+import { MembersFilters } from './members-filters';
+import { Avatar } from '@/components/ui/avatar';
 import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
 import type {
   MemberMinistry,
@@ -21,17 +23,9 @@ import type {
   OrganizationMembersTypeFilter,
 } from '@churchflow/shared';
 import { MEMBER_MINISTRIES, MEMBER_PAGE_SIZE_OPTIONS } from '@churchflow/shared';
-import { QueryFilterMultiSelect } from '@/components/forms/query-filter-multi-select';
-import { QueryFilterSelect } from '@/components/forms/query-filter-select';
 import { organizationMemberRoute } from '@/features/organizations/routes';
 import { useMembersQuery } from '../_hooks/use-members-query';
 import { MemberSearchInput } from './member-search-input';
-
-const MEMBERS_ACTION_BUTTON_CLASS_NAME =
-  'h-8 min-h-8 max-w-full shrink-0 whitespace-normal px-3 text-center text-sm leading-5 xl:whitespace-nowrap';
-
-const MEMBERS_MENU_BUTTON_CLASS_NAME =
-  '!h-8 !min-h-8 max-w-full shrink-0 justify-center whitespace-normal px-3 text-center text-sm leading-5 xl:whitespace-nowrap';
 
 type MemberActionProps = Pick<
   ComponentProps<typeof MemberActions>,
@@ -73,7 +67,6 @@ export function MembersManager({
 } & MemberActionProps) {
   const t = useTranslations('members');
   const paginationT = useTranslations('pagination');
-  const [inviteFormKey, setInviteFormKey] = useState(0);
   const { data: payload, refresh: refreshMembers } = useMembersQuery({
     access: memberAccess,
     initialPayload,
@@ -133,6 +126,70 @@ export function MembersManager({
     tab: 'archived',
     type: preservedType,
   });
+  const renderMemberActions = (member: OrganizationMember) => (
+    <MemberActions
+      {...actions}
+      member={member}
+      organizationId={organizationId}
+      viewHref={organizationMemberRoute(organizationId, member.id)}
+      canManage={canManage}
+      isOwner={isOwner}
+      isCurrentMember={member.id === payload.actorMembershipId}
+      memberCandidates={memberCandidates}
+      onProfileUpdated={(updates) => {
+        void updates;
+        refreshMembers();
+      }}
+      onRoleUpdated={(role) => {
+        void role;
+        refreshMembers();
+      }}
+      onRemoved={() => {
+        refreshMembers();
+      }}
+    />
+  );
+  const membersQuery = {
+    organizationId,
+    access: memberAccess,
+    ministries: memberMinistries,
+    page: memberPage,
+    pageSize: memberPageSize,
+    search: memberSearch,
+    tab: memberTab,
+    type: memberType,
+  };
+  const membersCardListKey = [
+    memberAccess,
+    memberMinistries.join('|'),
+    memberPage,
+    memberPageSize,
+    memberSearch,
+    memberTab,
+    memberType,
+  ].join(':');
+  const membersPagination = createDataTablePagination({
+    labels: {
+      firstPageLabel: paginationT('firstPage'),
+      itemLabel: paginationT('page'),
+      lastPageLabel: paginationT('lastPage'),
+      nextPageLabel: paginationT('nextPage'),
+      ofLabel: paginationT('of'),
+      pageSizeLabel: paginationT('itemsPerPage'),
+      previousPageLabel: paginationT('previousPage'),
+    },
+    page: payload.pagination.page,
+    pageSize: payload.pagination.pageSize,
+    pageSizeOptions: [...MEMBER_PAGE_SIZE_OPTIONS],
+    preserveParams: {
+      access: preservedAccess,
+      ministries: preservedMinistries,
+      search: preservedSearch,
+      tab: preservedTab,
+      type: preservedType,
+    },
+    total: payload.pagination.total,
+  });
   const columns: Array<ColumnDef<OrganizationMember>> = [
     {
       accessorFn: (member) => member.profile.displayName,
@@ -142,7 +199,7 @@ export function MembersManager({
 
         return (
           <div className="flex min-w-0 items-center gap-3">
-            <MemberAvatar
+            <Avatar
               displayName={member.profile.displayName}
               url={member.profile.photoUrl}
               size="md"
@@ -193,33 +250,7 @@ export function MembersManager({
     {
       id: 'actions',
       header: '',
-      cell: ({ row }) => {
-        const member = row.original;
-
-        return (
-          <MemberActions
-            {...actions}
-            member={member}
-            organizationId={organizationId}
-            viewHref={organizationMemberRoute(organizationId, member.id)}
-            canManage={canManage}
-            isOwner={isOwner}
-            isCurrentMember={member.id === payload.actorMembershipId}
-            memberCandidates={memberCandidates}
-            onProfileUpdated={(updates) => {
-              void updates;
-              refreshMembers();
-            }}
-            onRoleUpdated={(role) => {
-              void role;
-              refreshMembers();
-            }}
-            onRemoved={() => {
-              refreshMembers();
-            }}
-          />
-        );
-      },
+      cell: ({ row }) => renderMemberActions(row.original),
       meta: {
         headerClassName: 'w-11',
         cellClassName: 'w-11',
@@ -227,28 +258,50 @@ export function MembersManager({
     },
   ];
 
+  const filterProps = {
+    accessOptions: memberAccessFilterOptions,
+    accessValue: memberAccess === 'all' ? '' : memberAccess,
+    ministryOptions: memberMinistryFilterOptions,
+    ministryValue: memberMinistries,
+    preserved: {
+      access: preservedAccess,
+      ministries: preservedMinistries,
+      pageSize: preservedPageSize,
+      search: preservedSearch,
+      tab: preservedTab,
+      type: preservedType,
+    },
+    showAccessFilter: memberTab === 'active',
+    typeOptions: memberTypeFilterOptions,
+    typeValue: memberType === 'all' ? '' : memberType,
+  } satisfies Omit<MembersFiltersProps, 'variant'>;
+
   return (
     <>
       <div className="flex min-w-0 flex-col justify-between gap-3 xl:flex-row">
         <div className="flex w-full min-w-0 flex-col gap-2 md:w-[492px] md:max-w-full md:flex-none">
-          <Tabs
-            label={t('memberTabsLabel')}
-            items={[
-              {
-                label: t('activeMembers'),
-                href: activeMembersHref,
-                active: memberTab === 'active',
-                count: payload.counts.active,
-              },
-              {
-                label: t('archivedMembers'),
-                href: archivedMembersHref,
-                active: memberTab === 'archived',
-                count: payload.counts.archived,
-              },
-            ]}
-          />
+          <div className="flex min-w-0 items-center justify-between gap-2 md:contents">
+            <Tabs
+              label={t('memberTabsLabel')}
+              items={[
+                {
+                  label: t('activeMembers'),
+                  href: activeMembersHref,
+                  active: memberTab === 'active',
+                  count: payload.counts.active,
+                },
+                {
+                  label: t('archivedMembers'),
+                  href: archivedMembersHref,
+                  active: memberTab === 'archived',
+                  count: payload.counts.archived,
+                },
+              ]}
+            />
+            <MembersFilters {...filterProps} variant="sheet" />
+          </div>
           <MemberSearchInput
+            className="order-first md:order-none"
             label={t('searchByName')}
             placeholder={t('searchByNamePlaceholder')}
             preserveParams={{
@@ -260,123 +313,45 @@ export function MembersManager({
             }}
             search={memberSearch}
           />
-          <QueryFilterMultiSelect
-            label={t('ministries')}
-            labelClassName="sr-only"
-            name="ministries"
-            options={memberMinistryFilterOptions}
-            placeholder={t('allMinistries')}
-            preserveParams={{
-              access: preservedAccess,
-              pageSize: preservedPageSize,
-              search: preservedSearch,
-              tab: preservedTab,
-              type: preservedType,
-            }}
-            selectClassName="w-full"
-            value={memberMinistries}
-          />
-          <div className="filter-bar min-w-0 flex-wrap">
-            {memberTab === 'active' ? (
-              <QueryFilterSelect
-                label={t('access')}
-                labelClassName="sr-only"
-                name="access"
-                options={memberAccessFilterOptions}
-                preserveParams={{
-                  ministries: preservedMinistries,
-                  pageSize: preservedPageSize,
-                  search: preservedSearch,
-                  type: preservedType,
-                }}
-                size="medium"
-                value={memberAccess === 'all' ? '' : memberAccess}
-              />
-            ) : null}
-            <QueryFilterSelect
-              label={t('type')}
-              labelClassName="sr-only"
-              name="type"
-              options={memberTypeFilterOptions}
-              preserveParams={{
-                access: preservedAccess,
-                ministries: preservedMinistries,
-                pageSize: preservedPageSize,
-                search: preservedSearch,
-                tab: preservedTab,
-              }}
-              size="medium"
-              value={memberType === 'all' ? '' : memberType}
-            />
-          </div>
+          <MembersFilters {...filterProps} variant="inline" />
         </div>
         {canManage ? (
-          <div className="contents xl:flex xl:min-w-0 xl:flex-nowrap xl:items-start xl:justify-end xl:gap-2">
-            <FormDialog
-              triggerClassName={`${MEMBERS_ACTION_BUTTON_CLASS_NAME} col-start-1 row-start-2 w-full xl:w-auto`}
-              triggerLabel={t('inviteAppUser')}
-              title={t('inviteTitle')}
-              onOpen={() => setInviteFormKey((current) => current + 1)}
-            >
-              <p className="-mt-4 mb-0">{t('inviteDescription')}</p>
-              <InviteAppUserForm
-                key={inviteFormKey}
-                organizationId={organizationId}
-                action={manageInvitation}
-              />
-            </FormDialog>
-            <CreateMemberDialog
-              organizationId={organizationId}
-              triggerClassName={`${MEMBERS_ACTION_BUTTON_CLASS_NAME} col-start-2 row-start-2 w-full xl:w-auto`}
-              onCreated={(created) => {
-                void created;
-                refreshMembers();
-              }}
-            />
-            <MemberCsvActions
-              organizationId={organizationId}
-              triggerClassName={`${MEMBERS_MENU_BUTTON_CLASS_NAME} w-full xl:w-auto`}
-              wrapperClassName="flex w-full xl:w-auto"
-              onImported={() => {
-                refreshMembers();
-              }}
-            />
-          </div>
+          <MembersActions
+            manageInvitation={manageInvitation}
+            organizationId={organizationId}
+            variant="toolbar"
+          />
         ) : null}
       </div>
 
       <section className="stack min-w-0">
         <h2>{t('organizationMembers')}</h2>
-        <DataTable
-          columns={columns}
-          data={members}
-          emptyMessage={t('emptyFilter')}
-          getRowHref={(member) => organizationMemberRoute(organizationId, member.id)}
-          getRowClassName={(member) => (member.status === 'ARCHIVED' ? 'opacity-75' : undefined)}
-          pagination={createDataTablePagination({
-            labels: {
-              firstPageLabel: paginationT('firstPage'),
-              itemLabel: paginationT('page'),
-              lastPageLabel: paginationT('lastPage'),
-              nextPageLabel: paginationT('nextPage'),
-              ofLabel: paginationT('of'),
-              pageSizeLabel: paginationT('itemsPerPage'),
-              previousPageLabel: paginationT('previousPage'),
-            },
-            page: payload.pagination.page,
-            pageSize: payload.pagination.pageSize,
-            pageSizeOptions: [...MEMBER_PAGE_SIZE_OPTIONS],
-            preserveParams: {
-              access: preservedAccess,
-              ministries: preservedMinistries,
-              search: preservedSearch,
-              tab: preservedTab,
-              type: preservedType,
-            },
-            total: payload.pagination.total,
-          })}
-          tableClassName="min-w-[860px]"
-        />
+        <div className="md:hidden">
+          <MembersCardList
+            emptyMessage={t('emptyFilter')}
+            key={membersCardListKey}
+            payload={payload}
+            query={membersQuery}
+            renderCard={(member) => (
+              <MemberCard
+                actions={renderMemberActions(member)}
+                member={member}
+                viewHref={organizationMemberRoute(organizationId, member.id)}
+              />
+            )}
+          />
+        </div>
+        <div className="hidden md:block">
+          <DataTable
+            columns={columns}
+            data={members}
+            emptyMessage={t('emptyFilter')}
+            getRowHref={(member) => organizationMemberRoute(organizationId, member.id)}
+            getRowClassName={(member) => (member.status === 'ARCHIVED' ? 'opacity-75' : undefined)}
+            pagination={membersPagination}
+            tableClassName="min-w-[860px]"
+          />
+        </div>
       </section>
     </>
   );

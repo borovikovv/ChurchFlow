@@ -11,6 +11,20 @@ import type {
 import { loadMembersAction } from '../actions';
 import type { MembersPayload } from '../types';
 
+const MEMBERS_QUERY_KEY = 'organization-members';
+
+function membersQueryKeyPrefix(organizationId: string) {
+  return [MEMBERS_QUERY_KEY, organizationId] as const;
+}
+
+export function useRefreshMembers(organizationId: string): () => void {
+  const queryClient = useQueryClient();
+
+  return useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: membersQueryKeyPrefix(organizationId) });
+  }, [organizationId, queryClient]);
+}
+
 export function useMembersQuery({
   access,
   initialPayload,
@@ -37,8 +51,7 @@ export function useMembersQuery({
   const queryKey = useMemo(
     () =>
       [
-        'organization-members',
-        organizationId,
+        ...membersQueryKeyPrefix(organizationId),
         access,
         type,
         search,

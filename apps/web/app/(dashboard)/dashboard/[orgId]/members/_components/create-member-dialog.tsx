@@ -14,6 +14,7 @@ import { FormInput } from '@/components/forms/form-input';
 import { FormSelect } from '@/components/forms/form-select';
 import { FormTextarea } from '@/components/forms/form-textarea';
 import { Button } from '@/components/ui/button';
+import { FormDialog } from '@/components/ui/form-dialog';
 import { createMemberAction } from '../actions';
 
 const formSchema = createManualOrganizationMemberSchema.and(
@@ -54,7 +55,7 @@ export function CreateMemberDialog({
   const t = useTranslations('members');
   const commonT = useTranslations('common');
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
+  const formId = useId();
   const {
     register,
     control,
@@ -91,28 +92,24 @@ export function CreateMemberDialog({
       <Button className={triggerClassName} type="button" onClick={openDialog}>
         {t('createMember')}
       </Button>
-      <dialog
-        ref={dialogRef}
-        aria-labelledby={titleId}
-        className="fixed inset-0 m-auto h-fit max-h-[min(800px,80dvh)] w-[min(520px,calc(100%-32px))] max-w-none overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
+      <FormDialog
+        dialogRef={dialogRef}
+        footer={
+          <>
+            <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
+              {commonT('cancel')}
+            </Button>
+            <Button disabled={isSubmitting} form={formId} type="submit">
+              {isSubmitting ? t('creating') : t('createMember')}
+            </Button>
+          </>
+        }
+        fullScreenOnMobile
+        size="md"
+        title={t('addMemberManually')}
       >
-        <form
-          className="grid max-h-[min(800px,80dvh)] grid-rows-[auto_minmax(0,1fr)_auto]"
-          onSubmit={submit}
-          noValidate
-        >
-          <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
-            <h2 id={titleId}>{t('addMemberManually')}</h2>
-            <button
-              aria-label={commonT('cancel')}
-              className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
-              type="button"
-              onClick={() => dialogRef.current?.close()}
-            >
-              ×
-            </button>
-          </header>
-          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-5">
+        <form className="flex flex-col" id={formId} onSubmit={submit} noValidate>
+          <div className="flex min-h-0 flex-col gap-4">
             <FormInput
               label={commonT('name')}
               error={errors.displayName?.message}
@@ -186,16 +183,8 @@ export function CreateMemberDialog({
             />
             <FormCheckbox label={t('prepareAppAccess')} {...register('prepareAccess')} />
           </div>
-          <footer className="flex justify-end gap-2 border-t border-[var(--line)] p-5">
-            <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-              {commonT('cancel')}
-            </Button>
-            <Button disabled={isSubmitting} type="submit">
-              {isSubmitting ? t('creating') : t('createMember')}
-            </Button>
-          </footer>
         </form>
-      </dialog>
+      </FormDialog>
     </>
   );
 }

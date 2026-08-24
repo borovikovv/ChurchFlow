@@ -241,44 +241,81 @@ export function FormSelect({
   const maxMenuHeight = Math.min(240, Math.max(42, options.length * 40 + 8));
   const isMobile = useIsMobile();
   const isSearchable = allowMobileKeyboard || !isMobile;
+  // Touch devices get the OS picker: the floating menu is unreliable inside modals and sheets.
+  const isNative = isMobile && !allowMobileKeyboard;
 
   return (
     <FormField label={label} error={error} className={className} labelClassName={labelClassName}>
-      {({ id, errorId, invalid }) => (
-        <>
-          {name ? <input name={name} type="hidden" value={selectedValue} /> : null}
-          <Select
+      {({ id, errorId, invalid }) =>
+        isNative ? (
+          <select
             aria-describedby={errorId}
             aria-invalid={invalid}
-            inputId={id}
-            instanceId={id}
-            isClearable={Boolean(clearable)}
-            isDisabled={Boolean(disabled)}
-            isOptionDisabled={(option) => Boolean(option.isDisabled)}
-            isSearchable={isSearchable}
-            maxMenuHeight={maxMenuHeight}
-            menuPosition="fixed"
-            menuShouldScrollIntoView={false}
-            options={options}
+            className={nativeSelectClassName(size, selectClassName)}
+            disabled={Boolean(disabled)}
+            id={id}
+            name={name}
             required={Boolean(required)}
-            styles={size === 'medium' ? createSelectStyles('medium') : selectStyles}
-            value={selectedOption}
-            {...(selectClassName ? { className: selectClassName } : {})}
-            onBlur={() => {
-              onBlur?.(createSelectEvent(name, selectedValue) as FocusEvent<HTMLSelectElement>);
-            }}
-            onChange={(nextOption: SingleValue<SelectOption>) => {
-              const nextValue = nextOption?.value ?? '';
+            value={selectedValue}
+            onBlur={onBlur}
+            onChange={(event) => {
               if (value === undefined) {
-                setInternalValue(nextValue);
+                setInternalValue(event.currentTarget.value);
               }
-              onChange?.(createSelectEvent(name, nextValue) as ChangeEvent<HTMLSelectElement>);
+              onChange?.(event);
             }}
-          />
-        </>
-      )}
+          >
+            {clearable && !options.some((option) => option.value === '') ? (
+              <option value="" />
+            ) : null}
+            {options.map((option) => (
+              <option disabled={option.isDisabled} key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <>
+            {name ? <input name={name} type="hidden" value={selectedValue} /> : null}
+            <Select
+              aria-describedby={errorId}
+              aria-invalid={invalid}
+              inputId={id}
+              instanceId={id}
+              isClearable={Boolean(clearable)}
+              isDisabled={Boolean(disabled)}
+              isOptionDisabled={(option) => Boolean(option.isDisabled)}
+              isSearchable={isSearchable}
+              maxMenuHeight={maxMenuHeight}
+              menuPosition="fixed"
+              menuShouldScrollIntoView={false}
+              options={options}
+              required={Boolean(required)}
+              styles={size === 'medium' ? createSelectStyles('medium') : selectStyles}
+              value={selectedOption}
+              {...(selectClassName ? { className: selectClassName } : {})}
+              onBlur={() => {
+                onBlur?.(createSelectEvent(name, selectedValue) as FocusEvent<HTMLSelectElement>);
+              }}
+              onChange={(nextOption: SingleValue<SelectOption>) => {
+                const nextValue = nextOption?.value ?? '';
+                if (value === undefined) {
+                  setInternalValue(nextValue);
+                }
+                onChange?.(createSelectEvent(name, nextValue) as ChangeEvent<HTMLSelectElement>);
+              }}
+            />
+          </>
+        )
+      }
     </FormField>
   );
+}
+
+function nativeSelectClassName(size: SelectSize, selectClassName: string | undefined): string {
+  return ['cursor-pointer', size === 'medium' ? 'min-h-8 px-2 py-1' : '', selectClassName ?? '']
+    .filter(Boolean)
+    .join(' ');
 }
 
 function extractOptions(children: ReactNode): SelectOption[] {

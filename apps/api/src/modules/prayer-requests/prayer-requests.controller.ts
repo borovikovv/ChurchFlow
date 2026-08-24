@@ -10,7 +10,10 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import {
   ArchivePrayerRequestDto,
@@ -21,7 +24,7 @@ import {
 import { PrayerRequestsService } from './prayer-requests.service';
 
 @Controller('organizations/:organizationId/prayer-requests')
-@UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
 export class PrayerRequestsController {
   constructor(private readonly prayerRequestsService: PrayerRequestsService) {}
 
@@ -96,7 +99,7 @@ export class PrayerRequestsController {
   }
 
   private actorUserId(request: AuthenticatedRequest): string {
-    const userId = request.auth?.sub;
+    const userId = request.auth?.userId;
     if (!userId) {
       throw new Error('Authenticated request missing auth payload');
     }

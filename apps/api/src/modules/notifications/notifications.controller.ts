@@ -10,7 +10,10 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import {
   ListNotificationsQueryDto,
@@ -20,7 +23,7 @@ import { NotificationsService } from './notifications.service';
 import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
 
 @Controller('organizations/:organizationId/notifications')
-@UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
 export class NotificationsController {
   constructor(
     private readonly notificationsService: NotificationsService,
@@ -119,7 +122,7 @@ export class NotificationsController {
   }
 
   private actorUserId(request: AuthenticatedRequest): string {
-    const userId = request.auth?.sub;
+    const userId = request.auth?.userId;
     if (!userId) {
       throw new Error('Authenticated request missing auth payload');
     }

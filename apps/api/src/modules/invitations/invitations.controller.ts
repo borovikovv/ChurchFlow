@@ -1,7 +1,10 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { invitationTokenQuerySchema } from '@churchflow/shared';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CreateOrganizationInvitationDto } from './dto/create-organization-invitation.dto';
 import { InvitationsService } from './invitations.service';
@@ -11,7 +14,7 @@ export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
   @Post('organizations/:organizationId/invitations')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async create(
     @Param('organizationId') organizationId: string,
@@ -32,27 +35,27 @@ export class InvitationsController {
   }
 
   @Post('invitations/accept')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async accept(@Body() body: AcceptInvitationDto, @Req() request: AuthenticatedRequest) {
     return this.invitationsService.accept(body.token, this.getActorUserId(request));
   }
 
   @Get('invitations/pending')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   async pending(@Req() request: AuthenticatedRequest) {
     return this.invitationsService.listPendingForAuthenticatedUser(this.getActorUserId(request));
   }
 
   @Post('invitations/:id/accept')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async acceptPending(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.invitationsService.acceptPending(id, this.getActorUserId(request));
   }
 
   @Post('organizations/:organizationId/invitations/:id/revoke')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   async revoke(
     @Param('organizationId') organizationId: string,
     @Param('id') id: string,
@@ -62,7 +65,7 @@ export class InvitationsController {
   }
 
   @Post('organizations/:organizationId/invitations/:id/resend')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async resend(
     @Param('organizationId') organizationId: string,
@@ -73,7 +76,7 @@ export class InvitationsController {
   }
 
   private getActorUserId(request: AuthenticatedRequest): string {
-    const userId = request.auth?.sub;
+    const userId = request.auth?.userId;
     if (!userId) {
       throw new Error('Authenticated request missing auth payload');
     }

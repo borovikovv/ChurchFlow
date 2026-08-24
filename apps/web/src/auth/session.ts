@@ -1,8 +1,9 @@
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
 import { AUTH_COOKIE_NAMES, type AppLocale } from '@churchflow/shared';
-import { apiFetch } from '@/api/client';
+import { apiFetch, UNAUTHENTICATED_ERROR_CODE } from '@/api/client';
 import {
   getOrganizationAccessState,
   isOrganizationAdminRole,
@@ -16,6 +17,7 @@ export interface CurrentUser {
   id: string;
   email: string | null;
   displayName: string | null;
+  avatarUrl: string | null;
   platformRole: PlatformRole;
   baptizedAt: string | null;
   baptismChurchName: string | null;
@@ -26,17 +28,31 @@ export function isPlatformAdminRole(role: PlatformRole | null | undefined): bool
   return role === 'ADMIN' || role === 'SUPER_ADMIN';
 }
 
-export async function hasServerSession(): Promise<boolean> {
+async function hasSessionCookie(): Promise<boolean> {
   const cookieStore = await cookies();
-  // Middleware validates/refreshes the session before application routes execute.
-  // The refresh cookie is only a session candidate; API guards remain authoritative.
-  return cookieStore.has(AUTH_COOKIE_NAMES.access) || cookieStore.has(AUTH_COOKIE_NAMES.refresh);
+
+  return cookieStore.has(AUTH_COOKIE_NAMES.session);
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const result = await apiFetch<CurrentUser>('/users/me');
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
+  if (!(await hasSessionCookie())) {
+    return null;
+  }
 
-  return result.ok ? result.data : null;
+  const result = await apiFetch<CurrentUser>('/users/me');
+  if (result.ok) {
+    return result.data;
+  }
+
+  if (result.error.code === UNAUTHENTICATED_ERROR_CODE) {
+    return null;
+  }
+
+  throw new Error(`Could not load the current user: ${result.error.message}`);
+});
+
+function signedOutRoute(redirectTo: string): Route {
+  return `${APP_ROUTES.signedOut}?redirectTo=${encodeURIComponent(redirectTo)}` as Route;
 }
 
 export async function isPlatformAdmin(): Promise<boolean> {
@@ -50,23 +66,24 @@ interface MembershipClaimStatusRecord {
 }
 
 export async function requireServerSession(redirectTo: string): Promise<void> {
-  if (await hasServerSession()) {
+  if (await getCurrentUser()) {
     return;
   }
 
-  redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}` as Route);
+  redirect(signedOutRoute(redirectTo));
 }
 
 export async function requirePlatformAdmin(redirectTo: string): Promise<void> {
-  if (!(await hasServerSession())) {
-    redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}` as Route);
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect(signedOutRoute(redirectTo));
   }
 
-  if (await isPlatformAdmin()) {
+  if (isPlatformAdminRole(user.platformRole)) {
     return;
   }
 
-  redirect('/' as Route);
+  redirect(APP_ROUTES.home);
 }
 
 export async function getPostLoginRedirect(
@@ -108,8 +125,8 @@ export async function getPostLoginRedirect(
 }
 
 export async function requireAdminOrganizationsAccess(redirectTo: string): Promise<void> {
-  if (!(await hasServerSession())) {
-    redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}` as Route);
+  if (!(await getCurrentUser())) {
+    redirect(signedOutRoute(redirectTo));
   }
 
   const access = await getOrganizationAccessState();

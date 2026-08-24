@@ -34,10 +34,14 @@ export const slugSchema = z
   .max(80)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 
-export const jwtPayloadSchema = z.object({
-  sub: uuidSchema,
-  sid: uuidSchema,
-  type: z.enum(['access', 'refresh']),
+export const userSessionSchema = z.object({
+  id: uuidSchema,
+  deviceName: z.string().nullable(),
+  ipAddress: z.string().nullable(),
+  lastUsedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  current: z.boolean(),
 });
 
 export const authProviderSchema = z.enum(['telegram']);
@@ -89,6 +93,7 @@ const memberMinistriesQuerySchema = z.preprocess((value) => {
 
 export const listOrganizationMembersQuerySchema = z.object({
   access: organizationMembersAccessFilterSchema.default('all'),
+  cursor: uuidSchema.optional(),
   membershipId: uuidSchema.optional(),
   tab: organizationMembersTabSchema.default('active'),
   type: organizationMembersTypeFilterSchema.default('all'),
@@ -481,6 +486,7 @@ export const prayerRequestTabSchema = z.enum(PRAYER_REQUEST_TABS);
 
 export const listPrayerRequestsQuerySchema = z.object({
   tab: prayerRequestTabSchema.default('active'),
+  cursor: uuidSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce
     .number()

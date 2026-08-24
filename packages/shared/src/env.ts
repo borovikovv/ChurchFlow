@@ -1,6 +1,4 @@
-import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { z } from 'zod';
-import { normalizePem } from './pem.js';
 
 export const nodeEnvSchema = z.enum(['development', 'test', 'production']).default('development');
 
@@ -39,27 +37,11 @@ const optionalBooleanFlag = (defaultValue: boolean) =>
       value === undefined || value === '' ? defaultValue : value === 'true' || value === '1',
     );
 
-const pemKeySchema = (label: string, keyType: 'PUBLIC' | 'PRIVATE') =>
-  z
-    .string()
-    .min(1)
-    .transform(normalizePem)
-    .refine((value) => value.includes(`-----BEGIN ${keyType} KEY-----`), {
-      message: `${label} must be a PEM ${keyType.toLowerCase()} key`,
-    })
-    .refine((value) => canImportPemKey(value, keyType), {
-      message: `${label} must be an importable PEM ${keyType.toLowerCase()} key`,
-    });
-
 export const apiEnvSchema = z
   .object({
     NODE_ENV: nodeEnvSchema,
     PORT: z.coerce.number().int().positive().default(4000),
     DATABASE_URL: z.string().url(),
-    JWT_ACCESS_PUBLIC_KEY: pemKeySchema('JWT_ACCESS_PUBLIC_KEY', 'PUBLIC'),
-    JWT_ACCESS_PRIVATE_KEY: pemKeySchema('JWT_ACCESS_PRIVATE_KEY', 'PRIVATE'),
-    JWT_REFRESH_PUBLIC_KEY: pemKeySchema('JWT_REFRESH_PUBLIC_KEY', 'PUBLIC'),
-    JWT_REFRESH_PRIVATE_KEY: pemKeySchema('JWT_REFRESH_PRIVATE_KEY', 'PRIVATE'),
     COOKIE_DOMAIN: optionalTrimmedNonEmptyString,
     WEB_APP_URL: z.string().url(),
     PLATFORM_ADMIN_EMAIL: z.string().email(),
@@ -87,6 +69,8 @@ export const apiEnvSchema = z
     NOTIFICATIONS_RETENTION_DAYS: optionalPositiveInt(365),
     NOTIFICATIONS_READ_RETENTION_DAYS: optionalPositiveInt(180),
     NOTIFICATIONS_RETENTION_DRY_RUN: optionalBooleanFlag(false),
+    SESSIONS_RETENTION_DAYS: optionalPositiveInt(30),
+    SESSIONS_RETENTION_DRY_RUN: optionalBooleanFlag(false),
     S3_ENDPOINT: z.string().url(),
     S3_REGION: z.string().min(1),
     S3_BUCKET: z.string().min(1),
@@ -141,7 +125,6 @@ export const webEnvSchema = z
     NEXT_PUBLIC_WEB_URL: z.string().url().optional(),
     API_INTERNAL_URL: z.string().url().optional(),
     NEXT_PUBLIC_API_URL: z.string().url().optional(),
-    JWT_ACCESS_PUBLIC_KEY: pemKeySchema('JWT_ACCESS_PUBLIC_KEY', 'PUBLIC').optional(),
     COOKIE_DOMAIN: optionalTrimmedNonEmptyString,
   })
   .superRefine((env, context) => {
@@ -149,12 +132,7 @@ export const webEnvSchema = z
       return;
     }
 
-    for (const key of [
-      'NEXT_PUBLIC_WEB_URL',
-      'API_INTERNAL_URL',
-      'NEXT_PUBLIC_API_URL',
-      'JWT_ACCESS_PUBLIC_KEY',
-    ] as const) {
+    for (const key of ['NEXT_PUBLIC_WEB_URL', 'API_INTERNAL_URL', 'NEXT_PUBLIC_API_URL'] as const) {
       if (!env[key]) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -169,7 +147,6 @@ export const webEnvSchema = z
     NEXT_PUBLIC_WEB_URL: env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000',
     API_INTERNAL_URL: env.API_INTERNAL_URL ?? 'http://localhost:4000/v1',
     NEXT_PUBLIC_API_URL: env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1',
-    JWT_ACCESS_PUBLIC_KEY: env.JWT_ACCESS_PUBLIC_KEY,
     COOKIE_DOMAIN: env.COOKIE_DOMAIN,
   }));
 
@@ -200,18 +177,5 @@ export function parseEnv<Output, Def extends z.ZodTypeDef, Input>(
     return schema.parse(env);
   } catch (error) {
     throw new Error(formatEnvValidationError(label, error));
-  }
-}
-
-function canImportPemKey(value: string, keyType: 'PUBLIC' | 'PRIVATE'): boolean {
-  try {
-    if (keyType === 'PUBLIC') {
-      createPublicKey(value);
-    } else {
-      createPrivateKey(value);
-    }
-    return true;
-  } catch {
-    return false;
   }
 }

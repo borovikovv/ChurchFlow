@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
+import { FormDialog } from '@/components/ui/form-dialog';
 import {
   TableRowAction,
   TableRowActions,
@@ -68,7 +69,7 @@ export function EditMemberDialog({
 }: EditMemberDialogProps) {
   const t = useTranslations('members');
   const commonT = useTranslations('common');
-  const titleId = useId();
+  const formId = useId();
   const [photo, setPhoto] = useState<File | null>(null);
   const [savedPhotoUrl, setSavedPhotoUrl] = useState(member.profile.photoUrl);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -235,28 +236,32 @@ export function EditMemberDialog({
           {t('editMember')}
         </TableRowAction>
       )}
-      <dialog
-        aria-labelledby={titleId}
-        className="fixed inset-0 m-auto h-fit max-h-[min(800px,80dvh)] w-[min(560px,calc(100%-32px))] max-w-none overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] p-0 text-[var(--foreground)] shadow-[0_16px_48px_rgba(31,35,40,0.2)] backdrop:bg-[rgba(31,35,40,0.45)]"
+      <FormDialog
+        dialogRef={dialogRef}
+        footer={
+          <>
+            <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
+              {commonT('cancel')}
+            </Button>
+            <Button disabled={isSubmitting || uploading} form={formId} type="submit">
+              {uploading ? t('uploading') : isSubmitting ? commonT('saving') : t('saveChanges')}
+            </Button>
+          </>
+        }
+        fullScreenOnMobile
+        size="md"
+        title={
+          <>
+            <span className="block text-sm font-normal text-[var(--muted)]">
+              {t('editProfile')}
+            </span>
+            {member.profile.displayName}
+          </>
+        }
         onClose={onClose}
-        ref={dialogRef}
       >
-        <form onSubmit={submit} className="flex max-h-[min(800px,80dvh)] flex-col" noValidate>
-          <header className="flex items-start justify-between gap-4 border-b border-[var(--line-muted)] p-6 [&_h2]:m-0 [&_p]:m-0">
-            <div>
-              <p>{t('editProfile')}</p>
-              <h2 id={titleId}>{member.profile.displayName}</h2>
-            </div>
-            <button
-              aria-label={t('closeEditMemberPanel')}
-              className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
-              type="button"
-              onClick={() => dialogRef.current?.close()}
-            >
-              ×
-            </button>
-          </header>
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
+        <form onSubmit={submit} className="flex flex-col" id={formId} noValidate>
+          <div className="flex min-h-0 flex-1 flex-col gap-4">
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="membershipId" value={member.id} />
             <MemberPhotoField
@@ -443,16 +448,8 @@ export function EditMemberDialog({
               </fieldset>
             ) : null}
           </div>
-          <footer className="flex justify-end gap-2 border-t border-[var(--line-muted)] bg-[var(--surface)] px-6 py-4">
-            <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-              {commonT('cancel')}
-            </Button>
-            <Button disabled={isSubmitting || uploading} type="submit">
-              {uploading ? t('uploading') : isSubmitting ? commonT('saving') : t('saveChanges')}
-            </Button>
-          </footer>
         </form>
-      </dialog>
+      </FormDialog>
     </>
   );
 }

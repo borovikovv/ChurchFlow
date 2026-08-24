@@ -16,6 +16,7 @@ export class ListPrayerRequestsQueryDto implements ListPrayerRequestsQuery {
   static readonly schema = listPrayerRequestsQuerySchema;
 
   tab!: PrayerRequestTab;
+  cursor!: ListPrayerRequestsQuery['cursor'];
   page!: number;
   pageSize!: ListPrayerRequestsQuery['pageSize'];
 }

@@ -50,6 +50,7 @@ export class PrayerRequestsRepository {
     organizationId: string;
     actor: PrayerRequestActor;
     tab: PrayerRequestTab;
+    cursor?: string;
     page: number;
     pageSize: number;
   }) {
@@ -66,18 +67,22 @@ export class PrayerRequestsRepository {
       this.prisma.prayerRequest.count({ where: archivedPrayerRequestWhere(input) }),
     ]);
     const pageCount = Math.max(1, Math.ceil(total / input.pageSize));
-    const page = Math.min(input.page, pageCount);
+    const page = input.cursor ? input.page : Math.min(input.page, pageCount);
 
-    const items = await this.prisma.prayerRequest.findMany({
+    const rows = await this.prisma.prayerRequest.findMany({
       where,
       include: prayerRequestInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      skip: (page - 1) * input.pageSize,
-      take: input.pageSize,
+      ...(input.cursor
+        ? { cursor: { id: input.cursor }, skip: 1 }
+        : { skip: (page - 1) * input.pageSize }),
+      take: input.pageSize + 1,
     });
+    const items = rows.slice(0, input.pageSize);
 
     return {
       items,
+      nextCursor: rows.length > input.pageSize ? (items[input.pageSize - 1]?.id ?? null) : null,
       page,
       total,
       counts: { active: activeCount, archived: archivedCount },

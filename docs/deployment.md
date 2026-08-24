@@ -93,7 +93,7 @@ The workflow checks out `github.sha` from the selected `Use workflow from` ref a
 - `ghcr.io/borovikovv/churchflow-api-migrator:<environment>-<github.sha>`
 - `ghcr.io/borovikovv/churchflow-web:<environment>-<github.sha>`
 
-The Web image embeds `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, `API_INTERNAL_URL`, and `JWT_ACCESS_PUBLIC_KEY` at `next build` time. Build the Web image separately for each environment. `TELEGRAM_CLIENT_ID` is runtime-only and is rendered into the server env files, not built into an image.
+The Web image embeds `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, and `API_INTERNAL_URL` at `next build` time. Build the Web image separately for each environment. `TELEGRAM_CLIENT_ID` is runtime-only and is rendered into the server env files, not built into an image.
 
 Prod deploys accept only a `github.sha` reachable from `main` or exactly matching a `v*` release tag.
 
@@ -152,7 +152,12 @@ Optional variables with defaults, used by the nightly notification retention job
 - `NOTIFICATIONS_READ_RETENTION_DAYS=180` — deletes read, archived or dismissed notifications older than this.
 - `NOTIFICATIONS_RETENTION_DRY_RUN=false` — set to `true` to log the counts without deleting anything.
 
-Leaving any of the three blank falls back to the default shown above.
+Optional variables with defaults, used by the nightly session retention job:
+
+- `SESSIONS_RETENTION_DAYS=30` — deletes sessions that stopped being usable, through expiry or revocation, longer ago than this.
+- `SESSIONS_RETENTION_DRY_RUN=false` — set to `true` to log the count without deleting anything.
+
+Leaving any of these blank falls back to the default shown above.
 
 `API_INTERNAL_URL` is a Docker-network URL used by Next.js server code and rewrites. Do not use `localhost` for it inside containers.
 Leave `COOKIE_DOMAIN` unset in both environments so auth and Telegram OAuth cookies are host-only.
@@ -170,10 +175,6 @@ Required deployment secrets:
 Required API/runtime secrets:
 
 - `DATABASE_URL`, using the Docker network hostname, for example `postgresql://churchflow:<password>@churchflow-postgres:5432/churchflow?schema=public`
-- `JWT_ACCESS_PUBLIC_KEY`
-- `JWT_ACCESS_PRIVATE_KEY`
-- `JWT_REFRESH_PUBLIC_KEY`
-- `JWT_REFRESH_PRIVATE_KEY`
 - `TELEGRAM_CLIENT_SECRET`
 - `S3_ACCESS_KEY_ID`
 - `S3_SECRET_ACCESS_KEY`
@@ -191,9 +192,7 @@ Required when `EMAIL_PROVIDER=smtp`:
 
 - set variables `SMTP_HOST` and `SMTP_PORT`.
 
-JWT PEM secrets may be stored with real newlines, escaped `\n`, or double-escaped `\\n`; the shared env schema normalizes all supported forms. The workflow writes PEM values into env files with escaped newlines so Compose does not need multiline env syntax.
-
-Do not pass private JWT keys, database credentials, Telegram credentials, Resend API keys, or S3/R2 credentials to Docker builds. Only runtime env files receive them.
+Do not pass database credentials, Telegram credentials, Resend API keys, or S3/R2 credentials to Docker builds. Only runtime env files receive them.
 
 ## First Stage Deployment
 
@@ -210,8 +209,10 @@ Do not pass private JWT keys, database credentials, Telegram credentials, Resend
    docker network connect churchflow-internal churchflow-postgres || true
    ```
    The second command may report that the endpoint already exists; that is fine.
-4. Run `Deploy` from the stage branch or tag with:
+4. Run `Deploy` from any branch you want to test with:
    - `environment=stage`
+
+   Stage accepts any branch, so feature branches can be deployed there. `prod` still only accepts `main`.
 5. Verify from the server:
    ```bash
    cd /opt/churchflow/stage

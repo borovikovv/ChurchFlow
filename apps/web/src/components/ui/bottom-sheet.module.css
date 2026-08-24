@@ -1,0 +1,19 @@
+.sheet[open] {
+  animation: sheet-slide-in 180ms ease-out;
+}
+
+@keyframes sheet-slide-in {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet[open] {
+    animation: none;
+  }
+}

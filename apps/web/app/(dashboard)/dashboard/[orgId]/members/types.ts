@@ -75,6 +75,7 @@ export interface MembersPayload {
     pageCount: number;
     pageSize: number;
     total: number;
+    nextCursor: string | null;
   };
   counts: {
     active: number;

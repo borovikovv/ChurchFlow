@@ -5,6 +5,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   '/member-claims/accept',
   '/offline',
   '/platform-admin/bootstrap',
+  '/signed-out',
 ]);
 
 const STATIC_EXACT_PATHS = new Set([
@@ -56,6 +57,12 @@ export function isProtectedRoute(pathname: string): boolean {
     return false;
   }
 
-  // Fail closed: every new application page is protected until explicitly added above.
   return !isPublicRoute(normalized);
+}
+
+export function internalRedirectTarget(pathname: string, search: string): string {
+  const safePathname = pathname.startsWith('/') && !pathname.startsWith('//') ? pathname : '/';
+  const safeSearch = search.startsWith('?') ? search : '';
+
+  return `${safePathname}${safeSearch}`;
 }

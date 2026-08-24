@@ -58,6 +58,7 @@ export function PrayerRequestFormDialog({
   return (
     <FormDialog
       dialogRef={dialogRef}
+      fullScreenOnMobile
       title={title}
       triggerLabel={triggerLabel}
       triggerVariant={initialRequest ? 'ghost' : 'primary'}

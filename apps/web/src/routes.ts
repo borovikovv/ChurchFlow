@@ -9,4 +9,5 @@ export const APP_ROUTES = {
   organizationRequestStatus: '/organization-request/status',
   organizationSelect: '/organizations/select',
   profile: '/profile',
+  signedOut: '/signed-out',
 } as const satisfies Record<string, Route>;

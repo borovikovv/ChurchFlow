@@ -60,41 +60,26 @@ function createAuthService(repository, options = {}) {
   );
 }
 
-function createRefreshAuthService(repository) {
-  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-
+function createSessionAuthService(repository) {
   return new AuthService(
     {
       getOrThrow(key) {
-        if (key === 'JWT_ACCESS_PRIVATE_KEY') {
-          return privateKey.export({ type: 'pkcs8', format: 'pem' });
-        }
-        throw new Error(`Unexpected refresh config key: ${key}`);
+        throw new Error(`Unexpected session config key: ${key}`);
       },
     },
     repository,
   );
 }
 
-function activeRefreshSession(overrides = {}) {
-  return {
-    id: '3d3205cc-e8f4-4eb5-9b57-fcd1ffed8dd0',
-    userId: 'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
-    expiresAt: new Date(Date.now() + 60_000),
-    revokedAt: null,
-    user: {
-      id: 'b919dd9a-12d5-4460-b0e2-f22f85ca507b',
-      email: null,
-      displayName: 'Refresh User',
-      platformRole: 'USER',
-      deletedAt: null,
-    },
-    ...overrides,
-  };
-}
+const CONTROLLER_SESSION_EXPIRES_AT = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-function createAuthController(cookieDomain, webAppUrl = 'https://stage.mychurchflow.org') {
+function createAuthController(
+  cookieDomain,
+  webAppUrl = 'https://stage.mychurchflow.org',
+  overrides = {},
+) {
   const authService = {
+    logoutByToken: async () => ({ ok: true }),
     beginTelegramLogin: () => ({
       authorizationUrl: 'https://oauth.telegram.org/auth?state=state',
       state: 'state',
@@ -109,12 +94,11 @@ function createAuthController(cookieDomain, webAppUrl = 'https://stage.mychurchf
         displayName: 'Stage User',
         platformRole: 'USER',
       },
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      accessTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
-      refreshTokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      sessionToken: 'session-token',
+      sessionExpiresAt: CONTROLLER_SESSION_EXPIRES_AT,
       redirectTo: input.redirectTo ?? '/dashboard/stage',
     }),
+    ...overrides,
   };
 
   const config = {
@@ -180,64 +164,9 @@ function assertSecureCookiePolicy(options, { maxAge } = {}) {
   }
 }
 
-test('valid refresh token issues a 15-minute access token without extending session', async () => {
-  const refreshToken = 'opaque-refresh-token';
-  const session = activeRefreshSession();
-  const originalSessionExpiry = session.expiresAt.getTime();
-  let receivedHash;
-  let createSessionCalls = 0;
-  const service = createRefreshAuthService({
-    findSessionByRefreshTokenHash: async (hash) => {
-      receivedHash = hash;
-      return session;
-    },
-    createSession: async () => {
-      createSessionCalls += 1;
-    },
-  });
-
-  const before = Date.now();
-  const result = await service.refreshAccessToken(refreshToken);
-  const [, body] = result.accessToken.split('.');
-  const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-
-  assert.equal(receivedHash, createHash('sha256').update(refreshToken).digest('hex'));
-  assert.notEqual(receivedHash, refreshToken);
-  assert.equal(payload.sub, session.userId);
-  assert.equal(payload.sid, session.id);
-  assert.equal(payload.type, 'access');
-  assert.equal(payload.exp - payload.iat, 15 * 60);
-  assert.ok(result.accessTokenExpiresAt.getTime() >= before + 15 * 60 * 1000);
-  assert.equal(createSessionCalls, 0);
-  assert.equal(session.expiresAt.getTime(), originalSessionExpiry);
-});
-
-for (const [name, session] of [
-  ['missing', null],
-  ['expired', activeRefreshSession({ expiresAt: new Date(Date.now() - 1) })],
-  ['revoked', activeRefreshSession({ revokedAt: new Date() })],
-  [
-    'deleted-user',
-    activeRefreshSession({
-      user: { ...activeRefreshSession().user, deletedAt: new Date() },
-    }),
-  ],
-]) {
-  test(`${name} refresh session is rejected`, async () => {
-    const service = createRefreshAuthService({
-      findSessionByRefreshTokenHash: async () => session,
-    });
-
-    await assert.rejects(
-      service.refreshAccessToken('invalid-or-inactive-refresh-token'),
-      /Refresh session is no longer active/,
-    );
-  });
-}
-
-test('new session stores only refresh hash and has an absolute 30-day expiry', async () => {
+test('new session stores only the token hash, a 30-day idle window and a 180-day ceiling', async () => {
   let createdSession;
-  const service = createRefreshAuthService({
+  const service = createSessionAuthService({
     createSession: async (input) => {
       createdSession = input;
       return { id: '3d3205cc-e8f4-4eb5-9b57-fcd1ffed8dd0' };
@@ -245,28 +174,95 @@ test('new session stores only refresh hash and has an absolute 30-day expiry', a
   });
 
   const before = Date.now();
-  const result = await service.createUserSession('b919dd9a-12d5-4460-b0e2-f22f85ca507b');
+  const result = await service.createUserSession('b919dd9a-12d5-4460-b0e2-f22f85ca507b', {});
 
-  assert.notEqual(createdSession.refreshTokenHash, result.refreshToken);
-  assert.equal(createdSession.refreshTokenHash.length, 64);
+  assert.notEqual(createdSession.tokenHash, result.sessionToken);
+  assert.equal(createdSession.tokenHash.length, 64);
   assert.equal(
-    createdSession.refreshTokenHash,
-    createHash('sha256').update(result.refreshToken).digest('hex'),
+    createdSession.tokenHash,
+    createHash('sha256').update(result.sessionToken).digest('hex'),
   );
   assert.ok(createdSession.expiresAt.getTime() >= before + 30 * 24 * 60 * 60 * 1000);
-  assert.equal(createdSession.expiresAt.getTime(), result.refreshTokenExpiresAt.getTime());
+  assert.ok(createdSession.absoluteExpiresAt.getTime() >= before + 180 * 24 * 60 * 60 * 1000);
+  assert.equal(
+    result.sessionExpiresAt.getTime(),
+    createdSession.expiresAt.getTime(),
+    'the cookie tracks the idle window; a ceiling-length cookie would outlive the session',
+  );
 });
 
-test('logout revokes the current server-side session', async () => {
-  let revokedSessionId;
-  const service = createRefreshAuthService({
-    revokeSession: async (sessionId) => {
-      revokedSessionId = sessionId;
+test('new session records the device that created it', async () => {
+  let createdSession;
+  const service = createSessionAuthService({
+    createSession: async (input) => {
+      createdSession = input;
+      return { id: '3d3205cc-e8f4-4eb5-9b57-fcd1ffed8dd0' };
     },
   });
 
-  assert.deepEqual(await service.logout('session-to-revoke'), { ok: true });
-  assert.equal(revokedSessionId, 'session-to-revoke');
+  await service.createUserSession('b919dd9a-12d5-4460-b0e2-f22f85ca507b', {
+    userAgent: 'ChurchFlow/1.0 (iPhone)',
+    ipAddress: '203.0.113.7',
+  });
+
+  assert.equal(createdSession.userAgent, 'ChurchFlow/1.0 (iPhone)');
+  assert.equal(createdSession.ipAddress, '203.0.113.7');
+});
+
+test('session token is opaque, not a JWT', async () => {
+  const service = createSessionAuthService({
+    createSession: async () => ({ id: '3d3205cc-e8f4-4eb5-9b57-fcd1ffed8dd0' }),
+  });
+
+  const first = await service.createUserSession('b919dd9a-12d5-4460-b0e2-f22f85ca507b', {});
+  const second = await service.createUserSession('b919dd9a-12d5-4460-b0e2-f22f85ca507b', {});
+
+  assert.equal(first.sessionToken.split('.').length, 1);
+  assert.notEqual(first.sessionToken, second.sessionToken);
+  assert.ok(first.sessionToken.length >= 64);
+});
+
+test('logout revokes the session behind the presented token, by hash', async () => {
+  let revokedHash;
+  let revokedReason;
+  const service = createSessionAuthService({
+    revokeSessionByTokenHash: async (tokenHash, reason) => {
+      revokedHash = tokenHash;
+      revokedReason = reason;
+      return 1;
+    },
+  });
+
+  assert.deepEqual(await service.logoutByToken('session-to-revoke'), { ok: true });
+  assert.equal(revokedHash, createHash('sha256').update('session-to-revoke').digest('hex'));
+  assert.notEqual(revokedHash, 'session-to-revoke');
+  assert.equal(revokedReason, 'logout');
+});
+
+test('logout clears the session cookie and both legacy cookies', async () => {
+  const controller = createAuthController();
+  const response = new FakeResponse();
+
+  assert.deepEqual(
+    await controller.logout({ headers: { cookie: 'churchflow_session=token' } }, response),
+    { ok: true },
+  );
+  assert.deepEqual(
+    response.clearedCookies.map(({ name }) => name),
+    ['churchflow_session', 'churchflow_access', 'churchflow_refresh'],
+  );
+});
+
+test('logout still clears cookies when the session is already gone', async () => {
+  const controller = createAuthController(undefined, 'https://stage.mychurchflow.org', {
+    logoutByToken: async () => {
+      throw new Error('revokeSessionByTokenHash must not be reached for an unknown token');
+    },
+  });
+  const response = new FakeResponse();
+
+  assert.deepEqual(await controller.logout({ headers: {} }, response), { ok: true });
+  assert.equal(response.clearedCookies.length, 3);
 });
 
 test('unknown Telegram user is admitted from the organization request route', async () => {
@@ -377,7 +373,13 @@ for (const [label, cookieDomain] of [
 
     assert.deepEqual(
       callbackResponse.cookies.map(({ name }) => name),
-      ['churchflow_access', 'churchflow_refresh'],
+      ['churchflow_session'],
+    );
+    const [sessionCookie] = callbackResponse.cookies;
+    assert.equal(
+      sessionCookie.options.expires.getTime(),
+      CONTROLLER_SESSION_EXPIRES_AT.getTime(),
+      'the login cookie must expire with the session it was issued for',
     );
     for (const operation of callbackResponse.cookies) {
       assertSecureCookiePolicy(operation.options);

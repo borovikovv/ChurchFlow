@@ -47,7 +47,7 @@ separate, approval-based `MembershipClaim` flow documented in
 - Claimable links must not grant `OWNER` or `ADMIN`.
 - Only an active `OWNER` can change membership roles. Downgrading or removing the last active owner is blocked transactionally.
 
-JWT claims must not replace organization membership checks. Frontend checks are advisory only; the API must continue to enforce roles and permissions from database membership state.
+The session credential must not replace organization membership checks. Frontend checks are advisory only; the API must continue to enforce roles and permissions from database membership state.
 
 ## Remaining Integration Boundaries
 

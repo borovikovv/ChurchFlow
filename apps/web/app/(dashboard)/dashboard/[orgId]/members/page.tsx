@@ -1,5 +1,6 @@
 import { getCurrentUser } from '@/auth/session';
 import { getMessages } from '@/i18n/messages';
+import { MembersActions } from './_components/members-actions';
 import { MembersManager } from './_components/members-manager';
 import {
   claimAction,
@@ -52,6 +53,7 @@ const emptyMembersPayload: MembersPayload = {
     pageCount: 1,
     pageSize: DEFAULT_MEMBER_PAGE_SIZE,
     total: 0,
+    nextCursor: null,
   },
   counts: {
     active: 0,
@@ -102,17 +104,30 @@ export default async function MembersDashboardPage({
   });
   const payload = membersResult.ok ? membersResult.payload : emptyMembersPayload;
 
+  const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
+
   return (
     <div className="stack">
-      <h1>{messages.members.title}</h1>
-      <p>
-        {messages.members.yourRole.replace(
-          '{role}',
-          payload.actorRole
-            ? messages.members.roleLabels[payload.actorRole]
-            : messages.members.platformAdministrator,
-        )}
-      </p>
+      <div className="flex min-w-0 items-start justify-between gap-3 md:contents">
+        <div className="min-w-0 flex-1 md:contents">
+          <h1>{messages.members.title}</h1>
+          <p>
+            {messages.members.yourRole.replace(
+              '{role}',
+              payload.actorRole
+                ? messages.members.roleLabels[payload.actorRole]
+                : messages.members.platformAdministrator,
+            )}
+          </p>
+        </div>
+        {canManage ? (
+          <MembersActions
+            manageInvitation={manageInlineInvitationAction}
+            organizationId={orgId}
+            variant="fab"
+          />
+        ) : null}
+      </div>
       {!membersResult.ok ? <p className="form-error">{membersResult.error}</p> : null}
       {error ? <p className="form-error">{error}</p> : null}
       {message ? <p>{message}</p> : null}

@@ -144,3 +144,25 @@
 .calendarRoot :global(.fc .fc-more-popover .fc-popover-body) {
   padding: 8px;
 }
+
+.calendarRoot :global(.fc .fc-timegrid-slot) {
+  height: 40px;
+}
+
+.calendarRoot :global(.fc .fc-timegrid-slot-label-cushion),
+.calendarRoot :global(.fc .fc-timegrid-axis-cushion) {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.calendarRoot :global(.fc .fc-timegrid-now-indicator-line),
+.calendarRoot :global(.fc .fc-timegrid-now-indicator-arrow) {
+  border-color: var(--danger);
+}
+
+.calendarRoot :global(.fc .fc-timegrid-event) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}

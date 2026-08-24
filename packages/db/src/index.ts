@@ -21,6 +21,7 @@ export type {
   OrganizationStatus,
   PageStatus,
   PlatformRole,
+  SessionRevokeReason,
   SessionType,
   WebsiteSectionType,
 } from '@prisma/client';

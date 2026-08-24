@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import type { Route } from 'next';
 import type { Metadata } from 'next';
+import { requireServerSession } from '@/auth/session';
 import { getOrganizationAccessState } from '@/features/organizations/server/access';
 
 export const metadata: Metadata = {
@@ -15,6 +16,8 @@ export default async function DashboardLayout({
   params: Promise<{ orgId: string }>;
 }>) {
   const { orgId } = await params;
+  await requireServerSession(`/dashboard/${orgId}`);
+
   const access = await getOrganizationAccessState();
   const hasMembership = access.organizations.some((organization) => organization.id === orgId);
 

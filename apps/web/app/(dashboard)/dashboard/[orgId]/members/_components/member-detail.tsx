@@ -9,7 +9,7 @@ import { EditMemberDialog } from '@/components/members/member-actions';
 import type { MemberProfileUpdate } from '@/components/members/member-actions.types';
 import { organizationMembersRoute } from '@/features/organizations/routes';
 import type { MembersPayload, OrganizationMember } from '../types';
-import { MemberAvatar } from './member-avatar';
+import { Avatar } from '@/components/ui/avatar';
 
 type EditMemberDialogProps = ComponentProps<typeof EditMemberDialog>;
 
@@ -100,7 +100,7 @@ export function MemberDetail({
 
       <header className="flex min-w-0 flex-col gap-4 border-b border-[var(--line-muted)] pb-5 sm:flex-row sm:items-center">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-          <MemberAvatar
+          <Avatar
             displayName={member.profile.displayName}
             url={member.profile.photoUrl}
             size="lg"

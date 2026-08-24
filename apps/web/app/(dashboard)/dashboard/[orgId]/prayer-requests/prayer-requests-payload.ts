@@ -15,6 +15,7 @@ export function createEmptyPrayerRequestsPayload(
       pageSize: query.pageSize ?? DEFAULT_PRAYER_REQUEST_PAGE_SIZE,
       total: 0,
       pageCount: 1,
+      nextCursor: null,
     },
   };
 }

@@ -4,6 +4,15 @@ import { CALENDAR_EVENT_REPEAT_PERIOD, CALENDAR_EVENT_TYPE } from '@churchflow/s
 export const CALENDAR_TYPE = CALENDAR_EVENT_TYPE;
 export const CALENDAR_REPEAT = CALENDAR_EVENT_REPEAT_PERIOD;
 
+export const CALENDAR_VIEWS = ['month', 'week'] as const;
+
+export type CalendarView = (typeof CALENDAR_VIEWS)[number];
+
+export const FULL_CALENDAR_VIEW: Record<CalendarView, string> = {
+  month: 'dayGridMonth',
+  week: 'timeGridWeek',
+};
+
 export const EVENT_TYPES: Array<{ value: CalendarEventType }> = [
   { value: CALENDAR_TYPE.task },
   { value: CALENDAR_TYPE.birthday },

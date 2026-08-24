@@ -61,7 +61,7 @@ jobs:
 
           case "${{ inputs.environment }}" in
             stage)
-              expected_branch="stage"
+              expected_branch=""
               ;;
             prod)
               expected_branch="main"
@@ -72,9 +72,18 @@ jobs:
               ;;
           esac
 
-          if [[ "$GITHUB_REF_TYPE" != "branch" || "$GITHUB_REF_NAME" != "$expected_branch" ]]; then
+          if [[ "$GITHUB_REF_TYPE" != "branch" ]]; then
+            echo "::error::${{ inputs.environment }} deploys must be dispatched from a branch. Current ref: $GITHUB_REF_TYPE/$GITHUB_REF_NAME."
+            exit 1
+          fi
+
+          if [[ -n "$expected_branch" && "$GITHUB_REF_NAME" != "$expected_branch" ]]; then
             echo "::error::${{ inputs.environment }} deploys must be dispatched from the $expected_branch branch. Current ref: $GITHUB_REF_TYPE/$GITHUB_REF_NAME."
             exit 1
+          fi
+
+          if [[ -z "$expected_branch" ]]; then
+            echo "Deploying ${{ inputs.environment }} from branch $GITHUB_REF_NAME."
           fi
 
       - name: Validate Telegram environment variables
@@ -103,7 +112,6 @@ jobs:
           NEXT_PUBLIC_WEB_URL: ${{ vars.NEXT_PUBLIC_WEB_URL }}
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
           API_INTERNAL_URL: ${{ vars.API_INTERNAL_URL }}
-          JWT_ACCESS_PUBLIC_KEY: ${{ secrets.JWT_ACCESS_PUBLIC_KEY }}
         run: |
           set -euo pipefail
 
@@ -132,39 +140,6 @@ jobs:
           require_url NEXT_PUBLIC_API_URL
           require_url API_INTERNAL_URL
 
-          if ! node <<'NODE'; then
-          const { createPublicKey } = require('node:crypto');
-
-          function normalizePem(value) {
-            let normalized = value.trim();
-            const quote = normalized[0];
-            if ((quote === '"' || quote === "'") && normalized.endsWith(quote)) {
-              normalized = normalized.slice(1, -1).trim();
-            }
-            normalized = normalized.replace(/\\+n/g, '\n').replace(/\r\n?/g, '\n').trim();
-            return `${normalized}\n`;
-          }
-
-          const value = process.env.JWT_ACCESS_PUBLIC_KEY || '';
-          if (!value) {
-            console.error('JWT_ACCESS_PUBLIC_KEY is required for the Web image build.');
-            process.exit(1);
-          }
-
-          try {
-            const normalized = normalizePem(value);
-            if (!normalized.includes('-----BEGIN PUBLIC KEY-----')) {
-              throw new Error('missing public key header');
-            }
-            createPublicKey(normalized);
-          } catch {
-            console.error('JWT_ACCESS_PUBLIC_KEY must be an importable PEM public key.');
-            process.exit(1);
-          }
-          NODE
-            invalid=1
-          fi
-
           exit "$invalid"
 
       - name: Build and publish API image
@@ -190,7 +165,6 @@ jobs:
             NEXT_PUBLIC_WEB_URL=${{ vars.NEXT_PUBLIC_WEB_URL }}
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
             API_INTERNAL_URL=${{ vars.API_INTERNAL_URL }}
-            JWT_ACCESS_PUBLIC_KEY=${{ secrets.JWT_ACCESS_PUBLIC_KEY }}
           cache-from: type=gha,scope=web-${{ inputs.environment }}
           cache-to: type=gha,mode=max,scope=web-${{ inputs.environment }}
 
@@ -279,7 +253,7 @@ jobs:
 
           case "${{ inputs.environment }}" in
             stage)
-              expected_branch="stage"
+              expected_branch=""
               ;;
             prod)
               expected_branch="main"
@@ -290,9 +264,18 @@ jobs:
               ;;
           esac
 
-          if [[ "$GITHUB_REF_TYPE" != "branch" || "$GITHUB_REF_NAME" != "$expected_branch" ]]; then
+          if [[ "$GITHUB_REF_TYPE" != "branch" ]]; then
+            echo "::error::${{ inputs.environment }} deploys must be dispatched from a branch. Current ref: $GITHUB_REF_TYPE/$GITHUB_REF_NAME."
+            exit 1
+          fi
+
+          if [[ -n "$expected_branch" && "$GITHUB_REF_NAME" != "$expected_branch" ]]; then
             echo "::error::${{ inputs.environment }} deploys must be dispatched from the $expected_branch branch. Current ref: $GITHUB_REF_TYPE/$GITHUB_REF_NAME."
             exit 1
+          fi
+
+          if [[ -z "$expected_branch" ]]; then
+            echo "Deploying ${{ inputs.environment }} from branch $GITHUB_REF_NAME."
           fi
 
       - name: Validate deployment environment
@@ -311,10 +294,6 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           SMTP_HOST: ${{ vars.SMTP_HOST }}
           SMTP_PORT: ${{ vars.SMTP_PORT }}
-          JWT_ACCESS_PUBLIC_KEY: ${{ secrets.JWT_ACCESS_PUBLIC_KEY }}
-          JWT_ACCESS_PRIVATE_KEY: ${{ secrets.JWT_ACCESS_PRIVATE_KEY }}
-          JWT_REFRESH_PUBLIC_KEY: ${{ secrets.JWT_REFRESH_PUBLIC_KEY }}
-          JWT_REFRESH_PRIVATE_KEY: ${{ secrets.JWT_REFRESH_PRIVATE_KEY }}
           S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
           S3_REGION: ${{ vars.S3_REGION }}
           S3_BUCKET: ${{ vars.S3_BUCKET }}
@@ -362,7 +341,6 @@ jobs:
           for key in \
             SSH_HOST SSH_USER SSH_PRIVATE_KEY DATABASE_URL WEB_APP_URL PLATFORM_ADMIN_EMAIL \
             TELEGRAM_CLIENT_SECRET TELEGRAM_REDIRECT_URI EMAIL_PROVIDER EMAIL_FROM \
-            JWT_ACCESS_PUBLIC_KEY JWT_ACCESS_PRIVATE_KEY JWT_REFRESH_PUBLIC_KEY JWT_REFRESH_PRIVATE_KEY \
             S3_ENDPOINT S3_REGION S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY \
             NEXT_PUBLIC_WEB_URL NEXT_PUBLIC_API_URL API_INTERNAL_URL; do
             require_value "$key"
@@ -422,10 +400,6 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           SMTP_HOST: ${{ vars.SMTP_HOST }}
           SMTP_PORT: ${{ vars.SMTP_PORT }}
-          JWT_ACCESS_PUBLIC_KEY: ${{ secrets.JWT_ACCESS_PUBLIC_KEY }}
-          JWT_ACCESS_PRIVATE_KEY: ${{ secrets.JWT_ACCESS_PRIVATE_KEY }}
-          JWT_REFRESH_PUBLIC_KEY: ${{ secrets.JWT_REFRESH_PUBLIC_KEY }}
-          JWT_REFRESH_PRIVATE_KEY: ${{ secrets.JWT_REFRESH_PRIVATE_KEY }}
           S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
           S3_REGION: ${{ vars.S3_REGION }}
           S3_BUCKET: ${{ vars.S3_BUCKET }}
@@ -485,7 +459,6 @@ jobs:
             DATABASE_URL WEB_APP_URL PLATFORM_ADMIN_EMAIL \
             TELEGRAM_CLIENT_ID TELEGRAM_CLIENT_SECRET TELEGRAM_REDIRECT_URI \
             EMAIL_PROVIDER EMAIL_FROM \
-            JWT_ACCESS_PUBLIC_KEY JWT_ACCESS_PRIVATE_KEY JWT_REFRESH_PUBLIC_KEY JWT_REFRESH_PRIVATE_KEY \
             S3_ENDPOINT S3_REGION S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
             append_required_env "$api_env_file" "$key"
           done
@@ -496,7 +469,7 @@ jobs:
             append_optional_env "$api_env_file" "$key"
           done
 
-          for key in NEXT_PUBLIC_WEB_URL NEXT_PUBLIC_API_URL API_INTERNAL_URL JWT_ACCESS_PUBLIC_KEY; do
+          for key in NEXT_PUBLIC_WEB_URL NEXT_PUBLIC_API_URL API_INTERNAL_URL; do
             append_required_env "$web_env_file" "$key"
           done
 

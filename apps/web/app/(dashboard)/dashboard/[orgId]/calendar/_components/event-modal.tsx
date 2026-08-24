@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   useForm,
   type UseFormClearErrors,
@@ -22,6 +22,7 @@ import {
 } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { FormDialog } from '@/components/ui/form-dialog';
 import { FormDatePicker } from '@/components/forms/form-date-picker';
 import { FormInput } from '@/components/forms/form-input';
 import { FormSelect } from '@/components/forms/form-select';
@@ -67,6 +68,8 @@ export function EventModal({
 }) {
   const t = useTranslations('calendar');
   const readonly = !canManage;
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const formId = useId();
   const [assigneeToAdd, setAssigneeToAdd] = useState('');
   const {
     clearErrors,
@@ -107,349 +110,15 @@ export function EventModal({
     }
   });
 
+  useEffect(() => {
+    dialogRef.current?.showModal();
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(31,35,40,0.45)] p-4">
-      <div
-        aria-modal="true"
-        className="grid max-h-[90dvh] w-[min(720px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] rounded-lg border border-[var(--line)] bg-[var(--surface)] shadow-xl"
-        role="dialog"
-      >
-        <header className="flex items-center justify-between border-b border-[var(--line)] p-5">
-          <h2>{mode === 'create' ? t('newEvent') : (editingEvent?.title ?? t('event'))}</h2>
-          <button
-            aria-label={t('close')}
-            className="h-8 w-8 cursor-pointer rounded-[var(--radius)] border-0 bg-transparent text-2xl text-[var(--muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--foreground)]"
-            type="button"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </header>
-        <form
-          className="grid min-h-0 gap-4 overflow-y-auto p-5 sm:grid-cols-2"
-          onSubmit={submit}
-          noValidate
-        >
-          <FormSelect
-            disabled={readonly}
-            error={errors.type?.message}
-            label={t('type')}
-            value={values.type}
-            {...register('type', {
-              onChange: (event) => {
-                const next = autofillMemberEvent(
-                  { ...values, type: event.currentTarget.value as CalendarEventType },
-                  members,
-                  {
-                    anniversary: (name) => t('autofill.anniversary', { name }),
-                    birthday: (name) => t('autofill.birthday', { name }),
-                  },
-                );
-                applyFormValues(next, setValue);
-              },
-            })}
-          >
-            {CALENDAR_EVENT_TYPES.map((value) => (
-              <option key={value} value={value}>
-                {t(`eventTypes.${value}`)}
-              </option>
-            ))}
-          </FormSelect>
-          <FormSelect
-            disabled={readonly}
-            error={errors.linkedMembershipId?.message}
-            label={t('linkedMember')}
-            value={values.linkedMembershipId}
-            {...register('linkedMembershipId', {
-              onChange: (event) => {
-                const next = autofillMemberEvent(
-                  { ...values, linkedMembershipId: event.currentTarget.value },
-                  members,
-                  {
-                    anniversary: (name) => t('autofill.anniversary', { name }),
-                    birthday: (name) => t('autofill.birthday', { name }),
-                  },
-                );
-                applyFormValues(next, setValue);
-              },
-            })}
-          >
-            <option value="">{t('noLinkedMember')}</option>
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.displayName}
-              </option>
-            ))}
-          </FormSelect>
-          <div className="sm:col-span-2">
-            <FormInput
-              disabled={readonly}
-              error={errors.title?.message}
-              label={t('titleField')}
-              {...register('title')}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <FormTextarea
-              disabled={readonly}
-              error={errors.description?.message}
-              label={t('description')}
-              rows={4}
-              {...register('description')}
-            />
-          </div>
-          <FormDatePicker
-            control={control}
-            disabled={readonly}
-            error={errors.startDate?.message}
-            maxDate={null}
-            name="startDate"
-            label={t('startDate')}
-          />
-          <FormInput
-            disabled={readonly || values.allDay}
-            error={errors.startTime?.message}
-            label={t('startTime')}
-            type="time"
-            {...register('startTime')}
-          />
-          <FormDatePicker
-            control={control}
-            disabled={readonly}
-            error={errors.endDate?.message}
-            maxDate={null}
-            name="endDate"
-            label={t('endDate')}
-          />
-          <FormInput
-            disabled={readonly || values.allDay}
-            error={errors.endTime?.message}
-            label={t('endTime')}
-            type="time"
-            {...register('endTime')}
-          />
-          <Checkbox disabled={readonly} label={t('fullDay')} {...register('allDay')} />
-          <FormSelect
-            disabled={readonly}
-            error={errors.reminder?.message}
-            label={t('reminder')}
-            value={values.reminder}
-            {...register('reminder', {
-              onChange: (event) => {
-                setValue('reminder', event.currentTarget.value as CalendarFormState['reminder'], {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                });
-                clearErrors('reminder');
-              },
-            })}
-          >
-            {REMINDER_VALUES.map((value) => (
-              <option key={value || 'none'} value={value}>
-                {value ? t(`reminders.${value}`) : t('reminders.NONE')}
-              </option>
-            ))}
-          </FormSelect>
-          <FormSelect
-            disabled={readonly}
-            error={errors.repeatPeriod?.message}
-            label={t('repeat')}
-            value={values.repeatPeriod}
-            {...register('repeatPeriod', {
-              onChange: (event) => {
-                setValue(
-                  'repeatPeriod',
-                  event.currentTarget.value as CalendarFormState['repeatPeriod'],
-                  {
-                    shouldDirty: true,
-                    shouldValidate: true,
-                  },
-                );
-                clearErrors('repeatPeriod');
-              },
-            })}
-          >
-            {CALENDAR_EVENT_REPEAT_PERIODS.map((value) => (
-              <option key={value} value={value}>
-                {t(`repeatPeriods.${value}`)}
-              </option>
-            ))}
-          </FormSelect>
-          {values.type === CALENDAR_TYPE.task ? (
-            <>
-              <div className="grid gap-2 sm:col-span-2">
-                <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <FormSelect
-                    disabled={readonly || availableAssignees.length === 0}
-                    label={t('assignees')}
-                    value={assigneeToAdd}
-                    onChange={(event) => setAssigneeToAdd(event.currentTarget.value)}
-                  >
-                    <option value="">{t('selectMember')}</option>
-                    {availableAssignees.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.displayName}
-                      </option>
-                    ))}
-                  </FormSelect>
-                  <Button
-                    disabled={readonly || !assigneeToAdd}
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      if (!assigneeToAdd) return;
-                      setValue(
-                        'assigneeMembershipIds',
-                        [...values.assigneeMembershipIds, assigneeToAdd],
-                        { shouldDirty: true, shouldValidate: true },
-                      );
-                      clearErrors('assigneeMembershipIds');
-                      setAssigneeToAdd('');
-                    }}
-                  >
-                    {t('add')}
-                  </Button>
-                </div>
-                {selectedAssignees.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedAssignees.map((member) => (
-                      <span
-                        className="inline-flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--surface-subtle)] px-2 py-1 text-sm"
-                        key={member.id}
-                      >
-                        {member.displayName}
-                        <button
-                          aria-label={t('removeAssignee', { name: member.displayName })}
-                          className="h-5 w-5 rounded border-0 bg-transparent text-[var(--muted)] hover:bg-[var(--line-muted)] hover:text-[var(--foreground)]"
-                          disabled={readonly}
-                          type="button"
-                          onClick={() => {
-                            setValue(
-                              'assigneeMembershipIds',
-                              values.assigneeMembershipIds.filter((id) => id !== member.id),
-                              { shouldDirty: true, shouldValidate: true },
-                            );
-                          }}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                {errors.assigneeMembershipIds?.message ? (
-                  <p className="form-error m-0 text-xs">{errors.assigneeMembershipIds.message}</p>
-                ) : null}
-              </div>
-              <Checkbox disabled={readonly} label={t('completed')} {...register('taskCompleted')} />
-            </>
-          ) : null}
-          {values.type === CALENDAR_TYPE.service ? (
-            <fieldset className="grid items-start gap-4 rounded-md border border-[var(--line)] p-4 sm:col-span-2 sm:grid-cols-2">
-              <legend className="px-1 font-semibold">{t('serviceDetails')}</legend>
-              <ServiceRoleField
-                disabled={readonly}
-                error={errors.serviceDetails?.preacher?.message}
-                label={t('preacher')}
-                members={members}
-                role="preacher"
-                values={values.serviceDetails.preacher}
-                register={register}
-                setValue={setValue}
-                clearErrors={clearErrors}
-              />
-              <ServiceRoleField
-                disabled={readonly}
-                error={errors.serviceDetails?.serviceHost?.message}
-                label={t('serviceHost')}
-                members={members}
-                role="serviceHost"
-                values={values.serviceDetails.serviceHost}
-                register={register}
-                setValue={setValue}
-                clearErrors={clearErrors}
-              />
-              <ServiceRoleField
-                disabled={readonly}
-                error={errors.serviceDetails?.worshipLead?.message}
-                label={t('worshipLead')}
-                members={members}
-                role="worshipLead"
-                values={values.serviceDetails.worshipLead}
-                register={register}
-                setValue={setValue}
-                clearErrors={clearErrors}
-              />
-              <div className="self-start">
-                <FormTextarea
-                  disabled={readonly}
-                  error={errors.serviceDetails?.biblePassage?.message}
-                  className="min-h-31"
-                  label={t('biblePassage')}
-                  {...register('serviceDetails.biblePassage')}
-                />
-              </div>
-              <div className="self-start pt-1">
-                <Checkbox
-                  disabled={readonly}
-                  label={t('communion')}
-                  {...register('serviceDetails.hasCommunion')}
-                />
-              </div>
-              <div className="min-h-[150px]">
-                {values.serviceDetails.hasCommunion ? (
-                  <ServiceRoleField
-                    disabled={readonly}
-                    error={errors.serviceDetails?.communionLead?.message}
-                    label={t('communionLead')}
-                    members={members}
-                    role="communionLead"
-                    values={values.serviceDetails.communionLead}
-                    register={register}
-                    setValue={setValue}
-                    clearErrors={clearErrors}
-                  />
-                ) : null}
-              </div>
-              <div className="sm:col-span-2">
-                <FormTextarea
-                  disabled={readonly}
-                  error={errors.serviceDetails?.songs?.message}
-                  label={t('songs')}
-                  rows={4}
-                  placeholder={t('songsPlaceholder')}
-                  {...register('serviceDetails.songs')}
-                />
-              </div>
-            </fieldset>
-          ) : null}
-          {canManage ? (
-            <label className="sm:col-span-2">
-              {t('eventImage')}
-              <input
-                accept="image/jpeg,image/png,image/webp"
-                type="file"
-                onChange={async (event) => {
-                  const file = event.currentTarget.files?.[0];
-                  if (!file) return;
-                  const uploaded = await onImageUpload(file);
-                  if (!uploaded) return;
-                  setValue('imageAssetId', uploaded.assetId);
-                  setValue('imageUrl', uploaded.imageUrl);
-                }}
-              />
-            </label>
-          ) : null}
-          {values.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              alt=""
-              className="h-24 w-24 rounded-md border border-[var(--line)] object-cover"
-              src={values.imageUrl}
-            />
-          ) : null}
-        </form>
-        <footer className="flex flex-wrap justify-between gap-2 border-t border-[var(--line)] p-5">
+    <FormDialog
+      dialogRef={dialogRef}
+      footer={
+        <div className="flex flex-col-reverse gap-2 sm:w-full sm:flex-row sm:items-center sm:justify-between">
           <div>
             {mode === 'edit' && canManage ? (
               <Button type="button" variant="danger" onClick={onDelete}>
@@ -457,23 +126,344 @@ export function EventModal({
               </Button>
             ) : null}
           </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={onClose}>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
               {t('close')}
             </Button>
             {canManage ? (
-              <Button
-                disabled={pending || isSubmitting}
-                type="button"
-                onClick={() => void submit()}
-              >
+              <Button disabled={pending || isSubmitting} form={formId} type="submit">
                 {t('save')}
               </Button>
             ) : null}
           </div>
-        </footer>
-      </div>
-    </div>
+        </div>
+      }
+      fullScreenOnMobile
+      size="lg"
+      title={mode === 'create' ? t('newEvent') : (editingEvent?.title ?? t('event'))}
+      onClose={onClose}
+    >
+      <form className="grid gap-4 sm:grid-cols-2" id={formId} onSubmit={submit} noValidate>
+        <FormSelect
+          disabled={readonly}
+          error={errors.type?.message}
+          label={t('type')}
+          value={values.type}
+          {...register('type', {
+            onChange: (event) => {
+              const next = autofillMemberEvent(
+                { ...values, type: event.currentTarget.value as CalendarEventType },
+                members,
+                {
+                  anniversary: (name) => t('autofill.anniversary', { name }),
+                  birthday: (name) => t('autofill.birthday', { name }),
+                },
+              );
+              applyFormValues(next, setValue);
+            },
+          })}
+        >
+          {CALENDAR_EVENT_TYPES.map((value) => (
+            <option key={value} value={value}>
+              {t(`eventTypes.${value}`)}
+            </option>
+          ))}
+        </FormSelect>
+        <FormSelect
+          disabled={readonly}
+          error={errors.linkedMembershipId?.message}
+          label={t('linkedMember')}
+          value={values.linkedMembershipId}
+          {...register('linkedMembershipId', {
+            onChange: (event) => {
+              const next = autofillMemberEvent(
+                { ...values, linkedMembershipId: event.currentTarget.value },
+                members,
+                {
+                  anniversary: (name) => t('autofill.anniversary', { name }),
+                  birthday: (name) => t('autofill.birthday', { name }),
+                },
+              );
+              applyFormValues(next, setValue);
+            },
+          })}
+        >
+          <option value="">{t('noLinkedMember')}</option>
+          {members.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.displayName}
+            </option>
+          ))}
+        </FormSelect>
+        <div className="sm:col-span-2">
+          <FormInput
+            disabled={readonly}
+            error={errors.title?.message}
+            label={t('titleField')}
+            {...register('title')}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <FormTextarea
+            disabled={readonly}
+            error={errors.description?.message}
+            label={t('description')}
+            rows={4}
+            {...register('description')}
+          />
+        </div>
+        <FormDatePicker
+          control={control}
+          disabled={readonly}
+          error={errors.startDate?.message}
+          maxDate={null}
+          name="startDate"
+          label={t('startDate')}
+        />
+        <FormInput
+          disabled={readonly || values.allDay}
+          error={errors.startTime?.message}
+          label={t('startTime')}
+          type="time"
+          {...register('startTime')}
+        />
+        <FormDatePicker
+          control={control}
+          disabled={readonly}
+          error={errors.endDate?.message}
+          maxDate={null}
+          name="endDate"
+          label={t('endDate')}
+        />
+        <FormInput
+          disabled={readonly || values.allDay}
+          error={errors.endTime?.message}
+          label={t('endTime')}
+          type="time"
+          {...register('endTime')}
+        />
+        <Checkbox disabled={readonly} label={t('fullDay')} {...register('allDay')} />
+        <FormSelect
+          disabled={readonly}
+          error={errors.reminder?.message}
+          label={t('reminder')}
+          value={values.reminder}
+          {...register('reminder', {
+            onChange: (event) => {
+              setValue('reminder', event.currentTarget.value as CalendarFormState['reminder'], {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+              clearErrors('reminder');
+            },
+          })}
+        >
+          {REMINDER_VALUES.map((value) => (
+            <option key={value || 'none'} value={value}>
+              {value ? t(`reminders.${value}`) : t('reminders.NONE')}
+            </option>
+          ))}
+        </FormSelect>
+        <FormSelect
+          disabled={readonly}
+          error={errors.repeatPeriod?.message}
+          label={t('repeat')}
+          value={values.repeatPeriod}
+          {...register('repeatPeriod', {
+            onChange: (event) => {
+              setValue(
+                'repeatPeriod',
+                event.currentTarget.value as CalendarFormState['repeatPeriod'],
+                {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                },
+              );
+              clearErrors('repeatPeriod');
+            },
+          })}
+        >
+          {CALENDAR_EVENT_REPEAT_PERIODS.map((value) => (
+            <option key={value} value={value}>
+              {t(`repeatPeriods.${value}`)}
+            </option>
+          ))}
+        </FormSelect>
+        {values.type === CALENDAR_TYPE.task ? (
+          <>
+            <div className="grid gap-2 sm:col-span-2">
+              <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <FormSelect
+                  disabled={readonly || availableAssignees.length === 0}
+                  label={t('assignees')}
+                  value={assigneeToAdd}
+                  onChange={(event) => setAssigneeToAdd(event.currentTarget.value)}
+                >
+                  <option value="">{t('selectMember')}</option>
+                  {availableAssignees.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.displayName}
+                    </option>
+                  ))}
+                </FormSelect>
+                <Button
+                  disabled={readonly || !assigneeToAdd}
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    if (!assigneeToAdd) return;
+                    setValue(
+                      'assigneeMembershipIds',
+                      [...values.assigneeMembershipIds, assigneeToAdd],
+                      { shouldDirty: true, shouldValidate: true },
+                    );
+                    clearErrors('assigneeMembershipIds');
+                    setAssigneeToAdd('');
+                  }}
+                >
+                  {t('add')}
+                </Button>
+              </div>
+              {selectedAssignees.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {selectedAssignees.map((member) => (
+                    <span
+                      className="inline-flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--surface-subtle)] px-2 py-1 text-sm"
+                      key={member.id}
+                    >
+                      {member.displayName}
+                      <button
+                        aria-label={t('removeAssignee', { name: member.displayName })}
+                        className="h-5 w-5 rounded border-0 bg-transparent text-[var(--muted)] hover:bg-[var(--line-muted)] hover:text-[var(--foreground)]"
+                        disabled={readonly}
+                        type="button"
+                        onClick={() => {
+                          setValue(
+                            'assigneeMembershipIds',
+                            values.assigneeMembershipIds.filter((id) => id !== member.id),
+                            { shouldDirty: true, shouldValidate: true },
+                          );
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {errors.assigneeMembershipIds?.message ? (
+                <p className="form-error m-0 text-xs">{errors.assigneeMembershipIds.message}</p>
+              ) : null}
+            </div>
+            <Checkbox disabled={readonly} label={t('completed')} {...register('taskCompleted')} />
+          </>
+        ) : null}
+        {values.type === CALENDAR_TYPE.service ? (
+          <fieldset className="grid items-start gap-4 rounded-md border border-[var(--line)] p-4 sm:col-span-2 sm:grid-cols-2">
+            <legend className="px-1 font-semibold">{t('serviceDetails')}</legend>
+            <ServiceRoleField
+              disabled={readonly}
+              error={errors.serviceDetails?.preacher?.message}
+              label={t('preacher')}
+              members={members}
+              role="preacher"
+              values={values.serviceDetails.preacher}
+              register={register}
+              setValue={setValue}
+              clearErrors={clearErrors}
+            />
+            <ServiceRoleField
+              disabled={readonly}
+              error={errors.serviceDetails?.serviceHost?.message}
+              label={t('serviceHost')}
+              members={members}
+              role="serviceHost"
+              values={values.serviceDetails.serviceHost}
+              register={register}
+              setValue={setValue}
+              clearErrors={clearErrors}
+            />
+            <ServiceRoleField
+              disabled={readonly}
+              error={errors.serviceDetails?.worshipLead?.message}
+              label={t('worshipLead')}
+              members={members}
+              role="worshipLead"
+              values={values.serviceDetails.worshipLead}
+              register={register}
+              setValue={setValue}
+              clearErrors={clearErrors}
+            />
+            <div className="self-start">
+              <FormTextarea
+                disabled={readonly}
+                error={errors.serviceDetails?.biblePassage?.message}
+                className="min-h-31"
+                label={t('biblePassage')}
+                {...register('serviceDetails.biblePassage')}
+              />
+            </div>
+            <div className="self-start pt-1">
+              <Checkbox
+                disabled={readonly}
+                label={t('communion')}
+                {...register('serviceDetails.hasCommunion')}
+              />
+            </div>
+            <div className="min-h-[150px]">
+              {values.serviceDetails.hasCommunion ? (
+                <ServiceRoleField
+                  disabled={readonly}
+                  error={errors.serviceDetails?.communionLead?.message}
+                  label={t('communionLead')}
+                  members={members}
+                  role="communionLead"
+                  values={values.serviceDetails.communionLead}
+                  register={register}
+                  setValue={setValue}
+                  clearErrors={clearErrors}
+                />
+              ) : null}
+            </div>
+            <div className="sm:col-span-2">
+              <FormTextarea
+                disabled={readonly}
+                error={errors.serviceDetails?.songs?.message}
+                label={t('songs')}
+                rows={4}
+                placeholder={t('songsPlaceholder')}
+                {...register('serviceDetails.songs')}
+              />
+            </div>
+          </fieldset>
+        ) : null}
+        {canManage ? (
+          <label className="sm:col-span-2">
+            {t('eventImage')}
+            <input
+              accept="image/jpeg,image/png,image/webp"
+              type="file"
+              onChange={async (event) => {
+                const file = event.currentTarget.files?.[0];
+                if (!file) return;
+                const uploaded = await onImageUpload(file);
+                if (!uploaded) return;
+                setValue('imageAssetId', uploaded.assetId);
+                setValue('imageUrl', uploaded.imageUrl);
+              }}
+            />
+          </label>
+        ) : null}
+        {values.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            alt=""
+            className="h-24 w-24 rounded-md border border-[var(--line)] object-cover"
+            src={values.imageUrl}
+          />
+        ) : null}
+      </form>
+    </FormDialog>
   );
 }
 

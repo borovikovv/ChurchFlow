@@ -1,12 +1,12 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
-import type { AuthenticatedRequest } from '../../common/guards/jwt-auth.guard';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import type { AuthenticatedRequest } from '../../common/guards/session-auth.guard';
+import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import { MediaService } from './media.service';
 import { ConfirmMemberPhotoUploadDto, CreateMemberPhotoUploadDto } from './dto/member-photo.dto';
 
 @Controller('organizations/:organizationId/media')
-@UseGuards(JwtAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
 export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
@@ -130,6 +130,6 @@ export class MediaController {
 
   private actorUserId(request: AuthenticatedRequest): string {
     if (!request.auth) throw new Error('Authenticated request missing auth payload');
-    return request.auth.sub;
+    return request.auth.userId;
   }
 }

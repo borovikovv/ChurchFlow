@@ -62,21 +62,31 @@
     "title": "Request an organization"
   },
   "navigation": {
+    "accountMenu": "Account menu",
     "accountNavigation": "Account navigation",
     "applicationNavigation": "Application navigation",
     "budget": "Budget",
     "calendar": "Calendar",
     "createOrganization": "Create organization",
+    "descriptions": {
+      "budget": "Organization finances and expenses",
+      "prayerRequests": "Prayer requests and answers",
+      "profile": "View and edit personal details",
+      "website": "Manage the organization website"
+    },
     "home": "Home",
     "main": "Main",
     "members": "Members",
+    "more": "More",
+    "openAccountMenu": "Open account menu",
     "prayerRequests": "Prayers",
-    "navigationMenu": "Navigation menu",
-    "openNavigationMenu": "Open navigation menu",
     "profile": "Profile",
     "requestAccess": "Request access",
-    "signedInAs": "Signed in as",
     "signIn": "Sign in",
+    "signOut": "Sign out of the app",
+    "signOutDescription": "End the current session",
+    "signedInAs": "Signed in as",
+    "signingOut": "Signing out…",
     "website": "Website"
   },
   "profile": {
@@ -213,6 +223,7 @@
     "emptyFilter": "No members match this filter.",
     "editMember": "Edit member",
     "editProfile": "Edit profile",
+    "filters": "Filters",
     "familyNotes": "Family notes",
     "familyRelationships": "Family relationships",
     "generateAccessLink": "Generate access link",
@@ -236,6 +247,7 @@
     "backToMembers": "Back to members",
     "member": "Member",
     "memberDetails": "Member details",
+    "memberActionsTitle": "Add members",
     "memberSince": "Member since",
     "memberTabsLabel": "Member lists",
     "ministry": {
@@ -436,6 +448,10 @@
       "thu": "Thu",
       "tue": "Tue",
       "wed": "Wed"
+    },
+    "views": {
+      "month": "Month",
+      "week": "Week"
     }
   },
   "budget": {
@@ -860,6 +876,26 @@
     "previousPage": "Previous page",
     "page": "Page",
     "of": "of",
-    "itemsPerPage": "Items per page"
+    "itemsPerPage": "Items per page",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…"
+  },
+  "sessions": {
+    "title": "Devices",
+    "description": "Places where your ChurchFlow account is currently signed in.",
+    "currentDevice": "this device",
+    "unknownDevice": "Unknown device",
+    "lastUsed": "Last used {value}",
+    "neverUsed": "Not used yet",
+    "signOutDevice": "Sign out",
+    "signingOut": "Signing out...",
+    "signOutOthers": "Sign out {count} other {count, plural, one {device} other {devices}}",
+    "revoked": "Device signed out.",
+    "revokedOthers": "Signed out {count} {count, plural, one {device} other {devices}}."
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "description": "ChurchFlow could not be reached. Your session is still active — try again in a moment.",
+    "retry": "Try again"
   }
 }

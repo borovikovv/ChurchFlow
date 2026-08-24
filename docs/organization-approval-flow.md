@@ -4,7 +4,7 @@ ChurchFlow does not create organizations directly from anonymous public submissi
 
 Telegram authorization uses state, PKCE, and an OIDC nonce stored in short-lived `httpOnly` cookies. Return URLs are canonicalized against `WEB_APP_URL`; external origins, backslashes, protocol-relative URLs, control characters, and encoded path separators are rejected. Telegram `sub` remains the only login identity.
 
-The canonical production path is organization request approval. Direct `POST /v1/organizations` is an explicit administrative bypass protected by `JwtAuthGuard` and `PlatformAdminGuard`; normal authenticated users cannot create active organizations or make themselves owners. The platform admin who uses this endpoint becomes the active `OWNER`, and organization, website, membership, and audit records are created atomically.
+The canonical production path is organization request approval. Direct `POST /v1/organizations` is an explicit administrative bypass protected by `SessionAuthGuard` and `PlatformAdminGuard`; normal authenticated users cannot create active organizations or make themselves owners. The platform admin who uses this endpoint becomes the active `OWNER`, and organization, website, membership, and audit records are created atomically.
 
 ## Flow
 

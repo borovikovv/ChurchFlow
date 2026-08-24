@@ -1,36 +1,25 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useTranslations } from 'next-intl';
+import type { FormEvent } from 'react';
+import { LogoutIcon } from '@/components/icons/navigation-icons';
 import { Button } from '@/components/ui/button';
+import { useLogout } from '@/hooks/use-logout';
 
 export function LogoutButton() {
-  const [pending, setPending] = useState(false);
+  const t = useTranslations('navigation');
+  const { logout, pending } = useLogout();
 
-  async function logout(event: FormEvent<HTMLFormElement>): Promise<void> {
+  function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    setPending(true);
-    try {
-      await fetch('/v1/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { accept: 'application/json' },
-      });
-    } finally {
-      window.location.assign('/login');
-    }
+    void logout();
   }
 
   return (
-    <form onSubmit={logout}>
+    <form onSubmit={submit}>
       <Button className="sidebar-logout" disabled={pending} type="submit" variant="ghost">
-        <span className="sr-only">{pending ? 'Logging out…' : 'Log out'}</span>
-        <svg
-          aria-hidden="true"
-          className="h-5 w-5 fill-none stroke-current stroke-2 [stroke-linecap:round] [stroke-linejoin:round]"
-          viewBox="0 0 24 24"
-        >
-          <path d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M14 8l4 4-4 4M9 12h9" />
-        </svg>
+        <span className="sr-only">{pending ? t('signingOut') : t('signOut')}</span>
+        <LogoutIcon className="h-5 w-5" />
       </Button>
     </form>
   );

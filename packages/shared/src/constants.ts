@@ -1,7 +1,10 @@
 export const AUTH_COOKIE_NAMES = {
+  session: 'churchflow_session',
   access: 'churchflow_access',
   refresh: 'churchflow_refresh',
 } as const;
+
+export const SESSION_IDLE_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 export const APP_LOCALES = ['en', 'uk'] as const;
 export const DEFAULT_APP_LOCALE = 'en';

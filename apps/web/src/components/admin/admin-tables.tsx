@@ -1,7 +1,10 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
+import type { Route } from 'next';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { CardList } from '@/components/ui/card-list';
 import { DataTable } from '@/components/ui/data-table';
 import { organizationHomeRoute } from '@/features/organizations/routes';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -67,17 +70,70 @@ export function OrganizationsTable({ data }: { data: OrganizationTableRow[] }) {
     },
   ];
 
+  const organizationHref = (organization: OrganizationTableRow) =>
+    organization.itemType === 'request'
+      ? (`/admin/organization-requests/${organization.id}` as Route)
+      : organizationHomeRoute(organization.id);
+
   return (
-    <DataTable
-      columns={organizationColumns}
-      data={data}
-      emptyMessage={t('tables.emptyOrganizations')}
-      getRowHref={(organization) =>
-        organization.itemType === 'request'
-          ? `/admin/organization-requests/${organization.id}`
-          : organizationHomeRoute(organization.id)
-      }
-    />
+    <>
+      <div className="md:hidden">
+        <CardList
+          data={data}
+          emptyMessage={t('tables.emptyOrganizations')}
+          getCardKey={(organization) => organization.id}
+          renderCard={(organization) => (
+            <OrganizationCard href={organizationHref(organization)} organization={organization} />
+          )}
+        />
+      </div>
+      <div className="hidden md:block">
+        <DataTable
+          columns={organizationColumns}
+          data={data}
+          emptyMessage={t('tables.emptyOrganizations')}
+          getRowHref={organizationHref}
+        />
+      </div>
+    </>
+  );
+}
+
+function OrganizationCard({
+  href,
+  organization,
+}: {
+  href: Route;
+  organization: OrganizationTableRow;
+}) {
+  const t = useTranslations('adminPages');
+
+  return (
+    <>
+      <Link className="absolute inset-0 rounded-[var(--radius)]" href={href}>
+        <span className="sr-only">{organization.name}</span>
+      </Link>
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <div className="table-primary-cell min-w-0">
+          <strong>{organization.name}</strong>
+          <span>{organization.subtitle ?? organization.slug}</span>
+        </div>
+        <StatusBadge label={t(`statuses.${organization.status}`)} status={organization.status} />
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--muted)]">
+        {organization.itemType === 'request' ? null : (
+          <>
+            <span>
+              {t('tables.members')}: {organization._count?.members ?? 0}
+            </span>
+            <span aria-hidden="true">·</span>
+          </>
+        )}
+        <span>
+          {t('tables.created')}: {formatIsoDate(organization.createdAt)}
+        </span>
+      </div>
+    </>
   );
 }
 

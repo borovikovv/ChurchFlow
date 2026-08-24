@@ -3,23 +3,28 @@
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin, { type DateClickArg } from '@fullcalendar/interaction';
 import FullCalendar from '@fullcalendar/react';
+import timeGridPlugin from '@fullcalendar/timegrid';
 import type { DatesSetArg, EventClickArg, EventContentArg, EventInput } from '@fullcalendar/core';
 import ukLocale from '@fullcalendar/core/locales/uk';
 import { toPng } from 'html-to-image';
 import { useLocale, useTranslations } from 'next-intl';
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { toast } from 'react-toastify';
 import type { CalendarEventItem, CalendarEventsPayload } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import { NotificationDetailModal } from '@/features/notifications/components/notification-detail-modal';
 import {
   CALENDAR_TYPE,
   EVENT_TYPES,
   EVENT_TYPE_DOT_STYLES,
+  FULL_CALENDAR_VIEW,
   TRANSPARENT_IMAGE_PLACEHOLDER,
+  type CalendarView,
 } from './calendar-constants';
 import { eventForm, newEventForm, toDateInputValue } from './calendar-date-utils';
 import { renderEventContent } from './calendar-event-content';
+import { CalendarViewSwitch } from './calendar-view-switch';
 import { formPayload } from './calendar-form-utils';
 import { CalendarPreviewModal } from './calendar-preview-modal';
 import { CalendarSidebar } from './calendar-sidebar';
@@ -48,6 +53,7 @@ export function CalendarManager({
 } & CalendarManagerActions) {
   const t = useTranslations('calendar');
   const locale = useLocale();
+  const isMobile = useIsMobile();
   const fullCalendarLocale = locale === 'uk' ? ukLocale : undefined;
   const [events, setEvents] = useState(initialPayload.events);
   const [members, setMembers] = useState(initialPayload.members);
@@ -59,7 +65,10 @@ export function CalendarManager({
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<CalendarView>('month');
   const [isPending, startTransition] = useTransition();
+  const calendarRef = useRef<FullCalendar>(null);
+  const mobileWeekViewApplied = useRef(false);
   const printRef = useRef<HTMLDivElement>(null);
   const lastRangeKey = useRef('');
   const canManage = initialPayload.canManage;
@@ -239,9 +248,23 @@ export function CalendarManager({
     void refreshEvents(nextRange);
   }
 
+  function handleViewChange(nextView: CalendarView) {
+    setView(nextView);
+    calendarRef.current?.getApi().changeView(FULL_CALENDAR_VIEW[nextView]);
+  }
+
+  useEffect(() => {
+    if (!isMobile || mobileWeekViewApplied.current) return;
+    mobileWeekViewApplied.current = true;
+    const timer = setTimeout(() => handleViewChange('week'), 0);
+
+    return () => clearTimeout(timer);
+  }, [isMobile]);
+
   function handleDateClick(arg: DateClickArg) {
-    setSelectedDate(arg.dateStr);
-    openCreate(arg.dateStr);
+    const date = toDateInputValue(arg.date);
+    setSelectedDate(date);
+    openCreate(date);
   }
 
   function handleEventClick(arg: EventClickArg) {
@@ -264,18 +287,20 @@ export function CalendarManager({
 
   return (
     <div className="grid min-h-[680px] gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
-      <CalendarSidebar
-        canManage={canManage}
-        selectedDate={selectedDate}
-        selectedDateEvents={selectedDateEvents}
-        selectedDateTasks={selectedDateTasks}
-        visibleTypes={visibleTypes}
-        onEventOpen={openEdit}
-        onFilterToggle={(type) => void toggleFilter(type)}
-        onTaskToggle={(event, completed) => void toggleTask(event, completed)}
-      />
+      <div className="order-2 min-w-0 xl:order-none">
+        <CalendarSidebar
+          canManage={canManage}
+          selectedDate={selectedDate}
+          selectedDateEvents={selectedDateEvents}
+          selectedDateTasks={selectedDateTasks}
+          visibleTypes={visibleTypes}
+          onEventOpen={openEdit}
+          onFilterToggle={(type) => void toggleFilter(type)}
+          onTaskToggle={(event, completed) => void toggleTask(event, completed)}
+        />
+      </div>
 
-      <section className="min-w-0 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm">
+      <section className="order-1 min-w-0 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 shadow-sm xl:order-none">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             {canManage ? (
@@ -304,6 +329,7 @@ export function CalendarManager({
           </div>
         </div>
         {error ? <p className="form-error mb-3">{error}</p> : null}
+        <CalendarViewSwitch value={view} onChange={handleViewChange} />
         <div className={styles['calendarRoot']}>
           <FullCalendar
             datesSet={handleDatesSet}
@@ -323,7 +349,10 @@ export function CalendarManager({
             initialView="dayGridMonth"
             {...(fullCalendarLocale ? { locale: fullCalendarLocale } : {})}
             moreLinkClick="popover"
-            plugins={[dayGridPlugin, interactionPlugin]}
+            nowIndicator
+            plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
+            ref={calendarRef}
+            scrollTime="08:00:00"
           />
         </div>
       </section>
