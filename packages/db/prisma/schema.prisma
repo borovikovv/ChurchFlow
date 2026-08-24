@@ -432,6 +432,8 @@ model OrganizationMemberRelationship {
   @@unique([organizationId, fromMembershipId, toMembershipId, type], map: "organization_member_relationships_organization_id_from_membersh")
   @@index([organizationId, fromMembershipId], map: "member_relationships_from_idx")
   @@index([organizationId, toMembershipId], map: "member_relationships_to_idx")
+  @@index([fromMembershipId])
+  @@index([toMembershipId])
   @@map("organization_member_relationships")
 }
 
@@ -476,6 +478,8 @@ model MembershipClaim {
   @@index([membershipId, status])
   @@index([requestedByUserId])
   @@index([expiresAt])
+  @@index([reviewedByUserId])
+  @@index([createdByUserId])
   @@map("membership_claims")
 }
 
@@ -514,6 +518,7 @@ model OrganizationInvitation {
   @@index([expiresAt])
   @@index([organizationId, status])
   @@index([organizationId, targetProvider, targetProviderAccountId, status, expiresAt], map: "org_inv_target_status_exp_idx")
+  @@index([invitedByUserId])
   @@map("organization_invitations")
 }
 
@@ -545,6 +550,8 @@ model OrganizationRequest {
   @@index([contactEmail])
   @@index([requestedByUserId])
   @@index([createdAt])
+  @@index([reviewedByUserId])
+  @@index([createdOrganizationId])
   @@map("organization_requests")
 }
 
@@ -562,10 +569,12 @@ model OrganizationWebsite {
   deletedAt      DateTime? @map("deleted_at")
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  logoAsset    MediaAsset?     @relation(fields: [logoAssetId], references: [id], onDelete: SetNull)
   pages        WebsitePage[]
   domains      WebsiteDomain[]
 
   @@index([organizationId])
+  @@index([logoAssetId])
   @@map("organization_websites")
 }
 
@@ -646,6 +655,7 @@ model MediaAsset {
   organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberProfile  OrganizationMemberProfile?
   calendarEvents CalendarEvent[]
+  websiteLogos   OrganizationWebsite[]
 
   @@unique([bucket, objectKey])
   @@index([organizationId, createdAt])
@@ -704,6 +714,7 @@ model CalendarEvent {
   @@index([organizationId, deletedAt])
   @@index([linkedMembershipId])
   @@index([imageAssetId])
+  @@index([createdByUserId])
   @@map("calendar_events")
 }
 
@@ -798,6 +809,8 @@ model PrayerRequest {
   @@index([organizationId, authorUserId])
   @@index([organizationId, deletedAt])
   @@index([authorMembershipId])
+  @@index([authorUserId])
+  @@index([archivedByUserId])
   @@map("prayer_requests")
 }
 
@@ -847,6 +860,7 @@ model Notification {
   @@index([organizationId, recipientUserId, createdAt])
   @@index([entityType, entityId])
   @@index([createdAt])
+  @@index([recipientMembershipId])
   @@map("notifications")
 }
 
@@ -1036,6 +1050,7 @@ model PreacherQueueEntry {
   @@unique([organizationId, membershipId])
   @@unique([organizationId, position])
   @@index([organizationId, active, position])
+  @@index([membershipId])
   @@map("preacher_queue_entries")
 }
 
@@ -1053,7 +1068,6 @@ model FeatureFlag {
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([key, scope, organizationId, userId])
   @@index([organizationId])
   @@index([userId])
   @@map("feature_flags")
