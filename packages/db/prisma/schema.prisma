@@ -314,7 +314,7 @@ model Session {
 model Organization {
   id          String             @id @default(uuid()) @db.Uuid
   name        String
-  slug        String             @unique
+  slug        String
   description String?
   status      OrganizationStatus @default(ACTIVE)
   archivedAt  DateTime?          @map("archived_at")

@@ -244,8 +244,17 @@ export class OrganizationsService {
     const organization = await this.organizationsRepository
       .changeStatus(id, action)
       .catch((error: unknown) => {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-          throw new NotFoundException('Organization was not found');
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+          if (error.code === 'P2025') {
+            throw new NotFoundException('Organization was not found');
+          }
+          // Видалення звільняє slug, тож поки організація лежала видаленою,
+          // ім'я могли зайняти. Відновити її під тим самим slug уже не можна.
+          if (error.code === 'P2002' && action === 'RESTORE') {
+            throw new ConflictException(
+              'Organization slug is already taken by another organization',
+            );
+          }
         }
         throw error;
       });
