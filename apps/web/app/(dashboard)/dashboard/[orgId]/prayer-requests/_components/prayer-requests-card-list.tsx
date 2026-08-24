@@ -1,7 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import type { PrayerRequestItem, PrayerRequestsPayload } from '@churchflow/shared';
 import { CardList } from '@/components/ui/card-list';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -113,20 +113,28 @@ function PrayerRequestCard({
   const t = useTranslations('prayerRequests');
   const [expanded, setExpanded] = useState(false);
   const [clamped, setClamped] = useState(false);
-  const descriptionRef = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
-    const description = descriptionRef.current;
-    if (!description || expanded) return;
+  const descriptionRef = useCallback(
+    (description: HTMLSpanElement | null) => {
+      if (!description || expanded) return;
 
-    const measure = () => setClamped(description.scrollHeight > description.clientHeight + 1);
-    measure();
+      const measure = () => {
+        const clampedHeight = description.clientHeight;
+        description.style.setProperty('-webkit-line-clamp', 'none');
+        const fullHeight = description.scrollHeight;
+        description.style.removeProperty('-webkit-line-clamp');
+        setClamped(fullHeight > clampedHeight + 1);
+      };
 
-    const observer = new ResizeObserver(measure);
-    observer.observe(description);
+      measure();
 
-    return () => observer.disconnect();
-  }, [expanded, request.description]);
+      const observer = new ResizeObserver(measure);
+      observer.observe(description);
+
+      return () => observer.disconnect();
+    },
+    [expanded],
+  );
 
   const canExpand = expanded || clamped;
   const summary = (
