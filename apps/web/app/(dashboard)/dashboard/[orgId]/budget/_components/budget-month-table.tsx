@@ -57,7 +57,6 @@ export function BudgetMonthTable({
   const columns = spreadsheetColumns(categories, {
     columns: columnLabels,
     groups: groupLabels,
-    deprecatedExchangeHint: t('deprecatedExchangeColumn'),
   });
   const monthName = monthNames[month.month - 1] ?? String(month.month);
   const lastRowHasData = monthHasDataInRow(month, month.rowCount - 1);
@@ -89,10 +88,8 @@ export function BudgetMonthTable({
                   <th
                     className="min-w-[112px] border border-[var(--line)] bg-[var(--surface-subtle)] px-2 py-2 text-center font-semibold"
                     key={column.id}
-                    {...(column.hint ? { title: column.hint } : {})}
                   >
                     {column.label}
-                    {column.hint ? <span className="text-[var(--muted)]"> †</span> : null}
                   </th>
                 ))}
               </tr>

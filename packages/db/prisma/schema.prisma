@@ -179,7 +179,6 @@ enum NotificationType {
 
 enum BudgetGroup {
   INCOME
-  CURRENCY_EXCHANGE
   FACILITY
   TABLES
   PASTORS

@@ -49,7 +49,6 @@ export type BudgetSpreadsheetColumn = {
   category: BudgetCategory;
   field: BudgetAmountField;
   noteField: BudgetEntryField;
-  hint?: string;
 };
 
 export function formatMoney(value: number, currency: BudgetCurrency, locale: string): string {
@@ -128,7 +127,6 @@ export function spreadsheetColumns(
   labels: {
     columns: BudgetColumnLabels;
     groups: BudgetGroupLabels;
-    deprecatedExchangeHint: string;
   },
 ): BudgetSpreadsheetColumn[] {
   const incomeCategories = categories
@@ -159,7 +157,6 @@ export function spreadsheetColumns(
           category,
           field: 'amountUah' as const,
           noteField: BUDGET_ENTRY_FIELD.amountUah,
-          ...(group === 'CURRENCY_EXCHANGE' ? { hint: labels.deprecatedExchangeHint } : {}),
         },
       ];
     }),

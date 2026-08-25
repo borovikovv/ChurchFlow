@@ -55,8 +55,9 @@ bought.
 
 Before `budget_exchanges` existed, an exchange was typed as two unrelated entries in the
 `CURRENCY_EXCHANGE` group — `UAH from exchange` as income and `USD spent` / `EUR spent` as an
-expense. New organizations no longer get those categories; organizations that already have them
-keep them, and the column is marked with `†` in the spreadsheet.
+expense. That group no longer exists: the
+`20260825140000_drop_budget_currency_exchange_group` migration deletes those categories together
+with their entries and notes, so run the script before deploying it or the history is lost.
 
 To move the old history over:
 
@@ -68,7 +69,8 @@ pnpm --filter @churchflow/api budget:migrate-exchanges
 The script only migrates rows where the pairing is unambiguous: exactly one hryvnia leg and one
 foreign leg in the same row, each carrying a single currency. It creates the exchange, zeroes the
 two entries it came from, and writes a `MIGRATE_BUDGET_EXCHANGE` audit event. Everything else is
-left untouched and listed in the output so it can be corrected by hand. Run the dry run first: the
-numbers it reports are the ones the yearly income and expense totals will drop by.
+left untouched and listed in the output so it can be corrected by hand — correct those rows before
+the drop migration runs. Run the dry run first: the numbers it reports are the ones the yearly
+income and expense totals will drop by.
 
 Accept `--organization=<uuid>` to migrate a single organization.

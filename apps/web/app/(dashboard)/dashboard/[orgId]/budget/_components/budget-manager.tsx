@@ -100,7 +100,6 @@ export function BudgetManager({
   );
   const groupLabels = useMemo<BudgetGroupLabels>(
     () => ({
-      CURRENCY_EXCHANGE: t('groups.CURRENCY_EXCHANGE'),
       DISCIPLESHIP: t('groups.DISCIPLESHIP'),
       EVANGELISM: t('groups.EVANGELISM'),
       FACILITY: t('groups.FACILITY'),
