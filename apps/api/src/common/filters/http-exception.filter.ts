@@ -3,24 +3,44 @@ import {
   Catch,
   ExceptionFilter,
   HttpException,
-  HttpStatus
+  HttpStatus,
+  Logger,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+
+const SERVER_ERROR_STATUS: number = HttpStatus.INTERNAL_SERVER_ERROR;
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   catch(error: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const status = error instanceof HttpException ? error.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+    const request = ctx.getRequest<Request>();
+    const isHttpException = error instanceof HttpException;
+    const status = isHttpException ? error.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+    const isServerError = status === SERVER_ERROR_STATUS;
     const message = error instanceof Error ? error.message : 'Unexpected server error';
+
+    if (isServerError) {
+      this.logger.error(
+        {
+          event: 'Unhandled request error',
+          method: request.method,
+          path: request.originalUrl,
+          message,
+        },
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
 
     response.status(status).json({
       ok: false,
       error: {
-        code: status === HttpStatus.INTERNAL_SERVER_ERROR ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_FAILED',
-        message: status === HttpStatus.INTERNAL_SERVER_ERROR ? 'Unexpected server error' : message
-      }
+        code: isServerError ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_FAILED',
+        message: isServerError ? 'Unexpected server error' : message,
+      },
     });
   }
 }
