@@ -53,6 +53,8 @@ import type {
   budgetGroupSchema,
   budgetCategoryTypeSchema,
   budgetEntryFieldSchema,
+  budgetCurrencySchema,
+  budgetAmountFieldSchema,
   listBudgetQuerySchema,
   createBudgetMonthSchema,
   createBudgetCategorySchema,
@@ -142,6 +144,8 @@ export type ArchivePrayerRequestInput = z.infer<typeof archivePrayerRequestSchem
 export type BudgetGroup = z.infer<typeof budgetGroupSchema>;
 export type BudgetCategoryType = z.infer<typeof budgetCategoryTypeSchema>;
 export type BudgetEntryField = z.infer<typeof budgetEntryFieldSchema>;
+export type BudgetCurrency = z.infer<typeof budgetCurrencySchema>;
+export type BudgetAmountField = z.infer<typeof budgetAmountFieldSchema>;
 export type ListBudgetQuery = z.infer<typeof listBudgetQuerySchema>;
 export type CreateBudgetMonthInput = z.infer<typeof createBudgetMonthSchema>;
 export type CreateBudgetCategoryInput = z.infer<typeof createBudgetCategorySchema>;

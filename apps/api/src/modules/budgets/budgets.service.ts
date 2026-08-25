@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  BudgetAmountRow,
   BudgetCategory,
   BudgetOpeningBalance,
   BudgetCurrencyTotals,
@@ -13,7 +14,6 @@ import type {
   BudgetGroupSummary,
   BudgetMonth,
   BudgetPayload,
-  BudgetTotals,
   CreateBudgetCategoryInput,
   CreateBudgetMonthInput,
   UpdateBudgetCategoryInput,
@@ -21,7 +21,16 @@ import type {
   UpdateBudgetEntryNoteInput,
   UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
-import { BUDGET_GROUPS, budgetEntryFieldSchema } from '@churchflow/shared';
+import {
+  BUDGET_GROUPS,
+  addCurrencyTotals,
+  budgetEntryFieldSchema,
+  calculateBudgetTotals,
+  roundCurrencyTotals,
+  subtractCurrencyTotals,
+  sumBudgetTotals,
+  zeroCurrencyTotals,
+} from '@churchflow/shared';
 import { CurrencyRatesService } from '../currency-rates/currency-rates.service';
 import {
   BUDGET_GROUP_ORDER,
@@ -29,19 +38,7 @@ import {
   type BudgetMonthRecord,
 } from './repositories/budgets.repository';
 
-const zeroCurrencyTotals = (): BudgetCurrencyTotals => ({
-  amountUah: 0,
-  amountUsd: 0,
-  amountEur: 0,
-});
-
 const EARLIEST_BUDGET_YEAR = 2000;
-
-const zeroTotals = (): BudgetTotals => ({
-  income: zeroCurrencyTotals(),
-  expense: zeroCurrencyTotals(),
-  balance: zeroCurrencyTotals(),
-});
 
 @Injectable()
 export class BudgetsService {
@@ -69,7 +66,7 @@ export class BudgetsService {
       )
       .sort(compareCategories);
     const monthItems = months.map((month) => mapMonth(month));
-    const yearTotals = sumTotals(monthItems.map((month) => month.totals));
+    const yearTotals = sumBudgetTotals(monthItems.map((month) => month.totals));
     const [openingBalance, rates] = await Promise.all([
       this.resolveOpeningBalance(organizationId, year),
       this.currencyRatesService.getCurrent(),
@@ -121,9 +118,10 @@ export class BudgetsService {
       year,
     );
 
-    const opening = cloneCurrencyTotals(seed);
-    addCurrencyTotalsTo(opening, sumToCurrencyTotals(movement.income));
-    subtractCurrencyTotalsFrom(opening, sumToCurrencyTotals(movement.expense));
+    const opening = subtractCurrencyTotals(
+      addCurrencyTotals(seed, sumToCurrencyTotals(movement.income)),
+      sumToCurrencyTotals(movement.expense),
+    );
 
     return {
       sinceYear: record?.sinceYear ?? null,
@@ -323,15 +321,13 @@ export class BudgetsService {
 }
 
 function mapMonth(month: BudgetMonthRecord): BudgetMonth {
-  const entries = month.entries.map(mapEntry);
-
   return {
     id: month.id,
     year: month.year,
     month: month.month,
     rowCount: month.rowCount,
-    entries,
-    totals: calculateTotals(month),
+    entries: month.entries.map(mapEntry),
+    totals: calculateBudgetTotals(month.entries.map(toAmountRow)),
   };
 }
 
@@ -347,76 +343,32 @@ function mapEntry(entry: BudgetMonthRecord['entries'][number]): BudgetEntry {
   };
 }
 
-function calculateTotals(month: BudgetMonthRecord): BudgetTotals {
-  const totals = zeroTotals();
-
-  for (const entry of month.entries) {
-    const bucket = entry.category.type === 'INCOME' ? totals.income : totals.expense;
-    bucket.amountUah += decimalToNumber(entry.amountUah);
-    bucket.amountUsd += decimalToNumber(entry.amountUsd);
-    bucket.amountEur += decimalToNumber(entry.amountEur);
-  }
-
-  totals.balance = subtractCurrencyTotals(totals.income, totals.expense);
-
-  return roundTotals(totals);
+function toAmountRow(entry: BudgetMonthRecord['entries'][number]): BudgetAmountRow {
+  return {
+    type: entry.category.type,
+    amounts: {
+      amountUah: decimalToNumber(entry.amountUah),
+      amountUsd: decimalToNumber(entry.amountUsd),
+      amountEur: decimalToNumber(entry.amountEur),
+    },
+  };
 }
 
 function buildGroupSummaries(months: BudgetMonthRecord[]): BudgetGroupSummary[] {
-  const byGroup = new Map<BudgetGroup, BudgetTotals>(
-    BUDGET_GROUPS.map((group) => [group, zeroTotals()]),
+  const rowsByGroup = new Map<BudgetGroup, BudgetAmountRow[]>(
+    BUDGET_GROUPS.map((group) => [group, []]),
   );
 
   for (const month of months) {
     for (const entry of month.entries) {
-      const groupTotals = byGroup.get(entry.category.group) ?? zeroTotals();
-      const bucket = entry.category.type === 'INCOME' ? groupTotals.income : groupTotals.expense;
-      bucket.amountUah += decimalToNumber(entry.amountUah);
-      bucket.amountUsd += decimalToNumber(entry.amountUsd);
-      bucket.amountEur += decimalToNumber(entry.amountEur);
-      groupTotals.balance = subtractCurrencyTotals(groupTotals.income, groupTotals.expense);
-      byGroup.set(entry.category.group, groupTotals);
+      rowsByGroup.get(entry.category.group)?.push(toAmountRow(entry));
     }
   }
 
-  return [...byGroup.entries()].map(([group, totals]) => ({ group, totals: roundTotals(totals) }));
-}
-
-function sumTotals(items: BudgetTotals[]): BudgetTotals {
-  const totals = zeroTotals();
-
-  for (const item of items) {
-    addCurrencyTotals(totals.income, item.income);
-    addCurrencyTotals(totals.expense, item.expense);
-  }
-
-  totals.balance = subtractCurrencyTotals(totals.income, totals.expense);
-
-  return roundTotals(totals);
-}
-
-function cloneCurrencyTotals(totals: BudgetCurrencyTotals): BudgetCurrencyTotals {
-  return { ...totals };
-}
-
-function addCurrencyTotalsTo(
-  target: BudgetCurrencyTotals,
-  source: BudgetCurrencyTotals,
-): BudgetCurrencyTotals {
-  target.amountUah += source.amountUah;
-  target.amountUsd += source.amountUsd;
-  target.amountEur += source.amountEur;
-  return target;
-}
-
-function subtractCurrencyTotalsFrom(
-  target: BudgetCurrencyTotals,
-  source: BudgetCurrencyTotals,
-): BudgetCurrencyTotals {
-  target.amountUah -= source.amountUah;
-  target.amountUsd -= source.amountUsd;
-  target.amountEur -= source.amountEur;
-  return target;
+  return [...rowsByGroup.entries()].map(([group, rows]) => ({
+    group,
+    totals: calculateBudgetTotals(rows),
+  }));
 }
 
 function sumToCurrencyTotals(sum: {
@@ -429,43 +381,6 @@ function sumToCurrencyTotals(sum: {
     amountUsd: sum.amountUsd ? decimalToNumber(sum.amountUsd) : 0,
     amountEur: sum.amountEur ? decimalToNumber(sum.amountEur) : 0,
   };
-}
-
-function addCurrencyTotals(target: BudgetCurrencyTotals, source: BudgetCurrencyTotals) {
-  target.amountUah += source.amountUah;
-  target.amountUsd += source.amountUsd;
-  target.amountEur += source.amountEur;
-}
-
-function subtractCurrencyTotals(
-  income: BudgetCurrencyTotals,
-  expense: BudgetCurrencyTotals,
-): BudgetCurrencyTotals {
-  return {
-    amountUah: income.amountUah - expense.amountUah,
-    amountUsd: income.amountUsd - expense.amountUsd,
-    amountEur: income.amountEur - expense.amountEur,
-  };
-}
-
-function roundTotals(totals: BudgetTotals): BudgetTotals {
-  return {
-    income: roundCurrencyTotals(totals.income),
-    expense: roundCurrencyTotals(totals.expense),
-    balance: roundCurrencyTotals(totals.balance),
-  };
-}
-
-function roundCurrencyTotals(totals: BudgetCurrencyTotals): BudgetCurrencyTotals {
-  return {
-    amountUah: roundMoney(totals.amountUah),
-    amountUsd: roundMoney(totals.amountUsd),
-    amountEur: roundMoney(totals.amountEur),
-  };
-}
-
-function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
 }
 
 type DecimalLike = { toString(): string };

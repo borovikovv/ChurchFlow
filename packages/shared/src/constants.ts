@@ -136,6 +136,10 @@ export const BUDGET_CATEGORY_TYPE = {
 
 export const BUDGET_CURRENCIES = ['UAH', 'USD', 'EUR'] as const;
 
+export const DEFAULT_BUDGET_BASE_CURRENCY = 'UAH';
+
+export const BUDGET_AMOUNT_FIELDS = ['amountUah', 'amountUsd', 'amountEur'] as const;
+
 export const BUDGET_ENTRY_FIELDS = ['AMOUNT_UAH', 'AMOUNT_USD', 'AMOUNT_EUR'] as const;
 
 export const BUDGET_ENTRY_FIELD = {

@@ -1,15 +1,21 @@
 import {
-  BUDGET_CURRENCIES,
   BUDGET_ENTRY_FIELD,
   BUDGET_GROUPS,
+  DEFAULT_BUDGET_BASE_CURRENCY,
+  addCurrencyTotals,
+  calculateBudgetTotals,
+  roundCurrencyTotals,
+  toBaseEquivalent,
+  type BudgetAmountField,
+  type BudgetAmountRow,
   type BudgetCategory,
+  type BudgetCurrency,
   type BudgetCurrencyTotals,
   type BudgetEntry,
   type BudgetEntryField,
   type BudgetGroup,
   type ExchangeRates,
   type BudgetMonth,
-  type BudgetTotals,
 } from '@churchflow/shared';
 import { BUDGET_START_YEAR, BUDGET_YEAR_LOOKAHEAD } from '../constants';
 
@@ -22,8 +28,6 @@ export type BudgetColumnLabels = {
 
 export type BudgetGroupLabels = Record<BudgetGroup, string>;
 
-export type BudgetAmountField = 'amountUah' | 'amountUsd' | 'amountEur';
-
 export type BudgetSpreadsheetColumn = {
   id: string;
   label: string;
@@ -31,8 +35,6 @@ export type BudgetSpreadsheetColumn = {
   field: BudgetAmountField;
   noteField: BudgetEntryField;
 };
-
-export type BudgetCurrency = (typeof BUDGET_CURRENCIES)[number];
 
 export function formatMoney(value: number, currency: BudgetCurrency, locale: string): string {
   return new Intl.NumberFormat(locale, {
@@ -162,25 +164,21 @@ export function columnTotal(month: BudgetMonth, column: BudgetSpreadsheetColumn)
 }
 
 export function recalculateMonth(month: BudgetMonth, categories: BudgetCategory[]): BudgetMonth {
-  return { ...month, totals: calculateMonthTotals(month, categories) };
+  return { ...month, totals: calculateBudgetTotals(amountRows(month.entries, categories)) };
 }
 
 export function buildGroupSummaries(months: BudgetMonth[], categories: BudgetCategory[]) {
+  const categoriesByGroup = new Map(
+    BUDGET_GROUPS.map((group) => [
+      group,
+      categories.filter((category) => category.group === group),
+    ]),
+  );
+
   return BUDGET_GROUPS.map((group) => ({
     group,
-    totals: sumTotals(
-      months.map((month) =>
-        calculateMonthTotals(
-          {
-            ...month,
-            entries: month.entries.filter((entry) => {
-              const category = categories.find((item) => item.id === entry.categoryId);
-              return category?.group === group;
-            }),
-          },
-          categories,
-        ),
-      ),
+    totals: calculateBudgetTotals(
+      months.flatMap((month) => amountRows(month.entries, categoriesByGroup.get(group) ?? [])),
     ),
   }));
 }
@@ -189,36 +187,36 @@ export function toUahEquivalent(
   totals: BudgetCurrencyTotals,
   rates: ExchangeRates | null,
 ): number | null {
-  if (!rates) return null;
-
-  return roundMoney(
-    totals.amountUah + totals.amountUsd * rates.usdToUah + totals.amountEur * rates.eurToUah,
-  );
+  return toBaseEquivalent(totals, DEFAULT_BUDGET_BASE_CURRENCY, rates);
 }
 
 export function carryForwardBalance(
   opening: BudgetCurrencyTotals,
   yearBalance: BudgetCurrencyTotals,
 ): BudgetCurrencyTotals {
-  return {
-    amountUah: roundMoney(opening.amountUah + yearBalance.amountUah),
-    amountUsd: roundMoney(opening.amountUsd + yearBalance.amountUsd),
-    amountEur: roundMoney(opening.amountEur + yearBalance.amountEur),
-  };
+  return roundCurrencyTotals(addCurrencyTotals(opening, yearBalance));
 }
 
-function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
-}
+function amountRows(entries: BudgetEntry[], categories: BudgetCategory[]): BudgetAmountRow[] {
+  const typeByCategoryId = new Map(
+    categories.map((category) => [category.id, category.type] as const),
+  );
 
-export function sumTotals(items: BudgetTotals[]): BudgetTotals {
-  const totals = zeroTotals();
-  for (const item of items) {
-    addCurrencyTotals(totals.income, item.income);
-    addCurrencyTotals(totals.expense, item.expense);
-  }
-  totals.balance = subtractCurrencyTotals(totals.income, totals.expense);
-  return totals;
+  return entries.flatMap((entry) => {
+    const type = typeByCategoryId.get(entry.categoryId);
+    if (!type) return [];
+
+    return [
+      {
+        type,
+        amounts: {
+          amountUah: entry.amountUah,
+          amountUsd: entry.amountUsd,
+          amountEur: entry.amountEur,
+        },
+      },
+    ];
+  });
 }
 
 function columnForIncome(
@@ -243,47 +241,6 @@ function entryFieldForAmount(field: BudgetSpreadsheetColumn['field']): BudgetEnt
   if (field === 'amountUsd') return BUDGET_ENTRY_FIELD.amountUsd;
   if (field === 'amountEur') return BUDGET_ENTRY_FIELD.amountEur;
   return BUDGET_ENTRY_FIELD.amountUah;
-}
-
-function calculateMonthTotals(month: BudgetMonth, categories: BudgetCategory[]): BudgetTotals {
-  const totals = zeroTotals();
-
-  for (const entry of month.entries) {
-    const category = categories.find((item) => item.id === entry.categoryId);
-    if (!category) continue;
-    const bucket = category.type === 'INCOME' ? totals.income : totals.expense;
-    bucket.amountUah += entry.amountUah;
-    bucket.amountUsd += entry.amountUsd;
-    bucket.amountEur += entry.amountEur;
-  }
-
-  totals.balance = subtractCurrencyTotals(totals.income, totals.expense);
-  return totals;
-}
-
-function zeroTotals(): BudgetTotals {
-  return {
-    income: { amountUah: 0, amountUsd: 0, amountEur: 0 },
-    expense: { amountUah: 0, amountUsd: 0, amountEur: 0 },
-    balance: { amountUah: 0, amountUsd: 0, amountEur: 0 },
-  };
-}
-
-function addCurrencyTotals(target: BudgetCurrencyTotals, source: BudgetCurrencyTotals) {
-  target.amountUah += source.amountUah;
-  target.amountUsd += source.amountUsd;
-  target.amountEur += source.amountEur;
-}
-
-function subtractCurrencyTotals(
-  income: BudgetCurrencyTotals,
-  expense: BudgetCurrencyTotals,
-): BudgetCurrencyTotals {
-  return {
-    amountUah: income.amountUah - expense.amountUah,
-    amountUsd: income.amountUsd - expense.amountUsd,
-    amountEur: income.amountEur - expense.amountEur,
-  };
 }
 
 function compareCategories(a: BudgetCategory, b: BudgetCategory): number {

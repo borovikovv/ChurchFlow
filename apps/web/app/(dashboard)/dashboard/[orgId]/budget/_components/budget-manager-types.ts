@@ -1,4 +1,5 @@
 import type {
+  BudgetAmountField,
   BudgetEntry,
   BudgetEntryField,
   BudgetMonth,
@@ -10,7 +11,6 @@ import type {
   UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 import type { ActionResult } from '../types';
-import type { BudgetAmountField } from './budget-table-helpers';
 
 export type BudgetManagerProps = {
   organizationId: string;

@@ -4,7 +4,13 @@ import { toPng } from 'html-to-image';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { flushSync } from 'react-dom';
-import type { BudgetCurrencyTotals, BudgetEntryField, BudgetMonth } from '@churchflow/shared';
+import {
+  sumBudgetTotals,
+  type BudgetAmountField,
+  type BudgetCurrencyTotals,
+  type BudgetEntryField,
+  type BudgetMonth,
+} from '@churchflow/shared';
 import type { DateRangeValue } from '@/components/forms/date-range-input';
 import type { ActionResult } from '../types';
 import { AddMonthControls } from './add-month-controls';
@@ -27,9 +33,7 @@ import {
   type BudgetColumnLabels,
   type BudgetGroupLabels,
   recalculateMonth,
-  sumTotals,
   upsertEntry,
-  type BudgetAmountField,
 } from './budget-table-helpers';
 
 export function BudgetManager({
@@ -60,7 +64,7 @@ export function BudgetManager({
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
 
-  const yearTotals = useMemo(() => sumTotals(months.map((month) => month.totals)), [months]);
+  const yearTotals = useMemo(() => sumBudgetTotals(months.map((month) => month.totals)), [months]);
   const closingBalance = useMemo(
     () => carryForwardBalance(openingBalance.opening, yearTotals.balance),
     [openingBalance, yearTotals],
