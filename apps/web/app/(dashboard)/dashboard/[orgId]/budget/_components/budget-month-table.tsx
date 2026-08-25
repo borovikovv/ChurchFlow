@@ -1,6 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { BudgetCategory, BudgetExchangeInput, BudgetMonth } from '@churchflow/shared';
 import { BudgetCell } from './budget-cell';
@@ -65,10 +66,14 @@ export function BudgetMonthTable({
     savingKeys.has(`month:${month.id}:row:add`) || savingKeys.has(`month:${month.id}:row:remove`);
   const isSaving = [...savingKeys].some((key) => key.includes(`:${month.id}:`));
   const hasExchangeMovement = month.exchanges.length > 0;
+  const [exchangesOpen, setExchangesOpen] = useState(false);
+  const showExchanges = hasExchangeMovement || exchangesOpen;
 
   return (
     <div className="grid gap-4">
       <BudgetMonthTableHeader
+        canToggleExchanges={!hasExchangeMovement}
+        exchangesOpen={exchangesOpen}
         lastRowHasData={lastRowHasData}
         month={month}
         monthName={monthName}
@@ -76,6 +81,7 @@ export function BudgetMonthTable({
         onAddRow={onAddRow}
         onDeleteMonth={onDeleteMonth}
         onRemoveLastRow={onRemoveLastRow}
+        onToggleExchanges={() => setExchangesOpen((open) => !open)}
       />
       <section className="relative overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--surface)]">
         <div className="overflow-x-auto">
@@ -181,18 +187,22 @@ export function BudgetMonthTable({
           </p>
         ) : null}
       </section>
-      <BudgetExchangeSection
-        disabled={isSaving}
-        month={month}
-        onCreate={onCreateExchange}
-        onDelete={onDeleteExchange}
-        onUpdate={onUpdateExchange}
-      />
+      {showExchanges ? (
+        <BudgetExchangeSection
+          disabled={isSaving}
+          month={month}
+          onCreate={onCreateExchange}
+          onDelete={onDeleteExchange}
+          onUpdate={onUpdateExchange}
+        />
+      ) : null}
     </div>
   );
 }
 
 function BudgetMonthTableHeader({
+  canToggleExchanges,
+  exchangesOpen,
   lastRowHasData,
   month,
   monthName,
@@ -200,7 +210,10 @@ function BudgetMonthTableHeader({
   onAddRow,
   onDeleteMonth,
   onRemoveLastRow,
+  onToggleExchanges,
 }: {
+  canToggleExchanges: boolean;
+  exchangesOpen: boolean;
   lastRowHasData: boolean;
   month: BudgetMonth;
   monthName: string;
@@ -208,6 +221,7 @@ function BudgetMonthTableHeader({
   onAddRow: (monthId: string) => void;
   onDeleteMonth: (monthId: string) => void;
   onRemoveLastRow: (monthId: string) => void;
+  onToggleExchanges: () => void;
 }) {
   const t = useTranslations('budget');
 
@@ -252,6 +266,17 @@ function BudgetMonthTableHeader({
             </Button>
           )}
         </div>
+        {canToggleExchanges ? (
+          <Button
+            aria-expanded={exchangesOpen}
+            className="h-[42px]"
+            type="button"
+            variant="secondary"
+            onClick={onToggleExchanges}
+          >
+            {exchangesOpen ? t('hideExchangeSection') : t('showExchangeSection')}
+          </Button>
+        ) : null}
         <DeleteBudgetMonthDialog monthName={monthName} onConfirm={() => onDeleteMonth(month.id)} />
       </div>
     </div>
