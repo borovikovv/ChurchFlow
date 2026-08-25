@@ -107,7 +107,6 @@ export const PRAYER_REQUEST_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 
 export const BUDGET_GROUPS = [
   'INCOME',
-  'CURRENCY_EXCHANGE',
   'FACILITY',
   'TABLES',
   'PASTORS',
@@ -118,7 +117,6 @@ export const BUDGET_GROUPS = [
 
 export const BUDGET_GROUP = {
   income: 'INCOME',
-  currencyExchange: 'CURRENCY_EXCHANGE',
   facility: 'FACILITY',
   tables: 'TABLES',
   pastors: 'PASTORS',
@@ -151,12 +149,6 @@ export const BUDGET_ENTRY_FIELD = {
 export const DEFAULT_BUDGET_MONTH_ROW_COUNT = 10;
 
 export const BUDGET_MONTH_ROW_COUNT = DEFAULT_BUDGET_MONTH_ROW_COUNT;
-
-export const DEPRECATED_BUDGET_EXCHANGE_CATEGORIES = [
-  'UAH from exchange',
-  'USD spent',
-  'EUR spent',
-] as const;
 
 export const DEFAULT_BUDGET_CATEGORIES = [
   {

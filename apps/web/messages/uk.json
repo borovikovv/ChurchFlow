@@ -538,7 +538,6 @@
     "exchangePublishedRate": "Курс НБУ: {rate}",
     "exchangeSameCurrency": "Оберіть дві різні валюти.",
     "invalidExchange": "Некоректний обмін валюти.",
-    "deprecatedExchangeColumn": "Замінено секцією обміну валют нижче. Лишається лише доки записану історію не перенесено.",
     "currencyUah": "Гривні",
     "currencyUsd": "Долари",
     "currencyEur": "Євро",
@@ -554,7 +553,6 @@
       "USD_INCOME": "Доходи USD"
     },
     "groups": {
-      "CURRENCY_EXCHANGE": "Обмін валют",
       "DISCIPLESHIP": "Учнівство",
       "EVANGELISM": "Євангелізація",
       "FACILITY": "Приміщення",
