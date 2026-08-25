@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { flushSync } from 'react-dom';
 import {
+  budgetCurrencySchema,
   sumBudgetTotals,
   type BudgetAmountField,
   type BudgetCurrencyTotals,
@@ -46,6 +47,7 @@ export function BudgetManager({
   removeLastMonthRow,
   updateEntry,
   updateEntryNote,
+  updateBaseCurrency,
   updateOpeningBalance,
 }: BudgetManagerProps) {
   const t = useTranslations('budget');
@@ -57,6 +59,7 @@ export function BudgetManager({
   const [monthToAdd, setMonthToAdd] = useState(firstAvailableMonth(payload.months));
   const [openingBalance, setOpeningBalance] = useState(payload.openingBalance);
   const [rates, setRates] = useState(payload.rates);
+  const [baseCurrency, setBaseCurrency] = useState(payload.baseCurrency);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exportRange, setExportRange] = useState<DateRangeValue | null>(null);
@@ -166,9 +169,21 @@ export function BudgetManager({
       setMonths(result.data.months);
       setOpeningBalance(result.data.openingBalance);
       setRates(result.data.rates);
+      setBaseCurrency(result.data.baseCurrency);
       setMonthToAdd(firstAvailableMonth(result.data.months));
       window.history.pushState(null, '', `?year=${result.data.year}`);
     });
+  }
+
+  function handleBaseCurrencyChange(nextCurrency: string) {
+    const parsed = budgetCurrencySchema.safeParse(nextCurrency);
+    if (!parsed.success || parsed.data === baseCurrency) return;
+
+    runMutation(
+      'budget:base-currency',
+      () => updateBaseCurrency(organizationId, { baseCurrency: parsed.data }),
+      (updated) => setBaseCurrency(updated.baseCurrency),
+    );
   }
 
   function handleOpeningBalanceSave(totals: BudgetCurrencyTotals) {
@@ -315,6 +330,7 @@ export function BudgetManager({
   return (
     <div className="stack">
       <BudgetToolbar
+        baseCurrency={baseCurrency}
         isExporting={exporting}
         isPending={pending}
         isYearLoading={savingKeys.has('budget:year:load')}
@@ -323,6 +339,7 @@ export function BudgetManager({
         months={months}
         year={year}
         onAddMonth={handleAddMonth}
+        onBaseCurrencyChange={handleBaseCurrencyChange}
         onExportPng={handleExportPng}
         onMonthToAddChange={setMonthToAdd}
         onYearChange={handleYearChange}
@@ -338,6 +355,7 @@ export function BudgetManager({
       </div>
 
       <YearSummary
+        baseCurrency={baseCurrency}
         closingBalance={closingBalance}
         openingAction={
           <EditOpeningBalanceDialog
@@ -353,6 +371,7 @@ export function BudgetManager({
         totals={yearTotals}
       />
       <BudgetCharts
+        baseCurrency={baseCurrency}
         chartRef={null}
         groupLabels={groupLabels}
         groupSummaries={groupSummaries}
@@ -368,6 +387,7 @@ export function BudgetManager({
           className="pointer-events-none absolute left-[-10000px] top-0 w-[1200px]"
         >
           <BudgetCharts
+            baseCurrency={baseCurrency}
             chartRef={exportChartRef}
             displayMonths={exportDisplayMonths ?? undefined}
             exportMode

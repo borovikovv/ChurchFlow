@@ -5,6 +5,7 @@ import { getMessages } from '@/i18n/messages';
 import {
   createBudgetMonthSchema,
   listBudgetQuerySchema,
+  updateBudgetBaseCurrencySchema,
   updateBudgetEntryNoteSchema,
   updateBudgetOpeningBalanceSchema,
   type BudgetEntry,
@@ -13,6 +14,7 @@ import {
   type BudgetOpeningBalance,
   type BudgetPayload,
   type CreateBudgetMonthInput,
+  type UpdateBudgetBaseCurrencyInput,
   type UpdateBudgetEntryInput,
   type UpdateBudgetEntryNoteInput,
   type UpdateBudgetOpeningBalanceInput,
@@ -173,6 +175,30 @@ export async function updateBudgetOpeningBalanceAction(
 
   const result = await apiFetch<BudgetOpeningBalance>(
     `/organizations/${organizationId}/budget/opening-balance`,
+    {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(parsed.data),
+    },
+  );
+  revalidatePath(budgetPath(organizationId));
+
+  return result.ok ? { ok: true, data: result.data } : { ok: false, error: result.error.message };
+}
+
+export async function updateBudgetBaseCurrencyAction(
+  organizationId: string,
+  input: UpdateBudgetBaseCurrencyInput,
+): Promise<ActionResult<UpdateBudgetBaseCurrencyInput>> {
+  'use server';
+  const parsed = updateBudgetBaseCurrencySchema.safeParse(input);
+  if (!parsed.success) {
+    const messages = await currentBudgetMessages();
+    return { ok: false, error: messages.invalidBaseCurrency };
+  }
+
+  const result = await apiFetch<UpdateBudgetBaseCurrencyInput>(
+    `/organizations/${organizationId}/budget/base-currency`,
     {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },

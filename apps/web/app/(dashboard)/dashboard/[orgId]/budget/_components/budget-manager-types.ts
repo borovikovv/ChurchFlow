@@ -8,6 +8,7 @@ import type {
   CreateBudgetMonthInput,
   UpdateBudgetEntryInput,
   UpdateBudgetEntryNoteInput,
+  UpdateBudgetBaseCurrencyInput,
   UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 import type { ActionResult } from '../types';
@@ -44,6 +45,10 @@ export type BudgetManagerProps = {
     field: BudgetEntryField,
     input: UpdateBudgetEntryNoteInput,
   ) => Promise<ActionResult<BudgetEntry>>;
+  updateBaseCurrency: (
+    organizationId: string,
+    input: UpdateBudgetBaseCurrencyInput,
+  ) => Promise<ActionResult<UpdateBudgetBaseCurrencyInput>>;
   updateOpeningBalance: (
     organizationId: string,
     input: UpdateBudgetOpeningBalanceInput,

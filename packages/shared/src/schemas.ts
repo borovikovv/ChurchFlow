@@ -268,6 +268,10 @@ export const updateBudgetEntryNoteSchema = z.object({
   note: z.string().trim().max(500).nullable(),
 });
 
+export const updateBudgetBaseCurrencySchema = z.object({
+  baseCurrency: budgetCurrencySchema,
+});
+
 export const updateBudgetOpeningBalanceSchema = z.object({
   sinceYear: z.coerce.number().int().min(2000).max(2100),
   amountUah: budgetAmountSchema,

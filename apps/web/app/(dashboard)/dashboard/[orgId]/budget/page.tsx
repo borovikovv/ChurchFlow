@@ -9,6 +9,7 @@ import {
   deleteBudgetMonthAction,
   loadBudgetYearAction,
   removeLastBudgetMonthRowAction,
+  updateBudgetBaseCurrencyAction,
   updateBudgetEntryAction,
   updateBudgetEntryNoteAction,
   updateBudgetOpeningBalanceAction,
@@ -55,6 +56,7 @@ export default async function BudgetPage({
           removeLastMonthRow={removeLastBudgetMonthRowAction}
           updateEntry={updateBudgetEntryAction}
           updateEntryNote={updateBudgetEntryNoteAction}
+          updateBaseCurrency={updateBudgetBaseCurrencyAction}
           updateOpeningBalance={updateBudgetOpeningBalanceAction}
         />
       )}

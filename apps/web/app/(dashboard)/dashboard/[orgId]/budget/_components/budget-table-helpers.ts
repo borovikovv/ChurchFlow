@@ -1,11 +1,9 @@
 import {
   BUDGET_ENTRY_FIELD,
   BUDGET_GROUPS,
-  DEFAULT_BUDGET_BASE_CURRENCY,
   addCurrencyTotals,
   calculateBudgetTotals,
   roundCurrencyTotals,
-  toBaseEquivalent,
   type BudgetAmountField,
   type BudgetAmountRow,
   type BudgetCategory,
@@ -14,7 +12,6 @@ import {
   type BudgetEntry,
   type BudgetEntryField,
   type BudgetGroup,
-  type ExchangeRates,
   type BudgetMonth,
 } from '@churchflow/shared';
 import { BUDGET_START_YEAR, BUDGET_YEAR_LOOKAHEAD } from '../constants';
@@ -27,6 +24,12 @@ export type BudgetColumnLabels = {
 };
 
 export type BudgetGroupLabels = Record<BudgetGroup, string>;
+
+export const BUDGET_CURRENCY_MESSAGE_KEY = {
+  UAH: 'currencyUah',
+  USD: 'currencyUsd',
+  EUR: 'currencyEur',
+} as const satisfies Record<BudgetCurrency, string>;
 
 export type BudgetSpreadsheetColumn = {
   id: string;
@@ -181,13 +184,6 @@ export function buildGroupSummaries(months: BudgetMonth[], categories: BudgetCat
       months.flatMap((month) => amountRows(month.entries, categoriesByGroup.get(group) ?? [])),
     ),
   }));
-}
-
-export function toUahEquivalent(
-  totals: BudgetCurrencyTotals,
-  rates: ExchangeRates | null,
-): number | null {
-  return toBaseEquivalent(totals, DEFAULT_BUDGET_BASE_CURRENCY, rates);
 }
 
 export function carryForwardBalance(

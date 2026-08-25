@@ -61,6 +61,7 @@ import type {
   updateBudgetCategorySchema,
   updateBudgetEntrySchema,
   updateBudgetEntryNoteSchema,
+  updateBudgetBaseCurrencySchema,
   updateBudgetOpeningBalanceSchema,
   notificationTypeSchema,
   listNotificationsQuerySchema,
@@ -152,6 +153,7 @@ export type CreateBudgetCategoryInput = z.infer<typeof createBudgetCategorySchem
 export type UpdateBudgetCategoryInput = z.infer<typeof updateBudgetCategorySchema>;
 export type UpdateBudgetEntryInput = z.infer<typeof updateBudgetEntrySchema>;
 export type UpdateBudgetEntryNoteInput = z.infer<typeof updateBudgetEntryNoteSchema>;
+export type UpdateBudgetBaseCurrencyInput = z.infer<typeof updateBudgetBaseCurrencySchema>;
 export type UpdateBudgetOpeningBalanceInput = z.infer<typeof updateBudgetOpeningBalanceSchema>;
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema>;
@@ -342,6 +344,7 @@ export interface BudgetPayload {
   actorRole: 'OWNER' | 'ADMIN';
   canManage: true;
   year: number;
+  baseCurrency: BudgetCurrency;
   categories: BudgetCategory[];
   months: BudgetMonth[];
   yearTotals: BudgetTotals;

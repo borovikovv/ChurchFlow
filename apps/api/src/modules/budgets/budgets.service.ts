@@ -19,6 +19,7 @@ import type {
   UpdateBudgetCategoryInput,
   UpdateBudgetEntryInput,
   UpdateBudgetEntryNoteInput,
+  UpdateBudgetBaseCurrencyInput,
   UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 import {
@@ -76,6 +77,7 @@ export class BudgetsService {
       actorRole: actor.role as 'OWNER' | 'ADMIN',
       canManage: true,
       year,
+      baseCurrency: actor.organization.baseCurrency,
       categories: categoryItems,
       months: monthItems,
       yearTotals,
@@ -83,6 +85,18 @@ export class BudgetsService {
       openingBalance,
       rates,
     };
+  }
+
+  async updateBaseCurrency(
+    organizationId: string,
+    input: UpdateBudgetBaseCurrencyInput,
+    actorUserId: string,
+  ): Promise<UpdateBudgetBaseCurrencyInput> {
+    try {
+      return await this.budgetsRepository.updateBaseCurrency(organizationId, input, actorUserId);
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
   }
 
   async updateOpeningBalance(

@@ -8,6 +8,7 @@ import {
   type CreateBudgetCategoryInput,
   type CreateBudgetMonthInput,
   type UpdateBudgetEntryNoteInput,
+  type UpdateBudgetBaseCurrencyInput,
   type UpdateBudgetCategoryInput,
   type UpdateBudgetEntryInput,
   type UpdateBudgetOpeningBalanceInput,
@@ -44,7 +45,39 @@ export class BudgetsRepository {
         removedAt: null,
         organization: { status: 'ACTIVE', deletedAt: null },
       },
-      select: { id: true, role: true },
+      select: { id: true, role: true, organization: { select: { baseCurrency: true } } },
+    });
+  }
+
+  async updateBaseCurrency(
+    organizationId: string,
+    input: UpdateBudgetBaseCurrencyInput,
+    actorUserId: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertManagingActor(tx, organizationId, actorUserId);
+
+      const previous = await tx.organization.findUniqueOrThrow({
+        where: { id: organizationId },
+        select: { baseCurrency: true },
+      });
+      const organization = await tx.organization.update({
+        where: { id: organizationId },
+        data: { baseCurrency: input.baseCurrency },
+        select: { baseCurrency: true },
+      });
+
+      if (previous.baseCurrency !== organization.baseCurrency) {
+        await this.recordBudgetAudit(tx, {
+          organizationId,
+          actorUserId,
+          action: 'UPDATE_BUDGET_BASE_CURRENCY',
+          entityId: organizationId,
+          metadata: { from: previous.baseCurrency, to: organization.baseCurrency },
+        });
+      }
+
+      return organization;
     });
   }
 

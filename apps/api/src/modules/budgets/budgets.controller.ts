@@ -21,6 +21,7 @@ import {
   CreateBudgetCategoryDto,
   CreateBudgetMonthDto,
   ListBudgetQueryDto,
+  UpdateBudgetBaseCurrencyDto,
   UpdateBudgetCategoryDto,
   UpdateBudgetEntryDto,
   UpdateBudgetEntryNoteDto,
@@ -39,6 +40,15 @@ export class BudgetsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.budgetsService.list(organizationId, query.year, this.actorUserId(request));
+  }
+
+  @Put('base-currency')
+  updateBaseCurrency(
+    @Param('organizationId') organizationId: string,
+    @Body() body: UpdateBudgetBaseCurrencyDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.budgetsService.updateBaseCurrency(organizationId, body, this.actorUserId(request));
   }
 
   @Put('opening-balance')
