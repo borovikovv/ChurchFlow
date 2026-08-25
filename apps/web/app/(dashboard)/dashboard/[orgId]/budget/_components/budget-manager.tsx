@@ -10,6 +10,7 @@ import {
   type BudgetAmountField,
   type BudgetCurrencyTotals,
   type BudgetEntryField,
+  type BudgetExchangeInput,
   type BudgetMonth,
 } from '@churchflow/shared';
 import type { DateRangeValue } from '@/components/forms/date-range-input';
@@ -48,6 +49,9 @@ export function BudgetManager({
   removeLastMonthRow,
   updateEntry,
   updateEntryNote,
+  createExchange,
+  updateExchange,
+  deleteExchange,
   updateBaseCurrency,
   updateOpeningBalance,
 }: BudgetManagerProps) {
@@ -289,6 +293,30 @@ export function BudgetManager({
     );
   }
 
+  function handleCreateExchange(monthId: string, input: BudgetExchangeInput) {
+    runMutation(
+      `month:${monthId}:exchange:create`,
+      () => createExchange(organizationId, monthId, input),
+      (updated) => updateMonthState(updated),
+    );
+  }
+
+  function handleUpdateExchange(exchangeId: string, input: BudgetExchangeInput) {
+    runMutation(
+      `exchange:${exchangeId}:update`,
+      () => updateExchange(organizationId, exchangeId, input),
+      (updated) => updateMonthState(updated),
+    );
+  }
+
+  function handleDeleteExchange(exchangeId: string) {
+    runMutation(
+      `exchange:${exchangeId}:delete`,
+      () => deleteExchange(organizationId, exchangeId),
+      (updated) => updateMonthState(updated),
+    );
+  }
+
   function handleAddMonthRow(monthId: string) {
     runMutation(
       `month:${monthId}:row:add`,
@@ -437,11 +465,14 @@ export function BudgetManager({
               month={month}
               monthNames={monthNames}
               savingKeys={savingKeys}
+              onCreateExchange={handleCreateExchange}
+              onDeleteExchange={handleDeleteExchange}
               onDeleteMonth={handleDeleteMonth}
               onAddRow={handleAddMonthRow}
               onEntryBlur={handleEntryBlur}
               onEntryNoteSave={handleEntryNoteSave}
               onRemoveLastRow={handleRemoveLastMonthRow}
+              onUpdateExchange={handleUpdateExchange}
             />
           ))}
           <div className="flex flex-wrap items-end gap-2 border-t border-[var(--line)] pt-3">

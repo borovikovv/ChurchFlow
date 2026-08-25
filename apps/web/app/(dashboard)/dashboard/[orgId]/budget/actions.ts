@@ -3,6 +3,7 @@ import { apiFetch } from '@/api/client';
 import { getCurrentUser } from '@/auth/session';
 import { getMessages } from '@/i18n/messages';
 import {
+  budgetExchangeSchema,
   createBudgetMonthSchema,
   listBudgetQuerySchema,
   updateBudgetBaseCurrencySchema,
@@ -10,6 +11,7 @@ import {
   updateBudgetOpeningBalanceSchema,
   type BudgetEntry,
   type BudgetEntryField,
+  type BudgetExchangeInput,
   type BudgetMonth,
   type BudgetOpeningBalance,
   type BudgetPayload,
@@ -205,6 +207,70 @@ export async function updateBudgetBaseCurrencyAction(
       body: JSON.stringify(parsed.data),
     },
   );
+  revalidatePath(budgetPath(organizationId));
+
+  return result.ok ? { ok: true, data: result.data } : { ok: false, error: result.error.message };
+}
+
+export async function createBudgetExchangeAction(
+  organizationId: string,
+  monthId: string,
+  input: BudgetExchangeInput,
+): Promise<ActionResult<BudgetMonth>> {
+  'use server';
+  return saveBudgetExchange(
+    organizationId,
+    `/organizations/${organizationId}/budget/months/${monthId}/exchanges`,
+    'POST',
+    input,
+  );
+}
+
+export async function updateBudgetExchangeAction(
+  organizationId: string,
+  exchangeId: string,
+  input: BudgetExchangeInput,
+): Promise<ActionResult<BudgetMonth>> {
+  'use server';
+  return saveBudgetExchange(
+    organizationId,
+    `/organizations/${organizationId}/budget/exchanges/${exchangeId}`,
+    'PUT',
+    input,
+  );
+}
+
+export async function deleteBudgetExchangeAction(
+  organizationId: string,
+  exchangeId: string,
+): Promise<ActionResult<BudgetMonth>> {
+  'use server';
+  const result = await apiFetch<BudgetMonth>(
+    `/organizations/${organizationId}/budget/exchanges/${exchangeId}`,
+    { method: 'DELETE' },
+  );
+  revalidatePath(budgetPath(organizationId));
+
+  return result.ok ? { ok: true, data: result.data } : { ok: false, error: result.error.message };
+}
+
+async function saveBudgetExchange(
+  organizationId: string,
+  path: string,
+  method: 'POST' | 'PUT',
+  input: BudgetExchangeInput,
+): Promise<ActionResult<BudgetMonth>> {
+  const parsed = budgetExchangeSchema.safeParse(input);
+  if (!parsed.success) {
+    const messages = await currentBudgetMessages();
+    return { ok: false, error: messages.invalidExchange };
+  }
+
+  const result = await apiFetch<BudgetMonth>(path, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(parsed.data),
+  });
   revalidatePath(budgetPath(organizationId));
 
   return result.ok ? { ok: true, data: result.data } : { ok: false, error: result.error.message };

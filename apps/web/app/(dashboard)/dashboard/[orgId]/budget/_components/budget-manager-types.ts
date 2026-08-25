@@ -1,6 +1,7 @@
 import type {
   BudgetAmountField,
   BudgetEntry,
+  BudgetExchangeInput,
   BudgetEntryField,
   BudgetMonth,
   BudgetOpeningBalance,
@@ -45,6 +46,20 @@ export type BudgetManagerProps = {
     field: BudgetEntryField,
     input: UpdateBudgetEntryNoteInput,
   ) => Promise<ActionResult<BudgetEntry>>;
+  createExchange: (
+    organizationId: string,
+    monthId: string,
+    input: BudgetExchangeInput,
+  ) => Promise<ActionResult<BudgetMonth>>;
+  updateExchange: (
+    organizationId: string,
+    exchangeId: string,
+    input: BudgetExchangeInput,
+  ) => Promise<ActionResult<BudgetMonth>>;
+  deleteExchange: (
+    organizationId: string,
+    exchangeId: string,
+  ) => Promise<ActionResult<BudgetMonth>>;
   updateBaseCurrency: (
     organizationId: string,
     input: UpdateBudgetBaseCurrencyInput,
