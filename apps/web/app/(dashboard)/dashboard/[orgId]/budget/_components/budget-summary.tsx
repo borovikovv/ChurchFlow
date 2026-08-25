@@ -6,55 +6,65 @@ import {
   toBaseEquivalent,
   type BudgetCurrency,
   type BudgetCurrencyTotals,
-  type BudgetTotals,
-  type ExchangeRates,
 } from '@churchflow/shared';
+import type { BudgetSummaryData } from './budget-summary-types';
 import { formatMoney } from './budget-table-helpers';
 
 export function YearSummary({
+  openingAction,
+  ...summary
+}: Omit<BudgetSummaryData, 'labels'> & { openingAction?: ReactNode }) {
+  const t = useTranslations('budget');
+
+  return (
+    <BudgetSummaryCards
+      {...summary}
+      labels={{
+        closingBalance: t('yearClosingBalance'),
+        expenses: t('yearExpenses'),
+        income: t('yearIncome'),
+        openingBalance: t('yearOpeningBalance'),
+      }}
+      openingAction={openingAction}
+    />
+  );
+}
+
+export function BudgetSummaryCards({
   baseCurrency,
   closingBalance,
+  labels,
   openingAction,
   openingBalance,
   rates,
   totals,
   totalsInBase,
-}: {
-  baseCurrency: BudgetCurrency;
-  closingBalance: BudgetCurrencyTotals;
-  openingAction?: ReactNode;
-  openingBalance: BudgetCurrencyTotals;
-  rates: ExchangeRates | null;
-  totals: BudgetTotals;
-  totalsInBase: { income: number | null; expense: number | null };
-}) {
-  const t = useTranslations('budget');
-
+}: BudgetSummaryData & { openingAction?: ReactNode }) {
   return (
     <section className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
       <SummaryCard
         action={openingAction}
         baseCurrency={baseCurrency}
         converted={toBaseEquivalent(openingBalance, baseCurrency, rates)}
-        label={t('yearOpeningBalance')}
+        label={labels.openingBalance}
         totals={openingBalance}
       />
       <SummaryCard
         baseCurrency={baseCurrency}
         converted={totalsInBase.income}
-        label={t('yearIncome')}
+        label={labels.income}
         totals={totals.income}
       />
       <SummaryCard
         baseCurrency={baseCurrency}
         converted={totalsInBase.expense}
-        label={t('yearExpenses')}
+        label={labels.expenses}
         totals={totals.expense}
       />
       <SummaryCard
         baseCurrency={baseCurrency}
         converted={toBaseEquivalent(closingBalance, baseCurrency, rates)}
-        label={t('yearClosingBalance')}
+        label={labels.closingBalance}
         totals={closingBalance}
       />
     </section>

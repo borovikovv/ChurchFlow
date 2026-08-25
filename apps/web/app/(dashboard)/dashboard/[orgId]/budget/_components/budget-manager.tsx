@@ -25,6 +25,7 @@ import {
 import type { BudgetManagerProps } from './budget-manager-types';
 import { BudgetMonthTable } from './budget-month-table';
 import { YearSummary } from './budget-summary';
+import type { BudgetSummaryData } from './budget-summary-types';
 import { BudgetToolbar } from './budget-toolbar';
 import { EditOpeningBalanceDialog } from './edit-opening-balance-dialog';
 import {
@@ -126,6 +127,32 @@ export function BudgetManager({
     () => budgetMonthsInRange(year, exportRange),
     [exportRange, year],
   );
+  const exportSummary = useMemo<BudgetSummaryData>(() => {
+    const firstExportedMonth = exportDisplayMonths?.[0] ?? 1;
+    const balanceBeforeRange = sumBudgetTotals(
+      months.filter((month) => month.month < firstExportedMonth).map((month) => month.totals),
+    ).balance;
+    const opening = carryForwardBalance(openingBalance.opening, balanceBeforeRange);
+    const rangeTotals = sumBudgetTotals(exportMonths.map((month) => month.totals));
+
+    return {
+      baseCurrency,
+      closingBalance: carryForwardBalance(opening, rangeTotals.balance),
+      labels: {
+        closingBalance: t('periodClosingBalance'),
+        expenses: t('periodExpenses'),
+        income: t('periodIncome'),
+        openingBalance: t('periodOpeningBalance'),
+      },
+      openingBalance: opening,
+      rates,
+      totals: rangeTotals,
+      totalsInBase: {
+        expense: sumMonthsInBase(exportMonths, 'expense', baseCurrency),
+        income: sumMonthsInBase(exportMonths, 'income', baseCurrency),
+      },
+    };
+  }, [baseCurrency, exportDisplayMonths, exportMonths, months, openingBalance, rates, t]);
   const exportPeriodLabel = useMemo(
     () =>
       exportRange
@@ -434,6 +461,7 @@ export function BudgetManager({
             months={exportMonths}
             periodLabel={exportPeriodLabel}
             rates={rates}
+            summary={exportSummary}
             year={year}
           />
         </div>
