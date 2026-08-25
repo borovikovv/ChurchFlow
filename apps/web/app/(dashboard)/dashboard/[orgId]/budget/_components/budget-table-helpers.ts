@@ -2,8 +2,11 @@ import {
   BUDGET_ENTRY_FIELD,
   BUDGET_GROUPS,
   addCurrencyTotals,
+  budgetAmountField,
   calculateBudgetTotals,
   roundCurrencyTotals,
+  roundMoney,
+  toBaseEquivalent,
   type BudgetAmountField,
   type BudgetAmountRow,
   type BudgetCategory,
@@ -24,6 +27,14 @@ export type BudgetColumnLabels = {
 };
 
 export type BudgetGroupLabels = Record<BudgetGroup, string>;
+
+export type BudgetTotalsKey = 'income' | 'expense' | 'balance';
+
+export type BudgetGroupBaseSummary = {
+  group: BudgetGroup;
+  income: number;
+  expense: number;
+};
 
 export const BUDGET_CURRENCY_MESSAGE_KEY = {
   UAH: 'currencyUah',
@@ -170,7 +181,30 @@ export function recalculateMonth(month: BudgetMonth, categories: BudgetCategory[
   return { ...month, totals: calculateBudgetTotals(amountRows(month.entries, categories)) };
 }
 
-export function buildGroupSummaries(months: BudgetMonth[], categories: BudgetCategory[]) {
+// Every month is converted at its own rate before the year is added up, so a December total is
+// never priced with an August rate.
+export function sumMonthsInBase(
+  months: BudgetMonth[],
+  key: BudgetTotalsKey,
+  baseCurrency: BudgetCurrency,
+): number | null {
+  let total = 0;
+
+  for (const month of months) {
+    const amount = toBaseEquivalent(month.totals[key], baseCurrency, month.rates);
+    if (amount === null) return null;
+
+    total += amount;
+  }
+
+  return roundMoney(total);
+}
+
+export function buildGroupBaseSummaries(
+  months: BudgetMonth[],
+  categories: BudgetCategory[],
+  baseCurrency: BudgetCurrency,
+): BudgetGroupBaseSummary[] {
   const categoriesByGroup = new Map(
     BUDGET_GROUPS.map((group) => [
       group,
@@ -178,12 +212,32 @@ export function buildGroupSummaries(months: BudgetMonth[], categories: BudgetCat
     ]),
   );
 
-  return BUDGET_GROUPS.map((group) => ({
-    group,
-    totals: calculateBudgetTotals(
-      months.flatMap((month) => amountRows(month.entries, categoriesByGroup.get(group) ?? [])),
-    ),
-  }));
+  return BUDGET_GROUPS.map((group) => {
+    const groupCategories = categoriesByGroup.get(group) ?? [];
+    let income = 0;
+    let expense = 0;
+
+    for (const month of months) {
+      const totals = calculateBudgetTotals(amountRows(month.entries, groupCategories));
+      income += monthAmountInBase(totals.income, baseCurrency, month);
+      expense += monthAmountInBase(totals.expense, baseCurrency, month);
+    }
+
+    return { group, income: roundMoney(income), expense: roundMoney(expense) };
+  });
+}
+
+// Charts draw one bar per period, so an unpriced month falls back to its base currency leg rather
+// than dropping the bar entirely.
+export function monthAmountInBase(
+  totals: BudgetCurrencyTotals,
+  baseCurrency: BudgetCurrency,
+  month: Pick<BudgetMonth, 'rates'> | undefined,
+): number {
+  return (
+    toBaseEquivalent(totals, baseCurrency, month?.rates ?? null) ??
+    totals[budgetAmountField(baseCurrency)]
+  );
 }
 
 export function carryForwardBalance(

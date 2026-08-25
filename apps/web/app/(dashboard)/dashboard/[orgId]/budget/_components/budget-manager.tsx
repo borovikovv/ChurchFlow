@@ -27,13 +27,14 @@ import { YearSummary } from './budget-summary';
 import { BudgetToolbar } from './budget-toolbar';
 import { EditOpeningBalanceDialog } from './edit-opening-balance-dialog';
 import {
-  buildGroupSummaries,
+  buildGroupBaseSummaries,
   carryForwardBalance,
   emptyEntry,
   firstAvailableMonth,
   type BudgetColumnLabels,
   type BudgetGroupLabels,
   recalculateMonth,
+  sumMonthsInBase,
   upsertEntry,
 } from './budget-table-helpers';
 
@@ -72,9 +73,16 @@ export function BudgetManager({
     () => carryForwardBalance(openingBalance.opening, yearTotals.balance),
     [openingBalance, yearTotals],
   );
+  const totalsInBase = useMemo(
+    () => ({
+      income: sumMonthsInBase(months, 'income', baseCurrency),
+      expense: sumMonthsInBase(months, 'expense', baseCurrency),
+    }),
+    [baseCurrency, months],
+  );
   const groupSummaries = useMemo(
-    () => buildGroupSummaries(months, categories),
-    [categories, months],
+    () => buildGroupBaseSummaries(months, categories, baseCurrency),
+    [baseCurrency, categories, months],
   );
   const columnLabels = useMemo<BudgetColumnLabels>(
     () => ({
@@ -107,8 +115,8 @@ export function BudgetManager({
     [exportRange, months, year],
   );
   const exportGroupSummaries = useMemo(
-    () => buildGroupSummaries(exportMonths, categories),
-    [categories, exportMonths],
+    () => buildGroupBaseSummaries(exportMonths, categories, baseCurrency),
+    [baseCurrency, categories, exportMonths],
   );
   const exportDisplayMonths = useMemo(
     () => budgetMonthsInRange(year, exportRange),
@@ -369,6 +377,7 @@ export function BudgetManager({
         openingBalance={openingBalance.opening}
         rates={rates}
         totals={yearTotals}
+        totalsInBase={totalsInBase}
       />
       <BudgetCharts
         baseCurrency={baseCurrency}

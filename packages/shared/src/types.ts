@@ -321,6 +321,8 @@ export interface BudgetMonth {
   rowCount: number;
   entries: BudgetEntry[];
   totals: BudgetTotals;
+  // Rate on the last day of the month, or the latest one while the month is still open.
+  rates: ExchangeRates | null;
 }
 
 export interface BudgetGroupSummary {

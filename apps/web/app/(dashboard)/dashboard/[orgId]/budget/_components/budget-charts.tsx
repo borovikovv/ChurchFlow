@@ -13,17 +13,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import type { BudgetCurrency, BudgetGroup, BudgetMonth, ExchangeRates } from '@churchflow/shared';
 import {
-  toBaseEquivalent,
-  budgetAmountField,
-  type BudgetCurrency,
-  type BudgetCurrencyTotals,
-  type BudgetGroup,
-  type BudgetMonth,
-  type BudgetTotals,
-  type ExchangeRates,
-} from '@churchflow/shared';
-import { formatMoney, type BudgetGroupLabels } from './budget-table-helpers';
+  formatMoney,
+  monthAmountInBase,
+  type BudgetGroupBaseSummary,
+  type BudgetGroupLabels,
+} from './budget-table-helpers';
 
 type MonthlyChartItem = {
   balance: number;
@@ -60,7 +56,7 @@ export function BudgetCharts({
   exportMode?: boolean;
   groupLabels: BudgetGroupLabels;
   months: BudgetMonth[];
-  groupSummaries: Array<{ group: BudgetGroup; totals: BudgetTotals }>;
+  groupSummaries: BudgetGroupBaseSummary[];
   monthNames: string[];
   periodLabel?: string;
   rates: ExchangeRates | null;
@@ -130,7 +126,7 @@ function MonthlyBudgetBars({
 }) {
   const t = useTranslations('budget');
   const locale = useLocale();
-  const data = monthlyChartData(months, monthNames, baseCurrency, rates, displayMonths);
+  const data = monthlyChartData(months, monthNames, baseCurrency, displayMonths);
 
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -222,31 +218,18 @@ function monthlyChartData(
   months: BudgetMonth[],
   monthNames: string[],
   baseCurrency: BudgetCurrency,
-  rates: ExchangeRates | null,
   displayMonths = Array.from({ length: 12 }, (_, index) => index + 1),
 ): MonthlyChartItem[] {
   return displayMonths.map((monthNumber) => {
     const month = months.find((item) => item.month === monthNumber);
     return {
-      balance: baseAmount(month?.totals.balance, baseCurrency, rates),
-      expenses: baseAmount(month?.totals.expense, baseCurrency, rates),
-      income: baseAmount(month?.totals.income, baseCurrency, rates),
+      balance: month ? monthAmountInBase(month.totals.balance, baseCurrency, month) : 0,
+      expenses: month ? monthAmountInBase(month.totals.expense, baseCurrency, month) : 0,
+      income: month ? monthAmountInBase(month.totals.income, baseCurrency, month) : 0,
       label: monthNames[monthNumber - 1]?.slice(0, 3) ?? String(monthNumber),
       month: monthNumber,
     };
   });
-}
-
-// Charts plot one bar per period, so unconvertible totals fall back to the base currency leg
-// rather than dropping the bar entirely.
-function baseAmount(
-  totals: BudgetCurrencyTotals | undefined,
-  baseCurrency: BudgetCurrency,
-  rates: ExchangeRates | null,
-): number {
-  if (!totals) return 0;
-
-  return toBaseEquivalent(totals, baseCurrency, rates) ?? totals[budgetAmountField(baseCurrency)];
 }
 
 function formatChartAmount(value: number, locale: string): string {
@@ -266,11 +249,11 @@ function BudgetGroupBars({
   baseCurrency: BudgetCurrency;
   exportMode: boolean;
   groupLabels: BudgetGroupLabels;
-  groupSummaries: Array<{ group: BudgetGroup; totals: BudgetTotals }>;
+  groupSummaries: BudgetGroupBaseSummary[];
   rates: ExchangeRates | null;
 }) {
   const t = useTranslations('budget');
-  const data = groupChartData(groupSummaries, groupLabels, baseCurrency, rates);
+  const data = groupChartData(groupSummaries, groupLabels);
 
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -379,23 +362,17 @@ function BudgetGroupBarChart({
 }
 
 function groupChartData(
-  groupSummaries: Array<{ group: BudgetGroup; totals: BudgetTotals }>,
+  groupSummaries: BudgetGroupBaseSummary[],
   groupLabels: BudgetGroupLabels,
-  baseCurrency: BudgetCurrency,
-  rates: ExchangeRates | null,
 ): GroupChartItem[] {
   return groupSummaries
-    .map((summary) => {
-      const expenses = baseAmount(summary.totals.expense, baseCurrency, rates);
-      const income = baseAmount(summary.totals.income, baseCurrency, rates);
-      return {
-        expenses,
-        group: summary.group,
-        income,
-        label: groupLabels[summary.group],
-        total: income + expenses,
-      };
-    })
+    .map((summary) => ({
+      expenses: summary.expense,
+      group: summary.group,
+      income: summary.income,
+      label: groupLabels[summary.group],
+      total: summary.income + summary.expense,
+    }))
     .filter((item) => item.total > 0)
     .sort((a, b) => b.total - a.total);
 }

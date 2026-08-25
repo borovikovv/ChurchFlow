@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { ExchangeRates } from '@churchflow/shared';
 import { CurrencyRatesRepository } from './repositories/currency-rates.repository';
 
-const NBU_EXCHANGE_URL = 'https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json';
+const NBU_EXCHANGE_URL = 'https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange';
 const NBU_TIMEOUT_MS = 5_000;
 
 type NbuRate = { cc?: unknown; rate?: unknown };
@@ -13,30 +13,49 @@ export class CurrencyRatesService {
 
   constructor(private readonly currencyRatesRepository: CurrencyRatesRepository) {}
 
-  async getCurrent(now: Date = new Date()): Promise<ExchangeRates | null> {
-    const today = startOfUtcDay(now);
-    const cached = await this.currencyRatesRepository.findByDate(today);
-    if (cached) {
-      return toExchangeRates(cached);
-    }
+  getCurrent(now: Date = new Date()): Promise<ExchangeRates | null> {
+    return this.getOnOrBefore(startOfUtcDay(now));
+  }
 
-    const fetched = await this.fetchFromNbu();
-    if (fetched) {
-      const stored = await this.currencyRatesRepository.upsert(
-        today,
-        fetched.usdToUah,
-        fetched.eurToUah,
-      );
+  // Resolves the rate published for the given day, falling back to the most recent earlier one so
+  // a weekend, a holiday, or a gap in the stored history still prices a month.
+  async getOnOrBefore(date: Date): Promise<ExchangeRates | null> {
+    const day = startOfUtcDay(date);
+    const stored = await this.currencyRatesRepository.findOnOrBefore(day);
+    if (stored && stored.date.getTime() === day.getTime()) {
       return toExchangeRates(stored);
     }
 
-    const latest = await this.currencyRatesRepository.findLatest();
-    return latest ? toExchangeRates(latest) : null;
+    const fetched = await this.fetchFromNbu(day);
+    if (fetched) {
+      return toExchangeRates(
+        await this.currencyRatesRepository.upsert(day, fetched.usdToUah, fetched.eurToUah),
+      );
+    }
+
+    return stored ? toExchangeRates(stored) : null;
   }
 
-  private async fetchFromNbu(): Promise<{ usdToUah: number; eurToUah: number } | null> {
+  getForMonth(year: number, month: number, now: Date = new Date()): Promise<ExchangeRates | null> {
+    return this.getOnOrBefore(monthRateDate(year, month, now));
+  }
+
+  // Flows are converted at the rate of the month they happened in, not at today's rate.
+  async getForMonths(
+    year: number,
+    months: number[],
+    now: Date = new Date(),
+  ): Promise<Map<number, ExchangeRates | null>> {
+    const entries = await Promise.all(
+      months.map(async (month) => [month, await this.getForMonth(year, month, now)] as const),
+    );
+
+    return new Map(entries);
+  }
+
+  private async fetchFromNbu(date: Date): Promise<{ usdToUah: number; eurToUah: number } | null> {
     try {
-      const response = await fetch(NBU_EXCHANGE_URL, {
+      const response = await fetch(`${NBU_EXCHANGE_URL}?json&date=${toNbuDate(date)}`, {
         signal: AbortSignal.timeout(NBU_TIMEOUT_MS),
       });
       if (!response.ok) {
@@ -65,6 +84,14 @@ export class CurrencyRatesService {
   }
 }
 
+// The rate that prices a month is the one on its last day, or today while the month is still open.
+export function monthRateDate(year: number, month: number, now: Date): Date {
+  const monthEnd = new Date(Date.UTC(year, month, 0));
+  const today = startOfUtcDay(now);
+
+  return monthEnd.getTime() < today.getTime() ? monthEnd : today;
+}
+
 function findRate(entries: unknown[], code: string): number | null {
   for (const entry of entries) {
     const rate = entry as NbuRate;
@@ -86,6 +113,10 @@ function toExchangeRates(record: {
     usdToUah: Number(record.usdToUah.toString()),
     eurToUah: Number(record.eurToUah.toString()),
   };
+}
+
+function toNbuDate(date: Date): string {
+  return date.toISOString().slice(0, 10).replaceAll('-', '');
 }
 
 function startOfUtcDay(value: Date): Date {

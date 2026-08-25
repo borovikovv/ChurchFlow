@@ -18,13 +18,16 @@ export function YearSummary({
   openingBalance,
   rates,
   totals,
+  totalsInBase,
 }: {
   baseCurrency: BudgetCurrency;
   closingBalance: BudgetCurrencyTotals;
   openingAction?: ReactNode;
   openingBalance: BudgetCurrencyTotals;
+  // Holdings are worth what they are worth today; flows keep the rate of the month they happened in.
   rates: ExchangeRates | null;
   totals: BudgetTotals;
+  totalsInBase: { income: number | null; expense: number | null };
 }) {
   const t = useTranslations('budget');
 
@@ -39,13 +42,13 @@ export function YearSummary({
       />
       <SummaryCard
         baseCurrency={baseCurrency}
-        converted={toBaseEquivalent(totals.income, baseCurrency, rates)}
+        converted={totalsInBase.income}
         label={t('yearIncome')}
         totals={totals.income}
       />
       <SummaryCard
         baseCurrency={baseCurrency}
-        converted={toBaseEquivalent(totals.expense, baseCurrency, rates)}
+        converted={totalsInBase.expense}
         label={t('yearExpenses')}
         totals={totals.expense}
       />

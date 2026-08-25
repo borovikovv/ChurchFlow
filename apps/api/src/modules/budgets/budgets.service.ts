@@ -14,6 +14,7 @@ import type {
   BudgetGroupSummary,
   BudgetMonth,
   BudgetPayload,
+  ExchangeRates,
   CreateBudgetCategoryInput,
   CreateBudgetMonthInput,
   UpdateBudgetCategoryInput,
@@ -66,12 +67,16 @@ export class BudgetsService {
         }),
       )
       .sort(compareCategories);
-    const monthItems = months.map((month) => mapMonth(month));
-    const yearTotals = sumBudgetTotals(monthItems.map((month) => month.totals));
-    const [openingBalance, rates] = await Promise.all([
+    const [openingBalance, rates, monthRates] = await Promise.all([
       this.resolveOpeningBalance(organizationId, year),
       this.currencyRatesService.getCurrent(),
+      this.currencyRatesService.getForMonths(
+        year,
+        months.map((month) => month.month),
+      ),
     ]);
+    const monthItems = months.map((month) => mapMonth(month, monthRates.get(month.month) ?? null));
+    const yearTotals = sumBudgetTotals(monthItems.map((month) => month.totals));
 
     return {
       actorRole: actor.role as 'OWNER' | 'ADMIN',
@@ -150,7 +155,9 @@ export class BudgetsService {
     actorUserId: string,
   ): Promise<BudgetMonth> {
     try {
-      return mapMonth(await this.budgetsRepository.createMonth(organizationId, input, actorUserId));
+      return await this.mapMonthWithRates(
+        await this.budgetsRepository.createMonth(organizationId, input, actorUserId),
+      );
     } catch (error) {
       throw this.toHttpError(error);
     }
@@ -287,7 +294,7 @@ export class BudgetsService {
     actorUserId: string,
   ): Promise<BudgetMonth> {
     try {
-      return mapMonth(
+      return await this.mapMonthWithRates(
         await this.budgetsRepository.addMonthRow(organizationId, monthId, actorUserId),
       );
     } catch (error) {
@@ -301,12 +308,16 @@ export class BudgetsService {
     actorUserId: string,
   ): Promise<BudgetMonth> {
     try {
-      return mapMonth(
+      return await this.mapMonthWithRates(
         await this.budgetsRepository.removeLastMonthRow(organizationId, monthId, actorUserId),
       );
     } catch (error) {
       throw this.toHttpError(error);
     }
+  }
+
+  private async mapMonthWithRates(month: BudgetMonthRecord): Promise<BudgetMonth> {
+    return mapMonth(month, await this.currencyRatesService.getForMonth(month.year, month.month));
   }
 
   private toHttpError(error: unknown) {
@@ -334,7 +345,7 @@ export class BudgetsService {
   }
 }
 
-function mapMonth(month: BudgetMonthRecord): BudgetMonth {
+function mapMonth(month: BudgetMonthRecord, rates: ExchangeRates | null): BudgetMonth {
   return {
     id: month.id,
     year: month.year,
@@ -342,6 +353,7 @@ function mapMonth(month: BudgetMonthRecord): BudgetMonth {
     rowCount: month.rowCount,
     entries: month.entries.map(mapEntry),
     totals: calculateBudgetTotals(month.entries.map(toAmountRow)),
+    rates,
   };
 }
 
