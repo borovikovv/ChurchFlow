@@ -14,6 +14,8 @@ import {
   YAxis,
 } from 'recharts';
 import type { BudgetCurrency, BudgetGroup, BudgetMonth, ExchangeRates } from '@churchflow/shared';
+import { BudgetSummaryCards } from './budget-summary';
+import type { BudgetSummaryData } from './budget-summary-types';
 import {
   formatMoney,
   monthAmountInBase,
@@ -48,6 +50,7 @@ export function BudgetCharts({
   monthNames,
   periodLabel,
   rates,
+  summary,
   year,
 }: {
   baseCurrency: BudgetCurrency;
@@ -60,6 +63,7 @@ export function BudgetCharts({
   monthNames: string[];
   periodLabel?: string;
   rates: ExchangeRates | null;
+  summary?: BudgetSummaryData;
   year: number;
 }) {
   const t = useTranslations('budget');
@@ -82,6 +86,11 @@ export function BudgetCharts({
             : t('ratesUnavailable')}
         </span>
       </div>
+      {summary ? (
+        <div className="mb-4">
+          <BudgetSummaryCards {...summary} />
+        </div>
+      ) : null}
       <div
         className={
           exportMode
