@@ -510,6 +510,8 @@
     "openingBalanceCarriedOver": "Перенесено з попередніх років, окремий залишок не задано.",
     "invalidOpeningBalance": "Некоректний залишок на початок року.",
     "invalidBaseCurrency": "Некоректна основна валюта.",
+    "showExchangeSection": "Обміняти валюту",
+    "hideExchangeSection": "Сховати обмін валют",
     "exchanges": "Обмін валют",
     "exchangesDescription": "Переміщення грошей між валютами всередині каси. Не рахується як дохід чи витрата.",
     "noExchanges": "За цей місяць обмінів валюти немає.",

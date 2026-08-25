@@ -12,7 +12,7 @@ const env = parseEnv('Web build', webEnvSchema, {
   COOKIE_DOMAIN: process.env['COOKIE_DOMAIN'],
 });
 const webHost = new URL(env.NEXT_PUBLIC_WEB_URL).host;
-const sharedSource = fileURLToPath(new URL('./src/shared/index.ts', import.meta.url));
+const sharedSource = fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url));
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const nextConfig: NextConfig = {

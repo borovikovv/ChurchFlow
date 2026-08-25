@@ -510,6 +510,8 @@
     "openingBalanceCarriedOver": "Carried over from earlier years; no separate balance is set.",
     "invalidOpeningBalance": "Invalid opening balance.",
     "invalidBaseCurrency": "Invalid base currency.",
+    "showExchangeSection": "Exchange currency",
+    "hideExchangeSection": "Hide currency exchange",
     "exchanges": "Currency exchanges",
     "exchangesDescription": "Money moved between currencies inside the cash box. Not counted as income or expenses.",
     "noExchanges": "No currency exchanges recorded for this month.",
