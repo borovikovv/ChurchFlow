@@ -976,8 +976,6 @@ model BudgetEntry {
   @@map("budget_entries")
 }
 
-// A move of money between currencies inside the same cash box. It is neither income nor an
-// expense: it only shifts the per-currency balances, so it is kept apart from budget entries.
 model BudgetExchange {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
@@ -988,7 +986,6 @@ model BudgetExchange {
   fromAmount   Decimal        @map("from_amount") @db.Decimal(12, 2)
   toCurrency   BudgetCurrency @map("to_currency")
   toAmount     Decimal        @map("to_amount") @db.Decimal(12, 2)
-  // Stored rather than recomputed so a later rate correction cannot rewrite what was actually done.
   dealRate     Decimal        @map("deal_rate") @db.Decimal(18, 8)
   officialRate Decimal?       @map("official_rate") @db.Decimal(18, 8)
   note         String?

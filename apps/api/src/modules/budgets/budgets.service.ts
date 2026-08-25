@@ -385,8 +385,6 @@ export class BudgetsService {
     }
   }
 
-  // Snapshotted when the exchange is written so a later rate correction cannot rewrite how good
-  // the deal looked on the day it was made.
   private async resolveOfficialRate(input: BudgetExchangeInput): Promise<number | null> {
     const rates = await this.currencyRatesService.getOnOrBefore(
       new Date(`${input.occurredOn}T00:00:00.000Z`),

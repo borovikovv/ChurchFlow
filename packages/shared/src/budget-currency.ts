@@ -14,7 +14,6 @@ export function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-// Published rates are quoted against the hryvnia, so every other pair is a cross rate through it.
 export function rateToUah(currency: BudgetCurrency, rates: ExchangeRates | null): number | null {
   if (currency === 'UAH') return 1;
   if (!rates) return null;

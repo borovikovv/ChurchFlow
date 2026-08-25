@@ -5,11 +5,6 @@ import { loadEnvFile } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 
-// Currency exchanges used to be recorded as two unrelated budget entries in the CURRENCY_EXCHANGE
-// group, which inflated both income and expenses. This moves the pairs that are unambiguous into
-// budget_exchanges and zeroes the entries they came from. Anything ambiguous is left untouched and
-// reported, so a human can fix it in the UI.
-
 const INCOME_CATEGORY = 'UAH from exchange';
 const SPENT_CATEGORIES = new Map([
   ['USD spent', { currency: 'USD', column: 'amountUsd' }],
@@ -116,8 +111,6 @@ function groupByRow(rows) {
   return groups;
 }
 
-// A pair is unambiguous only when the row holds exactly one hryvnia leg and one foreign leg, each
-// carrying a single currency. Anything else could mean several exchanges typed into one row.
 function toExchangePair(group) {
   if (group.length !== 2) return null;
 

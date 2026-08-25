@@ -15,8 +15,6 @@ export class CurrencyRatesScheduler {
     private readonly scheduledJobLockService: ScheduledJobLockService,
   ) {}
 
-  // Budget totals price past months at the rate of their last day, so the daily rate has to be
-  // stored as it is published rather than only when somebody happens to open the budget.
   @Cron('0 0 10 * * *', {
     name: CURRENCY_RATES_SNAPSHOT_JOB,
     timeZone: 'Europe/Kyiv',

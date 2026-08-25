@@ -152,9 +152,6 @@ export const DEFAULT_BUDGET_MONTH_ROW_COUNT = 10;
 
 export const BUDGET_MONTH_ROW_COUNT = DEFAULT_BUDGET_MONTH_ROW_COUNT;
 
-// Currency exchanges used to be kept here as a pair of income and expense categories. They are
-// their own records now, so new organizations no longer get the categories; existing ones keep
-// theirs until their history is migrated.
 export const DEPRECATED_BUDGET_EXCHANGE_CATEGORIES = [
   'UAH from exchange',
   'USD spent',

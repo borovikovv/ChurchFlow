@@ -24,7 +24,6 @@ export function YearSummary({
   closingBalance: BudgetCurrencyTotals;
   openingAction?: ReactNode;
   openingBalance: BudgetCurrencyTotals;
-  // Holdings are worth what they are worth today; flows keep the rate of the month they happened in.
   rates: ExchangeRates | null;
   totals: BudgetTotals;
   totalsInBase: { income: number | null; expense: number | null };

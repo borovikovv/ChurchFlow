@@ -278,8 +278,6 @@ export const budgetExchangeSchema = z
     toAmount: budgetExchangeAmountSchema,
     note: z.string().trim().max(500).nullable().default(null),
   })
-  // Moving money into the currency it left is not an exchange; storing it would only distort the
-  // per-currency balances.
   .refine((value) => value.fromCurrency !== value.toCurrency, {
     message: 'An exchange must use two different currencies',
   });

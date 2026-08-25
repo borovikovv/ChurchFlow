@@ -27,7 +27,6 @@ export function zeroBudgetTotals(): BudgetTotals {
   };
 }
 
-// What the exchanges took out of one currency and put into another, as a signed vector.
 export function exchangeMovement(exchanges: BudgetExchange[]): BudgetCurrencyTotals {
   const movement = zeroCurrencyTotals();
 
@@ -39,8 +38,6 @@ export function exchangeMovement(exchanges: BudgetExchange[]): BudgetCurrencyTot
   return movement;
 }
 
-// How much better than the published rate the exchange turned out, in the currency that was
-// bought. Positive means more was received than the official rate would have given.
 export function exchangeRateGain(exchange: BudgetExchange): number | null {
   if (exchange.officialRate === null) return null;
 
@@ -106,7 +103,6 @@ export function sumBudgetTotals(items: BudgetTotals[]): BudgetTotals {
   return roundBudgetTotals(income, expense, exchange);
 }
 
-// Returns null when a currency the totals actually hold cannot be priced in the base currency.
 export function toBaseEquivalent(
   totals: BudgetCurrencyTotals,
   baseCurrency: BudgetCurrency,

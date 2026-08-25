@@ -17,8 +17,6 @@ export class CurrencyRatesService {
     return this.getOnOrBefore(startOfUtcDay(now));
   }
 
-  // Resolves the rate published for the given day, falling back to the most recent earlier one so
-  // a weekend, a holiday, or a gap in the stored history still prices a month.
   async getOnOrBefore(date: Date): Promise<ExchangeRates | null> {
     const day = startOfUtcDay(date);
     const stored = await this.currencyRatesRepository.findOnOrBefore(day);
@@ -40,7 +38,6 @@ export class CurrencyRatesService {
     return this.getOnOrBefore(monthRateDate(year, month, now));
   }
 
-  // Flows are converted at the rate of the month they happened in, not at today's rate.
   async getForMonths(
     year: number,
     months: number[],
@@ -84,7 +81,6 @@ export class CurrencyRatesService {
   }
 }
 
-// The rate that prices a month is the one on its last day, or today while the month is still open.
 export function monthRateDate(year: number, month: number, now: Date): Date {
   const monthEnd = new Date(Date.UTC(year, month, 0));
   const today = startOfUtcDay(now);

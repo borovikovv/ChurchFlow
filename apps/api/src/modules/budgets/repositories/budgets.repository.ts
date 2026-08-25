@@ -734,7 +734,6 @@ export class BudgetsRepository {
     });
   }
 
-  // An exchange belongs to the month it is filed under, so its date has to fall inside it.
   private async assertExchangeMonth(
     tx: Prisma.TransactionClient,
     organizationId: string,

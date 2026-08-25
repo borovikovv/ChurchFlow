@@ -194,8 +194,6 @@ export function recalculateMonth(month: BudgetMonth, categories: BudgetCategory[
   };
 }
 
-// Every month is converted at its own rate before the year is added up, so a December total is
-// never priced with an August rate.
 export function sumMonthsInBase(
   months: BudgetMonth[],
   key: BudgetTotalsKey,
@@ -240,8 +238,6 @@ export function buildGroupBaseSummaries(
   });
 }
 
-// Charts draw one bar per period, so an unpriced month falls back to its base currency leg rather
-// than dropping the bar entirely.
 export function monthAmountInBase(
   totals: BudgetCurrencyTotals,
   baseCurrency: BudgetCurrency,

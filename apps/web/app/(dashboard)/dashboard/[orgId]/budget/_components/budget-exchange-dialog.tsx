@@ -175,8 +175,6 @@ function AmountAndCurrency({
   );
 }
 
-// The rate is derived from the two amounts rather than entered: the cashier records what actually
-// happened, and the published rate is only shown next to it for comparison.
 function ExchangeRateHint({
   dealRate,
   publishedRate,
