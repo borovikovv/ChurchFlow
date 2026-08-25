@@ -320,7 +320,7 @@ model Session {
 model Organization {
   id           String             @id @default(uuid()) @db.Uuid
   name         String
-  slug         String             @unique
+  slug         String
   description  String?
   status       OrganizationStatus @default(ACTIVE)
   baseCurrency BudgetCurrency     @default(UAH) @map("base_currency")
@@ -440,6 +440,8 @@ model OrganizationMemberRelationship {
   @@unique([organizationId, fromMembershipId, toMembershipId, type], map: "organization_member_relationships_organization_id_from_membersh")
   @@index([organizationId, fromMembershipId], map: "member_relationships_from_idx")
   @@index([organizationId, toMembershipId], map: "member_relationships_to_idx")
+  @@index([fromMembershipId])
+  @@index([toMembershipId])
   @@map("organization_member_relationships")
 }
 
@@ -484,6 +486,8 @@ model MembershipClaim {
   @@index([membershipId, status])
   @@index([requestedByUserId])
   @@index([expiresAt])
+  @@index([reviewedByUserId])
+  @@index([createdByUserId])
   @@map("membership_claims")
 }
 
@@ -522,6 +526,7 @@ model OrganizationInvitation {
   @@index([expiresAt])
   @@index([organizationId, status])
   @@index([organizationId, targetProvider, targetProviderAccountId, status, expiresAt], map: "org_inv_target_status_exp_idx")
+  @@index([invitedByUserId])
   @@map("organization_invitations")
 }
 
@@ -553,6 +558,8 @@ model OrganizationRequest {
   @@index([contactEmail])
   @@index([requestedByUserId])
   @@index([createdAt])
+  @@index([reviewedByUserId])
+  @@index([createdOrganizationId])
   @@map("organization_requests")
 }
 
@@ -570,10 +577,13 @@ model OrganizationWebsite {
   deletedAt      DateTime? @map("deleted_at")
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  logoAsset    MediaAsset?     @relation(fields: [logoAssetId], references: [id], onDelete: SetNull)
   pages        WebsitePage[]
   domains      WebsiteDomain[]
 
+  @@unique([id, organizationId])
   @@index([organizationId])
+  @@index([logoAssetId])
   @@map("organization_websites")
 }
 
@@ -590,11 +600,13 @@ model WebsitePage {
   updatedAt      DateTime   @updatedAt @map("updated_at")
   deletedAt      DateTime?  @map("deleted_at")
 
-  website  OrganizationWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  website  OrganizationWebsite @relation(fields: [websiteId, organizationId], references: [id, organizationId], onDelete: Cascade)
   sections WebsiteSection[]
 
   @@unique([websiteId, slug])
+  @@unique([id, organizationId])
   @@index([organizationId, status])
+  @@index([websiteId, organizationId])
   @@index([websiteId, status])
   @@map("website_pages")
 }
@@ -610,9 +622,10 @@ model WebsiteSection {
   updatedAt      DateTime           @updatedAt @map("updated_at")
   deletedAt      DateTime?          @map("deleted_at")
 
-  page WebsitePage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  page WebsitePage @relation(fields: [pageId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([organizationId])
+  @@index([pageId, organizationId])
   @@index([pageId, order])
   @@map("website_sections")
 }
@@ -628,10 +641,11 @@ model WebsiteDomain {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  website OrganizationWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  website OrganizationWebsite @relation(fields: [websiteId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([websiteId])
+  @@index([websiteId, organizationId])
   @@map("website_domains")
 }
 
@@ -654,6 +668,7 @@ model MediaAsset {
   organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberProfile  OrganizationMemberProfile?
   calendarEvents CalendarEvent[]
+  websiteLogos   OrganizationWebsite[]
 
   @@unique([bucket, objectKey])
   @@index([organizationId, createdAt])
@@ -712,6 +727,7 @@ model CalendarEvent {
   @@index([organizationId, deletedAt])
   @@index([linkedMembershipId])
   @@index([imageAssetId])
+  @@index([createdByUserId])
   @@map("calendar_events")
 }
 
@@ -806,6 +822,8 @@ model PrayerRequest {
   @@index([organizationId, authorUserId])
   @@index([organizationId, deletedAt])
   @@index([authorMembershipId])
+  @@index([authorUserId])
+  @@index([archivedByUserId])
   @@map("prayer_requests")
 }
 
@@ -855,6 +873,7 @@ model Notification {
   @@index([organizationId, recipientUserId, createdAt])
   @@index([entityType, entityId])
   @@index([createdAt])
+  @@index([recipientMembershipId])
   @@map("notifications")
 }
 
@@ -931,6 +950,7 @@ model BudgetCategory {
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   entries      BudgetEntry[]
 
+  @@unique([id, organizationId])
   @@index([organizationId, group, order])
   @@index([organizationId, deletedAt])
   @@map("budget_categories")
@@ -950,14 +970,16 @@ model BudgetMonth {
   exchanges    BudgetExchange[]
 
   @@unique([organizationId, year, month])
+  @@unique([id, organizationId])
   @@index([organizationId, year])
   @@map("budget_months")
 }
 
 model BudgetEntry {
   id         String   @id @default(uuid()) @db.Uuid
-  monthId    String   @map("month_id") @db.Uuid
-  categoryId String   @map("category_id") @db.Uuid
+  monthId        String @map("month_id") @db.Uuid
+  categoryId     String @map("category_id") @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
   rowIndex   Int      @default(0) @map("row_index")
   amountUah  Decimal  @default(0) @map("amount_uah") @db.Decimal(12, 2)
   amountUsd  Decimal  @default(0) @map("amount_usd") @db.Decimal(12, 2)
@@ -966,12 +988,14 @@ model BudgetEntry {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  month    BudgetMonth       @relation(fields: [monthId], references: [id], onDelete: Cascade)
-  category BudgetCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  month    BudgetMonth       @relation(fields: [monthId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  category BudgetCategory    @relation(fields: [categoryId, organizationId], references: [id, organizationId], onDelete: Cascade)
   notes    BudgetEntryNote[]
 
   @@unique([monthId, categoryId, rowIndex])
   @@index([categoryId])
+  @@index([monthId, organizationId])
+  @@index([categoryId, organizationId])
   @@index([monthId, rowIndex])
   @@map("budget_entries")
 }
@@ -1070,6 +1094,7 @@ model PreacherQueueEntry {
   @@unique([organizationId, membershipId])
   @@unique([organizationId, position])
   @@index([organizationId, active, position])
+  @@index([membershipId])
   @@map("preacher_queue_entries")
 }
 
@@ -1087,7 +1112,6 @@ model FeatureFlag {
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([key, scope, organizationId, userId])
   @@index([organizationId])
   @@index([userId])
   @@map("feature_flags")

@@ -366,9 +366,11 @@ export class OrganizationRequestsRepository {
     return this.toDetail(request);
   }
 
+  // Slug звільняється разом із видаленням організації, тож зайнятим його робить
+  // лише невидалена: інакше заявку відхиляло б ім'я, яке насправді вільне.
   async findOrganizationBySlug(slug: string) {
-    return this.prisma.organization.findUnique({
-      where: { slug },
+    return this.prisma.organization.findFirst({
+      where: { slug, deletedAt: null },
       select: { id: true },
     });
   }

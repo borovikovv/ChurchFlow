@@ -194,9 +194,16 @@ test('middleware never calls the API', () => {
 // The API cannot roll the cookie: pages reach it from the Next server, which drops its
 // Set-Cookie. If middleware stopped doing this the cookie would keep its sign-in expiry
 // and an active visitor would be signed out on the idle window's original deadline.
-test('a session cookie is rolled forward on every page view', () => {
+test('a session cookie is rolled forward on every page view', (t) => {
   const originalWebUrl = process.env.NEXT_PUBLIC_WEB_URL;
   process.env.NEXT_PUBLIC_WEB_URL = 'https://churchflow.test';
+  t.after(() => {
+    if (originalWebUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_WEB_URL;
+    } else {
+      process.env.NEXT_PUBLIC_WEB_URL = originalWebUrl;
+    }
+  });
   const before = Date.now();
   const response = middlewareModule.middleware(
     requestFor('https://churchflow.test/dashboard/org', {
