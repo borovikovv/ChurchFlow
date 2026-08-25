@@ -2,21 +2,31 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
-import type { BudgetCurrencyTotals, BudgetTotals, ExchangeRates } from '@churchflow/shared';
-import { formatMoney, toUahEquivalent } from './budget-table-helpers';
+import {
+  toBaseEquivalent,
+  type BudgetCurrency,
+  type BudgetCurrencyTotals,
+  type BudgetTotals,
+  type ExchangeRates,
+} from '@churchflow/shared';
+import { formatMoney } from './budget-table-helpers';
 
 export function YearSummary({
+  baseCurrency,
   closingBalance,
   openingAction,
   openingBalance,
   rates,
   totals,
+  totalsInBase,
 }: {
+  baseCurrency: BudgetCurrency;
   closingBalance: BudgetCurrencyTotals;
   openingAction?: ReactNode;
   openingBalance: BudgetCurrencyTotals;
   rates: ExchangeRates | null;
   totals: BudgetTotals;
+  totalsInBase: { income: number | null; expense: number | null };
 }) {
   const t = useTranslations('budget');
 
@@ -24,14 +34,26 @@ export function YearSummary({
     <section className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
       <SummaryCard
         action={openingAction}
-        converted={toUahEquivalent(openingBalance, rates)}
+        baseCurrency={baseCurrency}
+        converted={toBaseEquivalent(openingBalance, baseCurrency, rates)}
         label={t('yearOpeningBalance')}
         totals={openingBalance}
       />
-      <SummaryCard label={t('yearIncome')} totals={totals.income} />
-      <SummaryCard label={t('yearExpenses')} totals={totals.expense} />
       <SummaryCard
-        converted={toUahEquivalent(closingBalance, rates)}
+        baseCurrency={baseCurrency}
+        converted={totalsInBase.income}
+        label={t('yearIncome')}
+        totals={totals.income}
+      />
+      <SummaryCard
+        baseCurrency={baseCurrency}
+        converted={totalsInBase.expense}
+        label={t('yearExpenses')}
+        totals={totals.expense}
+      />
+      <SummaryCard
+        baseCurrency={baseCurrency}
+        converted={toBaseEquivalent(closingBalance, baseCurrency, rates)}
         label={t('yearClosingBalance')}
         totals={closingBalance}
       />
@@ -61,12 +83,14 @@ export function CurrencyTotals({
 
 function SummaryCard({
   action,
-  converted = null,
+  baseCurrency,
+  converted,
   label,
   totals,
 }: {
   action?: ReactNode;
-  converted?: number | null;
+  baseCurrency: BudgetCurrency;
+  converted: number | null;
   label: string;
   totals: BudgetCurrencyTotals;
 }) {
@@ -83,7 +107,7 @@ function SummaryCard({
       ) : (
         <>
           <p className="m-0 whitespace-nowrap text-lg text-black">
-            ≈ {formatMoney(converted, 'UAH', locale)}
+            ≈ {formatMoney(converted, baseCurrency, locale)}
           </p>
           <CurrencyTotals
             className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-black"

@@ -1,8 +1,6 @@
+import { BUDGET_AMOUNT_FIELDS, type BudgetAmountField } from '@churchflow/shared';
+
 export const BUDGET_AUDIT_ENTITY_TYPE = 'Budget';
-
-export const BUDGET_AMOUNT_FIELDS = ['amountUah', 'amountUsd', 'amountEur'] as const;
-
-export type BudgetAmountField = (typeof BUDGET_AMOUNT_FIELDS)[number];
 
 export type BudgetAmountChange = {
   field: BudgetAmountField;

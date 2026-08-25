@@ -5,12 +5,11 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class CurrencyRatesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findByDate(date: Date) {
-    return this.prisma.currencyRate.findUnique({ where: { date } });
-  }
-
-  findLatest() {
-    return this.prisma.currencyRate.findFirst({ orderBy: { date: 'desc' } });
+  findOnOrBefore(date: Date) {
+    return this.prisma.currencyRate.findFirst({
+      where: { date: { lte: date } },
+      orderBy: { date: 'desc' },
+    });
   }
 
   upsert(date: Date, usdToUah: number, eurToUah: number) {

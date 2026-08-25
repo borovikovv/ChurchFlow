@@ -53,12 +53,16 @@ import type {
   budgetGroupSchema,
   budgetCategoryTypeSchema,
   budgetEntryFieldSchema,
+  budgetCurrencySchema,
+  budgetAmountFieldSchema,
   listBudgetQuerySchema,
   createBudgetMonthSchema,
   createBudgetCategorySchema,
   updateBudgetCategorySchema,
   updateBudgetEntrySchema,
   updateBudgetEntryNoteSchema,
+  budgetExchangeSchema,
+  updateBudgetBaseCurrencySchema,
   updateBudgetOpeningBalanceSchema,
   notificationTypeSchema,
   listNotificationsQuerySchema,
@@ -142,12 +146,16 @@ export type ArchivePrayerRequestInput = z.infer<typeof archivePrayerRequestSchem
 export type BudgetGroup = z.infer<typeof budgetGroupSchema>;
 export type BudgetCategoryType = z.infer<typeof budgetCategoryTypeSchema>;
 export type BudgetEntryField = z.infer<typeof budgetEntryFieldSchema>;
+export type BudgetCurrency = z.infer<typeof budgetCurrencySchema>;
+export type BudgetAmountField = z.infer<typeof budgetAmountFieldSchema>;
 export type ListBudgetQuery = z.infer<typeof listBudgetQuerySchema>;
 export type CreateBudgetMonthInput = z.infer<typeof createBudgetMonthSchema>;
 export type CreateBudgetCategoryInput = z.infer<typeof createBudgetCategorySchema>;
 export type UpdateBudgetCategoryInput = z.infer<typeof updateBudgetCategorySchema>;
 export type UpdateBudgetEntryInput = z.infer<typeof updateBudgetEntrySchema>;
 export type UpdateBudgetEntryNoteInput = z.infer<typeof updateBudgetEntryNoteSchema>;
+export type BudgetExchangeInput = z.infer<typeof budgetExchangeSchema>;
+export type UpdateBudgetBaseCurrencyInput = z.infer<typeof updateBudgetBaseCurrencySchema>;
 export type UpdateBudgetOpeningBalanceInput = z.infer<typeof updateBudgetOpeningBalanceSchema>;
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema>;
@@ -282,6 +290,7 @@ export interface BudgetCurrencyTotals {
 export interface BudgetTotals {
   income: BudgetCurrencyTotals;
   expense: BudgetCurrencyTotals;
+  exchange: BudgetCurrencyTotals;
   balance: BudgetCurrencyTotals;
 }
 
@@ -308,13 +317,28 @@ export interface BudgetEntry {
   notes: BudgetEntryNote[];
 }
 
+export interface BudgetExchange {
+  id: string;
+  monthId: string;
+  occurredOn: string;
+  fromCurrency: BudgetCurrency;
+  fromAmount: number;
+  toCurrency: BudgetCurrency;
+  toAmount: number;
+  dealRate: number;
+  officialRate: number | null;
+  note: string | null;
+}
+
 export interface BudgetMonth {
   id: string;
   year: number;
   month: number;
   rowCount: number;
   entries: BudgetEntry[];
+  exchanges: BudgetExchange[];
   totals: BudgetTotals;
+  rates: ExchangeRates | null;
 }
 
 export interface BudgetGroupSummary {
@@ -338,6 +362,7 @@ export interface BudgetPayload {
   actorRole: 'OWNER' | 'ADMIN';
   canManage: true;
   year: number;
+  baseCurrency: BudgetCurrency;
   categories: BudgetCategory[];
   months: BudgetMonth[];
   yearTotals: BudgetTotals;

@@ -2,8 +2,9 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
-import type { BudgetCategory, BudgetMonth } from '@churchflow/shared';
+import type { BudgetCategory, BudgetExchangeInput, BudgetMonth } from '@churchflow/shared';
 import { BudgetCell } from './budget-cell';
+import { BudgetExchangeSection } from './budget-exchange-section';
 import type { BudgetEntryBlurHandler, BudgetEntryNoteSaveHandler } from './budget-manager-types';
 import { CurrencyTotals } from './budget-summary';
 import {
@@ -27,11 +28,14 @@ export function BudgetMonthTable({
   month,
   monthNames,
   savingKeys,
+  onCreateExchange,
+  onDeleteExchange,
   onDeleteMonth,
   onAddRow,
   onEntryBlur,
   onEntryNoteSave,
   onRemoveLastRow,
+  onUpdateExchange,
 }: {
   categories: BudgetCategory[];
   columnLabels: BudgetColumnLabels;
@@ -39,20 +43,28 @@ export function BudgetMonthTable({
   month: BudgetMonth;
   monthNames: string[];
   savingKeys: Set<string>;
+  onCreateExchange: (monthId: string, input: BudgetExchangeInput) => void;
+  onDeleteExchange: (exchangeId: string) => void;
   onDeleteMonth: (monthId: string) => void;
   onAddRow: (monthId: string) => void;
   onEntryBlur: BudgetEntryBlurHandler;
   onEntryNoteSave: BudgetEntryNoteSaveHandler;
   onRemoveLastRow: (monthId: string) => void;
+  onUpdateExchange: (exchangeId: string, input: BudgetExchangeInput) => void;
 }) {
   const t = useTranslations('budget');
   const locale = useLocale();
-  const columns = spreadsheetColumns(categories, { columns: columnLabels, groups: groupLabels });
+  const columns = spreadsheetColumns(categories, {
+    columns: columnLabels,
+    groups: groupLabels,
+    deprecatedExchangeHint: t('deprecatedExchangeColumn'),
+  });
   const monthName = monthNames[month.month - 1] ?? String(month.month);
   const lastRowHasData = monthHasDataInRow(month, month.rowCount - 1);
   const rowMutationPending =
     savingKeys.has(`month:${month.id}:row:add`) || savingKeys.has(`month:${month.id}:row:remove`);
   const isSaving = [...savingKeys].some((key) => key.includes(`:${month.id}:`));
+  const hasExchangeMovement = month.exchanges.length > 0;
 
   return (
     <div className="grid gap-4">
@@ -77,8 +89,10 @@ export function BudgetMonthTable({
                   <th
                     className="min-w-[112px] border border-[var(--line)] bg-[var(--surface-subtle)] px-2 py-2 text-center font-semibold"
                     key={column.id}
+                    {...(column.hint ? { title: column.hint } : {})}
                   >
                     {column.label}
+                    {column.hint ? <span className="text-[var(--muted)]"> †</span> : null}
                   </th>
                 ))}
               </tr>
@@ -147,6 +161,11 @@ export function BudgetMonthTable({
                     <span>
                       {t('expenses')}: {formatTotalsInline(month.totals.expense, locale)}
                     </span>
+                    {hasExchangeMovement ? (
+                      <span>
+                        {t('exchanges')}: {formatTotalsInline(month.totals.exchange, locale)}
+                      </span>
+                    ) : null}
                     <span>
                       {t('balance')}: {formatTotalsInline(month.totals.balance, locale)}
                     </span>
@@ -162,6 +181,13 @@ export function BudgetMonthTable({
           </p>
         ) : null}
       </section>
+      <BudgetExchangeSection
+        disabled={isSaving}
+        month={month}
+        onCreate={onCreateExchange}
+        onDelete={onDeleteExchange}
+        onUpdate={onUpdateExchange}
+      />
     </div>
   );
 }

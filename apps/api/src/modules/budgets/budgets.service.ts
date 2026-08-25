@@ -5,23 +5,40 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  BudgetAmountRow,
   BudgetCategory,
   BudgetOpeningBalance,
+  BudgetCurrency,
   BudgetCurrencyTotals,
   BudgetEntry,
+  BudgetExchange,
+  BudgetExchangeInput,
   BudgetGroup,
   BudgetGroupSummary,
   BudgetMonth,
   BudgetPayload,
-  BudgetTotals,
+  ExchangeRates,
   CreateBudgetCategoryInput,
   CreateBudgetMonthInput,
   UpdateBudgetCategoryInput,
   UpdateBudgetEntryInput,
   UpdateBudgetEntryNoteInput,
+  UpdateBudgetBaseCurrencyInput,
   UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
-import { BUDGET_GROUPS, budgetEntryFieldSchema } from '@churchflow/shared';
+import {
+  BUDGET_GROUPS,
+  addCurrencyTotals,
+  budgetAmountField,
+  budgetEntryFieldSchema,
+  calculateBudgetTotals,
+  exchangeMovement,
+  rateToBase,
+  roundCurrencyTotals,
+  subtractCurrencyTotals,
+  sumBudgetTotals,
+  zeroCurrencyTotals,
+} from '@churchflow/shared';
 import { CurrencyRatesService } from '../currency-rates/currency-rates.service';
 import {
   BUDGET_GROUP_ORDER,
@@ -29,19 +46,7 @@ import {
   type BudgetMonthRecord,
 } from './repositories/budgets.repository';
 
-const zeroCurrencyTotals = (): BudgetCurrencyTotals => ({
-  amountUah: 0,
-  amountUsd: 0,
-  amountEur: 0,
-});
-
 const EARLIEST_BUDGET_YEAR = 2000;
-
-const zeroTotals = (): BudgetTotals => ({
-  income: zeroCurrencyTotals(),
-  expense: zeroCurrencyTotals(),
-  balance: zeroCurrencyTotals(),
-});
 
 @Injectable()
 export class BudgetsService {
@@ -68,17 +73,22 @@ export class BudgetsService {
         }),
       )
       .sort(compareCategories);
-    const monthItems = months.map((month) => mapMonth(month));
-    const yearTotals = sumTotals(monthItems.map((month) => month.totals));
-    const [openingBalance, rates] = await Promise.all([
+    const [openingBalance, rates, monthRates] = await Promise.all([
       this.resolveOpeningBalance(organizationId, year),
       this.currencyRatesService.getCurrent(),
+      this.currencyRatesService.getForMonths(
+        year,
+        months.map((month) => month.month),
+      ),
     ]);
+    const monthItems = months.map((month) => mapMonth(month, monthRates.get(month.month) ?? null));
+    const yearTotals = sumBudgetTotals(monthItems.map((month) => month.totals));
 
     return {
       actorRole: actor.role as 'OWNER' | 'ADMIN',
       canManage: true,
       year,
+      baseCurrency: actor.organization.baseCurrency,
       categories: categoryItems,
       months: monthItems,
       yearTotals,
@@ -86,6 +96,18 @@ export class BudgetsService {
       openingBalance,
       rates,
     };
+  }
+
+  async updateBaseCurrency(
+    organizationId: string,
+    input: UpdateBudgetBaseCurrencyInput,
+    actorUserId: string,
+  ): Promise<UpdateBudgetBaseCurrencyInput> {
+    try {
+      return await this.budgetsRepository.updateBaseCurrency(organizationId, input, actorUserId);
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
   }
 
   async updateOpeningBalance(
@@ -115,15 +137,19 @@ export class BudgetsService {
         }
       : zeroCurrencyTotals();
 
-    const movement = await this.budgetsRepository.sumEntriesBetweenYears(
-      organizationId,
-      record?.sinceYear ?? EARLIEST_BUDGET_YEAR,
-      year,
-    );
+    const sinceYear = record?.sinceYear ?? EARLIEST_BUDGET_YEAR;
+    const [movement, exchanges] = await Promise.all([
+      this.budgetsRepository.sumEntriesBetweenYears(organizationId, sinceYear, year),
+      this.budgetsRepository.sumExchangesBetweenYears(organizationId, sinceYear, year),
+    ]);
 
-    const opening = cloneCurrencyTotals(seed);
-    addCurrencyTotalsTo(opening, sumToCurrencyTotals(movement.income));
-    subtractCurrencyTotalsFrom(opening, sumToCurrencyTotals(movement.expense));
+    const opening = addCurrencyTotals(
+      subtractCurrencyTotals(
+        addCurrencyTotals(seed, sumToCurrencyTotals(movement.income)),
+        sumToCurrencyTotals(movement.expense),
+      ),
+      exchangeMovementFromSums(exchanges),
+    );
 
     return {
       sinceYear: record?.sinceYear ?? null,
@@ -138,7 +164,9 @@ export class BudgetsService {
     actorUserId: string,
   ): Promise<BudgetMonth> {
     try {
-      return mapMonth(await this.budgetsRepository.createMonth(organizationId, input, actorUserId));
+      return await this.mapMonthWithRates(
+        await this.budgetsRepository.createMonth(organizationId, input, actorUserId),
+      );
     } catch (error) {
       throw this.toHttpError(error);
     }
@@ -275,7 +303,7 @@ export class BudgetsService {
     actorUserId: string,
   ): Promise<BudgetMonth> {
     try {
-      return mapMonth(
+      return await this.mapMonthWithRates(
         await this.budgetsRepository.addMonthRow(organizationId, monthId, actorUserId),
       );
     } catch (error) {
@@ -289,12 +317,84 @@ export class BudgetsService {
     actorUserId: string,
   ): Promise<BudgetMonth> {
     try {
-      return mapMonth(
+      return await this.mapMonthWithRates(
         await this.budgetsRepository.removeLastMonthRow(organizationId, monthId, actorUserId),
       );
     } catch (error) {
       throw this.toHttpError(error);
     }
+  }
+
+  async createExchange(
+    organizationId: string,
+    monthId: string,
+    input: BudgetExchangeInput,
+    actorUserId: string,
+  ): Promise<BudgetMonth> {
+    try {
+      const officialRate = await this.resolveOfficialRate(input);
+
+      return await this.mapMonthWithRates(
+        await this.budgetsRepository.createExchange(
+          organizationId,
+          monthId,
+          input,
+          officialRate,
+          actorUserId,
+        ),
+      );
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+  }
+
+  async updateExchange(
+    organizationId: string,
+    exchangeId: string,
+    input: BudgetExchangeInput,
+    actorUserId: string,
+  ): Promise<BudgetMonth> {
+    try {
+      const officialRate = await this.resolveOfficialRate(input);
+
+      return await this.mapMonthWithRates(
+        await this.budgetsRepository.updateExchange(
+          organizationId,
+          exchangeId,
+          input,
+          officialRate,
+          actorUserId,
+        ),
+      );
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+  }
+
+  async deleteExchange(
+    organizationId: string,
+    exchangeId: string,
+    actorUserId: string,
+  ): Promise<BudgetMonth> {
+    try {
+      return await this.mapMonthWithRates(
+        await this.budgetsRepository.deleteExchange(organizationId, exchangeId, actorUserId),
+      );
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+  }
+
+  private async resolveOfficialRate(input: BudgetExchangeInput): Promise<number | null> {
+    const rates = await this.currencyRatesService.getOnOrBefore(
+      new Date(`${input.occurredOn}T00:00:00.000Z`),
+    );
+
+    return rateToBase(input.fromCurrency, input.toCurrency, rates);
+  }
+
+  private async mapMonthWithRates(month: BudgetMonthRecord): Promise<BudgetMonth> {
+    return mapMonth(month, await this.currencyRatesService.getForMonth(month.year, month.month));
   }
 
   private toHttpError(error: unknown) {
@@ -311,6 +411,12 @@ export class BudgetsService {
     if (error.message === 'BUDGET_MONTH_ROW_NOT_FOUND') {
       return new NotFoundException('Budget month row was not found');
     }
+    if (error.message === 'BUDGET_EXCHANGE_NOT_FOUND') {
+      return new NotFoundException('Currency exchange was not found');
+    }
+    if (error.message === 'BUDGET_EXCHANGE_DATE_OUTSIDE_MONTH') {
+      return new ConflictException('A currency exchange must be dated inside its budget month');
+    }
     if (error.message === 'BUDGET_MONTH_ROW_COUNT_MIN') {
       return new ConflictException('Budget month must have at least one row');
     }
@@ -322,17 +428,50 @@ export class BudgetsService {
   }
 }
 
-function mapMonth(month: BudgetMonthRecord): BudgetMonth {
-  const entries = month.entries.map(mapEntry);
+function mapMonth(month: BudgetMonthRecord, rates: ExchangeRates | null): BudgetMonth {
+  const exchanges = month.exchanges.map(mapExchange);
 
   return {
     id: month.id,
     year: month.year,
     month: month.month,
     rowCount: month.rowCount,
-    entries,
-    totals: calculateTotals(month),
+    entries: month.entries.map(mapEntry),
+    exchanges,
+    totals: calculateBudgetTotals(month.entries.map(toAmountRow), exchangeMovement(exchanges)),
+    rates,
   };
+}
+
+function mapExchange(exchange: BudgetMonthRecord['exchanges'][number]): BudgetExchange {
+  return {
+    id: exchange.id,
+    monthId: exchange.monthId,
+    occurredOn: exchange.occurredOn.toISOString().slice(0, 10),
+    fromCurrency: exchange.fromCurrency,
+    fromAmount: decimalToNumber(exchange.fromAmount),
+    toCurrency: exchange.toCurrency,
+    toAmount: decimalToNumber(exchange.toAmount),
+    dealRate: decimalToNumber(exchange.dealRate),
+    officialRate: exchange.officialRate === null ? null : decimalToNumber(exchange.officialRate),
+    note: exchange.note,
+  };
+}
+
+function exchangeMovementFromSums(sums: {
+  outgoing: Array<{ currency: BudgetCurrency; amount: DecimalLike | null }>;
+  incoming: Array<{ currency: BudgetCurrency; amount: DecimalLike | null }>;
+}): BudgetCurrencyTotals {
+  const movement = zeroCurrencyTotals();
+
+  for (const row of sums.outgoing) {
+    if (row.amount) movement[budgetAmountField(row.currency)] -= decimalToNumber(row.amount);
+  }
+  for (const row of sums.incoming) {
+    if (row.amount) movement[budgetAmountField(row.currency)] += decimalToNumber(row.amount);
+  }
+
+  return movement;
 }
 
 function mapEntry(entry: BudgetMonthRecord['entries'][number]): BudgetEntry {
@@ -347,76 +486,32 @@ function mapEntry(entry: BudgetMonthRecord['entries'][number]): BudgetEntry {
   };
 }
 
-function calculateTotals(month: BudgetMonthRecord): BudgetTotals {
-  const totals = zeroTotals();
-
-  for (const entry of month.entries) {
-    const bucket = entry.category.type === 'INCOME' ? totals.income : totals.expense;
-    bucket.amountUah += decimalToNumber(entry.amountUah);
-    bucket.amountUsd += decimalToNumber(entry.amountUsd);
-    bucket.amountEur += decimalToNumber(entry.amountEur);
-  }
-
-  totals.balance = subtractCurrencyTotals(totals.income, totals.expense);
-
-  return roundTotals(totals);
+function toAmountRow(entry: BudgetMonthRecord['entries'][number]): BudgetAmountRow {
+  return {
+    type: entry.category.type,
+    amounts: {
+      amountUah: decimalToNumber(entry.amountUah),
+      amountUsd: decimalToNumber(entry.amountUsd),
+      amountEur: decimalToNumber(entry.amountEur),
+    },
+  };
 }
 
 function buildGroupSummaries(months: BudgetMonthRecord[]): BudgetGroupSummary[] {
-  const byGroup = new Map<BudgetGroup, BudgetTotals>(
-    BUDGET_GROUPS.map((group) => [group, zeroTotals()]),
+  const rowsByGroup = new Map<BudgetGroup, BudgetAmountRow[]>(
+    BUDGET_GROUPS.map((group) => [group, []]),
   );
 
   for (const month of months) {
     for (const entry of month.entries) {
-      const groupTotals = byGroup.get(entry.category.group) ?? zeroTotals();
-      const bucket = entry.category.type === 'INCOME' ? groupTotals.income : groupTotals.expense;
-      bucket.amountUah += decimalToNumber(entry.amountUah);
-      bucket.amountUsd += decimalToNumber(entry.amountUsd);
-      bucket.amountEur += decimalToNumber(entry.amountEur);
-      groupTotals.balance = subtractCurrencyTotals(groupTotals.income, groupTotals.expense);
-      byGroup.set(entry.category.group, groupTotals);
+      rowsByGroup.get(entry.category.group)?.push(toAmountRow(entry));
     }
   }
 
-  return [...byGroup.entries()].map(([group, totals]) => ({ group, totals: roundTotals(totals) }));
-}
-
-function sumTotals(items: BudgetTotals[]): BudgetTotals {
-  const totals = zeroTotals();
-
-  for (const item of items) {
-    addCurrencyTotals(totals.income, item.income);
-    addCurrencyTotals(totals.expense, item.expense);
-  }
-
-  totals.balance = subtractCurrencyTotals(totals.income, totals.expense);
-
-  return roundTotals(totals);
-}
-
-function cloneCurrencyTotals(totals: BudgetCurrencyTotals): BudgetCurrencyTotals {
-  return { ...totals };
-}
-
-function addCurrencyTotalsTo(
-  target: BudgetCurrencyTotals,
-  source: BudgetCurrencyTotals,
-): BudgetCurrencyTotals {
-  target.amountUah += source.amountUah;
-  target.amountUsd += source.amountUsd;
-  target.amountEur += source.amountEur;
-  return target;
-}
-
-function subtractCurrencyTotalsFrom(
-  target: BudgetCurrencyTotals,
-  source: BudgetCurrencyTotals,
-): BudgetCurrencyTotals {
-  target.amountUah -= source.amountUah;
-  target.amountUsd -= source.amountUsd;
-  target.amountEur -= source.amountEur;
-  return target;
+  return [...rowsByGroup.entries()].map(([group, rows]) => ({
+    group,
+    totals: calculateBudgetTotals(rows),
+  }));
 }
 
 function sumToCurrencyTotals(sum: {
@@ -429,43 +524,6 @@ function sumToCurrencyTotals(sum: {
     amountUsd: sum.amountUsd ? decimalToNumber(sum.amountUsd) : 0,
     amountEur: sum.amountEur ? decimalToNumber(sum.amountEur) : 0,
   };
-}
-
-function addCurrencyTotals(target: BudgetCurrencyTotals, source: BudgetCurrencyTotals) {
-  target.amountUah += source.amountUah;
-  target.amountUsd += source.amountUsd;
-  target.amountEur += source.amountEur;
-}
-
-function subtractCurrencyTotals(
-  income: BudgetCurrencyTotals,
-  expense: BudgetCurrencyTotals,
-): BudgetCurrencyTotals {
-  return {
-    amountUah: income.amountUah - expense.amountUah,
-    amountUsd: income.amountUsd - expense.amountUsd,
-    amountEur: income.amountEur - expense.amountEur,
-  };
-}
-
-function roundTotals(totals: BudgetTotals): BudgetTotals {
-  return {
-    income: roundCurrencyTotals(totals.income),
-    expense: roundCurrencyTotals(totals.expense),
-    balance: roundCurrencyTotals(totals.balance),
-  };
-}
-
-function roundCurrencyTotals(totals: BudgetCurrencyTotals): BudgetCurrencyTotals {
-  return {
-    amountUah: roundMoney(totals.amountUah),
-    amountUsd: roundMoney(totals.amountUsd),
-    amountEur: roundMoney(totals.amountEur),
-  };
-}
-
-function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
 }
 
 type DecimalLike = { toString(): string };

@@ -1,14 +1,18 @@
 import {
+  budgetExchangeSchema,
   createBudgetCategorySchema,
   createBudgetMonthSchema,
   listBudgetQuerySchema,
   updateBudgetCategorySchema,
   updateBudgetEntrySchema,
   updateBudgetEntryNoteSchema,
+  updateBudgetBaseCurrencySchema,
   updateBudgetOpeningBalanceSchema,
 } from '@churchflow/shared';
 import type {
   BudgetCategoryType,
+  BudgetCurrency,
+  BudgetExchangeInput,
   BudgetGroup,
   CreateBudgetCategoryInput,
   CreateBudgetMonthInput,
@@ -16,6 +20,7 @@ import type {
   UpdateBudgetCategoryInput,
   UpdateBudgetEntryInput,
   UpdateBudgetEntryNoteInput,
+  UpdateBudgetBaseCurrencyInput,
   UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 
@@ -60,6 +65,23 @@ export class UpdateBudgetEntryNoteDto implements UpdateBudgetEntryNoteInput {
   static readonly schema = updateBudgetEntryNoteSchema;
 
   note!: string | null;
+}
+
+export class BudgetExchangeDto implements BudgetExchangeInput {
+  static readonly schema = budgetExchangeSchema;
+
+  occurredOn!: string;
+  fromCurrency!: BudgetCurrency;
+  fromAmount!: number;
+  toCurrency!: BudgetCurrency;
+  toAmount!: number;
+  note!: string | null;
+}
+
+export class UpdateBudgetBaseCurrencyDto implements UpdateBudgetBaseCurrencyInput {
+  static readonly schema = updateBudgetBaseCurrencySchema;
+
+  baseCurrency!: BudgetCurrency;
 }
 
 export class UpdateBudgetOpeningBalanceDto implements UpdateBudgetOpeningBalanceInput {
