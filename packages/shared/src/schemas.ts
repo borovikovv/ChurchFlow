@@ -228,6 +228,7 @@ export const budgetEntryFieldSchema = z.enum(BUDGET_ENTRY_FIELDS);
 export const budgetCurrencySchema = z.enum(BUDGET_CURRENCIES);
 export const budgetAmountFieldSchema = z.enum(BUDGET_AMOUNT_FIELDS);
 const budgetAmountSchema = z.coerce.number().min(0).max(999_999_999.99);
+const budgetExchangeAmountSchema = z.coerce.number().gt(0).max(999_999_999.99);
 
 export const listBudgetQuerySchema = z.object({
   year: z.coerce.number().int().min(2000).max(2100),
@@ -267,6 +268,21 @@ export const updateBudgetEntrySchema = z
 export const updateBudgetEntryNoteSchema = z.object({
   note: z.string().trim().max(500).nullable(),
 });
+
+export const budgetExchangeSchema = z
+  .object({
+    occurredOn: z.string().date(),
+    fromCurrency: budgetCurrencySchema,
+    fromAmount: budgetExchangeAmountSchema,
+    toCurrency: budgetCurrencySchema,
+    toAmount: budgetExchangeAmountSchema,
+    note: z.string().trim().max(500).nullable().default(null),
+  })
+  // Moving money into the currency it left is not an exchange; storing it would only distort the
+  // per-currency balances.
+  .refine((value) => value.fromCurrency !== value.toCurrency, {
+    message: 'An exchange must use two different currencies',
+  });
 
 export const updateBudgetBaseCurrencySchema = z.object({
   baseCurrency: budgetCurrencySchema,

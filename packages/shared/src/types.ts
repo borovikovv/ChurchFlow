@@ -61,6 +61,7 @@ import type {
   updateBudgetCategorySchema,
   updateBudgetEntrySchema,
   updateBudgetEntryNoteSchema,
+  budgetExchangeSchema,
   updateBudgetBaseCurrencySchema,
   updateBudgetOpeningBalanceSchema,
   notificationTypeSchema,
@@ -153,6 +154,7 @@ export type CreateBudgetCategoryInput = z.infer<typeof createBudgetCategorySchem
 export type UpdateBudgetCategoryInput = z.infer<typeof updateBudgetCategorySchema>;
 export type UpdateBudgetEntryInput = z.infer<typeof updateBudgetEntrySchema>;
 export type UpdateBudgetEntryNoteInput = z.infer<typeof updateBudgetEntryNoteSchema>;
+export type BudgetExchangeInput = z.infer<typeof budgetExchangeSchema>;
 export type UpdateBudgetBaseCurrencyInput = z.infer<typeof updateBudgetBaseCurrencySchema>;
 export type UpdateBudgetOpeningBalanceInput = z.infer<typeof updateBudgetOpeningBalanceSchema>;
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
@@ -288,6 +290,9 @@ export interface BudgetCurrencyTotals {
 export interface BudgetTotals {
   income: BudgetCurrencyTotals;
   expense: BudgetCurrencyTotals;
+  // Signed net effect of currency exchanges: what they took out of one currency and put into
+  // another. Kept out of income and expense so a transfer never inflates turnover.
+  exchange: BudgetCurrencyTotals;
   balance: BudgetCurrencyTotals;
 }
 
@@ -314,12 +319,27 @@ export interface BudgetEntry {
   notes: BudgetEntryNote[];
 }
 
+export interface BudgetExchange {
+  id: string;
+  monthId: string;
+  occurredOn: string;
+  fromCurrency: BudgetCurrency;
+  fromAmount: number;
+  toCurrency: BudgetCurrency;
+  toAmount: number;
+  // Units of the target currency bought with one unit of the source currency.
+  dealRate: number;
+  officialRate: number | null;
+  note: string | null;
+}
+
 export interface BudgetMonth {
   id: string;
   year: number;
   month: number;
   rowCount: number;
   entries: BudgetEntry[];
+  exchanges: BudgetExchange[];
   totals: BudgetTotals;
   // Rate on the last day of the month, or the latest one while the month is still open.
   rates: ExchangeRates | null;

@@ -1,4 +1,5 @@
 import {
+  budgetExchangeSchema,
   createBudgetCategorySchema,
   createBudgetMonthSchema,
   listBudgetQuerySchema,
@@ -11,6 +12,7 @@ import {
 import type {
   BudgetCategoryType,
   BudgetCurrency,
+  BudgetExchangeInput,
   BudgetGroup,
   CreateBudgetCategoryInput,
   CreateBudgetMonthInput,
@@ -62,6 +64,17 @@ export class UpdateBudgetEntryDto implements UpdateBudgetEntryInput {
 export class UpdateBudgetEntryNoteDto implements UpdateBudgetEntryNoteInput {
   static readonly schema = updateBudgetEntryNoteSchema;
 
+  note!: string | null;
+}
+
+export class BudgetExchangeDto implements BudgetExchangeInput {
+  static readonly schema = budgetExchangeSchema;
+
+  occurredOn!: string;
+  fromCurrency!: BudgetCurrency;
+  fromAmount!: number;
+  toCurrency!: BudgetCurrency;
+  toAmount!: number;
   note!: string | null;
 }
 

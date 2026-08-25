@@ -4,6 +4,7 @@ import {
   addCurrencyTotals,
   budgetAmountField,
   calculateBudgetTotals,
+  exchangeMovement,
   roundCurrencyTotals,
   roundMoney,
   toBaseEquivalent,
@@ -178,7 +179,13 @@ export function columnTotal(month: BudgetMonth, column: BudgetSpreadsheetColumn)
 }
 
 export function recalculateMonth(month: BudgetMonth, categories: BudgetCategory[]): BudgetMonth {
-  return { ...month, totals: calculateBudgetTotals(amountRows(month.entries, categories)) };
+  return {
+    ...month,
+    totals: calculateBudgetTotals(
+      amountRows(month.entries, categories),
+      exchangeMovement(month.exchanges),
+    ),
+  };
 }
 
 // Every month is converted at its own rate before the year is added up, so a December total is

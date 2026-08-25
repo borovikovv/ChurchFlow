@@ -8,8 +8,11 @@ import type {
   BudgetAmountRow,
   BudgetCategory,
   BudgetOpeningBalance,
+  BudgetCurrency,
   BudgetCurrencyTotals,
   BudgetEntry,
+  BudgetExchange,
+  BudgetExchangeInput,
   BudgetGroup,
   BudgetGroupSummary,
   BudgetMonth,
@@ -26,8 +29,11 @@ import type {
 import {
   BUDGET_GROUPS,
   addCurrencyTotals,
+  budgetAmountField,
   budgetEntryFieldSchema,
   calculateBudgetTotals,
+  exchangeMovement,
+  rateToBase,
   roundCurrencyTotals,
   subtractCurrencyTotals,
   sumBudgetTotals,
@@ -131,15 +137,18 @@ export class BudgetsService {
         }
       : zeroCurrencyTotals();
 
-    const movement = await this.budgetsRepository.sumEntriesBetweenYears(
-      organizationId,
-      record?.sinceYear ?? EARLIEST_BUDGET_YEAR,
-      year,
-    );
+    const sinceYear = record?.sinceYear ?? EARLIEST_BUDGET_YEAR;
+    const [movement, exchanges] = await Promise.all([
+      this.budgetsRepository.sumEntriesBetweenYears(organizationId, sinceYear, year),
+      this.budgetsRepository.sumExchangesBetweenYears(organizationId, sinceYear, year),
+    ]);
 
-    const opening = subtractCurrencyTotals(
-      addCurrencyTotals(seed, sumToCurrencyTotals(movement.income)),
-      sumToCurrencyTotals(movement.expense),
+    const opening = addCurrencyTotals(
+      subtractCurrencyTotals(
+        addCurrencyTotals(seed, sumToCurrencyTotals(movement.income)),
+        sumToCurrencyTotals(movement.expense),
+      ),
+      exchangeMovementFromSums(exchanges),
     );
 
     return {
@@ -316,6 +325,76 @@ export class BudgetsService {
     }
   }
 
+  async createExchange(
+    organizationId: string,
+    monthId: string,
+    input: BudgetExchangeInput,
+    actorUserId: string,
+  ): Promise<BudgetMonth> {
+    try {
+      const officialRate = await this.resolveOfficialRate(input);
+
+      return await this.mapMonthWithRates(
+        await this.budgetsRepository.createExchange(
+          organizationId,
+          monthId,
+          input,
+          officialRate,
+          actorUserId,
+        ),
+      );
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+  }
+
+  async updateExchange(
+    organizationId: string,
+    exchangeId: string,
+    input: BudgetExchangeInput,
+    actorUserId: string,
+  ): Promise<BudgetMonth> {
+    try {
+      const officialRate = await this.resolveOfficialRate(input);
+
+      return await this.mapMonthWithRates(
+        await this.budgetsRepository.updateExchange(
+          organizationId,
+          exchangeId,
+          input,
+          officialRate,
+          actorUserId,
+        ),
+      );
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+  }
+
+  async deleteExchange(
+    organizationId: string,
+    exchangeId: string,
+    actorUserId: string,
+  ): Promise<BudgetMonth> {
+    try {
+      return await this.mapMonthWithRates(
+        await this.budgetsRepository.deleteExchange(organizationId, exchangeId, actorUserId),
+      );
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+  }
+
+  // Snapshotted when the exchange is written so a later rate correction cannot rewrite how good
+  // the deal looked on the day it was made.
+  private async resolveOfficialRate(input: BudgetExchangeInput): Promise<number | null> {
+    const rates = await this.currencyRatesService.getOnOrBefore(
+      new Date(`${input.occurredOn}T00:00:00.000Z`),
+    );
+
+    return rateToBase(input.fromCurrency, input.toCurrency, rates);
+  }
+
   private async mapMonthWithRates(month: BudgetMonthRecord): Promise<BudgetMonth> {
     return mapMonth(month, await this.currencyRatesService.getForMonth(month.year, month.month));
   }
@@ -334,6 +413,12 @@ export class BudgetsService {
     if (error.message === 'BUDGET_MONTH_ROW_NOT_FOUND') {
       return new NotFoundException('Budget month row was not found');
     }
+    if (error.message === 'BUDGET_EXCHANGE_NOT_FOUND') {
+      return new NotFoundException('Currency exchange was not found');
+    }
+    if (error.message === 'BUDGET_EXCHANGE_DATE_OUTSIDE_MONTH') {
+      return new ConflictException('A currency exchange must be dated inside its budget month');
+    }
     if (error.message === 'BUDGET_MONTH_ROW_COUNT_MIN') {
       return new ConflictException('Budget month must have at least one row');
     }
@@ -346,15 +431,49 @@ export class BudgetsService {
 }
 
 function mapMonth(month: BudgetMonthRecord, rates: ExchangeRates | null): BudgetMonth {
+  const exchanges = month.exchanges.map(mapExchange);
+
   return {
     id: month.id,
     year: month.year,
     month: month.month,
     rowCount: month.rowCount,
     entries: month.entries.map(mapEntry),
-    totals: calculateBudgetTotals(month.entries.map(toAmountRow)),
+    exchanges,
+    totals: calculateBudgetTotals(month.entries.map(toAmountRow), exchangeMovement(exchanges)),
     rates,
   };
+}
+
+function mapExchange(exchange: BudgetMonthRecord['exchanges'][number]): BudgetExchange {
+  return {
+    id: exchange.id,
+    monthId: exchange.monthId,
+    occurredOn: exchange.occurredOn.toISOString().slice(0, 10),
+    fromCurrency: exchange.fromCurrency,
+    fromAmount: decimalToNumber(exchange.fromAmount),
+    toCurrency: exchange.toCurrency,
+    toAmount: decimalToNumber(exchange.toAmount),
+    dealRate: decimalToNumber(exchange.dealRate),
+    officialRate: exchange.officialRate === null ? null : decimalToNumber(exchange.officialRate),
+    note: exchange.note,
+  };
+}
+
+function exchangeMovementFromSums(sums: {
+  outgoing: Array<{ currency: BudgetCurrency; amount: DecimalLike | null }>;
+  incoming: Array<{ currency: BudgetCurrency; amount: DecimalLike | null }>;
+}): BudgetCurrencyTotals {
+  const movement = zeroCurrencyTotals();
+
+  for (const row of sums.outgoing) {
+    if (row.amount) movement[budgetAmountField(row.currency)] -= decimalToNumber(row.amount);
+  }
+  for (const row of sums.incoming) {
+    if (row.amount) movement[budgetAmountField(row.currency)] += decimalToNumber(row.amount);
+  }
+
+  return movement;
 }
 
 function mapEntry(entry: BudgetMonthRecord['entries'][number]): BudgetEntry {

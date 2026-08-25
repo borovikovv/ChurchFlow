@@ -5,6 +5,7 @@ import {
   DEFAULT_BUDGET_MONTH_ROW_COUNT,
   DEFAULT_BUDGET_CATEGORIES,
   type BudgetEntryField,
+  type BudgetExchangeInput,
   type CreateBudgetCategoryInput,
   type CreateBudgetMonthInput,
   type UpdateBudgetEntryNoteInput,
@@ -24,6 +25,9 @@ const budgetMonthInclude = Prisma.validator<Prisma.BudgetMonthInclude>()({
   entries: {
     include: { category: true, notes: true },
     orderBy: [{ rowIndex: 'asc' as const }, { category: { order: 'asc' as const } }],
+  },
+  exchanges: {
+    orderBy: [{ occurredOn: 'asc' as const }, { createdAt: 'asc' as const }],
   },
 });
 
@@ -133,6 +137,127 @@ export class BudgetsRepository {
     ]);
 
     return { income: income._sum, expense: expense._sum };
+  }
+
+  async sumExchangesBetweenYears(organizationId: string, fromYear: number, toYear: number) {
+    if (toYear <= fromYear) {
+      return { outgoing: [], incoming: [] };
+    }
+
+    const where = { organizationId, month: { year: { gte: fromYear, lt: toYear } } };
+    const [outgoing, incoming] = await Promise.all([
+      this.prisma.budgetExchange.groupBy({
+        by: ['fromCurrency'],
+        _sum: { fromAmount: true },
+        where,
+      }),
+      this.prisma.budgetExchange.groupBy({
+        by: ['toCurrency'],
+        _sum: { toAmount: true },
+        where,
+      }),
+    ]);
+
+    return {
+      outgoing: outgoing.map((row) => ({
+        currency: row.fromCurrency,
+        amount: row._sum.fromAmount,
+      })),
+      incoming: incoming.map((row) => ({ currency: row.toCurrency, amount: row._sum.toAmount })),
+    };
+  }
+
+  async createExchange(
+    organizationId: string,
+    monthId: string,
+    input: BudgetExchangeInput,
+    officialRate: number | null,
+    actorUserId: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertManagingActor(tx, organizationId, actorUserId);
+      const month = await this.assertExchangeMonth(tx, organizationId, monthId, input.occurredOn);
+
+      const exchange = await tx.budgetExchange.create({
+        data: {
+          organizationId,
+          monthId,
+          ...budgetExchangeData(input, officialRate),
+        },
+      });
+
+      await this.recordBudgetAudit(tx, {
+        organizationId,
+        actorUserId,
+        action: 'CREATE_BUDGET_EXCHANGE',
+        entityId: exchange.id,
+        metadata: budgetExchangeAuditMetadata(month, input),
+      });
+
+      return this.findMonth(tx, monthId);
+    });
+  }
+
+  async updateExchange(
+    organizationId: string,
+    exchangeId: string,
+    input: BudgetExchangeInput,
+    officialRate: number | null,
+    actorUserId: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertManagingActor(tx, organizationId, actorUserId);
+      const existing = await tx.budgetExchange.findFirst({
+        where: { id: exchangeId, organizationId },
+        select: { id: true, monthId: true },
+      });
+      if (!existing) throw new Error('BUDGET_EXCHANGE_NOT_FOUND');
+
+      const month = await this.assertExchangeMonth(
+        tx,
+        organizationId,
+        existing.monthId,
+        input.occurredOn,
+      );
+
+      await tx.budgetExchange.update({
+        where: { id: exchangeId },
+        data: budgetExchangeData(input, officialRate),
+      });
+
+      await this.recordBudgetAudit(tx, {
+        organizationId,
+        actorUserId,
+        action: 'UPDATE_BUDGET_EXCHANGE',
+        entityId: exchangeId,
+        metadata: budgetExchangeAuditMetadata(month, input),
+      });
+
+      return this.findMonth(tx, existing.monthId);
+    });
+  }
+
+  async deleteExchange(organizationId: string, exchangeId: string, actorUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertManagingActor(tx, organizationId, actorUserId);
+      const existing = await tx.budgetExchange.findFirst({
+        where: { id: exchangeId, organizationId },
+        select: { id: true, monthId: true, month: { select: { year: true, month: true } } },
+      });
+      if (!existing) throw new Error('BUDGET_EXCHANGE_NOT_FOUND');
+
+      await tx.budgetExchange.delete({ where: { id: exchangeId } });
+
+      await this.recordBudgetAudit(tx, {
+        organizationId,
+        actorUserId,
+        action: 'DELETE_BUDGET_EXCHANGE',
+        entityId: exchangeId,
+        metadata: { year: existing.month.year, month: existing.month.month },
+      });
+
+      return this.findMonth(tx, existing.monthId);
+    });
   }
 
   async upsertOpeningBalance(
@@ -609,6 +734,27 @@ export class BudgetsRepository {
     });
   }
 
+  // An exchange belongs to the month it is filed under, so its date has to fall inside it.
+  private async assertExchangeMonth(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    monthId: string,
+    occurredOn: string,
+  ) {
+    const month = await tx.budgetMonth.findFirst({
+      where: { id: monthId, organizationId },
+      select: { id: true, year: true, month: true },
+    });
+    if (!month) throw new Error('BUDGET_MONTH_NOT_FOUND');
+
+    const [year, monthNumber] = occurredOn.split('-').map(Number);
+    if (year !== month.year || monthNumber !== month.month) {
+      throw new Error('BUDGET_EXCHANGE_DATE_OUTSIDE_MONTH');
+    }
+
+    return month;
+  }
+
   private async assertMonthAndCategory(
     tx: Prisma.TransactionClient,
     organizationId: string,
@@ -715,6 +861,32 @@ type BudgetEntryPatchData = {
   amountUsd?: number;
   amountEur?: number;
 };
+
+function budgetExchangeData(input: BudgetExchangeInput, officialRate: number | null) {
+  return {
+    occurredOn: new Date(`${input.occurredOn}T00:00:00.000Z`),
+    fromCurrency: input.fromCurrency,
+    fromAmount: input.fromAmount,
+    toCurrency: input.toCurrency,
+    toAmount: input.toAmount,
+    dealRate: input.toAmount / input.fromAmount,
+    officialRate,
+    note: input.note,
+  };
+}
+
+function budgetExchangeAuditMetadata(
+  month: { year: number; month: number },
+  input: BudgetExchangeInput,
+): Prisma.InputJsonObject {
+  return {
+    year: month.year,
+    month: month.month,
+    occurredOn: input.occurredOn,
+    from: `${input.fromAmount.toFixed(2)} ${input.fromCurrency}`,
+    to: `${input.toAmount.toFixed(2)} ${input.toCurrency}`,
+  };
+}
 
 function budgetEntryData(input: UpdateBudgetEntryInput): BudgetEntryPatchData {
   const data: BudgetEntryPatchData = {};
