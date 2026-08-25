@@ -49,6 +49,7 @@ export type BudgetSpreadsheetColumn = {
   category: BudgetCategory;
   field: BudgetAmountField;
   noteField: BudgetEntryField;
+  hint?: string;
 };
 
 export function formatMoney(value: number, currency: BudgetCurrency, locale: string): string {
@@ -124,7 +125,11 @@ export function findEntry(month: BudgetMonth, categoryId: string, rowIndex: numb
 
 export function spreadsheetColumns(
   categories: BudgetCategory[],
-  labels: { columns: BudgetColumnLabels; groups: BudgetGroupLabels },
+  labels: {
+    columns: BudgetColumnLabels;
+    groups: BudgetGroupLabels;
+    deprecatedExchangeHint: string;
+  },
 ): BudgetSpreadsheetColumn[] {
   const incomeCategories = categories
     .filter((category) => category.type === 'INCOME')
@@ -145,17 +150,18 @@ export function spreadsheetColumns(
     columnForIncome(incomeCategories, 'EUR income', labels.columns.eurIncome, 'amountEur'),
     ...BUDGET_GROUPS.filter((group) => group !== 'INCOME').flatMap((group) => {
       const category = expenseCategories.find((item) => item.group === group);
-      return category
-        ? [
-            {
-              id: `expense-${group}`,
-              label: labels.groups[group],
-              category,
-              field: 'amountUah' as const,
-              noteField: BUDGET_ENTRY_FIELD.amountUah,
-            },
-          ]
-        : [];
+      if (!category) return [];
+
+      return [
+        {
+          id: `expense-${group}`,
+          label: labels.groups[group],
+          category,
+          field: 'amountUah' as const,
+          noteField: BUDGET_ENTRY_FIELD.amountUah,
+          ...(group === 'CURRENCY_EXCHANGE' ? { hint: labels.deprecatedExchangeHint } : {}),
+        },
+      ];
     }),
   ].filter((column): column is BudgetSpreadsheetColumn => Boolean(column));
 }

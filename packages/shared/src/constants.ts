@@ -152,6 +152,15 @@ export const DEFAULT_BUDGET_MONTH_ROW_COUNT = 10;
 
 export const BUDGET_MONTH_ROW_COUNT = DEFAULT_BUDGET_MONTH_ROW_COUNT;
 
+// Currency exchanges used to be kept here as a pair of income and expense categories. They are
+// their own records now, so new organizations no longer get the categories; existing ones keep
+// theirs until their history is migrated.
+export const DEPRECATED_BUDGET_EXCHANGE_CATEGORIES = [
+  'UAH from exchange',
+  'USD spent',
+  'EUR spent',
+] as const;
+
 export const DEFAULT_BUDGET_CATEGORIES = [
   {
     group: BUDGET_GROUP.income,
@@ -165,21 +174,6 @@ export const DEFAULT_BUDGET_CATEGORIES = [
   },
   { group: BUDGET_GROUP.income, type: BUDGET_CATEGORY_TYPE.income, name: 'USD income' },
   { group: BUDGET_GROUP.income, type: BUDGET_CATEGORY_TYPE.income, name: 'EUR income' },
-  {
-    group: BUDGET_GROUP.currencyExchange,
-    type: BUDGET_CATEGORY_TYPE.income,
-    name: 'UAH from exchange',
-  },
-  {
-    group: BUDGET_GROUP.currencyExchange,
-    type: BUDGET_CATEGORY_TYPE.expense,
-    name: 'USD spent',
-  },
-  {
-    group: BUDGET_GROUP.currencyExchange,
-    type: BUDGET_CATEGORY_TYPE.expense,
-    name: 'EUR spent',
-  },
   {
     group: BUDGET_GROUP.facility,
     type: BUDGET_CATEGORY_TYPE.expense,

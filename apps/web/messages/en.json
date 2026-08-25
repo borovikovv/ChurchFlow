@@ -532,6 +532,7 @@
     "exchangePublishedRate": "NBU rate: {rate}",
     "exchangeSameCurrency": "Choose two different currencies.",
     "invalidExchange": "Invalid currency exchange.",
+    "deprecatedExchangeColumn": "Replaced by the currency exchange section below. Kept only until the recorded history is migrated.",
     "currencyUah": "Hryvnia",
     "currencyUsd": "US dollars",
     "currencyEur": "Euro",
