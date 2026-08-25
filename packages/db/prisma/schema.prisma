@@ -199,6 +199,12 @@ enum BudgetEntryField {
   AMOUNT_EUR
 }
 
+enum BudgetCurrency {
+  UAH
+  USD
+  EUR
+}
+
 enum MemberMinistry {
   PREACHING
   WORSHIP
@@ -312,16 +318,17 @@ model Session {
 }
 
 model Organization {
-  id          String             @id @default(uuid()) @db.Uuid
-  name        String
-  slug        String             @unique
-  description String?
-  status      OrganizationStatus @default(ACTIVE)
-  archivedAt  DateTime?          @map("archived_at")
-  suspendedAt DateTime?          @map("suspended_at")
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
-  deletedAt   DateTime?          @map("deleted_at")
+  id           String             @id @default(uuid()) @db.Uuid
+  name         String
+  slug         String             @unique
+  description  String?
+  status       OrganizationStatus @default(ACTIVE)
+  baseCurrency BudgetCurrency     @default(UAH) @map("base_currency")
+  archivedAt   DateTime?          @map("archived_at")
+  suspendedAt  DateTime?          @map("suspended_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  deletedAt    DateTime?          @map("deleted_at")
 
   members                 OrganizationMember[]
   invitations             OrganizationInvitation[]
@@ -342,6 +349,7 @@ model Organization {
   notificationPreferences NotificationPreference[]
   budgetCategories        BudgetCategory[]
   budgetMonths            BudgetMonth[]
+  budgetExchanges         BudgetExchange[]
   budgetOpeningBalances   BudgetOpeningBalance[]
   prayerRequests          PrayerRequest[]
 
@@ -937,8 +945,9 @@ model BudgetMonth {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   entries      BudgetEntry[]
+  exchanges    BudgetExchange[]
 
   @@unique([organizationId, year, month])
   @@index([organizationId, year])
@@ -965,6 +974,31 @@ model BudgetEntry {
   @@index([categoryId])
   @@index([monthId, rowIndex])
   @@map("budget_entries")
+}
+
+model BudgetExchange {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  monthId        String   @map("month_id") @db.Uuid
+  occurredOn     DateTime @map("occurred_on") @db.Date
+
+  fromCurrency BudgetCurrency @map("from_currency")
+  fromAmount   Decimal        @map("from_amount") @db.Decimal(12, 2)
+  toCurrency   BudgetCurrency @map("to_currency")
+  toAmount     Decimal        @map("to_amount") @db.Decimal(12, 2)
+  dealRate     Decimal        @map("deal_rate") @db.Decimal(18, 8)
+  officialRate Decimal?       @map("official_rate") @db.Decimal(18, 8)
+  note         String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  month        BudgetMonth  @relation(fields: [monthId], references: [id], onDelete: Cascade)
+
+  @@index([monthId])
+  @@index([organizationId, occurredOn])
+  @@map("budget_exchanges")
 }
 
 model BudgetEntryNote {

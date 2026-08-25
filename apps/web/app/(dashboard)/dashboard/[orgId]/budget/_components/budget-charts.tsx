@@ -13,14 +13,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type {
-  BudgetCurrencyTotals,
-  BudgetGroup,
-  BudgetMonth,
-  BudgetTotals,
-  ExchangeRates,
-} from '@churchflow/shared';
-import { formatMoney, toUahEquivalent, type BudgetGroupLabels } from './budget-table-helpers';
+import type { BudgetCurrency, BudgetGroup, BudgetMonth, ExchangeRates } from '@churchflow/shared';
+import {
+  formatMoney,
+  monthAmountInBase,
+  type BudgetGroupBaseSummary,
+  type BudgetGroupLabels,
+} from './budget-table-helpers';
 
 type MonthlyChartItem = {
   balance: number;
@@ -39,6 +38,7 @@ type GroupChartItem = {
 };
 
 export function BudgetCharts({
+  baseCurrency,
   chartRef,
   displayMonths,
   exportMode = false,
@@ -50,12 +50,13 @@ export function BudgetCharts({
   rates,
   year,
 }: {
+  baseCurrency: BudgetCurrency;
   chartRef: RefObject<HTMLDivElement | null> | null;
   displayMonths?: number[] | undefined;
   exportMode?: boolean;
   groupLabels: BudgetGroupLabels;
   months: BudgetMonth[];
-  groupSummaries: Array<{ group: BudgetGroup; totals: BudgetTotals }>;
+  groupSummaries: BudgetGroupBaseSummary[];
   monthNames: string[];
   periodLabel?: string;
   rates: ExchangeRates | null;
@@ -89,6 +90,7 @@ export function BudgetCharts({
         }
       >
         <MonthlyBudgetBars
+          baseCurrency={baseCurrency}
           displayMonths={displayMonths}
           exportMode={exportMode}
           monthNames={monthNames}
@@ -96,6 +98,7 @@ export function BudgetCharts({
           rates={rates}
         />
         <BudgetGroupBars
+          baseCurrency={baseCurrency}
           exportMode={exportMode}
           groupLabels={groupLabels}
           groupSummaries={groupSummaries}
@@ -107,12 +110,14 @@ export function BudgetCharts({
 }
 
 function MonthlyBudgetBars({
+  baseCurrency,
   displayMonths,
   exportMode,
   monthNames,
   months,
   rates,
 }: {
+  baseCurrency: BudgetCurrency;
   displayMonths?: number[] | undefined;
   exportMode: boolean;
   monthNames: string[];
@@ -121,20 +126,27 @@ function MonthlyBudgetBars({
 }) {
   const t = useTranslations('budget');
   const locale = useLocale();
-  const data = monthlyChartData(months, monthNames, rates, displayMonths);
+  const data = monthlyChartData(months, monthNames, baseCurrency, displayMonths);
 
   return (
     <div className="flex h-full min-w-0 flex-col">
       <h3 className="mb-1 text-base">{t('monthlyIncomeExpenses')}</h3>
       <p className="mb-3 text-xs text-[var(--muted)]">
-        {rates ? t('chartConvertedUah') : t('chartUahOnly')}
+        {rates
+          ? t('chartAmountsConverted', { currency: baseCurrency })
+          : t('chartAmountsIn', { currency: baseCurrency })}
       </p>
       <div className="flex min-h-72 min-w-0 flex-1 items-end rounded-md border border-[var(--line)] bg-[var(--surface-subtle)] px-2 pb-2 pt-4">
         {exportMode ? (
-          <MonthlyBudgetBarChart data={data} locale={locale} width={520} />
+          <MonthlyBudgetBarChart
+            baseCurrency={baseCurrency}
+            data={data}
+            locale={locale}
+            width={520}
+          />
         ) : (
           <ResponsiveContainer height={240} width="100%">
-            <MonthlyBudgetBarChart data={data} locale={locale} />
+            <MonthlyBudgetBarChart baseCurrency={baseCurrency} data={data} locale={locale} />
           </ResponsiveContainer>
         )}
       </div>
@@ -143,10 +155,12 @@ function MonthlyBudgetBars({
 }
 
 function MonthlyBudgetBarChart({
+  baseCurrency,
   data,
   locale,
   width,
 }: {
+  baseCurrency: BudgetCurrency;
   data: MonthlyChartItem[];
   locale: string;
   width?: number | undefined;
@@ -177,7 +191,7 @@ function MonthlyBudgetBarChart({
       <Tooltip
         cursor={{ fill: 'rgba(31,35,40,0.06)' }}
         formatter={(value, name) => [
-          formatMoney(Number(value), 'UAH', locale),
+          formatMoney(Number(value), baseCurrency, locale),
           name === 'income' ? t('income') : t('expenses'),
         ]}
         labelFormatter={(label) => `${label}`}
@@ -203,28 +217,19 @@ function MonthlyBudgetBarChart({
 function monthlyChartData(
   months: BudgetMonth[],
   monthNames: string[],
-  rates: ExchangeRates | null,
+  baseCurrency: BudgetCurrency,
   displayMonths = Array.from({ length: 12 }, (_, index) => index + 1),
 ): MonthlyChartItem[] {
   return displayMonths.map((monthNumber) => {
     const month = months.find((item) => item.month === monthNumber);
     return {
-      balance: monthAmount(month?.totals.balance, rates),
-      expenses: monthAmount(month?.totals.expense, rates),
-      income: monthAmount(month?.totals.income, rates),
+      balance: month ? monthAmountInBase(month.totals.balance, baseCurrency, month) : 0,
+      expenses: month ? monthAmountInBase(month.totals.expense, baseCurrency, month) : 0,
+      income: month ? monthAmountInBase(month.totals.income, baseCurrency, month) : 0,
       label: monthNames[monthNumber - 1]?.slice(0, 3) ?? String(monthNumber),
       month: monthNumber,
     };
   });
-}
-
-function monthAmount(
-  totals: BudgetCurrencyTotals | undefined,
-  rates: ExchangeRates | null,
-): number {
-  if (!totals) return 0;
-
-  return toUahEquivalent(totals, rates) ?? totals.amountUah;
 }
 
 function formatChartAmount(value: number, locale: string): string {
@@ -235,31 +240,35 @@ function formatChartAmount(value: number, locale: string): string {
 }
 
 function BudgetGroupBars({
+  baseCurrency,
   exportMode,
   groupLabels,
   groupSummaries,
   rates,
 }: {
+  baseCurrency: BudgetCurrency;
   exportMode: boolean;
   groupLabels: BudgetGroupLabels;
-  groupSummaries: Array<{ group: BudgetGroup; totals: BudgetTotals }>;
+  groupSummaries: BudgetGroupBaseSummary[];
   rates: ExchangeRates | null;
 }) {
   const t = useTranslations('budget');
-  const data = groupChartData(groupSummaries, groupLabels, rates);
+  const data = groupChartData(groupSummaries, groupLabels);
 
   return (
     <div className="flex h-full min-w-0 flex-col">
       <h3 className="mb-1 text-base">{t('yearTotalsByGroup')}</h3>
       <p className="mb-3 text-xs text-[var(--muted)]">
-        {rates ? t('chartConvertedUah') : t('chartUahOnly')}
+        {rates
+          ? t('chartAmountsConverted', { currency: baseCurrency })
+          : t('chartAmountsIn', { currency: baseCurrency })}
       </p>
       <div className="flex min-h-72 min-w-0 flex-1 items-end rounded-md border border-[var(--line)] bg-[var(--surface-subtle)] px-2 pb-2 pt-4">
         {exportMode ? (
-          <BudgetGroupBarChart data={data} width={520} />
+          <BudgetGroupBarChart baseCurrency={baseCurrency} data={data} width={520} />
         ) : (
           <ResponsiveContainer height={240} width="100%">
-            <BudgetGroupBarChart data={data} />
+            <BudgetGroupBarChart baseCurrency={baseCurrency} data={data} />
           </ResponsiveContainer>
         )}
       </div>
@@ -268,9 +277,11 @@ function BudgetGroupBars({
 }
 
 function BudgetGroupBarChart({
+  baseCurrency,
   data,
   width,
 }: {
+  baseCurrency: BudgetCurrency;
   data: GroupChartItem[];
   width?: number | undefined;
 }) {
@@ -306,7 +317,7 @@ function BudgetGroupBarChart({
       <Tooltip
         cursor={{ fill: 'rgba(31,35,40,0.06)' }}
         formatter={(value, name) => [
-          formatMoney(Number(value), 'UAH', locale),
+          formatMoney(Number(value), baseCurrency, locale),
           name === 'income' ? t('income') : t('expenses'),
         ]}
         labelFormatter={(label) => `${label}`}
@@ -351,24 +362,17 @@ function BudgetGroupBarChart({
 }
 
 function groupChartData(
-  groupSummaries: Array<{ group: BudgetGroup; totals: BudgetTotals }>,
+  groupSummaries: BudgetGroupBaseSummary[],
   groupLabels: BudgetGroupLabels,
-  rates: ExchangeRates | null,
 ): GroupChartItem[] {
   return groupSummaries
-    .map((summary) => {
-      const expenses =
-        toUahEquivalent(summary.totals.expense, rates) ?? summary.totals.expense.amountUah;
-      const income =
-        toUahEquivalent(summary.totals.income, rates) ?? summary.totals.income.amountUah;
-      return {
-        expenses,
-        group: summary.group,
-        income,
-        label: groupLabels[summary.group],
-        total: income + expenses,
-      };
-    })
+    .map((summary) => ({
+      expenses: summary.expense,
+      group: summary.group,
+      income: summary.income,
+      label: groupLabels[summary.group],
+      total: summary.income + summary.expense,
+    }))
     .filter((item) => item.total > 0)
     .sort((a, b) => b.total - a.total);
 }

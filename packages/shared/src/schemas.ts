@@ -9,7 +9,9 @@ import {
   CALENDAR_EVENT_TYPE,
   CALENDAR_EVENT_TYPES,
   CALENDAR_SERVICE_ROLES,
+  BUDGET_AMOUNT_FIELDS,
   BUDGET_CATEGORY_TYPES,
+  BUDGET_CURRENCIES,
   BUDGET_ENTRY_FIELDS,
   BUDGET_GROUPS,
   DEFAULT_MEMBER_PAGE_SIZE,
@@ -223,7 +225,10 @@ export const notificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export const budgetGroupSchema = z.enum(BUDGET_GROUPS);
 export const budgetCategoryTypeSchema = z.enum(BUDGET_CATEGORY_TYPES);
 export const budgetEntryFieldSchema = z.enum(BUDGET_ENTRY_FIELDS);
+export const budgetCurrencySchema = z.enum(BUDGET_CURRENCIES);
+export const budgetAmountFieldSchema = z.enum(BUDGET_AMOUNT_FIELDS);
 const budgetAmountSchema = z.coerce.number().min(0).max(999_999_999.99);
+const budgetExchangeAmountSchema = z.coerce.number().gt(0).max(999_999_999.99);
 
 export const listBudgetQuerySchema = z.object({
   year: z.coerce.number().int().min(2000).max(2100),
@@ -262,6 +267,23 @@ export const updateBudgetEntrySchema = z
 
 export const updateBudgetEntryNoteSchema = z.object({
   note: z.string().trim().max(500).nullable(),
+});
+
+export const budgetExchangeSchema = z
+  .object({
+    occurredOn: z.string().date(),
+    fromCurrency: budgetCurrencySchema,
+    fromAmount: budgetExchangeAmountSchema,
+    toCurrency: budgetCurrencySchema,
+    toAmount: budgetExchangeAmountSchema,
+    note: z.string().trim().max(500).nullable().default(null),
+  })
+  .refine((value) => value.fromCurrency !== value.toCurrency, {
+    message: 'An exchange must use two different currencies',
+  });
+
+export const updateBudgetBaseCurrencySchema = z.object({
+  baseCurrency: budgetCurrencySchema,
 });
 
 export const updateBudgetOpeningBalanceSchema = z.object({

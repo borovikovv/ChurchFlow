@@ -18,9 +18,11 @@ import {
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import { BudgetsService } from './budgets.service';
 import {
+  BudgetExchangeDto,
   CreateBudgetCategoryDto,
   CreateBudgetMonthDto,
   ListBudgetQueryDto,
+  UpdateBudgetBaseCurrencyDto,
   UpdateBudgetCategoryDto,
   UpdateBudgetEntryDto,
   UpdateBudgetEntryNoteDto,
@@ -39,6 +41,15 @@ export class BudgetsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.budgetsService.list(organizationId, query.year, this.actorUserId(request));
+  }
+
+  @Put('base-currency')
+  updateBaseCurrency(
+    @Param('organizationId') organizationId: string,
+    @Body() body: UpdateBudgetBaseCurrencyDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.budgetsService.updateBaseCurrency(organizationId, body, this.actorUserId(request));
   }
 
   @Put('opening-balance')
@@ -127,6 +138,49 @@ export class BudgetsController {
     return this.budgetsService.removeLastMonthRow(
       organizationId,
       monthId,
+      this.actorUserId(request),
+    );
+  }
+
+  @Post('months/:monthId/exchanges')
+  createExchange(
+    @Param('organizationId') organizationId: string,
+    @Param('monthId') monthId: string,
+    @Body() body: BudgetExchangeDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.budgetsService.createExchange(
+      organizationId,
+      monthId,
+      body,
+      this.actorUserId(request),
+    );
+  }
+
+  @Put('exchanges/:exchangeId')
+  updateExchange(
+    @Param('organizationId') organizationId: string,
+    @Param('exchangeId') exchangeId: string,
+    @Body() body: BudgetExchangeDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.budgetsService.updateExchange(
+      organizationId,
+      exchangeId,
+      body,
+      this.actorUserId(request),
+    );
+  }
+
+  @Delete('exchanges/:exchangeId')
+  deleteExchange(
+    @Param('organizationId') organizationId: string,
+    @Param('exchangeId') exchangeId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.budgetsService.deleteExchange(
+      organizationId,
+      exchangeId,
       this.actorUserId(request),
     );
   }

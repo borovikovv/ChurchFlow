@@ -136,6 +136,10 @@ export const BUDGET_CATEGORY_TYPE = {
 
 export const BUDGET_CURRENCIES = ['UAH', 'USD', 'EUR'] as const;
 
+export const DEFAULT_BUDGET_BASE_CURRENCY = 'UAH';
+
+export const BUDGET_AMOUNT_FIELDS = ['amountUah', 'amountUsd', 'amountEur'] as const;
+
 export const BUDGET_ENTRY_FIELDS = ['AMOUNT_UAH', 'AMOUNT_USD', 'AMOUNT_EUR'] as const;
 
 export const BUDGET_ENTRY_FIELD = {
@@ -147,6 +151,12 @@ export const BUDGET_ENTRY_FIELD = {
 export const DEFAULT_BUDGET_MONTH_ROW_COUNT = 10;
 
 export const BUDGET_MONTH_ROW_COUNT = DEFAULT_BUDGET_MONTH_ROW_COUNT;
+
+export const DEPRECATED_BUDGET_EXCHANGE_CATEGORIES = [
+  'UAH from exchange',
+  'USD spent',
+  'EUR spent',
+] as const;
 
 export const DEFAULT_BUDGET_CATEGORIES = [
   {
@@ -161,21 +171,6 @@ export const DEFAULT_BUDGET_CATEGORIES = [
   },
   { group: BUDGET_GROUP.income, type: BUDGET_CATEGORY_TYPE.income, name: 'USD income' },
   { group: BUDGET_GROUP.income, type: BUDGET_CATEGORY_TYPE.income, name: 'EUR income' },
-  {
-    group: BUDGET_GROUP.currencyExchange,
-    type: BUDGET_CATEGORY_TYPE.income,
-    name: 'UAH from exchange',
-  },
-  {
-    group: BUDGET_GROUP.currencyExchange,
-    type: BUDGET_CATEGORY_TYPE.expense,
-    name: 'USD spent',
-  },
-  {
-    group: BUDGET_GROUP.currencyExchange,
-    type: BUDGET_CATEGORY_TYPE.expense,
-    name: 'EUR spent',
-  },
   {
     group: BUDGET_GROUP.facility,
     type: BUDGET_CATEGORY_TYPE.expense,

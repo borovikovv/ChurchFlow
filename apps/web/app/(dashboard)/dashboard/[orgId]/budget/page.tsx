@@ -5,12 +5,16 @@ import { PageHeader } from '@/components/ui/page-header';
 import type { BudgetPayload } from '@churchflow/shared';
 import {
   addBudgetMonthRowAction,
+  createBudgetExchangeAction,
   createBudgetMonthAction,
+  deleteBudgetExchangeAction,
   deleteBudgetMonthAction,
   loadBudgetYearAction,
   removeLastBudgetMonthRowAction,
+  updateBudgetBaseCurrencyAction,
   updateBudgetEntryAction,
   updateBudgetEntryNoteAction,
+  updateBudgetExchangeAction,
   updateBudgetOpeningBalanceAction,
 } from './actions';
 import { BUDGET_START_YEAR, BUDGET_YEAR_LOOKAHEAD } from './constants';
@@ -55,6 +59,10 @@ export default async function BudgetPage({
           removeLastMonthRow={removeLastBudgetMonthRowAction}
           updateEntry={updateBudgetEntryAction}
           updateEntryNote={updateBudgetEntryNoteAction}
+          createExchange={createBudgetExchangeAction}
+          deleteExchange={deleteBudgetExchangeAction}
+          updateExchange={updateBudgetExchangeAction}
+          updateBaseCurrency={updateBudgetBaseCurrencyAction}
           updateOpeningBalance={updateBudgetOpeningBalanceAction}
         />
       )}

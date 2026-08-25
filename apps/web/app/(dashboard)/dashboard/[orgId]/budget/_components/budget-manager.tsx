@@ -4,7 +4,15 @@ import { toPng } from 'html-to-image';
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { flushSync } from 'react-dom';
-import type { BudgetCurrencyTotals, BudgetEntryField, BudgetMonth } from '@churchflow/shared';
+import {
+  budgetCurrencySchema,
+  sumBudgetTotals,
+  type BudgetAmountField,
+  type BudgetCurrencyTotals,
+  type BudgetEntryField,
+  type BudgetExchangeInput,
+  type BudgetMonth,
+} from '@churchflow/shared';
 import type { DateRangeValue } from '@/components/forms/date-range-input';
 import type { ActionResult } from '../types';
 import { AddMonthControls } from './add-month-controls';
@@ -20,16 +28,15 @@ import { YearSummary } from './budget-summary';
 import { BudgetToolbar } from './budget-toolbar';
 import { EditOpeningBalanceDialog } from './edit-opening-balance-dialog';
 import {
-  buildGroupSummaries,
+  buildGroupBaseSummaries,
   carryForwardBalance,
   emptyEntry,
   firstAvailableMonth,
   type BudgetColumnLabels,
   type BudgetGroupLabels,
   recalculateMonth,
-  sumTotals,
+  sumMonthsInBase,
   upsertEntry,
-  type BudgetAmountField,
 } from './budget-table-helpers';
 
 export function BudgetManager({
@@ -42,6 +49,10 @@ export function BudgetManager({
   removeLastMonthRow,
   updateEntry,
   updateEntryNote,
+  createExchange,
+  updateExchange,
+  deleteExchange,
+  updateBaseCurrency,
   updateOpeningBalance,
 }: BudgetManagerProps) {
   const t = useTranslations('budget');
@@ -53,6 +64,7 @@ export function BudgetManager({
   const [monthToAdd, setMonthToAdd] = useState(firstAvailableMonth(payload.months));
   const [openingBalance, setOpeningBalance] = useState(payload.openingBalance);
   const [rates, setRates] = useState(payload.rates);
+  const [baseCurrency, setBaseCurrency] = useState(payload.baseCurrency);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exportRange, setExportRange] = useState<DateRangeValue | null>(null);
@@ -60,14 +72,21 @@ export function BudgetManager({
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
 
-  const yearTotals = useMemo(() => sumTotals(months.map((month) => month.totals)), [months]);
+  const yearTotals = useMemo(() => sumBudgetTotals(months.map((month) => month.totals)), [months]);
   const closingBalance = useMemo(
     () => carryForwardBalance(openingBalance.opening, yearTotals.balance),
     [openingBalance, yearTotals],
   );
+  const totalsInBase = useMemo(
+    () => ({
+      income: sumMonthsInBase(months, 'income', baseCurrency),
+      expense: sumMonthsInBase(months, 'expense', baseCurrency),
+    }),
+    [baseCurrency, months],
+  );
   const groupSummaries = useMemo(
-    () => buildGroupSummaries(months, categories),
-    [categories, months],
+    () => buildGroupBaseSummaries(months, categories, baseCurrency),
+    [baseCurrency, categories, months],
   );
   const columnLabels = useMemo<BudgetColumnLabels>(
     () => ({
@@ -100,8 +119,8 @@ export function BudgetManager({
     [exportRange, months, year],
   );
   const exportGroupSummaries = useMemo(
-    () => buildGroupSummaries(exportMonths, categories),
-    [categories, exportMonths],
+    () => buildGroupBaseSummaries(exportMonths, categories, baseCurrency),
+    [baseCurrency, categories, exportMonths],
   );
   const exportDisplayMonths = useMemo(
     () => budgetMonthsInRange(year, exportRange),
@@ -162,9 +181,21 @@ export function BudgetManager({
       setMonths(result.data.months);
       setOpeningBalance(result.data.openingBalance);
       setRates(result.data.rates);
+      setBaseCurrency(result.data.baseCurrency);
       setMonthToAdd(firstAvailableMonth(result.data.months));
       window.history.pushState(null, '', `?year=${result.data.year}`);
     });
+  }
+
+  function handleBaseCurrencyChange(nextCurrency: string) {
+    const parsed = budgetCurrencySchema.safeParse(nextCurrency);
+    if (!parsed.success || parsed.data === baseCurrency) return;
+
+    runMutation(
+      'budget:base-currency',
+      () => updateBaseCurrency(organizationId, { baseCurrency: parsed.data }),
+      (updated) => setBaseCurrency(updated.baseCurrency),
+    );
   }
 
   function handleOpeningBalanceSave(totals: BudgetCurrencyTotals) {
@@ -262,6 +293,30 @@ export function BudgetManager({
     );
   }
 
+  function handleCreateExchange(monthId: string, input: BudgetExchangeInput) {
+    runMutation(
+      `month:${monthId}:exchange:create`,
+      () => createExchange(organizationId, monthId, input),
+      (updated) => updateMonthState(updated),
+    );
+  }
+
+  function handleUpdateExchange(exchangeId: string, input: BudgetExchangeInput) {
+    runMutation(
+      `exchange:${exchangeId}:update`,
+      () => updateExchange(organizationId, exchangeId, input),
+      (updated) => updateMonthState(updated),
+    );
+  }
+
+  function handleDeleteExchange(exchangeId: string) {
+    runMutation(
+      `exchange:${exchangeId}:delete`,
+      () => deleteExchange(organizationId, exchangeId),
+      (updated) => updateMonthState(updated),
+    );
+  }
+
   function handleAddMonthRow(monthId: string) {
     runMutation(
       `month:${monthId}:row:add`,
@@ -311,6 +366,7 @@ export function BudgetManager({
   return (
     <div className="stack">
       <BudgetToolbar
+        baseCurrency={baseCurrency}
         isExporting={exporting}
         isPending={pending}
         isYearLoading={savingKeys.has('budget:year:load')}
@@ -319,6 +375,7 @@ export function BudgetManager({
         months={months}
         year={year}
         onAddMonth={handleAddMonth}
+        onBaseCurrencyChange={handleBaseCurrencyChange}
         onExportPng={handleExportPng}
         onMonthToAddChange={setMonthToAdd}
         onYearChange={handleYearChange}
@@ -334,6 +391,7 @@ export function BudgetManager({
       </div>
 
       <YearSummary
+        baseCurrency={baseCurrency}
         closingBalance={closingBalance}
         openingAction={
           <EditOpeningBalanceDialog
@@ -347,8 +405,10 @@ export function BudgetManager({
         openingBalance={openingBalance.opening}
         rates={rates}
         totals={yearTotals}
+        totalsInBase={totalsInBase}
       />
       <BudgetCharts
+        baseCurrency={baseCurrency}
         chartRef={null}
         groupLabels={groupLabels}
         groupSummaries={groupSummaries}
@@ -364,6 +424,7 @@ export function BudgetManager({
           className="pointer-events-none absolute left-[-10000px] top-0 w-[1200px]"
         >
           <BudgetCharts
+            baseCurrency={baseCurrency}
             chartRef={exportChartRef}
             displayMonths={exportDisplayMonths ?? undefined}
             exportMode
@@ -404,11 +465,14 @@ export function BudgetManager({
               month={month}
               monthNames={monthNames}
               savingKeys={savingKeys}
+              onCreateExchange={handleCreateExchange}
+              onDeleteExchange={handleDeleteExchange}
               onDeleteMonth={handleDeleteMonth}
               onAddRow={handleAddMonthRow}
               onEntryBlur={handleEntryBlur}
               onEntryNoteSave={handleEntryNoteSave}
               onRemoveLastRow={handleRemoveLastMonthRow}
+              onUpdateExchange={handleUpdateExchange}
             />
           ))}
           <div className="flex flex-wrap items-end gap-2 border-t border-[var(--line)] pt-3">
