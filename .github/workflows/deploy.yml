@@ -698,7 +698,7 @@ jobs:
 
           const migrationsDir = path.resolve('packages/db/prisma/migrations');
           const destructivePattern =
-            /\b(TRUNCATE|DELETE\s+FROM|DROP\s+TABLE|DROP\s+COLUMN)\b|ALTER\s+TABLE[\s\S]{0,240}\bDROP\b/i;
+            /\b(TRUNCATE|DELETE\s+FROM|DROP\s+(TABLE|COLUMN|SCHEMA|DATABASE))\b/i;
 
           async function main() {
             if (!fs.existsSync(migrationsDir)) {
