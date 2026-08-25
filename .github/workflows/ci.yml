@@ -26,6 +26,10 @@ jobs:
       NEXT_PUBLIC_WEB_URL: http://localhost:3000
       NEXT_PUBLIC_API_URL: http://localhost:3001
       API_INTERNAL_URL: http://localhost:3001
+      # prisma.config.ts resolves DATABASE_URL when the config loads, so every
+      # prisma generate needs it set. Nothing here connects to a database; the
+      # value only has to be a valid postgres URL.
+      DATABASE_URL: postgresql://churchflow:churchflow@localhost:5432/churchflow?schema=public
     steps:
       - name: Check out the commit
         uses: actions/checkout@v6
