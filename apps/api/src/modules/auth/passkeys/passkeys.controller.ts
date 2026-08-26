@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type {
   PublicKeyCredentialCreationOptionsJSON,
@@ -34,10 +34,7 @@ import {
   toRegistrationResponse,
 } from './dto/passkey.dto';
 
-// ThrottlerGuard is not registered globally, so the limits below only bind where the guard
-// is actually applied.
 @Controller('auth/passkeys')
-@UseGuards(ThrottlerGuard)
 export class PasskeysController {
   constructor(
     private readonly passkeysService: PasskeysService,

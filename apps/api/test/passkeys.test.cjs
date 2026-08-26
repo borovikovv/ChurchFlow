@@ -94,7 +94,7 @@ test('an authenticator that never counts is not mistaken for a clone', () => {
 });
 
 test('registration options exclude the credentials this account already holds', async () => {
-  const { service, challenges } = createService({
+  const { service } = createService({
     repository: {
       listCredentialsForUser: async () => [
         { credentialId: 'already-here', transports: ['internal', 'telepathy'] },

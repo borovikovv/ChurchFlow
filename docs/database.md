@@ -21,10 +21,7 @@ Use Prisma to generate table migrations:
 pnpm db:migrate
 ```
 
-After tables exist, apply:
-
-```bash
-psql "$DATABASE_URL" -f packages/db/sql/001_rls_foundation.sql
-```
-
-The RLS SQL defines identity helpers and foundation policies for organization members, websites, pages, sections, and media assets. API guards and service checks remain the active runtime authorization layer until request-scoped RLS context is implemented.
+There is no second step. Row level security is not implemented, and the SQL file this section
+used to point at was removed rather than left looking like a foundation: it had never run and
+could not have. API guards, service checks and composite foreign keys are the authorization
+layer. See `docs/rls.md` for the measurements behind that decision.

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { requestClientContext } from '../../../common/auth/request-client-context';
 import { setSessionCookie } from '../../../common/auth/session-cookie';
@@ -11,10 +11,7 @@ import {
 import { EmailAuthService } from './email-auth.service';
 import { EmailSignInCodeDto, EmailSignInRequestDto } from './dto/email-sign-in.dto';
 
-// ThrottlerGuard is not registered globally, so the limits below only bind where the guard
-// is actually applied.
 @Controller('auth/email')
-@UseGuards(ThrottlerGuard)
 export class EmailAuthController {
   constructor(
     private readonly emailAuthService: EmailAuthService,

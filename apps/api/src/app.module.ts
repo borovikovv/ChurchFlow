@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { resolve } from 'node:path';
 import { apiEnvSchema } from '@churchflow/shared';
 import { PrismaModule } from './prisma/prisma.module';
@@ -35,10 +36,13 @@ import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.
       ignoreEnvFile: process.env['NODE_ENV'] === 'production',
       validate: (env) => apiEnvSchema.parse(env),
     }),
+    // A backstop, not a budget: routes that need a real limit declare their own with
+    // @Throttle. This one only has to stay clear of what a dashboard session legitimately
+    // does, including several people sharing one office address.
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
-        limit: 120,
+        limit: 600,
       },
     ]),
     ScheduleModule.forRoot(),
@@ -65,5 +69,8 @@ import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.
     MediaModule,
     HealthModule,
   ],
+  // Without this the @Throttle decorators across the API are inert: the module only supplies
+  // the limits, and nothing enforces them until the guard actually runs.
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

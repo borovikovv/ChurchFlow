@@ -7,7 +7,7 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 - Frontend: Next.js App Router, React, TypeScript
 - Backend: Nest.js, TypeScript
 - Database: PostgreSQL with Prisma
-- Authorization: API guards/service checks today, with PostgreSQL RLS foundation prepared
+- Authorization: API guards, service checks and composite foreign keys. Row level security is not implemented; see `docs/rls.md` for why and what it would take
 - Auth foundation: provider-based auth for Telegram, email sign-in links, and passkeys
 - Storage: S3-compatible abstraction for Cloudflare R2 or AWS S3
 - Monorepo: pnpm workspace and Turborepo
@@ -24,9 +24,8 @@ Production-oriented multi-tenant SaaS monorepo for organization administration, 
 5. Install dependencies with `pnpm install`.
 6. Generate Prisma Client with `pnpm db:generate`.
 7. Create database migrations with `pnpm db:migrate`.
-8. Apply `packages/db/sql/001_rls_foundation.sql` after Prisma has created the tables if you are testing the RLS foundation.
-9. Apply migrations, then bootstrap the first platform admin with `DATABASE_URL="postgresql://..." WEB_APP_URL="https://..." pnpm admin:bootstrap` and open the generated one-time Telegram URL.
-10. Run the workspace with `pnpm dev`.
+8. Apply migrations, then bootstrap the first platform admin with `DATABASE_URL="postgresql://..." WEB_APP_URL="https://..." pnpm admin:bootstrap` and open the generated one-time Telegram URL.
+9. Run the workspace with `pnpm dev`.
 
 For local Telegram Web Login testing, use the HTTPS proxy in `docs/local-https.md` instead of `localhost`.
 
@@ -47,7 +46,7 @@ For local Telegram Web Login testing, use the HTTPS proxy in `docs/local-https.m
 - Organization owners are represented by `OrganizationMember` rows with role `OWNER`.
 - Invitations separate identity binding from delivery. Targeted Telegram invitations use Telegram OIDC `sub`. Claimable links are bearer credentials: the first authenticated account to open one claims it, and the claim is stamped with whichever identity that account signed in with. A confirmed email address counts as such an identity; an unconfirmed one never does.
 
-See `docs/environment.md`, `docs/organization-approval-flow.md`, `docs/platform-admin.md`, and `docs/invitations.md` for the full business and technical workflow.
+See `docs/auth.md`, `docs/organization-approval-flow.md`, `docs/platform-admin.md`, and `docs/invitations.md` for the full business and technical workflow, and `docs/deployment.md` for environment variables.
 
 ## Scripts
 
