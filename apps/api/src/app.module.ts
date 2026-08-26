@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { resolve } from 'node:path';
 import { apiEnvSchema } from '@churchflow/shared';
 import { PrismaModule } from './prisma/prisma.module';
@@ -36,13 +35,17 @@ import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.
       ignoreEnvFile: process.env['NODE_ENV'] === 'production',
       validate: (env) => apiEnvSchema.parse(env),
     }),
-    // A backstop, not a budget: routes that need a real limit declare their own with
-    // @Throttle. This one only has to stay clear of what a dashboard session legitimately
-    // does, including several people sharing one office address.
+    // Deliberately not enforced: ThrottlerGuard is not registered as an APP_GUARD, so every
+    // @Throttle in the API is a declaration and nothing more. Its default tracker keys on
+    // req.ip, and no request reaches this API carrying a client address — browser calls are
+    // proxied through the web app's /v1 rewrite and server-rendered pages call it directly
+    // from the Next container, so every caller looks like the same one. Enforcing that would
+    // spend one person's budget on everybody. Registering the guard needs a tracker that
+    // keys on the session user, and a client address that survives the hop, first.
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
-        limit: 600,
+        limit: 120,
       },
     ]),
     ScheduleModule.forRoot(),
@@ -69,8 +72,5 @@ import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.
     MediaModule,
     HealthModule,
   ],
-  // Without this the @Throttle decorators across the API are inert: the module only supplies
-  // the limits, and nothing enforces them until the guard actually runs.
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}
