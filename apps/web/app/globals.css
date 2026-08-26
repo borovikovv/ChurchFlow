@@ -102,6 +102,18 @@
     box-shadow: inset 0 1px 0 rgba(208, 215, 222, 0.2);
   }
 
+  /* Safari on iOS zooms the whole page whenever a focused field's text is smaller than 16px,
+     and the 14px the app inherits is enough to trigger it. Meeting that floor on narrow
+     screens is what stops the zoom. Locking the viewport would stop it too, and would also
+     take pinch zoom away from everyone who needs to magnify the page. */
+  @media (max-width: 767.98px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus,
