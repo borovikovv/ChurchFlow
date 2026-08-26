@@ -22,8 +22,21 @@ export class UsersRepository {
         normalizeLoginEmail(input.email ?? '') !== normalizeLoginEmail(current.email ?? '');
 
       if (emailChanged) {
-        // A verified address is an identity. Once the account stops holding it, the
-        // sign-in method built on it has to go with it.
+        // A verified address is an identity, so it cannot outlive being the account's
+        // address. That also means it cannot be given up while it is the only way back in:
+        // the new address is unconfirmed until its owner proves it, and by then the session
+        // that could have proved it may be gone.
+        const emailAccounts = await tx.authAccount.count({
+          where: { userId, provider: 'email', deletedAt: null },
+        });
+        const otherAccounts = await tx.authAccount.count({
+          where: { userId, provider: { not: 'email' }, deletedAt: null },
+        });
+
+        if (emailAccounts > 0 && otherAccounts === 0) {
+          throw new Error('LAST_SIGN_IN_METHOD');
+        }
+
         await tx.authAccount.deleteMany({ where: { userId, provider: 'email' } });
       }
 

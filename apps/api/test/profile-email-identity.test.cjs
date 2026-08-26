@@ -4,7 +4,7 @@ const { UsersRepository } = require('../dist/modules/users/repositories/users.re
 
 const USER_ID = 'b919dd9a-12d5-4460-b0e2-f22f85ca507b';
 
-function createRepository(currentEmail) {
+function createRepository(currentEmail, accounts = ['email', 'telegram']) {
   const deletedAccounts = [];
   const updates = [];
 
@@ -17,6 +17,10 @@ function createRepository(currentEmail) {
       },
     },
     authAccount: {
+      count: async ({ where }) =>
+        accounts.filter((provider) =>
+          where.provider === 'email' ? provider === 'email' : provider !== 'email',
+        ).length,
       deleteMany: async (args) => {
         deletedAccounts.push(args.where);
         return { count: 1 };
@@ -77,4 +81,42 @@ test('adding a first address to an account that had none is still a change', asy
 
   assert.deepEqual(deletedAccounts, [{ userId: USER_ID, provider: 'email' }]);
   assert.equal(updates[0].data.emailVerified, null);
+});
+
+test('the address cannot be given up while it is the only way back in', async () => {
+  const { repository, deletedAccounts, updates } = createRepository('member@example.com', [
+    'email',
+  ]);
+
+  await assert.rejects(
+    repository.updateProfile(USER_ID, { email: 'new@example.com' }),
+    /LAST_SIGN_IN_METHOD/,
+  );
+  assert.deepEqual(deletedAccounts, []);
+  assert.deepEqual(updates, []);
+});
+
+test('clearing the only address is refused for the same reason', async () => {
+  const { repository } = createRepository('member@example.com', ['email']);
+
+  await assert.rejects(repository.updateProfile(USER_ID, { email: null }), /LAST_SIGN_IN_METHOD/);
+});
+
+test('a passkey is enough of a fallback to let the address change', async () => {
+  const { repository, deletedAccounts } = createRepository('member@example.com', [
+    'email',
+    'passkey',
+  ]);
+
+  await repository.updateProfile(USER_ID, { email: 'new@example.com' });
+
+  assert.deepEqual(deletedAccounts, [{ userId: USER_ID, provider: 'email' }]);
+});
+
+test('an address nobody ever confirmed is not a way back in, so it may change freely', async () => {
+  const { repository, updates } = createRepository('typo@example.com', []);
+
+  await repository.updateProfile(USER_ID, { email: 'correct@example.com' });
+
+  assert.equal(updates[0].data.email, 'correct@example.com');
 });
