@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -27,7 +29,11 @@ import { AuthRepository } from '../auth.repository';
 import { AuthService } from '../auth.service';
 import { EmailAuthRepository } from './email-auth.repository';
 import { hasStandingToSignIn, resolveLoginRedirect, type LoginUserState } from '../login-state';
-import { emailLoginTokenExpiresAt } from './email-login-policy';
+import {
+  EMAIL_LOGIN_REQUESTS_PER_WINDOW,
+  emailLoginRequestWindowStart,
+  emailLoginTokenExpiresAt,
+} from './email-login-policy';
 
 export interface CompleteEmailVerificationResult {
   redirectTo: string;
@@ -75,6 +81,13 @@ export class EmailAuthService {
     }
 
     const email = normalizeLoginEmail(candidate.email);
+    if (await this.hasExhaustedRequests(email, 'verify_email')) {
+      throw new HttpException(
+        'Too many confirmation emails were requested. Try again later.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const rawToken = randomBytes(32).toString('base64url');
     const expiresAt = emailLoginTokenExpiresAt(new Date());
 
@@ -137,6 +150,13 @@ export class EmailAuthService {
     const redirectTo = normalizeInternalRedirect(input.redirectTo, this.webAppUrl) ?? null;
     const admission = await this.resolveAdmission(email, redirectTo);
     if (!admission) {
+      return;
+    }
+
+    // Stopping here is silent for the same reason the whole endpoint is: telling the caller
+    // they hit a limit would tell them the address was worth limiting.
+    if (await this.hasExhaustedRequests(email, 'sign_in')) {
+      this.logger.warn({ event: 'Sign-in link requests exhausted for an address' });
       return;
     }
 
@@ -300,6 +320,19 @@ export class EmailAuthService {
     }
 
     return false;
+  }
+
+  private async hasExhaustedRequests(
+    email: string,
+    purpose: 'sign_in' | 'verify_email',
+  ): Promise<boolean> {
+    const recent = await this.repository.countRecentTokens(
+      email,
+      purpose,
+      emailLoginRequestWindowStart(new Date()),
+    );
+
+    return recent >= EMAIL_LOGIN_REQUESTS_PER_WINDOW;
   }
 
   private async signInLocale(email: string, acceptLanguage?: string): Promise<AppLocale> {

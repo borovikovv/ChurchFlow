@@ -1,5 +1,4 @@
 export const PASSKEY_CHALLENGE_TTL_SECONDS = 3 * 60;
-export const PASSKEY_LABEL_MAX_LENGTH = 60;
 
 const AUTHENTICATOR_TRANSPORTS = [
   'ble',

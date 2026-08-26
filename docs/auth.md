@@ -55,6 +55,11 @@ signing in. Both live in the same `email_login_tokens` row, so using either reti
   digits carry too little entropy for a plain digest to survive a database dump.
 - Admission is resolved twice, when the mail is sent and again when the token is used, since
   access can be withdrawn inside the fifteen minutes a token is valid for.
+- How many links one address can be sent in that window is capped, and hitting the cap is as
+  silent as not being admitted. The count is per address rather than per caller: the abuse
+  worth stopping is aimed at somebody's inbox, and the caller's own address is not something
+  this API can see behind the web app. Confirmation emails are capped the same way, but say
+  so out loud, because that caller is already signed in and has nothing to discover.
 
 An address becomes an identity only once its owner has proved they hold it. Until
 `User.emailVerified` is set, the address is contact data, and email sign-in refuses it even

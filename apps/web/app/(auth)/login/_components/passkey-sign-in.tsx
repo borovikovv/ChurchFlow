@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { postToApi } from '@/api/browser-client';
 import { Button } from '@/components/ui/button';
-import type { PasskeyAuthenticationOptions } from '@/api/types/passkeys';
+import type { PasskeyAuthenticationOptions } from '@churchflow/shared';
 import {
   isAbortedPasskeyCeremony,
   isPasskeyAutofillAvailable,

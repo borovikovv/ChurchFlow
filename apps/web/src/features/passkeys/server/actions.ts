@@ -5,7 +5,7 @@ import type {
   PasskeyRegistrationCredential,
   PasskeyRegistrationOptions,
   PasskeySummary,
-} from '@/api/types/passkeys';
+} from '@churchflow/shared';
 
 export async function getPasskeys() {
   return apiFetch<PasskeySummary[]>('/auth/passkeys');

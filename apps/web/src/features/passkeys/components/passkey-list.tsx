@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'react-toastify';
+import type { PasskeySummary } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
-import type { PasskeySummary } from '@/api/types/passkeys';
 import {
   createPasskeyCredential,
   isAbortedPasskeyCeremony,
@@ -17,7 +17,7 @@ import {
   renamePasskey,
   startPasskeyRegistration,
 } from '../server/actions';
-import { formatPasskeyLastUsed } from '../format-last-used';
+import { PasskeyRow } from './passkey-row';
 
 export function PasskeyList({ passkeys, locale }: { passkeys: PasskeySummary[]; locale: string }) {
   const t = useTranslations('passkeys');
@@ -62,38 +62,35 @@ export function PasskeyList({ passkeys, locale }: { passkeys: PasskeySummary[]; 
     }
   }
 
-  async function handleRename(passkey: PasskeySummary): Promise<void> {
-    const label = window.prompt(t('label'), passkey.label ?? '')?.trim();
-    if (!label) {
-      return;
-    }
-
-    setPendingId(passkey.id);
+  async function handleRename(passkeyId: string, label: string): Promise<boolean> {
+    setPendingId(passkeyId);
     try {
-      const result = await renamePasskey(passkey.id, label);
+      const result = await renamePasskey(passkeyId, label);
       if (!result.ok) {
         toast.error(result.error);
-        return;
+        return false;
       }
 
       toast.success(t('renamed'));
       router.refresh();
+      return true;
     } finally {
       setPendingId(null);
     }
   }
 
-  async function handleRemove(passkeyId: string): Promise<void> {
+  async function handleRemove(passkeyId: string): Promise<boolean> {
     setPendingId(passkeyId);
     try {
       const result = await removePasskey(passkeyId);
       if (!result.ok) {
         toast.error(result.error);
-        return;
+        return false;
       }
 
       toast.success(t('removed'));
       router.refresh();
+      return true;
     } finally {
       setPendingId(null);
     }
@@ -106,39 +103,14 @@ export function PasskeyList({ passkeys, locale }: { passkeys: PasskeySummary[]; 
       ) : (
         <ul className="stack list-none p-0">
           {passkeys.map((passkey) => (
-            <li
+            <PasskeyRow
+              busy={pendingId === passkey.id || adding}
               key={passkey.id}
-              className="flex flex-wrap items-center justify-between gap-3 border-b py-3"
-            >
-              <div className="stack gap-1">
-                <span className="font-medium">{passkey.label ?? t('unnamed')}</span>
-                <span className="text-sm opacity-70">
-                  {formatPasskeyLastUsed(passkey.lastUsedAt, locale, {
-                    never: t('neverUsed'),
-                    lastUsed: (value) => t('lastUsed', { value }),
-                  })}
-                  {passkey.backedUp ? ` · ${t('syncedAcrossDevices')}` : ''}
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  disabled={pendingId === passkey.id || adding}
-                  onClick={() => void handleRename(passkey)}
-                  type="button"
-                  variant="secondary"
-                >
-                  {t('rename')}
-                </Button>
-                <Button
-                  disabled={pendingId === passkey.id || adding}
-                  onClick={() => void handleRemove(passkey.id)}
-                  type="button"
-                  variant="danger"
-                >
-                  {pendingId === passkey.id ? t('removing') : t('remove')}
-                </Button>
-              </div>
-            </li>
+              locale={locale}
+              onRemove={() => handleRemove(passkey.id)}
+              onRename={(label) => handleRename(passkey.id, label)}
+              passkey={passkey}
+            />
           ))}
         </ul>
       )}
@@ -159,16 +131,8 @@ export function PasskeyList({ passkeys, locale }: { passkeys: PasskeySummary[]; 
 // A best-effort name so the list is readable before anyone renames anything. User agents are
 // self-reported, so an unrecognised one simply goes unnamed.
 function defaultPasskeyLabel(): string | undefined {
-  const platforms = [
-    ['Mac', 'Mac'],
-    ['iPhone', 'iPhone'],
-    ['iPad', 'iPad'],
-    ['Android', 'Android'],
-    ['Windows', 'Windows'],
-    ['Linux', 'Linux'],
-  ] as const;
+  const platforms = ['Mac', 'iPhone', 'iPad', 'Android', 'Windows', 'Linux'] as const;
   const userAgent = window.navigator.userAgent;
-  const match = platforms.find(([needle]) => userAgent.includes(needle));
 
-  return match ? match[1] : undefined;
+  return platforms.find((platform) => userAgent.includes(platform));
 }

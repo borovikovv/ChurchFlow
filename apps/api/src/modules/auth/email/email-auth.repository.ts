@@ -119,6 +119,12 @@ export class EmailAuthRepository {
     });
   }
 
+  countRecentTokens(email: string, purpose: EmailLoginTokenPurpose, since: Date): Promise<number> {
+    return this.prisma.emailLoginToken.count({
+      where: { email, purpose, createdAt: { gt: since } },
+    });
+  }
+
   async issueToken(input: IssueEmailLoginTokenInput): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       // Asking for a new link retires the older ones for that address and purpose, so at most

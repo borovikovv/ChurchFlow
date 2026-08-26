@@ -5,7 +5,7 @@ import type {
   PasskeyCredentialDescriptorJson,
   PasskeyRegistrationCredential,
   PasskeyRegistrationOptions,
-} from '@/api/types/passkeys';
+} from '@churchflow/shared';
 
 // TypeScript's DOM lib knows a narrower transport list than the spec, and authenticators
 // report values neither list has heard of. Anything unusable is dropped.

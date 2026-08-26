@@ -3,6 +3,9 @@ const test = require('node:test');
 const { createHash } = require('node:crypto');
 const { EmailAuthService } = require('../dist/modules/auth/email/email-auth.service.js');
 const {
+  EMAIL_LOGIN_REQUESTS_PER_WINDOW,
+} = require('../dist/modules/auth/email/email-login-policy.js');
+const {
   generateEmailLoginCode,
   hashEmailLoginCode,
   verifyEmailLoginCode,
@@ -31,6 +34,7 @@ function createService(overrides = {}) {
 
   const repository = {
     findVerificationCandidate: async () => null,
+    countRecentTokens: async () => 0,
     findLoginAccountState: async () => memberState(),
     createAdmittedEmailUser: async () => {
       throw new Error('createAdmittedEmailUser should not be reached');
@@ -371,4 +375,46 @@ test('a verification link is issued without a code, because the caller is alread
   assert.equal(issued[0].purpose, 'verify_email');
   assert.equal(issued[0].codeHash, undefined);
   assert.equal(sent.length, 1);
+});
+
+test('an address that has already been sent its share of links is quietly left alone', async () => {
+  const { service, sent, issued } = createService({
+    repository: { countRecentTokens: async () => EMAIL_LOGIN_REQUESTS_PER_WINDOW },
+  });
+
+  // Silent, not refused: saying "too many" would say the address was worth counting.
+  await service.requestSignIn({ email: EMAIL, client: {} });
+
+  assert.deepEqual(issued, []);
+  assert.deepEqual(sent, []);
+});
+
+test('the request limit counts links for one address, not callers', async () => {
+  const counted = [];
+  const { service } = createService({
+    repository: {
+      countRecentTokens: async (email, purpose, since) => {
+        counted.push({ email, purpose, since });
+        return 0;
+      },
+    },
+  });
+
+  await service.requestSignIn({ email: '  SOFI@Example.com ', client: {} });
+
+  assert.equal(counted.length, 1);
+  assert.equal(counted[0].email, 'sofi@example.com');
+  assert.equal(counted[0].purpose, 'sign_in');
+});
+
+test('confirmation emails are limited too, and say so, because the caller is known', async () => {
+  const { service, sent } = createService({
+    repository: {
+      findVerificationCandidate: async () => ({ id: USER_ID, email: EMAIL, emailVerified: null }),
+      countRecentTokens: async () => EMAIL_LOGIN_REQUESTS_PER_WINDOW,
+    },
+  });
+
+  await assert.rejects(service.requestEmailVerification(USER_ID, {}), /Too many confirmation/);
+  assert.deepEqual(sent, []);
 });
