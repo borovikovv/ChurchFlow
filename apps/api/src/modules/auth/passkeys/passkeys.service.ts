@@ -19,7 +19,7 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
-import { requestClientContext } from '../../../common/auth/request-client-context';
+import type { RequestClientContext } from '../../../common/auth/request-client-context';
 import { normalizeInternalRedirect } from '../../../common/auth/internal-redirect';
 import { hashOpaqueToken } from '../../../common/auth/session-token';
 import { AuditService } from '../../audit/audit.service';
@@ -31,8 +31,6 @@ import {
   toKnownTransports,
 } from './passkey-policy';
 import { PasskeysRepository, type PasskeyRecord } from './passkeys.repository';
-
-export type PasskeyClientContext = ReturnType<typeof requestClientContext>;
 
 export interface PasskeySignInResult {
   sessionToken: string;
@@ -148,6 +146,16 @@ export class PasskeysService {
       throw new NotFoundException('Passkey was not found');
     }
 
+    // The label is what somebody reads when deciding which credential to revoke, so a rename
+    // is worth as much of a record as the registration was.
+    await this.auditService.record({
+      actorUserId: userId,
+      action: 'UPDATE',
+      entityType: 'User',
+      entityId: userId,
+      metadata: { event: 'passkey_renamed' },
+    });
+
     return passkey;
   }
 
@@ -190,7 +198,7 @@ export class PasskeysService {
   async finishAuthentication(input: {
     response: AuthenticationResponseJSON;
     redirectTo?: string;
-    client: PasskeyClientContext;
+    client: RequestClientContext;
   }): Promise<PasskeySignInResult> {
     const credential = await this.repository.findCredential(input.response.id);
     if (!credential) {

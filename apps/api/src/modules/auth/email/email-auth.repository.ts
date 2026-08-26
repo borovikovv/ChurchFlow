@@ -3,6 +3,10 @@ import { Prisma, type EmailLoginTokenPurpose } from '@churchflow/db';
 import type { AppLocale } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
+  EMAIL_LOGIN_MAX_CODE_ATTEMPTS,
+  EMAIL_LOGIN_TOKEN_RETENTION_SECONDS,
+} from './email-login-policy';
+import {
   LOGIN_STATE_SELECT,
   toLoginUserState,
   type LoginUser,
@@ -40,7 +44,6 @@ export interface ConsumedEmailSignIn {
 export interface LiveEmailSignInToken {
   id: string;
   codeHash: string | null;
-  attemptCount: number;
   redirectTo: string | null;
 }
 
@@ -118,11 +121,20 @@ export class EmailAuthRepository {
 
   async issueToken(input: IssueEmailLoginTokenInput): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      // One live token per address and purpose: asking for a new link retires the old one
-      // instead of leaving several usable at once.
+      // Asking for a new link retires the older ones for that address and purpose, so at most
+      // one is usable at a time. Two requests racing can still leave two rows live; the newest
+      // is the one a code is checked against, and both expire on the same short clock.
       await tx.emailLoginToken.updateMany({
         where: { email: input.email, purpose: input.purpose, consumedAt: null },
         data: { consumedAt: new Date() },
+      });
+
+      // Swept here rather than by a scheduled job: the table only grows when somebody asks
+      // for a token, so that is also the cheapest moment to drop the ones nobody can use.
+      await tx.emailLoginToken.deleteMany({
+        where: {
+          expiresAt: { lt: new Date(Date.now() - EMAIL_LOGIN_TOKEN_RETENTION_SECONDS * 1000) },
+        },
       });
 
       await tx.emailLoginToken.create({
@@ -167,16 +179,24 @@ export class EmailAuthRepository {
   async findLiveSignInToken(email: string): Promise<LiveEmailSignInToken | null> {
     return this.prisma.emailLoginToken.findFirst({
       where: { email, purpose: 'sign_in', consumedAt: null, expiresAt: { gt: new Date() } },
-      select: { id: true, codeHash: true, attemptCount: true, redirectTo: true },
+      select: { id: true, codeHash: true, redirectTo: true },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async recordFailedCodeAttempt(tokenId: string, burn: boolean): Promise<void> {
-    await this.prisma.emailLoginToken.updateMany({
-      where: { id: tokenId, consumedAt: null },
-      data: { attemptCount: { increment: 1 }, ...(burn ? { consumedAt: new Date() } : {}) },
-    });
+  // Counting the attempt and deciding whether it was the last one have to be one statement.
+  // Reading the count first and burning the token second lets concurrent guesses each see the
+  // same stale count and walk straight past the cap.
+  async recordFailedCodeAttempt(tokenId: string): Promise<void> {
+    await this.prisma.$executeRaw`
+      UPDATE "email_login_tokens"
+      SET "attempt_count" = "attempt_count" + 1,
+          "consumed_at" = CASE
+            WHEN "attempt_count" + 1 >= ${EMAIL_LOGIN_MAX_CODE_ATTEMPTS} THEN now()
+            ELSE "consumed_at"
+          END
+      WHERE "id" = ${tokenId}::uuid AND "consumed_at" IS NULL
+    `;
   }
 
   async consumeSignInTokenById(tokenId: string): Promise<boolean> {

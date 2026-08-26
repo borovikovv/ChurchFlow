@@ -16,6 +16,7 @@ import {
   type UserSession,
 } from '@churchflow/shared';
 import { deviceLabelFromUserAgent } from '../../common/auth/device-label';
+import type { RequestClientContext } from '../../common/auth/request-client-context';
 import {
   extractRedirectToken,
   normalizeInternalRedirect,
@@ -42,11 +43,6 @@ export interface AuthUserResult {
   email: string | null;
   displayName: string | null;
   platformRole: string;
-}
-
-export interface SessionClientContext {
-  userAgent?: string;
-  ipAddress?: string;
 }
 
 export interface BeginTelegramLoginResult {
@@ -239,7 +235,7 @@ export class AuthService {
     expectedNonce: string;
     redirectTo?: string;
     acceptLanguage?: string;
-    client: SessionClientContext;
+    client: RequestClientContext;
   }): Promise<CompleteTelegramLoginResult> {
     if (input.state !== input.expectedState) {
       throw new BadRequestException('Invalid Telegram login state');
@@ -517,7 +513,7 @@ export class AuthService {
 
   async createUserSession(
     userId: string,
-    client: SessionClientContext,
+    client: RequestClientContext,
   ): Promise<{
     sessionToken: string;
     sessionExpiresAt: Date;

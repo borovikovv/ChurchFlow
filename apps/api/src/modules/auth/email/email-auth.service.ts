@@ -2,12 +2,14 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
 import { resolveAppLocaleFromAcceptLanguage, type AppLocale } from '@churchflow/shared';
 import { normalizeLoginEmail } from '../../../common/auth/email-identity';
+import type { RequestClientContext } from '../../../common/auth/request-client-context';
 import {
   generateEmailLoginCode,
   hashEmailLoginCode,
@@ -25,12 +27,7 @@ import { AuthRepository } from '../auth.repository';
 import { AuthService } from '../auth.service';
 import { EmailAuthRepository } from './email-auth.repository';
 import { hasStandingToSignIn, resolveLoginRedirect, type LoginUserState } from '../login-state';
-import { EMAIL_LOGIN_MAX_CODE_ATTEMPTS, emailLoginTokenExpiresAt } from './email-login-policy';
-
-export interface EmailAuthClientContext {
-  userAgent?: string;
-  ipAddress?: string;
-}
+import { emailLoginTokenExpiresAt } from './email-login-policy';
 
 export interface CompleteEmailVerificationResult {
   redirectTo: string;
@@ -52,6 +49,8 @@ interface EmailLoginAdmission {
 
 @Injectable()
 export class EmailAuthService {
+  private readonly logger = new Logger(EmailAuthService.name);
+
   constructor(
     private readonly config: ConfigService,
     private readonly repository: EmailAuthRepository,
@@ -64,7 +63,7 @@ export class EmailAuthService {
 
   async requestEmailVerification(
     userId: string,
-    client: EmailAuthClientContext,
+    client: RequestClientContext,
   ): Promise<{ ok: true }> {
     const candidate = await this.repository.findVerificationCandidate(userId);
     if (!candidate) {
@@ -121,7 +120,9 @@ export class EmailAuthService {
       metadata: { event: 'email_verified' },
     });
 
-    return { redirectTo: '/profile?emailVerified=1' };
+    // No success flag needed: the profile reads the confirmation off the account itself, so
+    // it will already say the address is confirmed by the time the page renders.
+    return { redirectTo: '/profile' };
   }
 
   // Callers are never told whether an address can sign in: the answer is the same either
@@ -130,7 +131,7 @@ export class EmailAuthService {
     email: string;
     redirectTo?: string;
     acceptLanguage?: string;
-    client: EmailAuthClientContext;
+    client: RequestClientContext;
   }): Promise<void> {
     const email = normalizeLoginEmail(input.email);
     const redirectTo = normalizeInternalRedirect(input.redirectTo, this.webAppUrl) ?? null;
@@ -155,18 +156,28 @@ export class EmailAuthService {
       ...(input.client.userAgent ? { userAgent: input.client.userAgent } : {}),
     });
 
-    await this.emailService.sendEmailSignInEmail({
-      locale: await this.signInLocale(email, input.acceptLanguage),
-      email,
-      token: rawToken,
-      code,
-      expiresAt,
-    });
+    // The answer to this endpoint must not depend on whether the address is admitted, and a
+    // provider outage would otherwise say it out loud: 500 for addresses that can sign in,
+    // 202 for every other. The failure is recorded here rather than told to the caller.
+    try {
+      await this.emailService.sendEmailSignInEmail({
+        locale: await this.signInLocale(email, input.acceptLanguage),
+        email,
+        token: rawToken,
+        code,
+        expiresAt,
+      });
+    } catch (error: unknown) {
+      this.logger.error(
+        'Sign-in email failed after the token was issued',
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
   }
 
   async completeSignInWithToken(
     token: string,
-    client: EmailAuthClientContext,
+    client: RequestClientContext,
   ): Promise<CompleteEmailSignInResult> {
     const consumed = await this.repository.consumeSignInTokenByHash(hashOpaqueToken(token));
     if (!consumed) {
@@ -178,7 +189,7 @@ export class EmailAuthService {
 
   async completeSignInWithCode(
     input: { email: string; code: string },
-    client: EmailAuthClientContext,
+    client: RequestClientContext,
   ): Promise<CompleteEmailSignInResult> {
     const email = normalizeLoginEmail(input.email);
     const token = await this.repository.findLiveSignInToken(email);
@@ -188,11 +199,7 @@ export class EmailAuthService {
 
     const matches = await verifyEmailLoginCode(input.code, token.codeHash);
     if (!matches) {
-      const attempts = token.attemptCount + 1;
-      await this.repository.recordFailedCodeAttempt(
-        token.id,
-        attempts >= EMAIL_LOGIN_MAX_CODE_ATTEMPTS,
-      );
+      await this.repository.recordFailedCodeAttempt(token.id);
       throw new UnauthorizedException('This sign-in code is no longer valid');
     }
 
@@ -206,7 +213,7 @@ export class EmailAuthService {
   private async admitSignIn(
     email: string,
     requestedRedirect: string | null,
-    client: EmailAuthClientContext,
+    client: RequestClientContext,
   ): Promise<CompleteEmailSignInResult> {
     // Admission is resolved again on use, not trusted from when the mail was sent: access
     // can be revoked inside the window the token is valid for.

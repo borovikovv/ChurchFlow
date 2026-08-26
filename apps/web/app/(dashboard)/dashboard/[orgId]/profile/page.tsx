@@ -9,10 +9,13 @@ import { profileTabItems } from '@/features/profile/profile-tabs';
 
 export default async function OrganizationProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orgId: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { orgId } = await params;
+  const { error } = await searchParams;
   await requireServerSession(`/dashboard/${orgId}/profile`);
 
   const user = await getCurrentUser();
@@ -26,6 +29,7 @@ export default async function OrganizationProfilePage({
       <PageHeader title={messages.profile.title} description={messages.profile.description} />
       <Tabs label={messages.profile.settings} items={profileTabItems(orgId, messages)} />
       <div className="stack max-w-xl">
+        {error ? <p className="form-error">{error}</p> : null}
         <EmailVerificationNotice email={user.email} emailVerified={user.emailVerified} />
         <ProfileForm
           displayName={user.displayName}

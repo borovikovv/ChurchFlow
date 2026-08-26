@@ -23,7 +23,7 @@ separate, approval-based `MembershipClaim` flow documented in
 - Keep delivery channels separate from identity binding. Email delivery does not prove invitation ownership.
 - Require authentication to accept.
 - For `targeted_telegram`, require the authenticated Telegram account to match the invitation target provider and provider account id.
-- For `claimable_link`, allow only `MEMBER` and `VIEWER`; bind the invitation to the first authenticated account that accepts it, recording which provider that identity came from.
+- For `claimable_link`, allow only `MEMBER` and `VIEWER`; bind the invitation to the first authenticated account that accepts it, recording that account's Telegram identity if it has one and its confirmed email address otherwise. The record is of the account's identity, not of the provider it happened to sign in with this time.
 - Refuse acceptance from an account with no proved identity: no Telegram account, and no confirmed email address.
 - Prevent duplicate active members.
 - Refresh an active pending targeted invite for the same organization, target provider, target provider account id, and status instead of creating duplicates.

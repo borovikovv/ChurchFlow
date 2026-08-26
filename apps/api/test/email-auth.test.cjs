@@ -7,9 +7,6 @@ const {
   hashEmailLoginCode,
   verifyEmailLoginCode,
 } = require('../dist/common/auth/email-login-code.js');
-const {
-  EMAIL_LOGIN_MAX_CODE_ATTEMPTS,
-} = require('../dist/modules/auth/email/email-login-policy.js');
 
 const WEB_APP_URL = 'https://churchflow.test';
 const USER_ID = 'a2b0b9f1-1f0e-4a2b-8a7d-2f6c9b1d4e5a';
@@ -271,15 +268,14 @@ test('a platform admin without membership lands on the admin area, not a request
   assert.equal(result.redirectTo, '/admin/organizations');
 });
 
-test('a wrong code is counted, and the last allowed attempt burns the token', async () => {
+test('a wrong code is counted against the token it was guessed at', async () => {
   const attempts = [];
   const codeHash = await hashEmailLoginCode('123456');
-  let stored = { id: 'token-1', codeHash, attemptCount: 0, redirectTo: null };
   const { service } = createService({
     repository: {
-      findLiveSignInToken: async () => stored,
-      recordFailedCodeAttempt: async (tokenId, burn) => {
-        attempts.push({ tokenId, burn });
+      findLiveSignInToken: async () => ({ id: 'token-1', codeHash, redirectTo: null }),
+      recordFailedCodeAttempt: async (tokenId) => {
+        attempts.push(tokenId);
       },
     },
   });
@@ -288,26 +284,17 @@ test('a wrong code is counted, and the last allowed attempt burns the token', as
     service.completeSignInWithCode({ email: EMAIL, code: '999999' }, {}),
     /This sign-in code is no longer valid/,
   );
-  assert.deepEqual(attempts, [{ tokenId: 'token-1', burn: false }]);
 
-  stored = { ...stored, attemptCount: EMAIL_LOGIN_MAX_CODE_ATTEMPTS - 1 };
-  await assert.rejects(
-    service.completeSignInWithCode({ email: EMAIL, code: '999999' }, {}),
-    /This sign-in code is no longer valid/,
-  );
-  assert.deepEqual(attempts[1], { tokenId: 'token-1', burn: true });
+  // Whether that attempt was the last one the token had is decided by the statement that
+  // records it, so that concurrent guesses cannot each read the same stale count.
+  assert.deepEqual(attempts, ['token-1']);
 });
 
 test('a correct code signs in only while the token is still there to consume', async () => {
   const codeHash = await hashEmailLoginCode('123456');
   const { service } = createService({
     repository: {
-      findLiveSignInToken: async () => ({
-        id: 'token-1',
-        codeHash,
-        attemptCount: 0,
-        redirectTo: null,
-      }),
+      findLiveSignInToken: async () => ({ id: 'token-1', codeHash, redirectTo: null }),
       consumeSignInTokenById: async () => false,
     },
   });
@@ -322,12 +309,7 @@ test('a correct code produces the same session a link would have', async () => {
   const codeHash = await hashEmailLoginCode('123456');
   const { service } = createService({
     repository: {
-      findLiveSignInToken: async () => ({
-        id: 'token-1',
-        codeHash,
-        attemptCount: 0,
-        redirectTo: null,
-      }),
+      findLiveSignInToken: async () => ({ id: 'token-1', codeHash, redirectTo: null }),
     },
   });
 
@@ -357,7 +339,7 @@ test('confirming an address is recorded and returns the profile', async () => {
 
   const result = await service.completeEmailVerification('live-token');
 
-  assert.equal(result.redirectTo, '/profile?emailVerified=1');
+  assert.equal(result.redirectTo, '/profile');
   assert.equal(audited[0].metadata.event, 'email_verified');
 });
 

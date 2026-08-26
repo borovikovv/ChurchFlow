@@ -44,7 +44,7 @@ For local Telegram Web Login testing, use the HTTPS proxy in `docs/local-https.m
 - Each session is one device. Signed-in devices are listed under the profile and can be signed out individually or all at once.
 - Platform admins are regular users with `platformRole` set to `ADMIN` or `SUPER_ADMIN`.
 - Organization owners are represented by `OrganizationMember` rows with role `OWNER`.
-- Invitations separate identity binding from delivery. Targeted Telegram invitations use Telegram OIDC `sub`. Claimable links are bearer credentials: the first authenticated account to open one claims it, and the claim is stamped with whichever identity that account signed in with. A confirmed email address counts as such an identity; an unconfirmed one never does.
+- Invitations separate identity binding from delivery. Targeted Telegram invitations use Telegram OIDC `sub`. Claimable links are bearer credentials: the first authenticated account to open one claims it, and the claim is stamped with that account's strongest identity — its Telegram account if it has one, otherwise its confirmed email address. A confirmed email address counts as such an identity; an unconfirmed one never does.
 
 See `docs/auth.md`, `docs/organization-approval-flow.md`, `docs/platform-admin.md`, and `docs/invitations.md` for the full business and technical workflow, and `docs/deployment.md` for environment variables.
 
