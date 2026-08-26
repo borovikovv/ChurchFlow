@@ -383,6 +383,29 @@
     width: fit-content;
   }
 
+  .auth-sign-in-form {
+    width: min(420px, 100%);
+    text-align: left;
+  }
+
+  .auth-divider {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    width: min(420px, 100%);
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .auth-divider::before,
+  .auth-divider::after {
+    content: '';
+    height: 1px;
+    background: var(--line);
+  }
+
   .auth-provider-list {
     display: grid;
     gap: 10px;

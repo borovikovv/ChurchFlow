@@ -2,9 +2,13 @@
 
 Organization invitations are tenant-scoped, provider-aware, and token-based. Raw tokens are never stored in the database.
 
-The active authentication provider is Telegram. Targeted invitations store `targetProvider = telegram` and `targetProviderAccountId = <Telegram OIDC sub>`. Telegram usernames may be stored only as display metadata; they are not security identifiers. Email may be used as a notification/contact channel, but invitation acceptance is not bound to email.
+Targeted invitations store `targetProvider = telegram` and `targetProviderAccountId = <Telegram OIDC sub>`. Telegram usernames may be stored only as display metadata; they are not security identifiers. A targeted invitation stays bound to that Telegram identity and no other.
 
-For the MVP, normal member onboarding uses claimable links. The inviter generates a link for `MEMBER` or `VIEWER` and sends it manually, usually through Telegram. The first authenticated Telegram user who opens and accepts the link claims it; acceptance binds the invitation to that Telegram account and creates/reactivates membership. Owners can then promote an active member to `ADMIN` or `OWNER`, so normal onboarding never requires the inviter to know a Telegram OIDC `sub`.
+Acceptance is bound to an identity the accepting account has proved it holds: its Telegram account, or its email address once confirmed. An address an administrator typed into a profile is delivery data and never an acceptance identity. Delivering an invitation to a mailbox still proves nothing on its own — the token in the link does.
+
+For the MVP, normal member onboarding uses claimable links. The inviter generates a link for `MEMBER` or `VIEWER` and sends it manually, or has it emailed. A claimable link is a bearer credential: the first authenticated account to open and accept it claims it, whichever provider that account signed in with. Acceptance stamps the invitation with that identity, so a second account holding the same link is refused, and it creates or reactivates membership. Owners can then promote an active member to `ADMIN` or `OWNER`, so normal onboarding never requires the inviter to know a Telegram OIDC `sub`.
+
+Somebody with no ChurchFlow account can therefore be invited by email alone: the emailed link admits them at `/login`, they sign in with that mailbox, and the account is created verified on the way through.
 
 Invitations are for people who do not yet have an organization membership. A manually
 created registry member already has an `OrganizationMember`, so app access uses the
@@ -19,7 +23,8 @@ separate, approval-based `MembershipClaim` flow documented in
 - Keep delivery channels separate from identity binding. Email delivery does not prove invitation ownership.
 - Require authentication to accept.
 - For `targeted_telegram`, require the authenticated Telegram account to match the invitation target provider and provider account id.
-- For `claimable_link`, allow only `MEMBER` and `VIEWER`; bind the invitation to the first authenticated Telegram account that accepts it.
+- For `claimable_link`, allow only `MEMBER` and `VIEWER`; bind the invitation to the first authenticated account that accepts it, recording which provider that identity came from.
+- Refuse acceptance from an account with no proved identity: no Telegram account, and no confirmed email address.
 - Prevent duplicate active members.
 - Refresh an active pending targeted invite for the same organization, target provider, target provider account id, and status instead of creating duplicates.
 - Refresh an expired, unaccepted targeted invite in place. A partial unique index applies only to pending provider-bound invitations, so accepted and revoked history remains append-only.

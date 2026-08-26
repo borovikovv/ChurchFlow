@@ -3,11 +3,7 @@ import { getCurrentUser, requireServerSession } from '@/auth/session';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs } from '@/components/ui/tabs';
 import { getMessages } from '@/i18n/messages';
-import {
-  organizationProfileNotificationsRoute,
-  organizationProfileRoute,
-  organizationProfileSessionsRoute,
-} from '@/features/organizations/routes';
+import { profileTabItems } from '@/features/profile/profile-tabs';
 import { NotificationPreferencesForm } from '@/features/notifications/components/notification-preferences-form';
 import { getNotificationPreferences } from '@/features/notifications/server/actions';
 
@@ -34,17 +30,7 @@ export default async function OrganizationNotificationPreferencesPage({
         title={messages.profile.title}
         description={messages.notifications.pageDescription}
       />
-      <Tabs
-        label={messages.profile.settings}
-        items={[
-          { label: messages.profile.title, href: organizationProfileRoute(orgId) },
-          {
-            label: messages.profile.notifications,
-            href: organizationProfileNotificationsRoute(orgId),
-          },
-          { label: messages.sessions.title, href: organizationProfileSessionsRoute(orgId) },
-        ]}
-      />
+      <Tabs label={messages.profile.settings} items={profileTabItems(orgId, messages)} />
       {preferencesResult.ok ? (
         <NotificationPreferencesForm
           organizationId={orgId}

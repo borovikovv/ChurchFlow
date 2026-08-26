@@ -4,6 +4,7 @@ const test = require('node:test');
 const { createHash, generateKeyPairSync, sign } = require('node:crypto');
 const { AuthController } = require('../dist/modules/auth/auth.controller.js');
 const { AuthService } = require('../dist/modules/auth/auth.service.js');
+const { normalizeInternalRedirect } = require('../dist/common/auth/internal-redirect.js');
 const {
   OrganizationRequestsService,
   generateOrganizationSlug,
@@ -330,41 +331,43 @@ test('unknown Telegram user is admitted only with a valid membership claim token
 });
 
 test('redirect normalization accepts only canonical same-origin URLs', () => {
-  const service = createAuthService(createAuthRepository());
+  const appUrl = 'https://churchflow.test';
 
-  assert.equal(service.normalizeRedirectTo('/organization-request'), '/organization-request');
+  assert.equal(normalizeInternalRedirect('/organization-request', appUrl), '/organization-request');
   assert.equal(
-    service.normalizeRedirectTo('/organization-request/status?from=login#request'),
+    normalizeInternalRedirect('/organization-request/status?from=login#request', appUrl),
     '/organization-request/status?from=login#request',
   );
   assert.equal(
-    service.normalizeRedirectTo('/invitations/accept?token=valid-token'),
+    normalizeInternalRedirect('/invitations/accept?token=valid-token', appUrl),
     '/invitations/accept?token=valid-token',
   );
-  assert.equal(service.normalizeRedirectTo('https://churchflow.test/profile'), '/profile');
-  assert.equal(service.normalizeRedirectTo('//evil.example'), undefined);
-  assert.equal(service.normalizeRedirectTo('/\\evil.example'), undefined);
-  assert.equal(service.normalizeRedirectTo('https://evil.example/path'), undefined);
-  assert.equal(service.normalizeRedirectTo('/%5c%5cevil.example'), undefined);
-  assert.equal(service.normalizeRedirectTo('/%2f%2fevil.example'), undefined);
+  assert.equal(normalizeInternalRedirect('https://churchflow.test/profile', appUrl), '/profile');
+  assert.equal(normalizeInternalRedirect('//evil.example', appUrl), undefined);
+  assert.equal(normalizeInternalRedirect('/\\evil.example', appUrl), undefined);
+  assert.equal(normalizeInternalRedirect('https://evil.example/path', appUrl), undefined);
+  assert.equal(normalizeInternalRedirect('/%5c%5cevil.example', appUrl), undefined);
+  assert.equal(normalizeInternalRedirect('/%2f%2fevil.example', appUrl), undefined);
 });
 
 test('redirect normalization is scoped to the configured stage origin', () => {
-  const service = createAuthService(createAuthRepository(), {
-    webAppUrl: 'https://stage.mychurchflow.org',
-  });
+  const appUrl = 'https://stage.mychurchflow.org';
 
-  assert.equal(service.normalizeRedirectTo('https://stage.mychurchflow.org/profile'), '/profile');
-  assert.equal(service.normalizeRedirectTo('https://mychurchflow.org/profile'), undefined);
+  assert.equal(
+    normalizeInternalRedirect('https://stage.mychurchflow.org/profile', appUrl),
+    '/profile',
+  );
+  assert.equal(normalizeInternalRedirect('https://mychurchflow.org/profile', appUrl), undefined);
 });
 
 test('redirect normalization is scoped to the configured production origin', () => {
-  const service = createAuthService(createAuthRepository(), {
-    webAppUrl: 'https://mychurchflow.org',
-  });
+  const appUrl = 'https://mychurchflow.org';
 
-  assert.equal(service.normalizeRedirectTo('https://mychurchflow.org/profile'), '/profile');
-  assert.equal(service.normalizeRedirectTo('https://stage.mychurchflow.org/profile'), undefined);
+  assert.equal(normalizeInternalRedirect('https://mychurchflow.org/profile', appUrl), '/profile');
+  assert.equal(
+    normalizeInternalRedirect('https://stage.mychurchflow.org/profile', appUrl),
+    undefined,
+  );
 });
 
 for (const [label, cookieDomain] of [

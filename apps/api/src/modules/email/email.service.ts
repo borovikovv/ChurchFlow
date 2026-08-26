@@ -47,6 +47,21 @@ export interface MembershipClaimEmailInput {
   expiresAt: Date;
 }
 
+export interface EmailSignInEmailInput {
+  locale?: AppLocale;
+  email: string;
+  token: string;
+  code: string;
+  expiresAt: Date;
+}
+
+export interface EmailVerificationEmailInput {
+  locale?: AppLocale;
+  email: string;
+  token: string;
+  expiresAt: Date;
+}
+
 export interface NotificationEmailInput {
   locale?: AppLocale;
   email: string;
@@ -70,6 +85,45 @@ export class EmailService {
 
   buildMembershipClaimUrl(token: string): string {
     return `${this.webAppUrl}/member-claims/accept?token=${encodeURIComponent(token)}`;
+  }
+
+  // The web app rewrites /v1 to the API, so the link stays on the origin that owns the
+  // session cookies.
+  buildEmailVerificationUrl(token: string): string {
+    return `${this.webAppUrl}/v1/auth/email/verify?token=${encodeURIComponent(token)}`;
+  }
+
+  buildEmailSignInUrl(token: string): string {
+    return `${this.webAppUrl}/v1/auth/email/callback?token=${encodeURIComponent(token)}`;
+  }
+
+  async sendEmailSignInEmail(input: EmailSignInEmailInput): Promise<void> {
+    const locale = input.locale ?? DEFAULT_APP_LOCALE;
+    const messages = emailMessages(locale).emailSignIn;
+    await this.emailProvider.send({
+      to: input.email,
+      subject: messages.subject,
+      text: [
+        messages.intro,
+        messages.signIn({ url: this.buildEmailSignInUrl(input.token) }),
+        messages.code({ code: input.code }),
+        messages.expiresAt({ expiresAt: formatEmailDateTime(input.expiresAt, locale) }),
+      ].join('\n'),
+    });
+  }
+
+  async sendEmailVerificationEmail(input: EmailVerificationEmailInput): Promise<void> {
+    const locale = input.locale ?? DEFAULT_APP_LOCALE;
+    const messages = emailMessages(locale).emailVerification;
+    await this.emailProvider.send({
+      to: input.email,
+      subject: messages.subject,
+      text: [
+        messages.intro,
+        messages.confirm({ url: this.buildEmailVerificationUrl(input.token) }),
+        messages.expiresAt({ expiresAt: formatEmailDateTime(input.expiresAt, locale) }),
+      ].join('\n'),
+    });
   }
 
   async sendMembershipClaimEmail(input: MembershipClaimEmailInput): Promise<void> {
