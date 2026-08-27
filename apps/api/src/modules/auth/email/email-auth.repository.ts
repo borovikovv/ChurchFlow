@@ -4,6 +4,7 @@ import type { AppLocale } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   EMAIL_LOGIN_MAX_CODE_ATTEMPTS,
+  EMAIL_LOGIN_REQUESTS_PER_WINDOW,
   EMAIL_LOGIN_TOKEN_RETENTION_SECONDS,
 } from './email-login-policy';
 import {
@@ -155,13 +156,10 @@ export class EmailAuthRepository {
 
   async issueToken(input: IssueEmailLoginTokenInput): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      // Asking for a new link retires the older ones for that address and purpose, so at most
-      // one is usable at a time. Two requests racing can still leave two rows live; the newest
-      // is the one a code is checked against, and both expire on the same short clock.
-      await tx.emailLoginToken.updateMany({
-        where: { email: input.email, purpose: input.purpose, consumedAt: null },
-        data: { consumedAt: new Date() },
-      });
+      // Asking for a new link deliberately leaves the older ones alone. Anybody who knows an
+      // address can ask, so retiring them here would hand a stranger the power to invalidate
+      // the link somebody is holding. They expire on the same short clock either way, and how
+      // many can exist at once is already bounded by the per-address request cap.
 
       // Swept here rather than by a scheduled job: the table only grows when somebody asks
       // for a token, so that is also the cheapest moment to drop the ones nobody can use.
@@ -210,26 +208,41 @@ export class EmailAuthRepository {
     });
   }
 
-  async findLiveSignInToken(email: string): Promise<LiveEmailSignInToken | null> {
-    return this.prisma.emailLoginToken.findFirst({
+  // Every live token for the address, newest first, because more than one can now be live at
+  // once and the code somebody is holding may belong to any of them. Bounded by the same cap
+  // that limits how many can be issued, so one wrong guess costs a fixed amount of key
+  // derivation however the table happens to look.
+  async findLiveSignInTokens(email: string): Promise<LiveEmailSignInToken[]> {
+    return this.prisma.emailLoginToken.findMany({
       where: { email, purpose: 'sign_in', consumedAt: null, expiresAt: { gt: new Date() } },
       select: { id: true, codeHash: true, redirectTo: true },
       orderBy: { createdAt: 'desc' },
+      take: EMAIL_LOGIN_REQUESTS_PER_WINDOW,
     });
   }
 
+  // One wrong guess spends an attempt on every token the address has live, so asking for more
+  // links can never buy more guesses.
+  //
   // Counting the attempt and deciding whether it was the last one have to be one statement.
   // Reading the count first and burning the token second lets concurrent guesses each see the
   // same stale count and walk straight past the cap.
-  async recordFailedCodeAttempt(tokenId: string): Promise<void> {
+  // These columns are `timestamp` without a zone and Prisma writes UTC into them, so the clock
+  // has to be read as UTC too. Bare `now()` would be read in the server's own zone, which is
+  // only the same thing while that zone happens to be UTC.
+  async recordFailedCodeAttempts(email: string): Promise<void> {
     await this.prisma.$executeRaw`
       UPDATE "email_login_tokens"
       SET "attempt_count" = "attempt_count" + 1,
           "consumed_at" = CASE
-            WHEN "attempt_count" + 1 >= ${EMAIL_LOGIN_MAX_CODE_ATTEMPTS} THEN now()
+            WHEN "attempt_count" + 1 >= ${EMAIL_LOGIN_MAX_CODE_ATTEMPTS}
+              THEN (now() AT TIME ZONE 'UTC')
             ELSE "consumed_at"
           END
-      WHERE "id" = ${tokenId}::uuid AND "consumed_at" IS NULL
+      WHERE "email" = ${email}::citext
+        AND "purpose" = 'sign_in'::"EmailLoginTokenPurpose"
+        AND "consumed_at" IS NULL
+        AND "expires_at" > (now() AT TIME ZONE 'UTC')
     `;
   }
 

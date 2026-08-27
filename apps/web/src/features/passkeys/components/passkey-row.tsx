@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { PasskeySummary } from '@churchflow/shared';
+import { PASSKEY_LABEL_MAX_LENGTH, type PasskeySummary } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/forms/form-field';
 import { FormDialog } from '@/components/ui/form-dialog';
@@ -64,7 +64,7 @@ export function PasskeyRow({
             {({ id }) => (
               <input
                 id={id}
-                maxLength={60}
+                maxLength={PASSKEY_LABEL_MAX_LENGTH}
                 onChange={(event) => setLabel(event.target.value)}
                 value={label}
               />

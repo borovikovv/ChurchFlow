@@ -1,17 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { WebAuthnChallengeType } from '@churchflow/db';
+import type { PasskeySummary } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { LOGIN_STATE_SELECT, toLoginUserState, type LoginUserState } from '../login-state';
-
-export interface PasskeyRecord {
-  id: string;
-  label: string | null;
-  credentialId: string;
-  transports: string[];
-  backedUp: boolean | null;
-  lastUsedAt: Date | null;
-  createdAt: Date;
-}
 
 export interface PasskeyCredential {
   id: string;
@@ -89,14 +80,14 @@ export class PasskeysRepository {
     return consumed.count === 1;
   }
 
-  async listForUser(userId: string): Promise<PasskeyRecord[]> {
+  async listForUser(userId: string): Promise<PasskeySummary[]> {
     const passkeys = await this.prisma.authAccount.findMany({
       where: { userId, provider: 'passkey', deletedAt: null },
       select: PASSKEY_SELECT,
       orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
-    return passkeys.map(toPasskeyRecord);
+    return passkeys.map(toPasskeySummary);
   }
 
   async listCredentialsForUser(
@@ -146,7 +137,7 @@ export class PasskeysRepository {
     };
   }
 
-  async createPasskey(input: CreatePasskeyInput): Promise<PasskeyRecord> {
+  async createPasskey(input: CreatePasskeyInput): Promise<PasskeySummary> {
     const passkey = await this.prisma.authAccount.create({
       data: {
         userId: input.userId,
@@ -164,7 +155,7 @@ export class PasskeysRepository {
       select: PASSKEY_SELECT,
     });
 
-    return toPasskeyRecord(passkey);
+    return toPasskeySummary(passkey);
   }
 
   async recordAuthentication(id: string, signCount: number, backedUp: boolean): Promise<void> {
@@ -174,7 +165,7 @@ export class PasskeysRepository {
     });
   }
 
-  async rename(id: string, userId: string, label: string): Promise<PasskeyRecord | null> {
+  async rename(id: string, userId: string, label: string): Promise<PasskeySummary | null> {
     const updated = await this.prisma.authAccount.updateMany({
       where: { id, userId, provider: 'passkey', deletedAt: null },
       data: { label },
@@ -189,21 +180,31 @@ export class PasskeysRepository {
       select: PASSKEY_SELECT,
     });
 
-    return passkey ? toPasskeyRecord(passkey) : null;
+    return passkey ? toPasskeySummary(passkey) : null;
   }
 
-  async countSignInMethods(userId: string): Promise<number> {
-    return this.prisma.authAccount.count({ where: { userId, deletedAt: null } });
-  }
-
+  // Counting the remaining methods and removing one have to be one transaction. Read the
+  // count first and delete second, and two removals racing each see the same stale count and
+  // between them take the last way back into the account.
+  //
   // Removed outright rather than soft-deleted: the unique index on the credential would
   // otherwise block the owner from registering the same authenticator again.
-  async deletePasskey(id: string, userId: string): Promise<boolean> {
-    const deleted = await this.prisma.authAccount.deleteMany({
-      where: { id, userId, provider: 'passkey' },
-    });
+  async deleteUnlessLastSignInMethod(
+    id: string,
+    userId: string,
+  ): Promise<'deleted' | 'not_found' | 'last_sign_in_method'> {
+    return this.prisma.$transaction(async (tx) => {
+      const methods = await tx.authAccount.count({ where: { userId, deletedAt: null } });
+      if (methods <= 1) {
+        return 'last_sign_in_method';
+      }
 
-    return deleted.count > 0;
+      const deleted = await tx.authAccount.deleteMany({
+        where: { id, userId, provider: 'passkey' },
+      });
+
+      return deleted.count > 0 ? 'deleted' : 'not_found';
+    });
   }
 
   async findLoginState(userId: string): Promise<LoginUserState | null> {
@@ -216,7 +217,9 @@ export class PasskeysRepository {
   }
 }
 
-function toPasskeyRecord(passkey: {
+// The wire shape is the shared contract, so the web app and this repository cannot drift:
+// dates cross as ISO strings because that is what survives JSON.
+function toPasskeySummary(passkey: {
   id: string;
   label: string | null;
   credentialId: string | null;
@@ -224,14 +227,14 @@ function toPasskeyRecord(passkey: {
   backedUp: boolean | null;
   lastUsedAt: Date | null;
   createdAt: Date;
-}): PasskeyRecord {
+}): PasskeySummary {
   return {
     id: passkey.id,
     label: passkey.label,
     credentialId: passkey.credentialId ?? '',
     transports: passkey.transports,
     backedUp: passkey.backedUp,
-    lastUsedAt: passkey.lastUsedAt,
-    createdAt: passkey.createdAt,
+    lastUsedAt: passkey.lastUsedAt?.toISOString() ?? null,
+    createdAt: passkey.createdAt.toISOString(),
   };
 }

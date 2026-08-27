@@ -19,6 +19,7 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
 } from '@simplewebauthn/server';
+import type { PasskeySummary } from '@churchflow/shared';
 import type { RequestClientContext } from '../../../common/auth/request-client-context';
 import { normalizeInternalRedirect } from '../../../common/auth/internal-redirect';
 import { hashOpaqueToken } from '../../../common/auth/session-token';
@@ -32,7 +33,7 @@ import {
   passkeyChallengeExpiresAt,
   toKnownTransports,
 } from './passkey-policy';
-import { PasskeysRepository, type PasskeyRecord } from './passkeys.repository';
+import { PasskeysRepository } from './passkeys.repository';
 
 export interface PasskeySignInResult {
   sessionToken: string;
@@ -52,7 +53,7 @@ export class PasskeysService {
     private readonly auditService: AuditService,
   ) {}
 
-  list(userId: string): Promise<PasskeyRecord[]> {
+  list(userId: string): Promise<PasskeySummary[]> {
     return this.repository.listForUser(userId);
   }
 
@@ -93,7 +94,7 @@ export class PasskeysService {
     userId: string,
     response: RegistrationResponseJSON,
     label?: string,
-  ): Promise<PasskeyRecord> {
+  ): Promise<PasskeySummary> {
     const verification = await this.verified(() =>
       verifyRegistrationResponse({
         response,
@@ -143,7 +144,7 @@ export class PasskeysService {
     }
   }
 
-  async rename(userId: string, passkeyId: string, label: string): Promise<PasskeyRecord> {
+  async rename(userId: string, passkeyId: string, label: string): Promise<PasskeySummary> {
     const passkey = await this.repository.rename(passkeyId, userId, label);
     if (!passkey) {
       throw new NotFoundException('Passkey was not found');
@@ -163,12 +164,15 @@ export class PasskeysService {
   }
 
   async remove(userId: string, passkeyId: string): Promise<{ ok: true }> {
-    // Removing the only way back in would lock the account out of itself.
-    if ((await this.repository.countSignInMethods(userId)) <= 1) {
+    // Removing the only way back in would lock the account out of itself, so the check and the
+    // removal are one transaction rather than two statements a concurrent removal can slip
+    // between.
+    const outcome = await this.repository.deleteUnlessLastSignInMethod(passkeyId, userId);
+    if (outcome === 'last_sign_in_method') {
       throw new ConflictException('Add another sign-in method before removing the last one');
     }
 
-    if (!(await this.repository.deletePasskey(passkeyId, userId))) {
+    if (outcome === 'not_found') {
       throw new NotFoundException('Passkey was not found');
     }
 

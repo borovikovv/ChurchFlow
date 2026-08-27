@@ -1,4 +1,17 @@
-import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpException,
+  HttpStatus,
+  Logger,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
@@ -11,8 +24,14 @@ import {
 import { EmailAuthService } from './email-auth.service';
 import { EmailSignInCodeDto, EmailSignInRequestDto } from './dto/email-sign-in.dto';
 
+// Typed as a plain number so the comparison below is number-to-number: `getStatus()` returns
+// a number, and comparing it straight against an enum member is flagged as unsafe.
+const SERVER_ERROR_STATUS: number = HttpStatus.INTERNAL_SERVER_ERROR;
+
 @Controller('auth/email')
 export class EmailAuthController {
+  private readonly logger = new Logger(EmailAuthController.name);
+
   constructor(
     private readonly emailAuthService: EmailAuthService,
     private readonly config: ConfigService,
@@ -58,8 +77,9 @@ export class EmailAuthController {
       setSessionCookie(response, this.config, result);
       response.redirect(new URL(result.redirectTo, this.webAppUrl).toString());
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : 'Email sign-in failed';
-      response.redirect(this.errorUrl('/login', message));
+      response.redirect(
+        this.errorUrl('/login', this.visibleReason(caught, 'Email sign-in failed')),
+      );
     }
   }
 
@@ -109,9 +129,26 @@ export class EmailAuthController {
       const result = await this.emailAuthService.completeEmailVerification(token);
       response.redirect(new URL(result.redirectTo, this.webAppUrl).toString());
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : 'Email verification failed';
-      response.redirect(this.errorUrl('/profile', message));
+      response.redirect(
+        this.errorUrl('/profile', this.visibleReason(caught, 'Email verification failed')),
+      );
     }
+  }
+
+  // These two endpoints answer with a redirect, so they never reach the exception filter that
+  // replaces a server fault with a generic message. An unexpected error would otherwise put a
+  // database or configuration message in the visitor's address bar.
+  private visibleReason(caught: unknown, fallback: string): string {
+    if (caught instanceof HttpException && caught.getStatus() < SERVER_ERROR_STATUS) {
+      return caught.message;
+    }
+
+    this.logger.error(
+      { event: 'Email auth redirect failed unexpectedly' },
+      caught instanceof Error ? caught.stack : undefined,
+    );
+
+    return fallback;
   }
 
   private errorUrl(path: string, error: string): string {
