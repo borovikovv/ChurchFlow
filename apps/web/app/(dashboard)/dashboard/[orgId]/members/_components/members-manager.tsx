@@ -15,7 +15,11 @@ import { MembersActions } from './members-actions';
 import { MembersCardList } from './members-card-list';
 import { MembersFilters } from './members-filters';
 import { Avatar } from '@/components/ui/avatar';
-import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
+import {
+  MemberAccessMethodsSummary,
+  MemberContactSummary,
+  MemberIdentitySummary,
+} from './member-summary';
 import type {
   MemberMinistry,
   OrganizationMembersAccessFilter,
@@ -88,6 +92,7 @@ export function MembersManager({
   }> = [
     { label: t('allMembers'), value: '' },
     { label: t('telegramConnected'), value: 'connected' },
+    { label: t('emailConnected'), value: 'email' },
     { label: t('noAppAccess'), value: 'offline' },
     { label: t('accessRequested'), value: 'requested' },
     { label: t('suspended'), value: 'suspended' },
@@ -231,6 +236,7 @@ export function MembersManager({
               status={member.accountState}
               label={t(`statusLabels.${member.accountState}`)}
             />
+            <MemberAccessMethodsSummary methods={member.accessMethods} />
             {member.activeClaim?.status === 'REQUESTED' ? (
               <small className="truncate text-[var(--muted)]">
                 {t('requestedBy', {

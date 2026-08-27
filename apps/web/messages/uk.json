@@ -201,6 +201,10 @@
     "accessLinkCreatedAndEmailed": "Посилання доступу створено та надіслано учаснику email.",
     "accessLinkRefreshed": "Посилання доступу оновлено.",
     "accessLinkRevoked": "Посилання доступу до застосунку відкликано.",
+    "accessMethodLabels": {
+      "email": "Email",
+      "telegram": "Telegram"
+    },
     "accessRequested": "Доступ запитано",
     "addMembers": "Додати учасників",
     "addMemberManually": "Додати учасника вручну",
@@ -236,6 +240,7 @@
     "createdMember": "Учасника створено.",
     "creating": "Створення...",
     "downloadCsvTemplate": "Завантажити CSV шаблон",
+    "emailConnected": "Підключено email",
     "emailOptional": "Необов'язково",
     "emptyFilter": "Немає учасників для цього фільтра.",
     "editMember": "Редагувати учасника",

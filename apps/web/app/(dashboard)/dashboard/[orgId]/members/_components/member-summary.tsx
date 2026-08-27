@@ -1,4 +1,5 @@
 import { useTranslations } from 'next-intl';
+import type { MemberAccessMethod } from '@churchflow/shared';
 import { StatusBadge } from '@/components/ui/status-badge';
 
 interface SummaryProfile {
@@ -28,6 +29,18 @@ export function MemberIdentitySummary({
         {archived ? <StatusBadge status="archived" label={t('archived')} /> : null}
       </span>
     </div>
+  );
+}
+
+export function MemberAccessMethodsSummary({ methods }: { methods: MemberAccessMethod[] }) {
+  const t = useTranslations('members');
+
+  if (methods.length === 0) return null;
+
+  return (
+    <small className="truncate text-[var(--muted)]">
+      {methods.map((method) => t(`accessMethodLabels.${method}`)).join(' · ')}
+    </small>
   );
 }
 
