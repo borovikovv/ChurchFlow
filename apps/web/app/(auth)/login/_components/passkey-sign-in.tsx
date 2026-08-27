@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { postToApi } from '@/api/browser-client';
-import { Button } from '@/components/ui/button';
 import type { PasskeyAuthenticationOptions } from '@churchflow/shared';
+import { AuthProviderButton } from './auth-provider-button';
 import {
   isAbortedPasskeyCeremony,
   isPasskeyAutofillAvailable,
@@ -47,12 +47,12 @@ export function PasskeySignIn({
         return;
       }
 
+      // Nobody asked for this ceremony, so nothing it does is worth an error banner. Whatever
+      // went wrong, the button below is still there to be pressed on purpose.
       try {
         await signIn({ conditional: true, signal: controller.signal, redirectTo });
-      } catch (caught) {
-        if (!cancelled && !isAbortedPasskeyCeremony(caught)) {
-          setError(messages.passkeySignInFailed);
-        }
+      } catch {
+        // Ignored on purpose. See above.
       }
     }
 
@@ -63,7 +63,7 @@ export function PasskeySignIn({
       autofillRef.current = null;
       controller.abort();
     };
-  }, [redirectTo, messages.passkeySignInFailed]);
+  }, [redirectTo]);
 
   async function signInOnDemand(): Promise<void> {
     // A conditional ceremony already waiting in the background would make this second
@@ -90,9 +90,13 @@ export function PasskeySignIn({
 
   return (
     <div className="auth-sign-in-form grid gap-2">
-      <Button disabled={pending} onClick={signInOnDemand} type="button" variant="secondary">
-        {messages.signInWithPasskey}
-      </Button>
+      <AuthProviderButton
+        disabled={pending}
+        icon="/icons/key.png"
+        label={messages.signInWithPasskey}
+        onClick={signInOnDemand}
+        type="button"
+      />
       {error ? <p className="form-error">{error}</p> : null}
     </div>
   );

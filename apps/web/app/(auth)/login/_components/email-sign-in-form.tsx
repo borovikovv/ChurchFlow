@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { postToApi } from '@/api/browser-client';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/forms/form-field';
+import { AuthProviderButton } from './auth-provider-button';
 
 export interface EmailSignInMessages {
   emailAddress: string;
@@ -125,9 +126,13 @@ export function EmailSignInForm({
         )}
       </FormField>
       {error ? <p className="form-error">{error}</p> : null}
-      <Button disabled={pending} type="submit">
-        {messages.continueWithEmail}
-      </Button>
+      <AuthProviderButton
+        disabled={pending}
+        icon="/icons/email-svg.svg"
+        label={messages.continueWithEmail}
+        tone="primary"
+        type="submit"
+      />
     </form>
   );
 }

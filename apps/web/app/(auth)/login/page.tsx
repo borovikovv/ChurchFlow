@@ -2,6 +2,7 @@ import Image from 'next/image';
 import { getMessages } from '@/i18n/messages';
 import { DEFAULT_APP_LOCALE } from '@/i18n/locales';
 import { startProviderLogin } from './actions';
+import { AuthProviderButton } from './_components/auth-provider-button';
 import { EmailSignInForm } from './_components/email-sign-in-form';
 import { PasskeySignIn } from './_components/passkey-sign-in';
 
@@ -56,12 +57,11 @@ export default async function LoginPage({
             <form key={provider.id} action={startProviderLogin}>
               <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
               <input type="hidden" name="provider" value={provider.id} />
-              <button className="auth-provider-button" type="submit">
-                <span className="auth-provider-mark">
-                  <Image src={provider.icon} alt="" width={20} height={20} aria-hidden="true" />
-                </span>
-                {messages.auth[provider.translationKey]}
-              </button>
+              <AuthProviderButton
+                icon={provider.icon}
+                label={messages.auth[provider.translationKey]}
+                type="submit"
+              />
             </form>
           ))}
         </div>

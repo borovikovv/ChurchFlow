@@ -399,7 +399,7 @@ test('one membership claim token cannot be requested by two Telegram users', asy
         user: {
           findFirst: async ({ where }) => ({
             id: where.id,
-            accounts: [{ providerAccountId: `telegram-${where.id}` }],
+            accounts: [{ provider: 'telegram', providerAccountId: `telegram-${where.id}` }],
           }),
         },
         auditLog: { create: async () => ({}) },

@@ -60,6 +60,12 @@ function createService(overrides = {}) {
     },
     repository,
     {
+      hasValidClaimableInvitationTokenHash: async () => false,
+      hasValidPlatformAdminBootstrapTokenHash: async () => false,
+      hasValidMembershipClaimTokenHash: async () => false,
+      ...overrides.authRepository,
+    },
+    {
       createUserSession: async () => ({
         sessionToken: 'session-token',
         sessionExpiresAt: new Date('2026-09-25T00:00:00.000Z'),

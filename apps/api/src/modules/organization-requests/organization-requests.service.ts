@@ -113,7 +113,7 @@ export interface OrganizationRequestListItem {
   organizationName: string;
   contactName: string;
   contactEmail: string | null;
-  contactTelegramId: string;
+  contactTelegramId: string | null;
   contactTelegramUsername: string | null;
   status: string;
   createdAt: Date;

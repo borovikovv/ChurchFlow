@@ -23,6 +23,8 @@ import type { RequestClientContext } from '../../../common/auth/request-client-c
 import { normalizeInternalRedirect } from '../../../common/auth/internal-redirect';
 import { hashOpaqueToken } from '../../../common/auth/session-token';
 import { AuditService } from '../../audit/audit.service';
+import { hasAdmittingRedirect } from '../admitting-redirect';
+import { AuthRepository } from '../auth.repository';
 import { AuthService } from '../auth.service';
 import { hasStandingToSignIn, resolveLoginRedirect } from '../login-state';
 import {
@@ -45,6 +47,7 @@ export class PasskeysService {
   constructor(
     private readonly config: ConfigService,
     private readonly repository: PasskeysRepository,
+    private readonly authRepository: AuthRepository,
     private readonly authService: AuthService,
     private readonly auditService: AuditService,
   ) {}
@@ -231,8 +234,13 @@ export class PasskeysService {
       throw new UnauthorizedException('This passkey could not be verified');
     }
 
+    // Admission is the same question every provider answers, and a link carrying its own token
+    // is one of the answers: an account whose membership lapsed may still be readmitted by the
+    // invitation it is holding, exactly as it would be when signing in by email.
+    const redirectTo = normalizeInternalRedirect(input.redirectTo, this.webAppUrl) ?? null;
+    const admittedByRedirect = await hasAdmittingRedirect(redirectTo, this.authRepository);
     const state = await this.repository.findLoginState(credential.userId);
-    if (!state || !hasStandingToSignIn(state)) {
+    if (!state || !(hasStandingToSignIn(state) || admittedByRedirect)) {
       throw new UnauthorizedException('This account cannot sign in');
     }
 
@@ -249,10 +257,7 @@ export class PasskeysService {
 
     return {
       ...session,
-      redirectTo: resolveLoginRedirect(
-        state,
-        normalizeInternalRedirect(input.redirectTo, this.webAppUrl) ?? null,
-      ),
+      redirectTo: resolveLoginRedirect(state, redirectTo, admittedByRedirect),
     };
   }
 

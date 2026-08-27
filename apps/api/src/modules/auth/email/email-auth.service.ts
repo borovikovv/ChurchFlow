@@ -17,11 +17,9 @@ import {
   hashEmailLoginCode,
   verifyEmailLoginCode,
 } from '../../../common/auth/email-login-code';
-import {
-  extractRedirectToken,
-  normalizeInternalRedirect,
-} from '../../../common/auth/internal-redirect';
+import { normalizeInternalRedirect } from '../../../common/auth/internal-redirect';
 import { hashOpaqueToken } from '../../../common/auth/session-token';
+import { hasAdmittingRedirect, redirectPath } from '../admitting-redirect';
 import { UserLocaleService } from '../../../common/locale/user-locale.service';
 import { AuditService } from '../../audit/audit.service';
 import { EmailService } from '../../email/email.service';
@@ -215,18 +213,20 @@ export class EmailAuthService {
   async completeSignInWithToken(
     token: string,
     client: RequestClientContext,
+    acceptLanguage?: string,
   ): Promise<CompleteEmailSignInResult> {
     const consumed = await this.repository.consumeSignInTokenByHash(hashOpaqueToken(token));
     if (!consumed) {
       throw new UnauthorizedException('This sign-in link is no longer valid');
     }
 
-    return this.admitSignIn(consumed.email, consumed.redirectTo, client);
+    return this.admitSignIn(consumed.email, consumed.redirectTo, client, acceptLanguage);
   }
 
   async completeSignInWithCode(
     input: { email: string; code: string },
     client: RequestClientContext,
+    acceptLanguage?: string,
   ): Promise<CompleteEmailSignInResult> {
     const email = normalizeLoginEmail(input.email);
     const token = await this.repository.findLiveSignInToken(email);
@@ -244,13 +244,14 @@ export class EmailAuthService {
       throw new UnauthorizedException('This sign-in code is no longer valid');
     }
 
-    return this.admitSignIn(email, token.redirectTo, client);
+    return this.admitSignIn(email, token.redirectTo, client, acceptLanguage);
   }
 
   private async admitSignIn(
     email: string,
     requestedRedirect: string | null,
     client: RequestClientContext,
+    acceptLanguage?: string,
   ): Promise<CompleteEmailSignInResult> {
     // Admission is resolved again on use, not trusted from when the mail was sent: access
     // can be revoked inside the window the token is valid for.
@@ -264,7 +265,7 @@ export class EmailAuthService {
       throw new UnauthorizedException('This account cannot sign in with email');
     }
 
-    const state = admission.state ?? (await this.createAdmittedAccount(email));
+    const state = admission.state ?? (await this.createAdmittedAccount(email, acceptLanguage));
 
     if (state.isEmailVerified) {
       await this.repository.touchEmailAccount(state.user.id);
@@ -297,8 +298,16 @@ export class EmailAuthService {
     };
   }
 
-  private async createAdmittedAccount(email: string): Promise<LoginUserState> {
-    await this.repository.createAdmittedEmailUser({ email });
+  // The account is created here rather than when the mail was sent, so the language comes from
+  // the browser redeeming the token: that is the one the new account is about to be used in.
+  private async createAdmittedAccount(
+    email: string,
+    acceptLanguage?: string,
+  ): Promise<LoginUserState> {
+    await this.repository.createAdmittedEmailUser({
+      email,
+      locale: resolveAppLocaleFromAcceptLanguage(acceptLanguage),
+    });
     const state = await this.repository.findLoginAccountState(email);
     if (!state) {
       throw new UnauthorizedException('This account cannot sign in with email');
@@ -311,7 +320,7 @@ export class EmailAuthService {
     email: string,
     redirectTo: string | null,
   ): Promise<EmailLoginAdmission | EmailLoginRefused> {
-    const admittedByRedirect = await this.hasAdmittingRedirect(redirectTo);
+    const admittedByRedirect = await hasAdmittingRedirect(redirectTo, this.authRepository);
     const state = await this.repository.findLoginAccountState(email);
 
     if (!state) {
@@ -327,40 +336,6 @@ export class EmailAuthService {
     return hasStandingToSignIn(state) || admittedByRedirect
       ? { admitted: true, state, admittedByRedirect }
       : { admitted: false, reason: 'no_standing_to_sign_in' };
-  }
-
-  // Two kinds of admission meet here. A live claimable invitation, first-admin bootstrap or
-  // member-claim link puts the credential in the redirect itself, and its holder may sign in
-  // with the mailbox they can prove they own. Organization onboarding carries no token: it is
-  // the way in for somebody nobody has invited yet, and the same door Telegram already opens.
-  private async hasAdmittingRedirect(redirectTo: string | null): Promise<boolean> {
-    if (isOrganizationOnboardingRedirect(redirectTo)) {
-      return true;
-    }
-
-    const candidates: ReadonlyArray<[string, (tokenHash: string) => Promise<boolean>]> = [
-      [
-        '/invitations/accept',
-        (tokenHash) => this.authRepository.hasValidClaimableInvitationTokenHash(tokenHash),
-      ],
-      [
-        '/platform-admin/bootstrap',
-        (tokenHash) => this.authRepository.hasValidPlatformAdminBootstrapTokenHash(tokenHash),
-      ],
-      [
-        '/member-claims/accept',
-        (tokenHash) => this.authRepository.hasValidMembershipClaimTokenHash(tokenHash),
-      ],
-    ];
-
-    for (const [path, isValid] of candidates) {
-      const token = extractRedirectToken(redirectTo ?? undefined, path);
-      if (token && (await isValid(hashOpaqueToken(token)))) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   private async hasExhaustedRequests(
@@ -386,28 +361,4 @@ export class EmailAuthService {
   private get webAppUrl(): string {
     return this.config.getOrThrow<string>('WEB_APP_URL');
   }
-}
-
-// The same two paths Telegram admits an uninvited caller on, matched the same way.
-const ORGANIZATION_ONBOARDING_PATHS: ReadonlyArray<string> = [
-  '/organization-request',
-  '/organization-request/status',
-];
-
-function isOrganizationOnboardingRedirect(redirectTo: string | null): boolean {
-  const path = redirectPath(redirectTo);
-
-  return path !== null && ORGANIZATION_ONBOARDING_PATHS.includes(path);
-}
-
-// Everything that identifies the caller or carries a token lives past the path, so this is
-// also what the refusal log is allowed to say.
-function redirectPath(redirectTo: string | null): string | null {
-  if (!redirectTo) {
-    return null;
-  }
-
-  const end = redirectTo.search(/[?#]/);
-
-  return end < 0 ? redirectTo : redirectTo.slice(0, end);
 }

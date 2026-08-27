@@ -61,10 +61,17 @@ signing in. Both live in the same `email_login_tokens` row, so using either reti
   this API can see behind the web app. Confirmation emails are capped the same way, but say
   so out loud, because that caller is already signed in and has nothing to discover.
 
-An address becomes an identity only once its owner has proved they hold it. Until
-`User.emailVerified` is set, the address is contact data, and email sign-in refuses it even
-when the caller arrives with a valid invitation link. An account created _by_ email sign-in
-is verified at creation, because the link proved the mailbox on the way in.
+An address becomes an identity only once its owner has proved they hold it, and coming back
+with the link or the code is that proof. So email sign-in does _not_ refuse an address the
+account has never confirmed: the mail was only ever delivered to the address itself, and
+redeeming it confirms the address in the same step, exactly as a verification link would
+have. Refusing at that point would demand a confirmation that could never happen, because
+confirming an address needs a session and this is the way to one. An account created _by_
+email sign-in is verified at creation for the same reason.
+
+Everywhere else, an unconfirmed address is still only contact data: it is not an acceptance
+identity for invitations or membership claims, and it does not make somebody eligible to ask
+for an organization.
 
 Confirming an address on an existing account is a separate, authenticated flow:
 `POST /v1/auth/email/verify/request` sends the link, and `GET /v1/auth/email/verify`

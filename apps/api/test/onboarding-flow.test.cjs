@@ -882,3 +882,77 @@ test('invitation email failure still returns the generated link', async () => {
   assert.equal(result.emailSent, false);
   assert.match(result.acceptUrl, /^https:\/\/churchflow\.test\/invitations\//);
 });
+
+// The admission rule every provider now shares. It used to live inside the email service, so
+// passkey sign-in answered a narrower question than the link in the same person's inbox.
+const {
+  hasAdmittingRedirect,
+  isOrganizationOnboardingRedirect,
+  redirectPath,
+} = require('../dist/modules/auth/admitting-redirect.js');
+
+function admittingTokens(overrides = {}) {
+  return {
+    hasValidClaimableInvitationTokenHash: async () => false,
+    hasValidPlatformAdminBootstrapTokenHash: async () => false,
+    hasValidMembershipClaimTokenHash: async () => false,
+    ...overrides,
+  };
+}
+
+test('the pages that ask for an organization admit a caller carrying no token', async () => {
+  assert.equal(await hasAdmittingRedirect('/organization-request', admittingTokens()), true);
+  assert.equal(await hasAdmittingRedirect('/organization-request/status', admittingTokens()), true);
+  assert.equal(isOrganizationOnboardingRedirect('/organization-request?from=login'), true);
+  assert.equal(isOrganizationOnboardingRedirect('/organization-requests'), false);
+  assert.equal(await hasAdmittingRedirect('/dashboard/org-1', admittingTokens()), false);
+  assert.equal(await hasAdmittingRedirect(null, admittingTokens()), false);
+});
+
+test('a redirect admits only when the token it carries is still live', async () => {
+  const checked = [];
+  const tokens = admittingTokens({
+    hasValidClaimableInvitationTokenHash: async (tokenHash) => {
+      checked.push(tokenHash);
+      return true;
+    },
+  });
+
+  assert.equal(
+    await hasAdmittingRedirect('/invitations/accept?token=live-invitation', tokens),
+    true,
+  );
+  // Hashed on the way in: the raw token never reaches the repository.
+  assert.equal(checked[0], createHash('sha256').update('live-invitation').digest('hex'));
+
+  assert.equal(
+    await hasAdmittingRedirect('/invitations/accept?token=spent', admittingTokens()),
+    false,
+  );
+  // The token has to sit on the path that owns it.
+  assert.equal(await hasAdmittingRedirect('/dashboard?token=live-invitation', tokens), false);
+});
+
+test('bootstrap and member-claim links are admitting redirects too', async () => {
+  assert.equal(
+    await hasAdmittingRedirect(
+      '/platform-admin/bootstrap?token=live',
+      admittingTokens({ hasValidPlatformAdminBootstrapTokenHash: async () => true }),
+    ),
+    true,
+  );
+  assert.equal(
+    await hasAdmittingRedirect(
+      '/member-claims/accept?token=live',
+      admittingTokens({ hasValidMembershipClaimTokenHash: async () => true }),
+    ),
+    true,
+  );
+});
+
+test('only the path is ever readable from a redirect, because the rest is a credential', () => {
+  assert.equal(redirectPath('/invitations/accept?token=secret'), '/invitations/accept');
+  assert.equal(redirectPath('/profile#section'), '/profile');
+  assert.equal(redirectPath('/profile'), '/profile');
+  assert.equal(redirectPath(null), null);
+});

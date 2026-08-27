@@ -245,6 +245,7 @@ test('expired request resubmission preserves history and creates a pending reque
   const prisma = {
     $transaction: async (callback) =>
       callback({
+        user: { findFirst: async () => ({ id: 'user-1' }) },
         organizationRequest: {
           updateMany: async () => ({ count: 0 }),
           findUnique: async () => previousRequest,
@@ -321,6 +322,7 @@ test('resubmission fails when the requester already has a pending request', asyn
   const repository = new OrganizationRequestsRepository({
     $transaction: async (callback) =>
       callback({
+        user: { findFirst: async () => ({ id: 'user-1' }) },
         organizationRequest: {
           updateMany: async () => ({ count: 0 }),
           findUnique: async () => previousRequest,
@@ -545,5 +547,151 @@ test('a platform admin still has to reach a live organization', async () => {
   await assert.rejects(
     guard.canActivate(organizationAccessContext()),
     /Organization access is required/,
+  );
+});
+
+// Evaluates the eligibility `where` the repository actually builds, instead of a stub that
+// answers yes to anything. Without this the two ends of the flow can drift: a request the
+// create path accepted was, for a while, one the approve path could never approve.
+function eligibleRequesterAgainst(user) {
+  return async ({ where }) => {
+    if (where.id !== user.id) {
+      return null;
+    }
+    if (where.deletedAt === null && user.deletedAt !== null) {
+      return null;
+    }
+
+    const branches = where.OR ?? [where];
+    const matches = branches.some((branch) => {
+      if (branch.emailVerified && user.emailVerified === null) {
+        return false;
+      }
+
+      const wanted = branch.accounts?.some;
+      if (!wanted) {
+        return true;
+      }
+
+      return user.accounts.some(
+        (account) => account.provider === wanted.provider && account.deletedAt === null,
+      );
+    });
+
+    return matches ? { id: user.id } : null;
+  };
+}
+
+function emailOnlyRequester() {
+  return {
+    id: 'user-1',
+    deletedAt: null,
+    emailVerified: new Date('2026-08-01T00:00:00.000Z'),
+    accounts: [{ provider: 'email', deletedAt: null }],
+  };
+}
+
+function approvalPrisma(requester, state) {
+  return {
+    $transaction: async (callback) =>
+      callback({
+        organizationRequest: {
+          updateMany: async ({ where, data }) => {
+            if (where.createdAt || state.status !== 'PENDING') {
+              return { count: 0 };
+            }
+            state.status = data.status;
+            return { count: 1 };
+          },
+          findUniqueOrThrow: async () => ({ id: 'request-1', requestedByUserId: requester.id }),
+          update: async () => ({}),
+        },
+        user: { findFirst: eligibleRequesterAgainst(requester) },
+        organization: {
+          create: async ({ data }) => {
+            const organization = { id: 'organization-1', name: data.name, slug: data.slug };
+            state.organizations.push(organization);
+            return organization;
+          },
+        },
+        organizationMember: {
+          create: async ({ data }) => {
+            const membership = { id: 'membership-1', ...data };
+            state.memberships.push(membership);
+            return membership;
+          },
+        },
+        auditLog: { create: async ({ data }) => state.audits.push(data) },
+      }),
+  };
+}
+
+const APPROVAL_INPUT = {
+  id: 'request-1',
+  organizationName: 'Grace Church',
+  organizationSlug: 'grace-church',
+  actorUserId: 'admin-1',
+  staleBefore: new Date('2026-06-01T00:00:00.000Z'),
+};
+
+test('a requester who signed in with an address may both ask and be approved', async () => {
+  const requester = emailOnlyRequester();
+  const created = [];
+  const createPrisma = {
+    $transaction: async (callback) =>
+      callback({
+        user: { findFirst: eligibleRequesterAgainst(requester) },
+        organizationRequest: {
+          updateMany: async () => ({ count: 0 }),
+          create: async ({ data }) => {
+            created.push(data);
+            return { id: 'request-1', ...data, requestedBy: { accounts: [] } };
+          },
+        },
+        auditLog: { create: async () => ({}) },
+      }),
+  };
+
+  const request = await new OrganizationRequestsRepository(createPrisma).create(
+    { organizationName: 'Grace Church', contactName: 'Requester' },
+    requester.id,
+    new Date('2026-06-01T00:00:00.000Z'),
+  );
+  assert.equal(request.id, 'request-1');
+  assert.equal(created.length, 1);
+
+  // The half that used to be narrower than the half above.
+  const state = { status: 'PENDING', organizations: [], memberships: [], audits: [] };
+  const approved = await new OrganizationRequestsRepository(
+    approvalPrisma(requester, state),
+  ).approve(APPROVAL_INPUT);
+
+  assert.equal(approved.organization.id, 'organization-1');
+  assert.equal(state.memberships[0].role, 'OWNER');
+});
+
+test('an approval is still refused when the requester has no way to sign in left', async () => {
+  const requester = { id: 'user-1', deletedAt: null, emailVerified: null, accounts: [] };
+  const state = { status: 'PENDING', organizations: [], memberships: [], audits: [] };
+
+  await assert.rejects(
+    new OrganizationRequestsRepository(approvalPrisma(requester, state)).approve(APPROVAL_INPUT),
+    /ORGANIZATION_REQUEST_REQUESTER_INACTIVE/,
+  );
+  assert.deepEqual(state.organizations, []);
+});
+
+test('an unconfirmed address is not enough to be approved', async () => {
+  const requester = {
+    id: 'user-1',
+    deletedAt: null,
+    emailVerified: null,
+    accounts: [{ provider: 'email', deletedAt: null }],
+  };
+  const state = { status: 'PENDING', organizations: [], memberships: [], audits: [] };
+
+  await assert.rejects(
+    new OrganizationRequestsRepository(approvalPrisma(requester, state)).approve(APPROVAL_INPUT),
+    /ORGANIZATION_REQUEST_REQUESTER_INACTIVE/,
   );
 });

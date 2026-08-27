@@ -53,6 +53,7 @@ export class EmailAuthController {
       const result = await this.emailAuthService.completeSignInWithToken(
         token,
         requestClientContext(request),
+        request.headers['accept-language'],
       );
       setSessionCookie(response, this.config, result);
       response.redirect(new URL(result.redirectTo, this.webAppUrl).toString());
@@ -72,6 +73,7 @@ export class EmailAuthController {
     const result = await this.emailAuthService.completeSignInWithCode(
       { email: body.email, code: body.code },
       requestClientContext(request),
+      request.headers['accept-language'],
     );
     setSessionCookie(response, this.config, result);
 
