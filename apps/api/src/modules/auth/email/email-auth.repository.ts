@@ -112,6 +112,34 @@ export class EmailAuthRepository {
     }
   }
 
+  // Left in the same shape a verification link leaves it: the address is confirmed and the
+  // account carries exactly one email sign-in method for it.
+  async confirmEmailIdentity(userId: string, email: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      // An address counts as confirmed only while the account still holds it, so a profile
+      // that moved on between the mail and the click leaves nothing to confirm.
+      const confirmed = await tx.user.updateMany({
+        where: { id: userId, email, deletedAt: null },
+        data: { emailVerified: now },
+      });
+
+      if (confirmed.count === 0) {
+        return;
+      }
+
+      // User emails are unique and the profile drops the auth account when the address
+      // changes, so anything still sitting on this address is a leftover.
+      await tx.authAccount.deleteMany({
+        where: { provider: 'email', providerAccountId: email },
+      });
+
+      await tx.authAccount.create({
+        data: { userId, provider: 'email', providerAccountId: email, lastUsedAt: now },
+      });
+    });
+  }
+
   async touchEmailAccount(userId: string): Promise<void> {
     await this.prisma.authAccount.updateMany({
       where: { userId, provider: 'email', deletedAt: null },

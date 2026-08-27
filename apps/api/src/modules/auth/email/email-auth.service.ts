@@ -48,10 +48,7 @@ export interface CompleteEmailSignInResult {
 // Why an address was turned away. The caller is told none of this on purpose, so it is the
 // only place the answer exists: without it a sign-in email that never arrives leaves nothing
 // behind to explain itself.
-type EmailLoginRefusal =
-  | 'unknown_address_without_admitting_redirect'
-  | 'address_not_confirmed'
-  | 'no_standing_to_sign_in';
+type EmailLoginRefusal = 'unknown_address_without_admitting_redirect' | 'no_standing_to_sign_in';
 
 interface EmailLoginAdmission {
   admitted: true;
@@ -269,7 +266,21 @@ export class EmailAuthService {
 
     const state = admission.state ?? (await this.createAdmittedAccount(email));
 
-    await this.repository.touchEmailAccount(state.user.id);
+    if (state.isEmailVerified) {
+      await this.repository.touchEmailAccount(state.user.id);
+    } else {
+      // The mail came back, so the address stops being contact data and becomes the identity
+      // it was always meant to be, exactly as a verification link would have left it.
+      await this.repository.confirmEmailIdentity(state.user.id, email);
+      await this.auditService.record({
+        actorUserId: state.user.id,
+        action: 'UPDATE',
+        entityType: 'User',
+        entityId: state.user.id,
+        metadata: { event: 'email_verified' },
+      });
+    }
+
     const session = await this.authService.createUserSession(state.user.id, client);
 
     await this.auditService.record({
@@ -309,13 +320,10 @@ export class EmailAuthService {
         : { admitted: false, reason: 'unknown_address_without_admitting_redirect' };
     }
 
-    // An address only becomes an identity once its owner has proved they hold it. Anything
-    // an administrator typed into a profile is contact data until then, so a link handed to
-    // somebody else cannot be pointed at an account that never claimed its address.
-    if (!state.isEmailVerified) {
-      return { admitted: false, reason: 'address_not_confirmed' };
-    }
-
+    // An address the account never confirmed is not turned away here: the link and the code
+    // are only ever delivered to the address itself, and coming back with either is the proof
+    // of ownership. Refusing at this point asked for a confirmation that could never happen,
+    // because confirming an address needs a session and this is the way to one.
     return hasStandingToSignIn(state) || admittedByRedirect
       ? { admitted: true, state, admittedByRedirect }
       : { admitted: false, reason: 'no_standing_to_sign_in' };

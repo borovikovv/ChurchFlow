@@ -31,6 +31,8 @@ function createService(overrides = {}) {
   const sent = [];
   const issued = [];
   const audited = [];
+  const touched = [];
+  const confirmed = [];
 
   const repository = {
     findVerificationCandidate: async () => null,
@@ -39,7 +41,12 @@ function createService(overrides = {}) {
     createAdmittedEmailUser: async () => {
       throw new Error('createAdmittedEmailUser should not be reached');
     },
-    touchEmailAccount: async () => {},
+    touchEmailAccount: async (userId) => {
+      touched.push(userId);
+    },
+    confirmEmailIdentity: async (userId, email) => {
+      confirmed.push({ userId, email });
+    },
     issueToken: async (input) => {
       issued.push(input);
     },
@@ -94,7 +101,7 @@ function createService(overrides = {}) {
     },
   );
 
-  return { service, sent, issued, audited };
+  return { service, sent, issued, audited, touched, confirmed };
 }
 
 test('a six-digit code survives its own hashing and nothing else does', async () => {
@@ -130,15 +137,45 @@ test('a sign-in request for an unknown address issues nothing and reveals nothin
   assert.deepEqual(sent, []);
 });
 
-test('an address the account never confirmed cannot be used to sign in', async () => {
+test('an address the account never confirmed is still sent the link that confirms it', async () => {
   const { service, sent, issued } = createService({
     repository: { findLoginAccountState: async () => memberState({ isEmailVerified: false }) },
   });
 
   await service.requestSignIn({ email: EMAIL, client: {} });
 
-  assert.deepEqual(issued, []);
-  assert.deepEqual(sent, []);
+  assert.equal(issued.length, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].email, EMAIL);
+});
+
+test('coming back with the link confirms the address it was sent to', async () => {
+  const { service, audited, touched, confirmed } = createService({
+    repository: {
+      consumeSignInTokenByHash: async () => ({ email: EMAIL, redirectTo: null }),
+      findLoginAccountState: async () => memberState({ isEmailVerified: false }),
+    },
+  });
+
+  await service.completeSignInWithToken('live-token', {});
+
+  assert.deepEqual(confirmed, [{ userId: USER_ID, email: EMAIL }]);
+  assert.deepEqual(touched, []);
+  assert.deepEqual(
+    audited.map((entry) => entry.metadata),
+    [{ event: 'email_verified' }, { provider: 'email' }],
+  );
+});
+
+test('an address that was already confirmed is not confirmed a second time', async () => {
+  const { service, touched, confirmed } = createService({
+    repository: { consumeSignInTokenByHash: async () => ({ email: EMAIL, redirectTo: null }) },
+  });
+
+  await service.completeSignInWithToken('live-token', {});
+
+  assert.deepEqual(confirmed, []);
+  assert.deepEqual(touched, [USER_ID]);
 });
 
 test('a confirmed member is sent a link and a code that are stored only as hashes', async () => {
