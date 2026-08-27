@@ -10,7 +10,7 @@ export interface OrganizationRequestAdminEmailInput {
   organizationName: string;
   contactName: string;
   contactEmail?: string | null;
-  contactTelegramId: string;
+  contactTelegramId?: string | null;
   contactTelegramUsername?: string | null;
   contactPhone?: string | null;
   message?: string | null;
@@ -152,7 +152,7 @@ export class EmailService {
       text: [
         `${labels.organization}: ${input.organizationName}`,
         `${labels.contact}: ${input.contactName}${input.contactEmail ? ` <${input.contactEmail}>` : ''}`,
-        `${labels.telegramId}: ${input.contactTelegramId}`,
+        input.contactTelegramId ? `${labels.telegramId}: ${input.contactTelegramId}` : null,
         ...(input.contactTelegramUsername
           ? [`${labels.telegramUsername}: ${input.contactTelegramUsername}`]
           : []),

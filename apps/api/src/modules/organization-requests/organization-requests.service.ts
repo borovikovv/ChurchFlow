@@ -454,8 +454,9 @@ export class OrganizationRequestsService {
   }
 
   private async sendAdminNotification(request: CreatedOrganizationRequest): Promise<boolean> {
-    const requestedTelegramAccountId =
-      request.requestedBy?.accounts[0]?.providerAccountId ?? 'linked Telegram account';
+    // Absent for a requester who signed in with an address, and the line is left out of the
+    // mail rather than filled with a placeholder standing in for an account that is not there.
+    const requestedTelegramAccountId = request.requestedBy?.accounts[0]?.providerAccountId ?? null;
 
     const url = `/admin/organization-requests/${request.id}`;
     const platformAdminLocale = await this.userLocaleService.forRecipient(

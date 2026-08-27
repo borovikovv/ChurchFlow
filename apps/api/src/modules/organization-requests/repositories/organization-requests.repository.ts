@@ -78,14 +78,7 @@ export class OrganizationRequestsRepository {
     staleBefore: Date,
   ): Promise<CreatedOrganizationRequest> {
     return this.prisma.$transaction(async (tx) => {
-      const requester = await tx.user.findFirst({
-        where: {
-          id: requestedByUserId,
-          deletedAt: null,
-          accounts: { some: { provider: 'telegram', deletedAt: null } },
-        },
-        select: { id: true },
-      });
+      const requester = await this.findEligibleRequester(tx, requestedByUserId);
       if (!requester) {
         throw new Error('ORGANIZATION_REQUEST_REQUESTER_INACTIVE');
       }
@@ -181,7 +174,7 @@ export class OrganizationRequestsRepository {
       if (previousRequest.status !== 'EXPIRED' || previousRequest.createdOrganizationId) {
         throw new Error('ORGANIZATION_REQUEST_NOT_RESUBMITTABLE');
       }
-      if (!previousRequest.requestedBy || previousRequest.requestedBy.accounts.length === 0) {
+      if (!(await this.findEligibleRequester(tx, requestedByUserId))) {
         throw new Error('ORGANIZATION_REQUEST_REQUESTER_INACTIVE');
       }
 
@@ -531,6 +524,29 @@ export class OrganizationRequestsRepository {
       });
 
       return request ? this.toDetail(request) : null;
+    });
+  }
+
+  // Asking for an organization needs a sign-in method whose owner has proved it, not Telegram
+  // in particular: a confirmed address is one, and email is how somebody with no Telegram
+  // reaches this form at all.
+  private async findEligibleRequester(
+    client: Pick<PrismaService, 'user'>,
+    requestedByUserId: string,
+  ): Promise<{ id: string } | null> {
+    return client.user.findFirst({
+      where: {
+        id: requestedByUserId,
+        deletedAt: null,
+        OR: [
+          { accounts: { some: { provider: 'telegram', deletedAt: null } } },
+          {
+            emailVerified: { not: null },
+            accounts: { some: { provider: 'email', deletedAt: null } },
+          },
+        ],
+      },
+      select: { id: true },
     });
   }
 

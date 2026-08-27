@@ -165,7 +165,7 @@ export class EmailAuthService {
         event: 'Sign-in email refused before it was sent',
         reason: admission.reason,
         // The path only. The token inside the redirect is a credential and stays out of logs.
-        redirectPath: redirectPathForLog(redirectTo),
+        redirectPath: redirectPath(redirectTo),
       });
       return;
     }
@@ -259,7 +259,7 @@ export class EmailAuthService {
       this.logger.warn({
         event: 'Sign-in refused while the token was being redeemed',
         reason: admission.reason,
-        redirectPath: redirectPathForLog(requestedRedirect),
+        redirectPath: redirectPath(requestedRedirect),
       });
       throw new UnauthorizedException('This account cannot sign in with email');
     }
@@ -329,11 +329,15 @@ export class EmailAuthService {
       : { admitted: false, reason: 'no_standing_to_sign_in' };
   }
 
-  // The token inside the redirect is the credential here, not the address: whoever holds a
-  // live claimable invitation, first-admin bootstrap or member-claim link may sign in with
-  // the mailbox they can prove they own. Organization onboarding is deliberately absent —
-  // it carries no token, so accepting it would make email sign-up open to anyone.
+  // Two kinds of admission meet here. A live claimable invitation, first-admin bootstrap or
+  // member-claim link puts the credential in the redirect itself, and its holder may sign in
+  // with the mailbox they can prove they own. Organization onboarding carries no token: it is
+  // the way in for somebody nobody has invited yet, and the same door Telegram already opens.
   private async hasAdmittingRedirect(redirectTo: string | null): Promise<boolean> {
+    if (isOrganizationOnboardingRedirect(redirectTo)) {
+      return true;
+    }
+
     const candidates: ReadonlyArray<[string, (tokenHash: string) => Promise<boolean>]> = [
       [
         '/invitations/accept',
@@ -384,14 +388,26 @@ export class EmailAuthService {
   }
 }
 
-// Redirect paths are logged without their query: everything that identifies the caller or
-// carries a token lives there.
-function redirectPathForLog(redirectTo: string | null): string | null {
+// The same two paths Telegram admits an uninvited caller on, matched the same way.
+const ORGANIZATION_ONBOARDING_PATHS: ReadonlyArray<string> = [
+  '/organization-request',
+  '/organization-request/status',
+];
+
+function isOrganizationOnboardingRedirect(redirectTo: string | null): boolean {
+  const path = redirectPath(redirectTo);
+
+  return path !== null && ORGANIZATION_ONBOARDING_PATHS.includes(path);
+}
+
+// Everything that identifies the caller or carries a token lives past the path, so this is
+// also what the refusal log is allowed to say.
+function redirectPath(redirectTo: string | null): string | null {
   if (!redirectTo) {
     return null;
   }
 
-  const queryIndex = redirectTo.indexOf('?');
+  const end = redirectTo.search(/[?#]/);
 
-  return queryIndex < 0 ? redirectTo : redirectTo.slice(0, queryIndex);
+  return end < 0 ? redirectTo : redirectTo.slice(0, end);
 }

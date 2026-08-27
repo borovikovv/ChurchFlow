@@ -247,6 +247,44 @@ test('an unclaimed invitation link admits an address that has no account yet', a
   assert.equal(issued[0].redirectTo, '/invitations/accept?token=live-invitation');
 });
 
+test('the page that asks for an organization admits an address nobody has invited', async () => {
+  const created = [];
+  const { service, issued, sent } = createService({
+    repository: {
+      findLoginAccountState: async () => (created.length > 0 ? memberState() : null),
+      createAdmittedEmailUser: async (input) => {
+        created.push(input);
+        return { id: USER_ID, email: input.email, displayName: null, platformRole: 'USER' };
+      },
+    },
+  });
+
+  await service.requestSignIn({
+    email: 'stranger@example.com',
+    redirectTo: '/organization-request',
+    client: {},
+  });
+
+  assert.equal(issued.length, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(issued[0].redirectTo, '/organization-request');
+});
+
+test('a page that carries no token and no onboarding admits nobody', async () => {
+  const { service, issued, sent } = createService({
+    repository: { findLoginAccountState: async () => null },
+  });
+
+  await service.requestSignIn({
+    email: 'stranger@example.com',
+    redirectTo: '/dashboard/org-1',
+    client: {},
+  });
+
+  assert.deepEqual(issued, []);
+  assert.deepEqual(sent, []);
+});
+
 test('a link that has already been used cannot be used again', async () => {
   const { service } = createService({
     repository: { consumeSignInTokenByHash: async () => null },
