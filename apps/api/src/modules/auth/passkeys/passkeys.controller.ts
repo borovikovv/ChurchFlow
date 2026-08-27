@@ -18,6 +18,7 @@ import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/server';
+import type { PasskeySummary } from '@churchflow/shared';
 import { requestClientContext } from '../../../common/auth/request-client-context';
 import { setSessionCookie } from '../../../common/auth/session-cookie';
 import {
@@ -25,7 +26,6 @@ import {
   type AuthenticatedRequest,
 } from '../../../common/guards/session-auth.guard';
 import { PasskeysService } from './passkeys.service';
-import type { PasskeyRecord } from './passkeys.repository';
 import {
   AuthenticatePasskeyDto,
   RegisterPasskeyDto,
@@ -43,7 +43,7 @@ export class PasskeysController {
 
   @Get()
   @UseGuards(SessionAuthGuard)
-  list(@Req() request: AuthenticatedRequest): Promise<PasskeyRecord[]> {
+  list(@Req() request: AuthenticatedRequest): Promise<PasskeySummary[]> {
     return this.passkeysService.list(this.userId(request));
   }
 
@@ -62,7 +62,7 @@ export class PasskeysController {
   finishRegistration(
     @Body() body: RegisterPasskeyDto,
     @Req() request: AuthenticatedRequest,
-  ): Promise<PasskeyRecord> {
+  ): Promise<PasskeySummary> {
     return this.passkeysService.finishRegistration(
       this.userId(request),
       toRegistrationResponse(body.credential),
@@ -76,7 +76,7 @@ export class PasskeysController {
     @Param('passkeyId', ParseUUIDPipe) passkeyId: string,
     @Body() body: RenamePasskeyDto,
     @Req() request: AuthenticatedRequest,
-  ): Promise<PasskeyRecord> {
+  ): Promise<PasskeySummary> {
     return this.passkeysService.rename(this.userId(request), passkeyId, body.label);
   }
 

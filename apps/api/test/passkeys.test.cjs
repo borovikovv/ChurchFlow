@@ -43,8 +43,7 @@ function createService(overrides = {}) {
     createPasskey: async () => ({}),
     recordAuthentication: async () => {},
     rename: async () => null,
-    countSignInMethods: async () => 2,
-    deletePasskey: async () => true,
+    deleteUnlessLastSignInMethod: async () => 'deleted',
     ...overrides.repository,
   };
 
@@ -167,33 +166,46 @@ test('a credential the account does not know is refused before any verification 
 });
 
 test('the last way back into an account cannot be removed', async () => {
-  const deleted = [];
-  const { service } = createService({
-    repository: {
-      countSignInMethods: async () => 1,
-      deletePasskey: async (id) => {
-        deleted.push(id);
-        return true;
-      },
-    },
+  const { service, audited } = createService({
+    repository: { deleteUnlessLastSignInMethod: async () => 'last_sign_in_method' },
   });
 
   await assert.rejects(
     service.remove(USER_ID, PASSKEY_ID),
     /Add another sign-in method before removing the last one/,
   );
-  assert.deepEqual(deleted, []);
+  assert.deepEqual(audited, []);
 });
 
 test('a passkey is removed once another sign-in method remains', async () => {
-  const { service, audited } = createService({ repository: { countSignInMethods: async () => 2 } });
+  const { service, audited } = createService();
 
   assert.deepEqual(await service.remove(USER_ID, PASSKEY_ID), { ok: true });
   assert.equal(audited[0].metadata.event, 'passkey_removed');
 });
 
+// Two removals racing must not be able to take the last method between them, so counting and
+// deleting is one call the repository answers atomically rather than two the service sequences.
+test('counting the remaining methods is not a step the service can be raced through', async () => {
+  const calls = [];
+  const { service } = createService({
+    repository: {
+      deleteUnlessLastSignInMethod: async (id, userId) => {
+        calls.push({ id, userId });
+        return 'deleted';
+      },
+    },
+  });
+
+  await service.remove(USER_ID, PASSKEY_ID);
+
+  assert.deepEqual(calls, [{ id: PASSKEY_ID, userId: USER_ID }]);
+});
+
 test('removing somebody else passkey reads as not found rather than refused', async () => {
-  const { service } = createService({ repository: { deletePasskey: async () => false } });
+  const { service } = createService({
+    repository: { deleteUnlessLastSignInMethod: async () => 'not_found' },
+  });
 
   await assert.rejects(service.remove(USER_ID, PASSKEY_ID), /Passkey was not found/);
 });
