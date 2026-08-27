@@ -51,8 +51,8 @@ function createService(overrides = {}) {
       issued.push(input);
     },
     consumeSignInTokenByHash: async () => null,
-    findLiveSignInToken: async () => null,
-    recordFailedCodeAttempt: async () => {},
+    findLiveSignInTokens: async () => [],
+    recordFailedCodeAttempts: async () => {},
     consumeSignInTokenById: async () => true,
     consumeVerificationToken: async () => null,
     ...overrides.repository,
@@ -347,14 +347,17 @@ test('a platform admin without membership lands on the admin area, not a request
   assert.equal(result.redirectTo, '/admin/organizations');
 });
 
-test('a wrong code is counted against the token it was guessed at', async () => {
+test('a wrong code is counted against every token the address has live', async () => {
   const attempts = [];
   const codeHash = await hashEmailLoginCode('123456');
   const { service } = createService({
     repository: {
-      findLiveSignInToken: async () => ({ id: 'token-1', codeHash, redirectTo: null }),
-      recordFailedCodeAttempt: async (tokenId) => {
-        attempts.push(tokenId);
+      findLiveSignInTokens: async () => [
+        { id: 'token-2', codeHash, redirectTo: null },
+        { id: 'token-1', codeHash, redirectTo: null },
+      ],
+      recordFailedCodeAttempts: async (email) => {
+        attempts.push(email);
       },
     },
   });
@@ -364,16 +367,81 @@ test('a wrong code is counted against the token it was guessed at', async () => 
     /This sign-in code is no longer valid/,
   );
 
-  // Whether that attempt was the last one the token had is decided by the statement that
-  // records it, so that concurrent guesses cannot each read the same stale count.
-  assert.deepEqual(attempts, ['token-1']);
+  // Counted per address, not per token: asking for more links must never buy more guesses.
+  // Whether that attempt was the last one is decided by the statement that records it, so
+  // concurrent guesses cannot each read the same stale count.
+  assert.deepEqual(attempts, [EMAIL]);
+});
+
+test('nothing is counted when the address has no live token to guess at', async () => {
+  const attempts = [];
+  const { service } = createService({
+    repository: {
+      findLiveSignInTokens: async () => [],
+      recordFailedCodeAttempts: async (email) => {
+        attempts.push(email);
+      },
+    },
+  });
+
+  await assert.rejects(
+    service.completeSignInWithCode({ email: EMAIL, code: '999999' }, {}),
+    /This sign-in code is no longer valid/,
+  );
+  assert.deepEqual(attempts, []);
+});
+
+// Anybody who knows an address can ask for a link, so a later request must not be able to
+// invalidate the code somebody is already holding.
+test('a code still works after a later request for the same address', async () => {
+  const held = await hashEmailLoginCode('123456');
+  const newer = await hashEmailLoginCode('654321');
+  const consumed = [];
+  const { service } = createService({
+    repository: {
+      findLiveSignInTokens: async () => [
+        { id: 'newer', codeHash: newer, redirectTo: null },
+        { id: 'held', codeHash: held, redirectTo: '/dashboard/org-1' },
+      ],
+      consumeSignInTokenById: async (tokenId) => {
+        consumed.push(tokenId);
+        return true;
+      },
+    },
+  });
+
+  const result = await service.completeSignInWithCode({ email: EMAIL, code: '123456' }, {});
+
+  assert.deepEqual(consumed, ['held']);
+  // The redirect comes from the token the code belonged to, not from the newest one.
+  assert.equal(result.redirectTo, '/dashboard/org-1');
+});
+
+test('losing the race to consume a token is not counted as a wrong guess', async () => {
+  const attempts = [];
+  const codeHash = await hashEmailLoginCode('123456');
+  const { service } = createService({
+    repository: {
+      findLiveSignInTokens: async () => [{ id: 'token-1', codeHash, redirectTo: null }],
+      consumeSignInTokenById: async () => false,
+      recordFailedCodeAttempts: async (email) => {
+        attempts.push(email);
+      },
+    },
+  });
+
+  await assert.rejects(
+    service.completeSignInWithCode({ email: EMAIL, code: '123456' }, {}),
+    /This sign-in code is no longer valid/,
+  );
+  assert.deepEqual(attempts, []);
 });
 
 test('a correct code signs in only while the token is still there to consume', async () => {
   const codeHash = await hashEmailLoginCode('123456');
   const { service } = createService({
     repository: {
-      findLiveSignInToken: async () => ({ id: 'token-1', codeHash, redirectTo: null }),
+      findLiveSignInTokens: async () => [{ id: 'token-1', codeHash, redirectTo: null }],
       consumeSignInTokenById: async () => false,
     },
   });
@@ -388,7 +456,7 @@ test('a correct code produces the same session a link would have', async () => {
   const codeHash = await hashEmailLoginCode('123456');
   const { service } = createService({
     repository: {
-      findLiveSignInToken: async () => ({ id: 'token-1', codeHash, redirectTo: null }),
+      findLiveSignInTokens: async () => [{ id: 'token-1', codeHash, redirectTo: null }],
     },
   });
 

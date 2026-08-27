@@ -25,7 +25,7 @@ import { AuditService } from '../../audit/audit.service';
 import { EmailService } from '../../email/email.service';
 import { AuthRepository } from '../auth.repository';
 import { AuthService } from '../auth.service';
-import { EmailAuthRepository } from './email-auth.repository';
+import { EmailAuthRepository, type LiveEmailSignInToken } from './email-auth.repository';
 import { hasStandingToSignIn, resolveLoginRedirect, type LoginUserState } from '../login-state';
 import {
   EMAIL_LOGIN_REQUESTS_PER_WINDOW,
@@ -229,22 +229,39 @@ export class EmailAuthService {
     acceptLanguage?: string,
   ): Promise<CompleteEmailSignInResult> {
     const email = normalizeLoginEmail(input.email);
-    const token = await this.repository.findLiveSignInToken(email);
-    if (!token?.codeHash) {
+    // More than one token can be live for an address, because asking for a new link no longer
+    // retires the older ones. The code being offered may belong to any of them.
+    const live = await this.repository.findLiveSignInTokens(email);
+    const token = await this.matchingSignInToken(input.code, live);
+
+    if (!token) {
+      // Counted against every live token, so issuing more of them never buys more guesses.
+      if (live.length > 0) {
+        await this.repository.recordFailedCodeAttempts(email);
+      }
+
       throw new UnauthorizedException('This sign-in code is no longer valid');
     }
 
-    const matches = await verifyEmailLoginCode(input.code, token.codeHash);
-    if (!matches) {
-      await this.repository.recordFailedCodeAttempt(token.id);
-      throw new UnauthorizedException('This sign-in code is no longer valid');
-    }
-
+    // Losing the race to consume is not a wrong guess, so it costs no attempt.
     if (!(await this.repository.consumeSignInTokenById(token.id))) {
       throw new UnauthorizedException('This sign-in code is no longer valid');
     }
 
     return this.admitSignIn(email, token.redirectTo, client, acceptLanguage);
+  }
+
+  private async matchingSignInToken(
+    code: string,
+    tokens: ReadonlyArray<LiveEmailSignInToken>,
+  ): Promise<LiveEmailSignInToken | null> {
+    for (const token of tokens) {
+      if (token.codeHash && (await verifyEmailLoginCode(code, token.codeHash))) {
+        return token;
+      }
+    }
+
+    return null;
   }
 
   private async admitSignIn(
