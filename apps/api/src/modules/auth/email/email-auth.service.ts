@@ -45,12 +45,26 @@ export interface CompleteEmailSignInResult {
   redirectTo: string;
 }
 
+// Why an address was turned away. The caller is told none of this on purpose, so it is the
+// only place the answer exists: without it a sign-in email that never arrives leaves nothing
+// behind to explain itself.
+type EmailLoginRefusal =
+  | 'unknown_address_without_admitting_redirect'
+  | 'address_not_confirmed'
+  | 'no_standing_to_sign_in';
+
 interface EmailLoginAdmission {
+  admitted: true;
   // Null means the address is admitted but has no account yet, so signing in creates one.
   state: LoginUserState | null;
   // A redirect carrying a valid invitation, bootstrap or member-claim token is a credential
   // in its own right, and the caller is sent back to the page it came from.
   admittedByRedirect: boolean;
+}
+
+interface EmailLoginRefused {
+  admitted: false;
+  reason: EmailLoginRefusal;
 }
 
 @Injectable()
@@ -149,7 +163,13 @@ export class EmailAuthService {
     const email = normalizeLoginEmail(input.email);
     const redirectTo = normalizeInternalRedirect(input.redirectTo, this.webAppUrl) ?? null;
     const admission = await this.resolveAdmission(email, redirectTo);
-    if (!admission) {
+    if (!admission.admitted) {
+      this.logger.warn({
+        event: 'Sign-in email refused before it was sent',
+        reason: admission.reason,
+        // The path only. The token inside the redirect is a credential and stays out of logs.
+        redirectPath: redirectPathForLog(redirectTo),
+      });
       return;
     }
 
@@ -238,7 +258,12 @@ export class EmailAuthService {
     // Admission is resolved again on use, not trusted from when the mail was sent: access
     // can be revoked inside the window the token is valid for.
     const admission = await this.resolveAdmission(email, requestedRedirect);
-    if (!admission) {
+    if (!admission.admitted) {
+      this.logger.warn({
+        event: 'Sign-in refused while the token was being redeemed',
+        reason: admission.reason,
+        redirectPath: redirectPathForLog(requestedRedirect),
+      });
       throw new UnauthorizedException('This account cannot sign in with email');
     }
 
@@ -274,22 +299,26 @@ export class EmailAuthService {
   private async resolveAdmission(
     email: string,
     redirectTo: string | null,
-  ): Promise<EmailLoginAdmission | null> {
+  ): Promise<EmailLoginAdmission | EmailLoginRefused> {
     const admittedByRedirect = await this.hasAdmittingRedirect(redirectTo);
     const state = await this.repository.findLoginAccountState(email);
 
     if (!state) {
-      return admittedByRedirect ? { state: null, admittedByRedirect } : null;
+      return admittedByRedirect
+        ? { admitted: true, state: null, admittedByRedirect }
+        : { admitted: false, reason: 'unknown_address_without_admitting_redirect' };
     }
 
     // An address only becomes an identity once its owner has proved they hold it. Anything
     // an administrator typed into a profile is contact data until then, so a link handed to
     // somebody else cannot be pointed at an account that never claimed its address.
     if (!state.isEmailVerified) {
-      return null;
+      return { admitted: false, reason: 'address_not_confirmed' };
     }
 
-    return hasStandingToSignIn(state) || admittedByRedirect ? { state, admittedByRedirect } : null;
+    return hasStandingToSignIn(state) || admittedByRedirect
+      ? { admitted: true, state, admittedByRedirect }
+      : { admitted: false, reason: 'no_standing_to_sign_in' };
   }
 
   // The token inside the redirect is the credential here, not the address: whoever holds a
@@ -345,4 +374,16 @@ export class EmailAuthService {
   private get webAppUrl(): string {
     return this.config.getOrThrow<string>('WEB_APP_URL');
   }
+}
+
+// Redirect paths are logged without their query: everything that identifies the caller or
+// carries a token lives there.
+function redirectPathForLog(redirectTo: string | null): string | null {
+  if (!redirectTo) {
+    return null;
+  }
+
+  const queryIndex = redirectTo.indexOf('?');
+
+  return queryIndex < 0 ? redirectTo : redirectTo.slice(0, queryIndex);
 }
