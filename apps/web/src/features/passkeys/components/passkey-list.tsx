@@ -7,16 +7,12 @@ import { toast } from 'react-toastify';
 import type { PasskeySummary } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import {
-  createPasskeyCredential,
   isAbortedPasskeyCeremony,
+  isExistingPasskeyCeremony,
   isPasskeySupported,
 } from '@/lib/webauthn';
-import {
-  finishPasskeyRegistration,
-  removePasskey,
-  renamePasskey,
-  startPasskeyRegistration,
-} from '../server/actions';
+import { registerPasskeyOnThisDevice } from '../register-passkey';
+import { removePasskey, renamePasskey } from '../server/actions';
 import { PasskeyRow } from './passkey-row';
 
 export function PasskeyList({ passkeys, locale }: { passkeys: PasskeySummary[]; locale: string }) {
@@ -34,18 +30,7 @@ export function PasskeyList({ passkeys, locale }: { passkeys: PasskeySummary[]; 
   async function handleAdd(): Promise<void> {
     setAdding(true);
     try {
-      const options = await startPasskeyRegistration();
-      if (!options.ok) {
-        toast.error(options.error);
-        return;
-      }
-
-      const credential = await createPasskeyCredential(options.data);
-      const label = defaultPasskeyLabel();
-      const registered = await finishPasskeyRegistration({
-        credential,
-        ...(label ? { label } : {}),
-      });
+      const registered = await registerPasskeyOnThisDevice();
       if (!registered.ok) {
         toast.error(registered.error);
         return;
@@ -54,7 +39,9 @@ export function PasskeyList({ passkeys, locale }: { passkeys: PasskeySummary[]; 
       toast.success(t('added'));
       router.refresh();
     } catch (caught) {
-      if (!isAbortedPasskeyCeremony(caught)) {
+      if (isExistingPasskeyCeremony(caught)) {
+        toast.info(t('alreadyOnDevice'));
+      } else if (!isAbortedPasskeyCeremony(caught)) {
         toast.error(t('failed'));
       }
     } finally {
@@ -126,13 +113,4 @@ export function PasskeyList({ passkeys, locale }: { passkeys: PasskeySummary[]; 
       )}
     </div>
   );
-}
-
-// A best-effort name so the list is readable before anyone renames anything. User agents are
-// self-reported, so an unrecognised one simply goes unnamed.
-function defaultPasskeyLabel(): string | undefined {
-  const platforms = ['Mac', 'iPhone', 'iPad', 'Android', 'Windows', 'Linux'] as const;
-  const userAgent = window.navigator.userAgent;
-
-  return platforms.find((platform) => userAgent.includes(platform));
 }
