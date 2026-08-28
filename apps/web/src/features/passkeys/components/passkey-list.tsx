@@ -6,7 +6,11 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'react-toastify';
 import type { PasskeySummary } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
-import { isAbortedPasskeyCeremony, isPasskeySupported } from '@/lib/webauthn';
+import {
+  isAbortedPasskeyCeremony,
+  isExistingPasskeyCeremony,
+  isPasskeySupported,
+} from '@/lib/webauthn';
 import { registerPasskeyOnThisDevice } from '../register-passkey';
 import { removePasskey, renamePasskey } from '../server/actions';
 import { PasskeyRow } from './passkey-row';
@@ -35,7 +39,9 @@ export function PasskeyList({ passkeys, locale }: { passkeys: PasskeySummary[]; 
       toast.success(t('added'));
       router.refresh();
     } catch (caught) {
-      if (!isAbortedPasskeyCeremony(caught)) {
+      if (isExistingPasskeyCeremony(caught)) {
+        toast.info(t('alreadyOnDevice'));
+      } else if (!isAbortedPasskeyCeremony(caught)) {
         toast.error(t('failed'));
       }
     } finally {

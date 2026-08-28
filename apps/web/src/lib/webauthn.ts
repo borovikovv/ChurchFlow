@@ -153,6 +153,13 @@ export function isAbortedPasskeyCeremony(error: unknown): boolean {
   );
 }
 
+// The registration ceremony excludes credentials the account already holds, and an
+// authenticator asked to duplicate one refuses instead of prompting. That is an answer about
+// this device, not a failure.
+export function isExistingPasskeyCeremony(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'InvalidStateError';
+}
+
 function toDomDescriptor(
   descriptor: PasskeyCredentialDescriptorJson,
 ): PublicKeyCredentialDescriptor {

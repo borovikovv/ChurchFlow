@@ -959,6 +959,7 @@
     "addPasskey": "Add a passkey",
     "added": "Passkey added.",
     "adding": "Waiting for your device...",
+    "alreadyOnDevice": "This device already has a passkey for your account.",
     "description": "Sign in with your device instead of a link, using Touch ID, Windows Hello or a security key.",
     "empty": "No passkeys are registered on this account yet.",
     "failed": "That passkey could not be registered.",
