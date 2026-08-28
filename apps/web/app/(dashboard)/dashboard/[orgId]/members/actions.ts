@@ -10,6 +10,7 @@ import type {
   CreateManualOrganizationMemberInput,
   ImportOrganizationMembersCsvResult,
   MemberMinistry,
+  MembershipClaimMutationResult,
   OrganizationMembersAccessFilter,
   OrganizationMembersTab,
   OrganizationMembersTypeFilter,
@@ -20,7 +21,6 @@ import type {
 } from '@/components/members/member-actions.types';
 import { getMessages } from '@/i18n/messages';
 import type {
-  ClaimMutationResult,
   InvitationMutationResult,
   MemberRelationship,
   MembersPayload,
@@ -191,19 +191,28 @@ export async function createMemberAction(input: {
   });
   if (!created.ok) return { ok: false as const, error: created.error.message };
 
-  if (input.prepareAccess) {
-    const claim = await apiFetch<{ claimUrl: string; emailSent: boolean }>(
-      `/organizations/${input.organizationId}/memberships/${created.data.id}/claim`,
-      { method: 'POST' },
-    );
-    if (!claim.ok) {
-      return {
-        ok: false as const,
-        error: `Member was created, but access could not be prepared: ${claim.error.message}`,
-      };
-    }
+  if (!input.prepareAccess) return { ok: true as const, member: created.data, access: null };
+
+  const claim = await apiFetch<MembershipClaimMutationResult>(
+    `/organizations/${input.organizationId}/memberships/${created.data.id}/claim`,
+    { method: 'POST' },
+  );
+  if (!claim.ok) {
+    return {
+      ok: false as const,
+      error: `Member was created, but access could not be prepared: ${claim.error.message}`,
+    };
   }
-  return { ok: true as const, member: created.data };
+
+  return {
+    ok: true as const,
+    member: created.data,
+    access: {
+      url: claim.data.claimUrl,
+      expiresAt: claim.data.expiresAt,
+      emailSent: claim.data.emailSent,
+    },
+  };
 }
 
 export async function importMembersCsvAction(formData: FormData) {
@@ -236,20 +245,12 @@ export async function claimAction(formData: FormData) {
   const organizationId = String(formData.get('organizationId'));
   const claimId = String(formData.get('claimId'));
   const action = String(formData.get('action'));
-  const result = await apiFetch<ClaimMutationResult | { status: string }>(
+  const result = await apiFetch<{ status: string }>(
     `/organizations/${organizationId}/membership-claims/${claimId}/${action}`,
     { method: 'POST' },
   );
   revalidatePath(`/dashboard/${organizationId}/members`);
   if (!result.ok) redirect(membersUrl(organizationId, { error: result.error.message }));
-  if ('claimUrl' in result.data) {
-    redirect(
-      membersUrl(organizationId, {
-        claimLink: result.data.claimUrl,
-        message: messages.members.accessLinkRefreshed,
-      }),
-    );
-  }
   redirect(
     membersUrl(organizationId, {
       message: messages.members.claimActionCompleted.replace('{action}', action),

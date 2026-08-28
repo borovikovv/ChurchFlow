@@ -1,6 +1,7 @@
 import type { Route } from 'next';
 import type { ReactNode, RefObject } from 'react';
 import type { MemberMinistry } from '@churchflow/shared';
+import type { MemberActiveClaim } from './member-access.types';
 
 export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 export type OrganizationMemberStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'REMOVED';
@@ -63,10 +64,7 @@ export interface EditableMember {
     familyNotes: string | null;
     photoUrl: string | null;
   };
-  activeClaim: {
-    id: string;
-    status: 'PENDING' | 'REQUESTED';
-  } | null;
+  activeClaim: MemberActiveClaim | null;
   relationships?: Array<{
     id: string;
     type: 'SPOUSE' | 'PARENT' | 'CHILD' | 'SIBLING' | 'OTHER';

@@ -91,9 +91,3 @@ export interface InvitationMutationResult {
   acceptUrl: string;
   emailSent: boolean;
 }
-
-export interface ClaimMutationResult {
-  claim: { id: string };
-  claimUrl: string;
-  emailSent: boolean;
-}
