@@ -11,3 +11,13 @@ export async function updateCurrentUserProfile(input: UpdateCurrentUserProfileIn
   });
   return result.ok ? { ok: true as const } : { ok: false as const, error: result.error.message };
 }
+
+export async function requestEmailVerification() {
+  const result = await apiFetch('/auth/email/verify/request', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+
+  return result.ok ? { ok: true as const } : { ok: false as const, error: result.error.message };
+}

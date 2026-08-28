@@ -68,7 +68,7 @@ export default async function MembershipClaimAcceptPage({
                 className="button"
                 href={`/login?redirectTo=${encodeURIComponent(`/member-claims/accept?token=${token}`)}`}
               >
-                {messages.continueWithTelegram}
+                {messages.signInOrCreateAccount}
               </Link>
             )}
           </>

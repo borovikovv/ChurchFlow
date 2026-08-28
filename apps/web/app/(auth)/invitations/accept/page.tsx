@@ -76,7 +76,7 @@ export default async function AcceptInvitationPage({
               <dt>{messages.invitationType}</dt>
               <dd>
                 {invitation.mode === 'claimable_link'
-                  ? messages.claimableTelegramLink
+                  ? messages.claimableInviteLink
                   : messages.targetedTelegramInvite}
               </dd>
               <dt>{messages.role}</dt>

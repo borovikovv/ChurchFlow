@@ -16,6 +16,12 @@ import {
   type UserSession,
 } from '@churchflow/shared';
 import { deviceLabelFromUserAgent } from '../../common/auth/device-label';
+import type { RequestClientContext } from '../../common/auth/request-client-context';
+import {
+  extractRedirectToken,
+  normalizeInternalRedirect,
+  parseInternalRedirectUrl,
+} from '../../common/auth/internal-redirect';
 import { hashOpaqueToken } from '../../common/auth/session-token';
 import {
   SESSION_ABSOLUTE_TTL_SECONDS,
@@ -31,18 +37,12 @@ const TELEGRAM_TOKEN_URL = 'https://oauth.telegram.org/token';
 const TELEGRAM_JWKS_URL = 'https://oauth.telegram.org/.well-known/jwks.json';
 const TELEGRAM_CLOCK_SKEW_SECONDS = 5 * 60;
 const MAX_TELEGRAM_SUB_LENGTH = 255;
-const UNSAFE_ENCODED_REDIRECT_CHARACTERS = /%(?:2f|5c|0[0-9a-f]|1[0-9a-f]|7f)/i;
 
 export interface AuthUserResult {
   id: string;
   email: string | null;
   displayName: string | null;
   platformRole: string;
-}
-
-export interface SessionClientContext {
-  userAgent?: string;
-  ipAddress?: string;
 }
 
 export interface BeginTelegramLoginResult {
@@ -206,7 +206,7 @@ export class AuthService {
     const codeVerifier = randomBytes(64).toString('base64url');
     const nonce = randomBytes(32).toString('base64url');
     const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
-    const redirectTo = this.normalizeRedirectTo(input.redirectTo);
+    const redirectTo = normalizeInternalRedirect(input.redirectTo, this.webAppUrl);
     const authorizationUrl = new URL(TELEGRAM_AUTHORIZATION_URL);
 
     authorizationUrl.searchParams.set('client_id', this.telegramClientId);
@@ -235,7 +235,7 @@ export class AuthService {
     expectedNonce: string;
     redirectTo?: string;
     acceptLanguage?: string;
-    client: SessionClientContext;
+    client: RequestClientContext;
   }): Promise<CompleteTelegramLoginResult> {
     if (input.state !== input.expectedState) {
       throw new BadRequestException('Invalid Telegram login state');
@@ -243,7 +243,7 @@ export class AuthService {
 
     const tokenResponse = await this.exchangeTelegramCode(input.code, input.codeVerifier);
     const claims = await this.verifyTelegramIdToken(tokenResponse.id_token, input.expectedNonce);
-    const redirectTo = this.normalizeRedirectTo(input.redirectTo);
+    const redirectTo = normalizeInternalRedirect(input.redirectTo, this.webAppUrl);
     const { user, defaultRedirectTo, useRequestedRedirect } = await this.resolveTelegramLoginUser(
       claims,
       redirectTo,
@@ -378,7 +378,7 @@ export class AuthService {
   }
 
   private hasValidPlatformAdminBootstrapRedirect(redirectTo?: string): Promise<boolean> {
-    const token = this.extractTokenFromRedirect(redirectTo, '/platform-admin/bootstrap');
+    const token = extractRedirectToken(redirectTo, '/platform-admin/bootstrap');
     if (!token) {
       return Promise.resolve(false);
     }
@@ -387,17 +387,17 @@ export class AuthService {
   }
 
   private hasValidMembershipClaimRedirect(redirectTo?: string): Promise<boolean> {
-    const token = this.extractTokenFromRedirect(redirectTo, '/member-claims/accept');
+    const token = extractRedirectToken(redirectTo, '/member-claims/accept');
     if (!token) return Promise.resolve(false);
     return this.authRepository.hasValidMembershipClaimTokenHash(hashOpaqueToken(token));
   }
 
   private extractInvitationTokenFromRedirect(redirectTo?: string): string | null {
-    return this.extractTokenFromRedirect(redirectTo, '/invitations/accept');
+    return extractRedirectToken(redirectTo, '/invitations/accept');
   }
 
   private isOrganizationOnboardingRedirect(redirectTo?: string): boolean {
-    const url = this.parseInternalRedirectUrl(redirectTo);
+    const url = parseInternalRedirectUrl(redirectTo, this.webAppUrl);
     return (
       url !== null &&
       (url.pathname === '/organization-request' || url.pathname === '/organization-request/status')
@@ -429,22 +429,9 @@ export class AuthService {
   }
 
   private matchesRedirectPath(redirectTo: string | undefined, path: string): boolean {
-    const url = this.parseInternalRedirectUrl(redirectTo);
+    const url = parseInternalRedirectUrl(redirectTo, this.webAppUrl);
 
     return url !== null && url.pathname === path;
-  }
-
-  private extractTokenFromRedirect(redirectTo: string | undefined, path: string): string | null {
-    if (!redirectTo) {
-      return null;
-    }
-
-    const queryIndex = redirectTo.indexOf('?');
-    if (queryIndex < 0 || redirectTo.slice(0, queryIndex) !== path) {
-      return null;
-    }
-
-    return new URLSearchParams(redirectTo.slice(queryIndex + 1)).get('token');
   }
 
   private toAuthUserResult(user: {
@@ -524,9 +511,9 @@ export class AuthService {
     return { deletedCount: purged.deletedCount };
   }
 
-  private async createUserSession(
+  async createUserSession(
     userId: string,
-    client: SessionClientContext,
+    client: RequestClientContext,
   ): Promise<{
     sessionToken: string;
     sessionExpiresAt: Date;
@@ -737,45 +724,6 @@ export class AuthService {
 
   private isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
-  }
-
-  private normalizeRedirectTo(value?: string): string | undefined {
-    if (
-      !value ||
-      this.hasUnsafeRedirectCharacters(value) ||
-      UNSAFE_ENCODED_REDIRECT_CHARACTERS.test(value)
-    ) {
-      return undefined;
-    }
-
-    const redirectUrl = this.parseInternalRedirectUrl(value);
-    if (!redirectUrl) {
-      return undefined;
-    }
-
-    return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
-  }
-
-  private parseInternalRedirectUrl(value: string | undefined): URL | null {
-    if (!value) {
-      return null;
-    }
-
-    try {
-      const appUrl = new URL(this.webAppUrl);
-      const redirectUrl = new URL(value, appUrl);
-
-      return redirectUrl.origin === appUrl.origin ? redirectUrl : null;
-    } catch {
-      return null;
-    }
-  }
-
-  private hasUnsafeRedirectCharacters(value: string): boolean {
-    return Array.from(value).some((character) => {
-      const codePoint = character.codePointAt(0);
-      return character === '\\' || codePoint === undefined || codePoint <= 31 || codePoint === 127;
-    });
   }
 
   private get telegramClientId(): string {

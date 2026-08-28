@@ -1,5 +1,22 @@
 import { Injectable } from '@nestjs/common';
+import type { AuthProvider } from '@churchflow/db';
 import { PrismaService } from '../../prisma/prisma.service';
+
+// Which sign-in method the first admin arrived with. Telegram first, because that is how the
+// bootstrap link was meant to be answered; an address only counts once its owner has proved
+// they hold it, which is what signing in with it does.
+function bootstrappingProvider(user: {
+  emailVerified: Date | null;
+  accounts: ReadonlyArray<{ provider: AuthProvider }>;
+}): 'telegram' | 'email' | null {
+  if (user.accounts.some((account) => account.provider === 'telegram')) {
+    return 'telegram';
+  }
+
+  const hasEmailAccount = user.accounts.some((account) => account.provider === 'email');
+
+  return hasEmailAccount && user.emailVerified !== null ? 'email' : null;
+}
 
 export interface PlatformAdminBootstrapState {
   valid: boolean;
@@ -56,14 +73,19 @@ export class PlatformAdminBootstrapRepository {
       }
 
       const user = await tx.user.findFirst({
-        where: {
-          id: userId,
-          deletedAt: null,
-          accounts: { some: { provider: 'telegram', deletedAt: null } },
+        where: { id: userId, deletedAt: null },
+        select: {
+          id: true,
+          platformRole: true,
+          emailVerified: true,
+          accounts: {
+            where: { provider: { in: ['telegram', 'email'] }, deletedAt: null },
+            select: { provider: true },
+          },
         },
-        select: { id: true, platformRole: true },
       });
-      if (!user) {
+      const provider = user ? bootstrappingProvider(user) : null;
+      if (!user || !provider) {
         throw new Error('BOOTSTRAP_USER_NOT_ELIGIBLE');
       }
 
@@ -97,7 +119,7 @@ export class PlatformAdminBootstrapRepository {
           metadata: {
             previousRole: user.platformRole,
             role: 'SUPER_ADMIN',
-            source: 'telegram_bootstrap',
+            source: `${provider}_bootstrap`,
           },
         },
       });

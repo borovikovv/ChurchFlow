@@ -1,6 +1,26 @@
 import { Injectable } from '@nestjs/common';
-import type { MembershipClaimStatus } from '@churchflow/db';
+import type { AuthProvider, MembershipClaimStatus } from '@churchflow/db';
 import { PrismaService } from '../../../prisma/prisma.service';
+
+// The account the claim is answered with, and the one approval checks the claimant still
+// holds. Telegram first because it is the identity an organization already recognises; an
+// address only counts once its owner has proved they hold it.
+function claimingIdentity(user: {
+  emailVerified: Date | null;
+  accounts: ReadonlyArray<{ provider: AuthProvider; providerAccountId: string }>;
+}): { provider: AuthProvider; accountId: string } | null {
+  const telegram = user.accounts.find((account) => account.provider === 'telegram');
+  if (telegram) {
+    return { provider: 'telegram', accountId: telegram.providerAccountId };
+  }
+
+  const email = user.accounts.find((account) => account.provider === 'email');
+  if (email && user.emailVerified !== null) {
+    return { provider: 'email', accountId: email.providerAccountId };
+  }
+
+  return null;
+}
 
 @Injectable()
 export class MembershipClaimsRepository {
@@ -177,14 +197,13 @@ export class MembershipClaimsRepository {
         where: { id: actorUserId, deletedAt: null },
         include: {
           accounts: {
-            where: { provider: 'telegram', deletedAt: null },
-            select: { providerAccountId: true },
-            take: 1,
+            where: { provider: { in: ['telegram', 'email'] }, deletedAt: null },
+            select: { provider: true, providerAccountId: true },
           },
         },
       });
-      const telegramAccount = user?.accounts[0];
-      if (!user || !telegramAccount) throw new Error('TELEGRAM_ACCOUNT_REQUIRED');
+      const identity = user ? claimingIdentity(user) : null;
+      if (!identity) throw new Error('SIGN_IN_ACCOUNT_REQUIRED');
 
       const requested = await tx.membershipClaim.updateMany({
         where: { id: claim.id, status: 'PENDING', requestedByUserId: null },
@@ -192,8 +211,8 @@ export class MembershipClaimsRepository {
           status: 'REQUESTED',
           requestedAt: new Date(),
           requestedByUserId: actorUserId,
-          provider: 'telegram',
-          providerAccountId: telegramAccount.providerAccountId,
+          provider: identity.provider,
+          providerAccountId: identity.accountId,
         },
       });
       if (requested.count !== 1) throw new Error('CLAIM_NOT_PENDING');
@@ -235,7 +254,7 @@ export class MembershipClaimsRepository {
         where: { id: claimId, status: 'REQUESTED', membership: { organizationId } },
         include: { membership: { include: { organization: true } } },
       });
-      if (!claim || !claim.requestedByUserId || !claim.providerAccountId) {
+      if (!claim || !claim.requestedByUserId || !claim.provider || !claim.providerAccountId) {
         throw new Error('CLAIM_NOT_REQUESTED');
       }
       if (claim.expiresAt.getTime() <= Date.now()) {
@@ -262,7 +281,7 @@ export class MembershipClaimsRepository {
           deletedAt: null,
           accounts: {
             some: {
-              provider: 'telegram',
+              provider: claim.provider,
               providerAccountId: claim.providerAccountId,
               deletedAt: null,
             },

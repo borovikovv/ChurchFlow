@@ -43,6 +43,10 @@ export function organizationProfileNotificationsRoute(organizationId: string): R
   return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.profile}/notifications` as Route;
 }
 
+export function organizationProfilePasskeysRoute(organizationId: string): Route {
+  return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.profile}/passkeys` as Route;
+}
+
 export function organizationProfileSessionsRoute(organizationId: string): Route {
   return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.profile}/sessions` as Route;
 }

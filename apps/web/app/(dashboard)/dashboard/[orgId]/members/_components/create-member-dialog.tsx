@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { createManualOrganizationMemberSchema, MEMBER_MINISTRIES } from '@churchflow/shared';
 import type { MemberMinistry } from '@churchflow/shared';
 import { useTranslations } from 'next-intl';
-import { useId, useRef } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ import { FormDatePicker } from '@/components/forms/form-date-picker';
 import { FormInput } from '@/components/forms/form-input';
 import { FormSelect } from '@/components/forms/form-select';
 import { FormTextarea } from '@/components/forms/form-textarea';
+import { AccessLinkPanel } from '@/components/members/access-link-panel';
 import { Button } from '@/components/ui/button';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { createMemberAction } from '../actions';
@@ -28,6 +29,13 @@ const createMemberDefaultValues = {
   prepareAccess: false,
   ministries: [],
 } satisfies Partial<FormInput>;
+
+interface PreparedAccess {
+  memberName: string;
+  url: string;
+  expiresAt: string;
+  emailSent: boolean;
+}
 
 interface CreatedMember {
   id: string;
@@ -56,6 +64,7 @@ export function CreateMemberDialog({
   const commonT = useTranslations('common');
   const dialogRef = useRef<HTMLDialogElement>(null);
   const formId = useId();
+  const [preparedAccess, setPreparedAccess] = useState<PreparedAccess | null>(null);
   const {
     register,
     control,
@@ -79,10 +88,18 @@ export function CreateMemberDialog({
     toast.success(t('createdMember'));
     onCreated(result.member);
     reset();
+
+    // The claim link is only readable at this moment, so keep the dialog open to hand it over.
+    if (result.access) {
+      setPreparedAccess({ memberName: result.member.profile.displayName, ...result.access });
+      return;
+    }
+
     dialogRef.current?.close();
   });
 
   const openDialog = () => {
+    setPreparedAccess(null);
     reset(createMemberDefaultValues);
     dialogRef.current?.showModal();
   };
@@ -95,95 +112,114 @@ export function CreateMemberDialog({
       <FormDialog
         dialogRef={dialogRef}
         footer={
-          <>
-            <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
-              {commonT('cancel')}
+          preparedAccess ? (
+            <Button type="button" onClick={() => dialogRef.current?.close()}>
+              {commonT('close')}
             </Button>
-            <Button disabled={isSubmitting} form={formId} type="submit">
-              {isSubmitting ? t('creating') : t('createMember')}
-            </Button>
-          </>
+          ) : (
+            <>
+              <Button type="button" variant="secondary" onClick={() => dialogRef.current?.close()}>
+                {commonT('cancel')}
+              </Button>
+              <Button disabled={isSubmitting} form={formId} type="submit">
+                {isSubmitting ? t('creating') : t('createMember')}
+              </Button>
+            </>
+          )
         }
         fullScreenOnMobile
         size="md"
-        title={t('addMemberManually')}
+        title={
+          preparedAccess
+            ? t('accessLinkTitle', { name: preparedAccess.memberName })
+            : t('addMemberManually')
+        }
       >
-        <form className="flex flex-col" id={formId} onSubmit={submit} noValidate>
-          <div className="flex min-h-0 flex-col gap-4">
-            <FormInput
-              label={commonT('name')}
-              error={errors.displayName?.message}
-              {...register('displayName')}
-            />
-            <FormInput
-              label={commonT('email')}
-              type="email"
-              error={errors.email?.message}
-              {...register('email')}
-            />
-            <FormInput
-              label={t('phone')}
-              type="tel"
-              inputMode="tel"
-              error={errors.phone?.message}
-              {...register('phone')}
-            />
-            <FormSelect label={t('role')} error={errors.role?.message} {...register('role')}>
-              <option value="MEMBER">{t('roleLabels.MEMBER')}</option>
-              <option value="VIEWER">{t('roleLabels.VIEWER')}</option>
-            </FormSelect>
-            <fieldset className="grid gap-2 rounded-md border border-[var(--line)] p-3">
-              <legend className="px-1 font-semibold">{t('ministries')}</legend>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {MEMBER_MINISTRIES.map((ministry) => (
-                  <FormCheckbox
-                    key={ministry}
-                    label={t(`ministry.${ministry}`)}
-                    value={ministry}
-                    {...register('ministries')}
-                  />
-                ))}
-              </div>
-            </fieldset>
-            <FormDatePicker
-              control={control}
-              name="memberSince"
-              label={t('memberSince')}
-              error={errors.memberSince?.message}
-            />
-            <FormDatePicker
-              control={control}
-              name="birthday"
-              label={t('birthday')}
-              error={errors.birthday?.message}
-            />
-            <FormDatePicker
-              control={control}
-              name="anniversary"
-              label={t('anniversary')}
-              error={errors.anniversary?.message}
-            />
-            <FormTextarea
-              label={t('notes')}
-              rows={4}
-              error={errors.notes?.message}
-              {...register('notes')}
-            />
-            <FormTextarea
-              label={t('biography')}
-              rows={5}
-              error={errors.biography?.message}
-              {...register('biography')}
-            />
-            <FormTextarea
-              label={t('familyNotes')}
-              rows={4}
-              error={errors.familyNotes?.message}
-              {...register('familyNotes')}
-            />
-            <FormCheckbox label={t('prepareAppAccess')} {...register('prepareAccess')} />
+        {preparedAccess ? (
+          <div className="grid gap-4">
+            <p className="m-0 text-[var(--success)]">
+              {preparedAccess.emailSent ? t('accessLinkCreatedAndEmailed') : t('accessLinkCreated')}
+            </p>
+            <AccessLinkPanel url={preparedAccess.url} expiresAt={preparedAccess.expiresAt} />
           </div>
-        </form>
+        ) : (
+          <form className="flex flex-col" id={formId} onSubmit={submit} noValidate>
+            <div className="flex min-h-0 flex-col gap-4">
+              <FormInput
+                label={commonT('name')}
+                error={errors.displayName?.message}
+                {...register('displayName')}
+              />
+              <FormInput
+                label={commonT('email')}
+                type="email"
+                error={errors.email?.message}
+                {...register('email')}
+              />
+              <FormInput
+                label={t('phone')}
+                type="tel"
+                inputMode="tel"
+                error={errors.phone?.message}
+                {...register('phone')}
+              />
+              <FormSelect label={t('role')} error={errors.role?.message} {...register('role')}>
+                <option value="MEMBER">{t('roleLabels.MEMBER')}</option>
+                <option value="VIEWER">{t('roleLabels.VIEWER')}</option>
+              </FormSelect>
+              <fieldset className="grid gap-2 rounded-md border border-[var(--line)] p-3">
+                <legend className="px-1 font-semibold">{t('ministries')}</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {MEMBER_MINISTRIES.map((ministry) => (
+                    <FormCheckbox
+                      key={ministry}
+                      label={t(`ministry.${ministry}`)}
+                      value={ministry}
+                      {...register('ministries')}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+              <FormDatePicker
+                control={control}
+                name="memberSince"
+                label={t('memberSince')}
+                error={errors.memberSince?.message}
+              />
+              <FormDatePicker
+                control={control}
+                name="birthday"
+                label={t('birthday')}
+                error={errors.birthday?.message}
+              />
+              <FormDatePicker
+                control={control}
+                name="anniversary"
+                label={t('anniversary')}
+                error={errors.anniversary?.message}
+              />
+              <FormTextarea
+                label={t('notes')}
+                rows={4}
+                error={errors.notes?.message}
+                {...register('notes')}
+              />
+              <FormTextarea
+                label={t('biography')}
+                rows={5}
+                error={errors.biography?.message}
+                {...register('biography')}
+              />
+              <FormTextarea
+                label={t('familyNotes')}
+                rows={4}
+                error={errors.familyNotes?.message}
+                {...register('familyNotes')}
+              />
+              <FormCheckbox label={t('prepareAppAccess')} {...register('prepareAccess')} />
+            </div>
+          </form>
+        )}
       </FormDialog>
     </>
   );

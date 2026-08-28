@@ -152,6 +152,14 @@ Optional variables with defaults, used by the nightly notification retention job
 - `NOTIFICATIONS_READ_RETENTION_DAYS=180` — deletes read, archived or dismissed notifications older than this.
 - `NOTIFICATIONS_RETENTION_DRY_RUN=false` — set to `true` to log the counts without deleting anything.
 
+Optional variables for passkeys, derived from `WEB_APP_URL` when left blank:
+
+- `WEBAUTHN_RP_ID=` — the relying party id. Defaults to the host of `WEB_APP_URL`, which is correct whenever the browser reaches the app on that hostname.
+- `WEBAUTHN_RP_NAME=` — the name the browser shows in the passkey prompt. Defaults to `ChurchFlow`.
+- `WEBAUTHN_ORIGINS=` — comma-separated origins accepted during verification. Defaults to the origin of `WEB_APP_URL`. Set it only when the browser origin differs from the web app URL.
+
+Changing `WEBAUTHN_RP_ID` invalidates every passkey already registered: credentials are bound to the relying party they were created for.
+
 Optional variables with defaults, used by the nightly session retention job:
 
 - `SESSIONS_RETENTION_DAYS=30` — deletes sessions that stopped being usable, through expiry or revocation, longer ago than this.
@@ -213,6 +221,7 @@ Do not pass database credentials, Telegram credentials, Resend API keys, or S3/R
    - `environment=stage`
 
    Stage accepts any branch, so feature branches can be deployed there. `prod` still only accepts `main`.
+
 5. Verify from the server:
    ```bash
    cd /opt/churchflow/stage

@@ -29,11 +29,9 @@ import {
   memberMinistriesSchema,
   type MemberMinistry,
 } from '@churchflow/shared';
-import { CopyField } from '@/components/copy-field';
 
 type MembersSearchParams = {
   access?: string;
-  claimLink?: string;
   error?: string;
   message?: string;
   ministries?: string;
@@ -72,7 +70,6 @@ export default async function MembersDashboardPage({
 }) {
   const { orgId } = await params;
   const {
-    claimLink,
     message,
     error,
     access = 'all',
@@ -131,7 +128,6 @@ export default async function MembersDashboardPage({
       {!membersResult.ok ? <p className="form-error">{membersResult.error}</p> : null}
       {error ? <p className="form-error">{error}</p> : null}
       {message ? <p>{message}</p> : null}
-      {claimLink ? <CopyField value={claimLink} /> : null}
 
       <MembersManager
         memberAccess={memberAccess}

@@ -16,6 +16,7 @@ export type PlatformRole = 'USER' | 'ADMIN' | 'SUPER_ADMIN';
 export interface CurrentUser {
   id: string;
   email: string | null;
+  emailVerified: string | null;
   displayName: string | null;
   avatarUrl: string | null;
   platformRole: PlatformRole;

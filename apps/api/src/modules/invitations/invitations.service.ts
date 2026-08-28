@@ -9,7 +9,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
-import { Prisma, type InvitationTargetProvider, type OrganizationRole } from '@churchflow/db';
+import {
+  Prisma,
+  type AuthProvider,
+  type InvitationTargetProvider,
+  type OrganizationRole,
+} from '@churchflow/db';
 import type { CreateOrganizationInvitationInput } from '@churchflow/shared';
 import { AuditService } from '../audit/audit.service';
 import { UserLocaleService } from '../../common/locale/user-locale.service';
@@ -246,15 +251,18 @@ export class InvitationsService {
       throw new UnauthorizedException('Authenticated user was not found');
     }
 
-    const telegramAccount = user.accounts[0];
-    if (!telegramAccount) {
-      throw new ForbiddenException('Authenticated Telegram account is required');
+    const identity = this.acceptingIdentity(user);
+    if (!identity) {
+      throw new ForbiddenException(
+        'A Telegram account or a verified email address is required to accept an invitation',
+      );
     }
 
     if (invitation.mode === 'targeted_telegram') {
       if (
         invitation.targetProvider !== 'telegram' ||
-        invitation.targetProviderAccountId !== telegramAccount.providerAccountId
+        identity.provider !== 'telegram' ||
+        invitation.targetProviderAccountId !== identity.accountId
       ) {
         throw new ForbiddenException('Authenticated provider account must match invitation target');
       }
@@ -270,9 +278,10 @@ export class InvitationsService {
     if (
       invitation.mode === 'claimable_link' &&
       invitation.targetProviderAccountId &&
-      invitation.targetProviderAccountId !== telegramAccount.providerAccountId
+      (invitation.targetProvider !== identity.provider ||
+        invitation.targetProviderAccountId !== identity.accountId)
     ) {
-      throw new ForbiddenException('Invitation was already claimed by another Telegram account');
+      throw new ForbiddenException('Invitation was already claimed by another account');
     }
 
     const existingMembership = await this.invitationsRepository.findActiveMembership(
@@ -290,12 +299,12 @@ export class InvitationsService {
         userId: actorUserId,
         organizationId: invitation.organizationId,
         role: invitation.role,
-        acceptedProviderAccountId: telegramAccount.providerAccountId,
+        acceptedProviderAccountId: identity.accountId,
         ...(invitation.mode === 'claimable_link'
           ? {
               claim: {
-                targetProvider: 'telegram',
-                targetProviderAccountId: telegramAccount.providerAccountId,
+                targetProvider: identity.provider,
+                targetProviderAccountId: identity.accountId,
               },
             }
           : {}),
@@ -312,6 +321,26 @@ export class InvitationsService {
       organizationId: result.organizationId,
       redirectTo: `/dashboard/${result.organizationId}`,
     };
+  }
+
+  // A claimable link is a bearer credential, so the provider behind the session does not
+  // matter; a targeted invitation still has to match the identity it names. An address only
+  // counts once its owner has proved they hold it.
+  private acceptingIdentity(user: {
+    emailVerified: Date | null;
+    accounts: ReadonlyArray<{ provider: AuthProvider; providerAccountId: string }>;
+  }): { provider: InvitationTargetProvider; accountId: string } | null {
+    const telegram = user.accounts.find((account) => account.provider === 'telegram');
+    if (telegram) {
+      return { provider: 'telegram', accountId: telegram.providerAccountId };
+    }
+
+    const email = user.accounts.find((account) => account.provider === 'email');
+    if (email && user.emailVerified !== null) {
+      return { provider: 'email', accountId: email.providerAccountId };
+    }
+
+    return null;
   }
 
   async revoke(organizationId: string, invitationId: string, actorUserId: string) {

@@ -39,6 +39,7 @@ import type {
   calendarEventReminderSchema,
   calendarEventRepeatPeriodSchema,
   calendarServiceRoleSchema,
+  memberAccessMethodSchema,
   memberMinistrySchema,
   listCalendarEventsQuerySchema,
   createCalendarEventSchema,
@@ -132,6 +133,7 @@ export type CalendarEventType = z.infer<typeof calendarEventTypeSchema>;
 export type CalendarEventReminder = z.infer<typeof calendarEventReminderSchema>;
 export type CalendarEventRepeatPeriod = z.infer<typeof calendarEventRepeatPeriodSchema>;
 export type CalendarServiceRole = z.infer<typeof calendarServiceRoleSchema>;
+export type MemberAccessMethod = z.infer<typeof memberAccessMethodSchema>;
 export type MemberMinistry = z.infer<typeof memberMinistrySchema>;
 export type ListCalendarEventsQuery = z.infer<typeof listCalendarEventsQuerySchema>;
 export type CreateCalendarEventInput = z.infer<typeof createCalendarEventSchema>;

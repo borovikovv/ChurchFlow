@@ -15,6 +15,7 @@ import {
   BUDGET_ENTRY_FIELDS,
   BUDGET_GROUPS,
   DEFAULT_MEMBER_PAGE_SIZE,
+  MEMBER_ACCESS_METHODS,
   MEMBER_MINISTRIES,
   MEMBER_TABS,
   MEMBER_PAGE_SIZE_OPTIONS,
@@ -78,12 +79,14 @@ export const organizationMemberAccountStateSchema = z.enum([
 export const organizationMembersAccessFilterSchema = z.enum([
   'all',
   'connected',
+  'email',
   'offline',
   'requested',
   'suspended',
 ]);
 export const organizationMembersTypeFilterSchema = z.enum(['all', 'member', 'visitor']);
 export const organizationMembersTabSchema = z.enum(MEMBER_TABS);
+export const memberAccessMethodSchema = z.enum(MEMBER_ACCESS_METHODS);
 export const memberMinistrySchema = z.enum(MEMBER_MINISTRIES);
 export const memberMinistriesSchema = z.array(memberMinistrySchema);
 

@@ -37,6 +37,11 @@ export class MembershipsRepository {
           accounts: { some: { provider: 'telegram', deletedAt: null } },
         },
       },
+      email: {
+        user: {
+          accounts: { some: { provider: 'email', deletedAt: null } },
+        },
+      },
       offline: {
         userId: null,
         claims: {
@@ -133,9 +138,8 @@ export class MembershipsRepository {
             baptismChurchName: true,
             platformRole: true,
             accounts: {
-              where: { provider: 'telegram', deletedAt: null },
-              select: { id: true },
-              take: 1,
+              where: { deletedAt: null },
+              select: { provider: true },
             },
           },
         },
