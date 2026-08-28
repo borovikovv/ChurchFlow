@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { postToApi } from '@/api/browser-client';
 import type { PasskeyAuthenticationOptions } from '@churchflow/shared';
+import { rememberDeviceCredential } from '@/features/passkeys/device-registry';
 import { AuthProviderButton } from './auth-provider-button';
 import {
   isAbortedPasskeyCeremony,
@@ -129,6 +130,9 @@ async function signIn(init: {
   if (!verified.ok) {
     throw new Error(verified.message);
   }
+
+  // This browser has just proven it holds the credential, so nothing should offer to add it.
+  rememberDeviceCredential(credential.id);
 
   // A full navigation, so the middleware sees the session cookie the API just set.
   window.location.assign(verified.data.redirectTo);
