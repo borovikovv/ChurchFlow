@@ -32,6 +32,26 @@ export async function isPasskeyAutofillAvailable(): Promise<boolean> {
   }
 }
 
+// Whether the device itself can hold a passkey: Touch ID, Windows Hello, an Android screen
+// lock. A browser that supports WebAuthn on a desktop without one can still use a security
+// key, but it is not somewhere to volunteer an unprompted offer.
+export async function isPlatformAuthenticatorAvailable(): Promise<boolean> {
+  if (!isPasskeySupported()) {
+    return false;
+  }
+
+  const available = window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable;
+  if (typeof available !== 'function') {
+    return false;
+  }
+
+  try {
+    return await available.call(window.PublicKeyCredential);
+  } catch {
+    return false;
+  }
+}
+
 export async function createPasskeyCredential(
   options: PasskeyRegistrationOptions,
 ): Promise<PasskeyRegistrationCredential> {
