@@ -62,3 +62,9 @@ Use `EMAIL_PROVIDER=smtp` for local Mailpit development. Use `EMAIL_PROVIDER=res
 - Organization request admin emails go to `PLATFORM_ADMIN_EMAIL`. The requester contact email is included in the email body for review context.
 - Organization invitation emails go to the invited user email address.
 - Organization request rejection emails go to the requester contact email address.
+- Sign-in emails go to the address that asked to sign in, and only when that address is
+  actually admitted. Nothing is sent otherwise, and the endpoint answers `202` either way.
+- Address confirmation emails go to the address on the caller's own profile.
+
+Both auth emails carry credentials, so they are the one place where a delivery failure must
+not be swallowed: an unsent sign-in link is a failed sign-in, not a missing notification.

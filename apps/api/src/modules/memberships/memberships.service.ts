@@ -12,6 +12,7 @@ import type {
   NotificationTitleKey,
 } from '../notifications/notification-messages';
 import type { OrganizationRole } from '@churchflow/db';
+import { MEMBER_ACCESS_METHODS } from '@churchflow/shared';
 import type {
   CreateOrganizationMemberRelationshipInput,
   CreateManualOrganizationMemberInput,
@@ -88,8 +89,14 @@ export class MembershipsService {
       })),
       members: members.map((member) => {
         const activeClaim = member.claims.find((claim) => claim.expiresAt.getTime() > Date.now());
+        const accounts = member.user?.accounts ?? [];
+        // How the member signs in, so the list can tell a Telegram account from an email one.
+        // A passkey is a second factor on one of those identities, not a sign-in method of its own.
+        const accessMethods = MEMBER_ACCESS_METHODS.filter((method) =>
+          accounts.some((account) => account.provider === method),
+        );
         const accountState = member.user
-          ? member.user.accounts.length > 0
+          ? accounts.length > 0
             ? 'CLAIMED'
             : 'ACCOUNT_DISABLED'
           : activeClaim?.status === 'REQUESTED'
@@ -108,6 +115,7 @@ export class MembershipsService {
           source: member.source,
           ministries: member.ministries.map(({ ministry }) => ministry),
           claimedAt: member.claimedAt,
+          accessMethods,
           accountState,
           profile: member.profile
             ? {

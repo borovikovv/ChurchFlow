@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
-import type { CookieOptions } from 'express';
+import type { CookieOptions, Response } from 'express';
+import { AUTH_COOKIE_NAMES } from '@churchflow/shared';
 
 export function sessionCookieOptions(config: ConfigService): CookieOptions {
   const cookieDomain = config.get<string>('COOKIE_DOMAIN')?.trim();
@@ -12,4 +13,15 @@ export function sessionCookieOptions(config: ConfigService): CookieOptions {
     path: '/',
     ...(cookieDomain ? { domain: cookieDomain } : {}),
   };
+}
+
+export function setSessionCookie(
+  response: Response,
+  config: ConfigService,
+  input: { sessionToken: string; sessionExpiresAt: Date },
+): void {
+  response.cookie(AUTH_COOKIE_NAMES.session, input.sessionToken, {
+    ...sessionCookieOptions(config),
+    expires: input.sessionExpiresAt,
+  });
 }

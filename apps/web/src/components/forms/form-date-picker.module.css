@@ -9,6 +9,17 @@
   box-shadow: inset 0 1px 0 rgba(208, 215, 222, 0.2);
 }
 
+/* These class rules are unlayered, so they win over the 16px floor `globals.css` sets in
+   `@layer base` for narrow screens. Restating it here is what keeps iOS Safari from zooming
+   the page when the calendar's own fields take focus. */
+@media (max-width: 767.98px) {
+  .input,
+  .calendar :global(.react-datepicker__month-select),
+  .calendar :global(.react-datepicker__year-select) {
+    font-size: 16px;
+  }
+}
+
 .input:focus,
 .input:focus-visible {
   border-color: #0969da;

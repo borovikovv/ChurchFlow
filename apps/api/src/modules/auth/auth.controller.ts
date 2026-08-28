@@ -16,7 +16,11 @@ import { Throttle } from '@nestjs/throttler';
 import { AUTH_COOKIE_NAMES, type UserSession } from '@churchflow/shared';
 import type { CookieOptions, Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { sessionCookieOptions } from '../../common/auth/session-cookie';
+import {
+  requestClientContext,
+  type RequestClientContext,
+} from '../../common/auth/request-client-context';
+import { sessionCookieOptions, setSessionCookie } from '../../common/auth/session-cookie';
 import { sessionTokenFromRequest } from '../../common/auth/session-token';
 import {
   SessionAuthGuard,
@@ -58,11 +62,6 @@ interface ProviderLoginRequest {
   redirectTo?: string;
 }
 
-interface SessionClientContext {
-  userAgent?: string;
-  ipAddress?: string;
-}
-
 interface AuthControllerService {
   beginProviderLogin(input: ProviderLoginRequest): { provider: string };
   beginTelegramLogin(input: { redirectTo?: string }): BeginTelegramLoginResult;
@@ -74,7 +73,7 @@ interface AuthControllerService {
     expectedNonce: string;
     redirectTo?: string;
     acceptLanguage?: string;
-    client: SessionClientContext;
+    client: RequestClientContext;
   }): Promise<CompleteTelegramLoginResult>;
   logoutByToken(sessionToken: string): Promise<{ ok: true }>;
   listSessions(userId: string, currentSessionId: string): Promise<UserSession[]>;
@@ -157,7 +156,7 @@ export class AuthController {
         expectedNonce,
         ...(redirectTo ? { redirectTo } : {}),
         ...(acceptLanguage ? { acceptLanguage } : {}),
-        client: this.sessionClientContext(request),
+        client: requestClientContext(request),
       });
       this.setAuthCookies(response, result);
       response.redirect(new URL(result.redirectTo, this.webAppUrl).toString());
@@ -215,24 +214,11 @@ export class AuthController {
     return request.auth;
   }
 
-  private sessionClientContext(request: Request): SessionClientContext {
-    const userAgent = request.headers['user-agent'];
-    const ipAddress = request.ip;
-
-    return {
-      ...(userAgent ? { userAgent } : {}),
-      ...(ipAddress ? { ipAddress } : {}),
-    };
-  }
-
   private setAuthCookies(
     response: Response,
     input: { sessionToken: string; sessionExpiresAt: Date },
   ): void {
-    response.cookie(AUTH_COOKIE_NAMES.session, input.sessionToken, {
-      ...this.cookieOptions,
-      expires: input.sessionExpiresAt,
-    });
+    setSessionCookie(response, this.config, input);
   }
 
   private clearAuthCookies(response: Response): void {

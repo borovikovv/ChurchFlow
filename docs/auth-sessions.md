@@ -26,6 +26,14 @@ than `user`. It then puts `{ userId, sessionId }` on the request. Organization a
 separate concern: `OrganizationAccessGuard` reads current membership, role and permissions from the
 database on every request, and the token is never a source of authorization truth.
 
+## Where the cookie is set
+
+Telegram and the email link both finish as a browser navigation to the API, so the API sets the
+cookie on the browser directly. The email code and passkey sign-in finish as a `POST`, and those
+go from the browser straight to the same-origin `/v1` rewrite for the same reason: a `Set-Cookie`
+returned to a server action reaches the Next server, never the browser. Passkey _management_ in
+the profile has no such constraint and goes through server actions like every other mutation.
+
 ## Web layer
 
 The Next.js middleware runs for every application page. Session tokens are opaque, so it can only
@@ -60,8 +68,9 @@ Every other application page is protected by default. Adding a genuinely public 
 explicit update to `apps/web/src/auth/route-policy.ts`. Public validation pages do not make their API
 mutations public; guards remain authoritative.
 
-A new Telegram login is required after logout, session revocation, user deletion, 30 days without
-using the session, 180 days since it was created, or loss of the session cookie.
+A new sign-in — through any provider the account holds — is required after logout, session
+revocation, user deletion, 30 days without using the session, 180 days since it was created, or
+loss of the session cookie.
 
 ## Managing devices
 

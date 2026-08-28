@@ -23,7 +23,9 @@ export class PlatformAdminBootstrapService {
         throw new ConflictException('A platform super admin already exists');
       }
       if (error instanceof Error && error.message === 'BOOTSTRAP_USER_NOT_ELIGIBLE') {
-        throw new UnauthorizedException('An active Telegram account is required');
+        throw new UnauthorizedException(
+          'A Telegram account or a verified email address is required',
+        );
       }
       if (error instanceof Error && error.message === 'BOOTSTRAP_TOKEN_UNAVAILABLE') {
         throw new GoneException('Bootstrap token is expired, consumed, or invalid');

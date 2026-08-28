@@ -5,6 +5,19 @@ const EMAIL_TIME_ZONE = 'Europe/Kyiv';
 
 interface EmailMessageCatalog {
   intlLocale: string;
+  emailSignIn: {
+    code: (params: { code: string }) => string;
+    expiresAt: (params: { expiresAt: string }) => string;
+    intro: string;
+    signIn: (params: { url: string }) => string;
+    subject: string;
+  };
+  emailVerification: {
+    confirm: (params: { url: string }) => string;
+    expiresAt: (params: { expiresAt: string }) => string;
+    intro: string;
+    subject: string;
+  };
   membershipClaim: {
     intro: (params: { organizationName: string }) => string;
     expiresAt: (params: { expiresAt: string }) => string;
@@ -49,6 +62,19 @@ interface EmailMessageCatalog {
 const EMAIL_MESSAGE_CATALOG = {
   en: {
     intlLocale: 'en-US',
+    emailSignIn: {
+      code: (params) => `Or enter this code on the sign-in page: ${params.code}`,
+      expiresAt: (params) => `This link and code expire at ${params.expiresAt}.`,
+      intro: 'Use this link to sign in to ChurchFlow.',
+      signIn: (params) => `Sign in: ${params.url}`,
+      subject: 'Your ChurchFlow sign-in link',
+    },
+    emailVerification: {
+      confirm: (params) => `Confirm your email address: ${params.url}`,
+      expiresAt: (params) => `This link expires at ${params.expiresAt}.`,
+      intro: 'Confirm this email address so you can use it to sign in to ChurchFlow.',
+      subject: 'Confirm your ChurchFlow email address',
+    },
     membershipClaim: {
       intro: (params) =>
         `An organization administrator prepared ChurchFlow access for ${params.organizationName}.`,
@@ -93,6 +119,19 @@ const EMAIL_MESSAGE_CATALOG = {
   },
   uk: {
     intlLocale: 'uk-UA',
+    emailSignIn: {
+      code: (params) => `Або введіть цей код на сторінці входу: ${params.code}`,
+      expiresAt: (params) => `Посилання і код діють до ${params.expiresAt}.`,
+      intro: 'Скористайтеся цим посиланням, щоб увійти до ChurchFlow.',
+      signIn: (params) => `Увійти: ${params.url}`,
+      subject: 'Посилання для входу до ChurchFlow',
+    },
+    emailVerification: {
+      confirm: (params) => `Підтвердьте свою електронну адресу: ${params.url}`,
+      expiresAt: (params) => `Це посилання діє до ${params.expiresAt}.`,
+      intro: 'Підтвердьте цю адресу, щоб входити з нею до ChurchFlow.',
+      subject: 'Підтвердьте електронну адресу ChurchFlow',
+    },
     membershipClaim: {
       intro: (params) =>
         `Адміністратор організації підготував для вас доступ до ChurchFlow: ${params.organizationName}.`,
