@@ -105,6 +105,7 @@ async function loadMissingMilestones(client, organizationId) {
 }
 
 async function insertMilestoneEvent(client, milestone, locale) {
+  const eventId = randomUUID();
   await client.query(
     `insert into calendar_events
        (id, organization_id, created_by_user_id, linked_membership_id, type, title,
@@ -112,13 +113,29 @@ async function insertMilestoneEvent(client, milestone, locale) {
      values ($1, $2, null, $3, $4::"CalendarEventType", $5,
              ($6::date::timestamp at time zone $7), null, true, 'YEARLY', false, now(), now())`,
     [
-      randomUUID(),
+      eventId,
       milestone.organizationId,
       milestone.membershipId,
       milestone.type,
       MILESTONE_TITLES[locale][milestone.type](milestone.displayName),
       milestone.milestoneDate,
       MILESTONE_EVENT_TIME_ZONE,
+    ],
+  );
+
+  await client.query(
+    `insert into audit_logs (id, organization_id, actor_user_id, action, entity_type, entity_id, metadata, created_at)
+     values ($1, $2, null, 'SYNC_MEMBER_MILESTONE_EVENT', 'CalendarEvent', $3, $4::jsonb, now())`,
+    [
+      randomUUID(),
+      milestone.organizationId,
+      eventId,
+      JSON.stringify({
+        type: milestone.type,
+        change: 'created',
+        membershipId: milestone.membershipId,
+        source: 'backfill',
+      }),
     ],
   );
 }

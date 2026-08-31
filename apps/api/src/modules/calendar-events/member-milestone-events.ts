@@ -31,6 +31,7 @@ export interface MemberMilestoneEventSyncInput {
   birthday: Date | null;
   anniversary: Date | null;
   locale: AppLocale;
+  actorUserId: string | null;
 }
 
 export async function syncMemberMilestoneEvents(
@@ -77,6 +78,7 @@ async function syncMilestoneEvent(
         where: { id: existing.id },
         data: { deletedAt: new Date() },
       });
+      await recordMilestoneAudit(tx, input, type, existing.id, 'deleted');
     }
     return;
   }
@@ -90,10 +92,11 @@ async function syncMilestoneEvent(
       where: { id: existing.id },
       data: { startsAt, allDay: true, repeatPeriod: CALENDAR_EVENT_REPEAT_PERIOD.yearly },
     });
+    await recordMilestoneAudit(tx, input, type, existing.id, 'updated');
     return;
   }
 
-  await tx.calendarEvent.create({
+  const created = await tx.calendarEvent.create({
     data: {
       organizationId: input.organizationId,
       linkedMembershipId: input.membershipId,
@@ -103,6 +106,27 @@ async function syncMilestoneEvent(
       endsAt: null,
       allDay: true,
       repeatPeriod: CALENDAR_EVENT_REPEAT_PERIOD.yearly,
+    },
+    select: { id: true },
+  });
+  await recordMilestoneAudit(tx, input, type, created.id, 'created');
+}
+
+async function recordMilestoneAudit(
+  tx: Prisma.TransactionClient,
+  input: MemberMilestoneEventSyncInput,
+  type: MilestoneEventType,
+  eventId: string,
+  change: 'created' | 'updated' | 'deleted',
+): Promise<void> {
+  await tx.auditLog.create({
+    data: {
+      organizationId: input.organizationId,
+      actorUserId: input.actorUserId,
+      action: 'SYNC_MEMBER_MILESTONE_EVENT',
+      entityType: 'CalendarEvent',
+      entityId: eventId,
+      metadata: { type, change, membershipId: input.membershipId },
     },
   });
 }

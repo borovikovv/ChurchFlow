@@ -260,6 +260,7 @@ export class MembershipsRepository {
         birthday: membership.profile?.birthday ?? null,
         anniversary: membership.profile?.anniversary ?? null,
         locale: await milestoneActorLocale(tx, actorUserId),
+        actorUserId,
       });
 
       await tx.auditLog.create({
@@ -368,6 +369,7 @@ export class MembershipsRepository {
           birthday: membership.profile?.birthday ?? null,
           anniversary: membership.profile?.anniversary ?? null,
           locale: importLocale,
+          actorUserId,
         });
 
         await tx.auditLog.create({
@@ -491,6 +493,7 @@ export class MembershipsRepository {
         birthday: profile.birthday,
         anniversary: profile.anniversary,
         locale: await milestoneActorLocale(tx, actorUserId),
+        actorUserId,
       });
 
       await tx.auditLog.create({
