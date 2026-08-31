@@ -24,6 +24,8 @@ import {
   CalendarRecurrenceError,
   expandCalendarEventOccurrences,
   getOccurrenceStarts,
+  zonedDateParts,
+  zonedDateTimeToUtc,
 } from './recurrence/calendar-recurrence';
 import { validTimeZoneOrFallback } from '../../common/time/date-time';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -36,7 +38,14 @@ const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const NOTIFICATION_FALLBACK_TIME_ZONE = 'Europe/Kyiv';
 const REMINDER_WINDOW_MS = 5 * 60 * 1000;
 const REMINDER_LOOKAHEAD_MS = 7 * MILLISECONDS_PER_DAY;
+const ALL_DAY_NOTIFICATION_HOUR = 9;
+const ALL_DAY_OCCURRENCE_PADDING_MS = MILLISECONDS_PER_DAY;
 const calendarEventsLogger = new Logger('CalendarEventsService');
+interface MilestoneDigest {
+  date: string;
+  birthdays: string[];
+  anniversaries: string[];
+}
 type CalendarNotificationSchedule =
   | { kind: 'event'; offsetMs: 0 }
   | { kind: 'reminder'; offsetMs: number };
@@ -230,6 +239,8 @@ export class CalendarEventsService {
     let telegramSentCount = 0;
 
     for (const event of events) {
+      if (isBirthdayOrAnniversaryEvent(event.type)) continue;
+
       const creatorMembershipId = await this.calendarEventsRepository.findCreatorMembershipId(
         event.organizationId,
         event.createdByUserId,
@@ -269,9 +280,9 @@ export class CalendarEventsService {
             schedule.kind,
             event.type,
           );
-          const occurrenceStarts = safeNotificationOccurrenceStarts(
+          const occurrenceStarts = notificationOccurrenceStarts(
             event,
-            schedule.offsetMs,
+            schedule,
             windowStart,
             windowEnd,
             timeZone,
@@ -323,7 +334,78 @@ export class CalendarEventsService {
       }
     }
 
-    return { eventsCount: events.length, createdCount, emailSentCount, telegramSentCount };
+    const digests = await this.createMilestoneDigestNotifications(
+      events.filter((event) => isBirthdayOrAnniversaryEvent(event.type)),
+      windowStart,
+      windowEnd,
+    );
+
+    return {
+      eventsCount: events.length,
+      createdCount: createdCount + digests.createdCount,
+      emailSentCount: emailSentCount + digests.emailSentCount,
+      telegramSentCount: telegramSentCount + digests.telegramSentCount,
+    };
+  }
+
+  private async createMilestoneDigestNotifications(
+    milestoneEvents: CalendarEventRecord[],
+    windowStart: Date,
+    windowEnd: Date,
+  ) {
+    let createdCount = 0;
+    let emailSentCount = 0;
+    let telegramSentCount = 0;
+
+    for (const [organizationId, organizationEvents] of groupEventsByOrganization(milestoneEvents)) {
+      const recipientMembershipIds =
+        await this.calendarEventsRepository.listCalendarEventNotificationRecipientMembershipIds(
+          organizationId,
+        );
+      const recipientMemberships =
+        await this.calendarEventsRepository.listReminderRecipientMemberships(
+          organizationId,
+          recipientMembershipIds,
+        );
+
+      for (const [timeZone, membershipIds] of groupReminderRecipientsByTimeZone(
+        recipientMemberships,
+      )) {
+        const digest = collectMilestoneDigest(organizationEvents, windowStart, windowEnd, timeZone);
+        if (!digest) continue;
+
+        try {
+          const result = await this.notificationsService.createCalendarReminderNotifications({
+            organizationId,
+            actorUserId: null,
+            recipientMembershipIds: membershipIds,
+            type: 'BIRTHDAY_DIGEST',
+            preferenceKey: 'birthdayDigestEnabled',
+            titleKey: milestoneDigestTitleKey(digest),
+            bodyMessage: {
+              key: 'birthdayDigest',
+              birthdays: digest.birthdays,
+              anniversaries: digest.anniversaries,
+            },
+            url: `/dashboard/${organizationId}/calendar`,
+            dedupeKey: `birthday-digest:${digest.date}:${timeZone}`,
+          });
+          createdCount += result.createdCount;
+          emailSentCount += result.emailSentCount;
+          telegramSentCount += result.telegramSentCount;
+        } catch (error: unknown) {
+          calendarEventsLogger.error({
+            event: 'Milestone digest notification creation failed',
+            organizationId,
+            digestDate: digest.date,
+            timeZone,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+
+    return { createdCount, emailSentCount, telegramSentCount };
   }
 
   private toHttpError(error: unknown) {
@@ -540,6 +622,15 @@ function calendarNotificationBody(
   timeZone: string,
   scheduleKind: CalendarNotificationSchedule['kind'],
 ): NotificationBodyMessage {
+  if (usesAllDayNotificationTime(event)) {
+    return {
+      key: 'eventOnDate',
+      eventTitle: event.title,
+      startsAt: occurrenceStart.toISOString(),
+      timeZone: NOTIFICATION_FALLBACK_TIME_ZONE,
+    };
+  }
+
   return {
     key: scheduleKind === 'event' ? 'eventScheduledFor' : 'eventStartsAt',
     eventTitle: event.title,
@@ -592,6 +683,79 @@ function isBirthdayOrAnniversaryEvent(eventType: CalendarEventRecord['type']): b
   );
 }
 
+function milestoneDigestTitleKey(digest: MilestoneDigest): NotificationTitleKey {
+  if (digest.birthdays.length > 0 && digest.anniversaries.length > 0) {
+    return 'birthdayDigestBirthdaysAndAnniversaries';
+  }
+  if (digest.anniversaries.length > 0) return 'birthdayDigestAnniversaries';
+
+  return 'birthdayDigestBirthdays';
+}
+
+function collectMilestoneDigest(
+  events: CalendarEventRecord[],
+  windowStart: Date,
+  windowEnd: Date,
+  timeZone: string,
+): MilestoneDigest | null {
+  const birthdays: string[] = [];
+  const anniversaries: string[] = [];
+  let digestDate: string | null = null;
+
+  for (const event of events) {
+    const occurrenceStarts = notificationOccurrenceStarts(
+      event,
+      { kind: 'event', offsetMs: 0 },
+      windowStart,
+      windowEnd,
+      timeZone,
+    );
+    const occurrenceStart = occurrenceStarts.at(0);
+    if (!occurrenceStart) continue;
+
+    digestDate ??= milestoneDigestDate(occurrenceStart);
+    const name = milestoneMemberName(event);
+    if (event.type === CALENDAR_EVENT_TYPE.birthday) birthdays.push(name);
+    else anniversaries.push(name);
+  }
+
+  if (!digestDate) return null;
+
+  return {
+    date: digestDate,
+    birthdays: birthdays.sort((left, right) => left.localeCompare(right)),
+    anniversaries: anniversaries.sort((left, right) => left.localeCompare(right)),
+  };
+}
+
+function milestoneMemberName(event: CalendarEventRecord): string {
+  return (event.linkedMembership ? memberDisplayName(event.linkedMembership) : null) ?? event.title;
+}
+
+function milestoneDigestDate(occurrenceStart: Date): string {
+  const parts = zonedDateParts(occurrenceStart, NOTIFICATION_FALLBACK_TIME_ZONE);
+
+  return [
+    String(parts.year).padStart(4, '0'),
+    String(parts.month).padStart(2, '0'),
+    String(parts.day).padStart(2, '0'),
+  ].join('-');
+}
+
+function groupEventsByOrganization(
+  events: CalendarEventRecord[],
+): Map<string, CalendarEventRecord[]> {
+  const groups = new Map<string, CalendarEventRecord[]>();
+
+  for (const event of events) {
+    const group = groups.get(event.organizationId) ?? [];
+    group.push(event);
+    groups.set(event.organizationId, group);
+  }
+
+  return groups;
+}
+
 function notificationSchedules(event: CalendarEventRecord): CalendarNotificationSchedule[] {
   return [
     { kind: 'event', offsetMs: 0 },
@@ -599,6 +763,60 @@ function notificationSchedules(event: CalendarEventRecord): CalendarNotification
       ? [{ kind: 'reminder' as const, offsetMs: reminderOffsetMs(event.reminder) }]
       : []),
   ];
+}
+
+function notificationOccurrenceStarts(
+  event: CalendarEventRecord,
+  schedule: CalendarNotificationSchedule,
+  windowStart: Date,
+  windowEnd: Date,
+  timeZone: string,
+): Date[] {
+  if (!usesAllDayNotificationTime(event)) {
+    return safeNotificationOccurrenceStarts(
+      event,
+      schedule.offsetMs,
+      windowStart,
+      windowEnd,
+      timeZone,
+    );
+  }
+
+  const candidates = safeNotificationOccurrenceStarts(
+    event,
+    schedule.offsetMs,
+    new Date(windowStart.getTime() - ALL_DAY_OCCURRENCE_PADDING_MS),
+    new Date(windowEnd.getTime() + ALL_DAY_OCCURRENCE_PADDING_MS),
+    timeZone,
+  );
+
+  return candidates.filter((occurrenceStart) => {
+    const notifyAt = new Date(
+      allDayNotificationInstant(occurrenceStart, timeZone).getTime() - schedule.offsetMs,
+    );
+
+    return notifyAt >= windowStart && notifyAt <= windowEnd;
+  });
+}
+
+function usesAllDayNotificationTime(event: CalendarEventRecord): boolean {
+  return event.allDay || isBirthdayOrAnniversaryEvent(event.type);
+}
+
+function allDayNotificationInstant(occurrenceStart: Date, timeZone: string): Date {
+  const parts = zonedDateParts(occurrenceStart, NOTIFICATION_FALLBACK_TIME_ZONE);
+
+  return zonedDateTimeToUtc(
+    {
+      year: parts.year,
+      month: parts.month,
+      day: parts.day,
+      hour: ALL_DAY_NOTIFICATION_HOUR,
+      minute: 0,
+      second: 0,
+    },
+    timeZone,
+  );
 }
 
 function safeNotificationOccurrenceStarts(

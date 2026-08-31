@@ -220,56 +220,6 @@ export class NotificationsService {
     return { createdCount: result.createdCount, ...sentCounts };
   }
 
-  async createBirthdayDigestNotifications(now = new Date()) {
-    const digestDate = formatDateKey(now);
-    const groups = await this.notificationsRepository.listBirthdayDigestGroups(now);
-    let createdCount = 0;
-    let emailSentCount = 0;
-    let telegramSentCount = 0;
-
-    for (const group of groups) {
-      const titleKey = birthdayDigestTitleKey(group);
-      const bodyMessage: NotificationBodyMessage = {
-        key: 'birthdayDigest',
-        birthdays: group.birthdays,
-        anniversaries: group.anniversaries,
-      };
-      const result = await this.notificationsRepository.createBirthdayDigestNotifications({
-        organizationId: group.organizationId,
-        recipientUserIds: group.recipientUserIds,
-        titleKey,
-        bodyMessage,
-        url: `/dashboard/${group.organizationId}/calendar`,
-        dedupeKey: `birthday-digest:${digestDate}`,
-      });
-      createdCount += result.createdCount;
-
-      const sentCounts = await this.dispatchToEnabledServices(
-        {
-          organizationId: group.organizationId,
-          titleKey,
-          bodyMessage,
-          url: `/dashboard/${group.organizationId}/calendar`,
-        },
-        result,
-        'birthdayDigestEnabled',
-      );
-      emailSentCount += sentCounts.emailSentCount;
-      telegramSentCount += sentCounts.telegramSentCount;
-    }
-
-    this.logger.log({
-      event: 'Birthday digest notifications processed',
-      digestDate,
-      organizationsCount: groups.length,
-      createdCount,
-      emailSentCount,
-      telegramSentCount,
-    });
-
-    return { organizationsCount: groups.length, createdCount, emailSentCount, telegramSentCount };
-  }
-
   async purgeExpiredNotifications(input: {
     cutoffs: NotificationRetentionCutoffs;
     dryRun: boolean;
@@ -570,20 +520,4 @@ function memberDisplayName(member: {
   user: { displayName: string | null; email: string | null } | null;
 }): string {
   return member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? 'Member';
-}
-
-function birthdayDigestTitleKey(group: {
-  birthdays: string[];
-  anniversaries: string[];
-}): NotificationTitleKey {
-  if (group.birthdays.length > 0 && group.anniversaries.length > 0) {
-    return 'birthdayDigestBirthdaysAndAnniversaries';
-  }
-  if (group.anniversaries.length > 0) return 'birthdayDigestAnniversaries';
-
-  return 'birthdayDigestBirthdays';
-}
-
-function formatDateKey(value: Date): string {
-  return value.toISOString().slice(0, 10);
 }

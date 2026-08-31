@@ -8,6 +8,18 @@ export function validTimeZoneOrFallback(timeZone: string | null | undefined): st
   }
 }
 
+export function formatDate(
+  value: Date,
+  options: { intlLocale: string; timeZone: string | null | undefined },
+): string {
+  return new Intl.DateTimeFormat(options.intlLocale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: validTimeZoneOrFallback(options.timeZone),
+  }).format(value);
+}
+
 export function formatDateTime(
   value: Date,
   options: { intlLocale: string; timeZone: string | null | undefined },

@@ -9,6 +9,10 @@ import type {
   UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  milestoneActorLocale,
+  syncMemberMilestoneEvents,
+} from '../../calendar-events/member-milestone-events';
 
 @Injectable()
 export class MembershipsRepository {
@@ -249,6 +253,15 @@ export class MembershipsRepository {
         });
       }
 
+      await syncMemberMilestoneEvents(tx, {
+        organizationId,
+        membershipId: membership.id,
+        displayName: membership.profile?.displayName ?? input.displayName,
+        birthday: membership.profile?.birthday ?? null,
+        anniversary: membership.profile?.anniversary ?? null,
+        locale: await milestoneActorLocale(tx, actorUserId),
+      });
+
       await tx.auditLog.create({
         data: {
           organizationId,
@@ -310,6 +323,7 @@ export class MembershipsRepository {
           anniversary: Date | null;
         };
       }> = [];
+      const importLocale = await milestoneActorLocale(tx, actorUserId);
 
       for (const row of rows) {
         const membership = await tx.organizationMember.create({
@@ -346,6 +360,15 @@ export class MembershipsRepository {
             })),
           });
         }
+
+        await syncMemberMilestoneEvents(tx, {
+          organizationId,
+          membershipId: membership.id,
+          displayName: membership.profile?.displayName ?? row.displayName,
+          birthday: membership.profile?.birthday ?? null,
+          anniversary: membership.profile?.anniversary ?? null,
+          locale: importLocale,
+        });
 
         await tx.auditLog.create({
           data: {
@@ -460,6 +483,15 @@ export class MembershipsRepository {
           });
         }
       }
+
+      await syncMemberMilestoneEvents(tx, {
+        organizationId,
+        membershipId,
+        displayName: profile.displayName,
+        birthday: profile.birthday,
+        anniversary: profile.anniversary,
+        locale: await milestoneActorLocale(tx, actorUserId),
+      });
 
       await tx.auditLog.create({
         data: {
