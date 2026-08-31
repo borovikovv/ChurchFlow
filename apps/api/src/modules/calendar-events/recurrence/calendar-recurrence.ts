@@ -104,7 +104,7 @@ export function getOccurrenceStarts({
   let guard = 0;
 
   while (occurrenceStart < rangeStart && guard < MAX_OCCURRENCE_SEARCH_STEPS) {
-    occurrenceStart = nextOccurrenceAfter(occurrenceStart, repeatPeriod, timeZone);
+    occurrenceStart = nextOccurrenceAfter(occurrenceStart, startsAt, repeatPeriod, timeZone);
     guard += 1;
   }
   if (occurrenceStart < rangeStart) {
@@ -127,7 +127,7 @@ export function getOccurrenceStarts({
     guard < maxOccurrences
   ) {
     occurrenceStarts.push(new Date(occurrenceStart));
-    occurrenceStart = nextOccurrenceAfter(occurrenceStart, repeatPeriod, timeZone);
+    occurrenceStart = nextOccurrenceAfter(occurrenceStart, startsAt, repeatPeriod, timeZone);
     guard += 1;
   }
 
@@ -209,7 +209,7 @@ function firstOccurrenceInRange(
   let guard = 0;
 
   while (guard < MAX_OCCURRENCE_SEARCH_STEPS) {
-    const next = nextOccurrenceAfter(occurrenceStart, repeatPeriod, timeZone);
+    const next = nextOccurrenceAfter(occurrenceStart, startsAt, repeatPeriod, timeZone);
     if (next > rangeStart) return occurrenceStart;
 
     occurrenceStart.setTime(next.getTime());
@@ -279,10 +279,11 @@ function fastForwardDailyOrWeeklyOccurrence(
 
 function nextOccurrenceAfter(
   value: Date,
+  anchor: Date,
   repeatPeriod: CalendarEventRepeatPeriod,
   timeZone: string | null | undefined,
 ): Date {
-  const next = nextOccurrence(value, repeatPeriod, timeZone);
+  const next = nextOccurrence(value, anchor, repeatPeriod, timeZone);
   if (next <= value) {
     throw new CalendarRecurrenceError(
       'CALENDAR_REPEAT_DID_NOT_ADVANCE',
@@ -301,10 +302,37 @@ function nextOccurrenceAfter(
 
 function nextOccurrence(
   value: Date,
+  anchor: Date,
   repeatPeriod: CalendarEventRepeatPeriod,
   timeZone: string | null | undefined,
 ): Date {
   const parts = zonedDateParts(value, timeZone);
+
+  if (
+    repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.monthly ||
+    repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.yearly
+  ) {
+    // Step from the original date so a 29 February or 31st occurrence that had to be
+    // clamped in one period comes back on the next period that is long enough.
+    const anchorParts = zonedDateParts(anchor, timeZone);
+    const target =
+      repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.monthly
+        ? nextMonth(parts.year, parts.month)
+        : { year: parts.year + YEARLY_REPEAT_STEP_YEARS, month: anchorParts.month };
+
+    return zonedDateTimeToUtc(
+      {
+        year: target.year,
+        month: target.month,
+        day: Math.min(anchorParts.day, daysInMonth(target.year, target.month)),
+        hour: parts.hour,
+        minute: parts.minute,
+        second: parts.second,
+      },
+      timeZone,
+    );
+  }
+
   const localDate = new Date(
     Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second),
   );
@@ -313,10 +341,6 @@ function nextOccurrence(
     localDate.setUTCDate(localDate.getUTCDate() + DAILY_REPEAT_STEP_DAYS);
   if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.weekly)
     localDate.setUTCDate(localDate.getUTCDate() + WEEKLY_REPEAT_STEP_DAYS);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.monthly)
-    localDate.setUTCMonth(localDate.getUTCMonth() + MONTHLY_REPEAT_STEP_MONTHS);
-  if (repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.yearly)
-    localDate.setUTCFullYear(localDate.getUTCFullYear() + YEARLY_REPEAT_STEP_YEARS);
 
   return zonedDateTimeToUtc(
     {
@@ -329,6 +353,16 @@ function nextOccurrence(
     },
     timeZone,
   );
+}
+
+function nextMonth(year: number, month: number): { year: number; month: number } {
+  const monthIndex = month - 1 + MONTHLY_REPEAT_STEP_MONTHS;
+
+  return { year: year + Math.floor(monthIndex / 12), month: (monthIndex % 12) + 1 };
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
 function timeZoneOffsetMs(value: Date, timeZone: string | null | undefined): number {
