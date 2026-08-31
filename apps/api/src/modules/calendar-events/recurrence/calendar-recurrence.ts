@@ -206,6 +206,13 @@ function firstOccurrenceInRange(
 ): Date {
   const occurrenceStart = new Date(startsAt);
   fastForwardDailyOrWeeklyOccurrence(occurrenceStart, startsAt, repeatPeriod, rangeStart, timeZone);
+  fastForwardMonthlyOrYearlyOccurrence(
+    occurrenceStart,
+    startsAt,
+    repeatPeriod,
+    rangeStart,
+    timeZone,
+  );
   let guard = 0;
 
   while (guard < MAX_OCCURRENCE_SEARCH_STEPS) {
@@ -277,6 +284,54 @@ function fastForwardDailyOrWeeklyOccurrence(
   );
 }
 
+function fastForwardMonthlyOrYearlyOccurrence(
+  occurrenceStart: Date,
+  startsAt: Date,
+  repeatPeriod: CalendarEventRepeatPeriod,
+  rangeStart: Date,
+  timeZone: string | null | undefined,
+): void {
+  if (
+    repeatPeriod !== CALENDAR_EVENT_REPEAT_PERIOD.monthly &&
+    repeatPeriod !== CALENDAR_EVENT_REPEAT_PERIOD.yearly
+  ) {
+    return;
+  }
+
+  const anchorParts = zonedDateParts(startsAt, timeZone);
+  const rangeParts = zonedDateParts(rangeStart, timeZone);
+  const elapsedPeriods =
+    repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.yearly
+      ? (rangeParts.year - anchorParts.year) / YEARLY_REPEAT_STEP_YEARS
+      : ((rangeParts.year - anchorParts.year) * 12 + rangeParts.month - anchorParts.month) /
+        MONTHLY_REPEAT_STEP_MONTHS;
+  // Stop one period short so the caller's stepping loop still settles the exact boundary.
+  const skippedPeriods = Math.floor(elapsedPeriods) - 1;
+  if (skippedPeriods <= 0) return;
+
+  const target =
+    repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.yearly
+      ? {
+          year: anchorParts.year + skippedPeriods * YEARLY_REPEAT_STEP_YEARS,
+          month: anchorParts.month,
+        }
+      : addMonths(anchorParts.year, anchorParts.month, skippedPeriods * MONTHLY_REPEAT_STEP_MONTHS);
+
+  occurrenceStart.setTime(
+    zonedDateTimeToUtc(
+      {
+        year: target.year,
+        month: target.month,
+        day: Math.min(anchorParts.day, daysInMonth(target.year, target.month)),
+        hour: anchorParts.hour,
+        minute: anchorParts.minute,
+        second: anchorParts.second,
+      },
+      timeZone,
+    ).getTime(),
+  );
+}
+
 function nextOccurrenceAfter(
   value: Date,
   anchor: Date,
@@ -317,7 +372,7 @@ function nextOccurrence(
     const anchorParts = zonedDateParts(anchor, timeZone);
     const target =
       repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.monthly
-        ? nextMonth(parts.year, parts.month)
+        ? addMonths(parts.year, parts.month, MONTHLY_REPEAT_STEP_MONTHS)
         : { year: parts.year + YEARLY_REPEAT_STEP_YEARS, month: anchorParts.month };
 
     return zonedDateTimeToUtc(
@@ -355,8 +410,8 @@ function nextOccurrence(
   );
 }
 
-function nextMonth(year: number, month: number): { year: number; month: number } {
-  const monthIndex = month - 1 + MONTHLY_REPEAT_STEP_MONTHS;
+function addMonths(year: number, month: number, count: number): { year: number; month: number } {
+  const monthIndex = month - 1 + count;
 
   return { year: year + Math.floor(monthIndex / 12), month: (monthIndex % 12) + 1 };
 }
