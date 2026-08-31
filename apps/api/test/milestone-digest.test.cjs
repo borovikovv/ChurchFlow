@@ -10,13 +10,13 @@ const MILESTONE_STARTS_AT = new Date('2020-08-30T21:00:00.000Z');
 // 09:00 in Europe/Kyiv on 2026-08-31.
 const DIGEST_RUN_AT = new Date('2026-08-31T06:00:00.000Z');
 
-function milestoneEvent({ id, type, title, displayName }) {
+function milestoneEvent({ id, type, title, displayName, status = 'ACTIVE', removedAt = null }) {
   return {
     id,
     organizationId: 'organization',
     createdByUserId: null,
     linkedMembershipId: `${id}-membership`,
-    linkedMembership: { profile: { displayName }, user: null },
+    linkedMembership: { status, removedAt, profile: { displayName }, user: null },
     type,
     title,
     startsAt: MILESTONE_STARTS_AT,
@@ -128,4 +128,37 @@ test('only birthdays falling today are grouped', async () => {
   assert.equal(created.length, 1);
   assert.equal(created[0].titleKey, 'birthdayDigestBirthdays');
   assert.deepEqual(created[0].bodyMessage.birthdays, ['Maria']);
+});
+
+test('milestones of removed or archived members are not announced', async () => {
+  const { service, created } = createService([
+    milestoneEvent({
+      id: 'birthday-maria',
+      type: 'BIRTHDAY',
+      title: 'День народження: Maria',
+      displayName: 'Maria',
+    }),
+    milestoneEvent({
+      id: 'birthday-removed',
+      type: 'BIRTHDAY',
+      title: 'День народження: Removed',
+      displayName: 'Removed',
+      status: 'REMOVED',
+      removedAt: new Date('2026-01-01T00:00:00.000Z'),
+    }),
+    milestoneEvent({
+      id: 'anniversary-archived',
+      type: 'ANNIVERSARY',
+      title: 'Річниця: Archived',
+      displayName: 'Archived',
+      status: 'ARCHIVED',
+    }),
+  ]);
+
+  await service.createDueReminderNotifications(DIGEST_RUN_AT);
+
+  assert.equal(created.length, 1);
+  assert.equal(created[0].titleKey, 'birthdayDigestBirthdays');
+  assert.deepEqual(created[0].bodyMessage.birthdays, ['Maria']);
+  assert.deepEqual(created[0].bodyMessage.anniversaries, []);
 });

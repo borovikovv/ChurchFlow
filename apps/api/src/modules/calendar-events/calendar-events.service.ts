@@ -335,7 +335,9 @@ export class CalendarEventsService {
     }
 
     const digests = await this.createMilestoneDigestNotifications(
-      events.filter((event) => isBirthdayOrAnniversaryEvent(event.type)),
+      events.filter(
+        (event) => isBirthdayOrAnniversaryEvent(event.type) && hasCelebratableMember(event),
+      ),
       windowStart,
       windowEnd,
     );
@@ -726,6 +728,13 @@ function collectMilestoneDigest(
     birthdays: birthdays.sort((left, right) => left.localeCompare(right)),
     anniversaries: anniversaries.sort((left, right) => left.localeCompare(right)),
   };
+}
+
+function hasCelebratableMember(event: CalendarEventRecord): boolean {
+  const membership = event.linkedMembership;
+  if (!membership) return true;
+
+  return membership.status === 'ACTIVE' && membership.removedAt === null;
 }
 
 function milestoneMemberName(event: CalendarEventRecord): string {
