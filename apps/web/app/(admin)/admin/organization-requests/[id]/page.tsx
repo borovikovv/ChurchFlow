@@ -16,7 +16,7 @@ interface OrganizationRequestDetail {
   organizationSlug: string | null;
   contactName: string;
   contactEmail: string | null;
-  contactTelegramId: string;
+  contactTelegramId: string | null;
   contactTelegramUsername: string | null;
   contactPhone: string | null;
   message: string | null;
@@ -152,7 +152,11 @@ export default async function AdminOrganizationRequestPage({
             {request.contactEmail ?? messages.organizationRequestDetail.noEmail}
           </dd>
           <dt>{messages.organizationRequestDetail.telegram}</dt>
-          <dd>{request.contactTelegramUsername ?? request.contactTelegramId}</dd>
+          <dd>
+            {request.contactTelegramUsername ??
+              request.contactTelegramId ??
+              messages.organizationRequestDetail.notProvided}
+          </dd>
           <dt>{messages.organizationRequestDetail.phone}</dt>
           <dd>{request.contactPhone ?? messages.organizationRequestDetail.notProvided}</dd>
           <dt>{messages.organizationRequestDetail.message}</dt>

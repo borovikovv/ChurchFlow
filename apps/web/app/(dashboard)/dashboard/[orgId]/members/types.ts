@@ -1,4 +1,4 @@
-import type { OrganizationGroupBadge } from '@churchflow/shared';
+import type { MemberAccessMethod, OrganizationGroupBadge } from '@churchflow/shared';
 
 export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 export type OrganizationMemberStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'REMOVED';
@@ -24,6 +24,7 @@ export interface OrganizationMember {
   status: OrganizationMemberStatus;
   source: string;
   groups: OrganizationGroupBadge[];
+  accessMethods: MemberAccessMethod[];
   accountState: AccountState;
   claimedAt: string | null;
   archivedAt: string | null;
@@ -89,11 +90,5 @@ export interface MembersPayload {
 export interface InvitationMutationResult {
   invitation: PendingInvitation;
   acceptUrl: string;
-  emailSent: boolean;
-}
-
-export interface ClaimMutationResult {
-  claim: { id: string };
-  claimUrl: string;
   emailSent: boolean;
 }

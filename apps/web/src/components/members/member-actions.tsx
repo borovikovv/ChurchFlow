@@ -640,6 +640,7 @@ function GiveMemberAccessAction({
 }: GiveMemberAccessActionProps) {
   return (
     <GiveMemberAccessDialog
+      activeClaim={member.activeClaim}
       dialogRef={accessDialogRef}
       onOpen={() => {
         setOpenDialog('access');
@@ -716,6 +717,8 @@ export function MemberActions({
   const accessDialogRef = useRef<HTMLDialogElement>(null);
   const [openDialog, setOpenDialog] = useState<'edit' | 'role' | 'access' | null>(null);
   const isArchived = member.status === 'ARCHIVED';
+  const canIssueAccessLink =
+    member.accountState === 'UNCLAIMED' || member.activeClaim?.status === 'PENDING';
 
   const canEditProfile = canManage || isCurrentMember;
   const canEditRelationships = canManage || isCurrentMember;
@@ -771,7 +774,7 @@ export function MemberActions({
           onClose={() => setOpenDialog(null)}
         />
       ) : null}
-      {canManage && !isArchived && member.accountState === 'UNCLAIMED' ? (
+      {canManage && !isArchived && canIssueAccessLink ? (
         <GiveMemberAccessAction
           accessDialogRef={accessDialogRef}
           member={member}
@@ -802,16 +805,7 @@ export function MemberActions({
                 {t('rejectRequest')}
               </button>
             </>
-          ) : (
-            <button
-              className={tableRowActionClassNameFor()}
-              name="action"
-              value="refresh"
-              type="submit"
-            >
-              {t('refreshAccessLink')}
-            </button>
-          )}
+          ) : null}
           <button
             className={tableRowActionClassNameFor({ destructive: true })}
             name="action"

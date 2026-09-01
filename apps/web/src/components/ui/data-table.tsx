@@ -6,6 +6,7 @@ import {
   getExpandedRowModel,
   getSortedRowModel,
   useReactTable,
+  type Cell,
   type ColumnDef,
   type ExpandedState,
   type Row,
@@ -15,6 +16,12 @@ import { usePathname, useRouter } from 'next/navigation';
 import type { Route } from 'next';
 import { Fragment, useState, type ReactNode } from 'react';
 import { FormSelect } from '@/components/forms/form-select';
+
+function renderCellContent<TData>(cell: Cell<TData, unknown>): ReactNode {
+  const renderer = cell.column.columnDef.cell;
+
+  return typeof renderer === 'function' ? renderer(cell.getContext()) : (renderer ?? null);
+}
 
 export interface DataTableColumnMeta {
   headerClassName?: string;
@@ -166,7 +173,7 @@ export function DataTable<TData>({
 
                       return (
                         <td className={meta?.cellClassName} key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          {renderCellContent(cell)}
                         </td>
                       );
                     })}

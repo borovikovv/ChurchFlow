@@ -2,15 +2,17 @@
 
 import { useTranslations } from 'next-intl';
 import { useActionState } from 'react';
-import { CopyField } from '@/components/copy-field';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { Button } from '@/components/ui/button';
+import { formatIsoDate } from '@/lib/format-date';
+import { AccessLinkPanel } from './access-link-panel';
 import { manageMemberAccess } from './member-access.actions';
 import type { GiveMemberAccessDialogProps, MemberAccessActionState } from './member-access.types';
 
 const initialState: MemberAccessActionState = {
   claimId: null,
   claimUrl: null,
+  expiresAt: null,
   message: null,
   error: null,
 };
@@ -32,6 +34,7 @@ export function GiveMemberAccessDialog({
   membershipId,
   memberName,
   memberEmail,
+  activeClaim,
   triggerClassName,
   dialogRef,
   onOpen,
@@ -39,15 +42,24 @@ export function GiveMemberAccessDialog({
 }: GiveMemberAccessDialogProps) {
   const t = useTranslations('members');
   const [state, formAction, pending] = useActionState(manageMemberAccess, initialState);
+  // A claim token is stored hashed, so an existing link can never be read back.
+  // The member keeps a link until it expires; showing it again means issuing a new one.
+  const hasIssuedClaim = Boolean(activeClaim);
+  const issueLabel = hasIssuedClaim ? t('refreshAccessLink') : t('generateAccessLink');
+  const issuePendingLabel = hasIssuedClaim ? t('refreshing') : t('generating');
 
   return (
     <FormDialog
-      title={t('giveAppAccessTitle', { name: memberName })}
+      title={
+        hasIssuedClaim
+          ? t('accessLinkTitle', { name: memberName })
+          : t('giveAppAccessTitle', { name: memberName })
+      }
       triggerClassName={triggerClassName}
       triggerLabel={
         <>
           <AccessIcon />
-          {t('giveAppAccess')}
+          {hasIssuedClaim ? t('accessLink') : t('giveAppAccess')}
         </>
       }
       triggerVariant="ghost"
@@ -59,10 +71,7 @@ export function GiveMemberAccessDialog({
         <div className="grid gap-4">
           {state.message ? <p className="m-0 text-[var(--success)]">{state.message}</p> : null}
           {state.error ? <p className="form-error m-0">{state.error}</p> : null}
-          <label>
-            {t('accessUrl')}
-            <CopyField value={state.claimUrl} />
-          </label>
+          <AccessLinkPanel url={state.claimUrl} expiresAt={state.expiresAt} />
           <form action={formAction} className="flex justify-end">
             <input type="hidden" name="intent" value="revoke" />
             <input type="hidden" name="organizationId" value={organizationId} />
@@ -77,16 +86,25 @@ export function GiveMemberAccessDialog({
           <input type="hidden" name="intent" value="create" />
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="membershipId" value={membershipId} />
-          <p className="m-0">
-            {t('generateAccessLinkDescription', { name: memberName })}
-            {memberEmail
-              ? ` ${t('generateAccessLinkEmailDescription', { email: memberEmail })}`
-              : null}
-          </p>
+          {activeClaim ? (
+            <div className="grid gap-2">
+              <p className="m-0">
+                {t('accessLinkExpires', { date: formatIsoDate(activeClaim.expiresAt) })}
+              </p>
+              <p className="m-0 text-sm text-[var(--muted)]">{t('accessLinkReissueDescription')}</p>
+            </div>
+          ) : (
+            <p className="m-0">
+              {t('generateAccessLinkDescription', { name: memberName })}
+              {memberEmail
+                ? ` ${t('generateAccessLinkEmailDescription', { email: memberEmail })}`
+                : null}
+            </p>
+          )}
           {state.message ? <p className="m-0 text-[var(--success)]">{state.message}</p> : null}
           {state.error ? <p className="form-error m-0">{state.error}</p> : null}
           <Button disabled={pending} type="submit">
-            {pending ? t('generating') : t('generateAccessLink')}
+            {pending ? issuePendingLabel : issueLabel}
           </Button>
         </form>
       )}

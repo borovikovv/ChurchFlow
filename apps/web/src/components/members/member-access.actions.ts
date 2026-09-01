@@ -25,6 +25,7 @@ export async function manageMemberAccess(
       ? {
           claimId: null,
           claimUrl: null,
+          expiresAt: null,
           message: messages.members.accessLinkRevoked,
           error: null,
         }
@@ -41,6 +42,7 @@ export async function manageMemberAccess(
     ? {
         claimId: result.data.claim.id,
         claimUrl: result.data.claimUrl,
+        expiresAt: result.data.expiresAt,
         message: result.data.emailSent
           ? messages.members.accessLinkCreatedAndEmailed
           : messages.members.accessLinkCreated,

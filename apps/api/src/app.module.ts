@@ -36,6 +36,13 @@ import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.
       ignoreEnvFile: process.env['NODE_ENV'] === 'production',
       validate: (env) => apiEnvSchema.parse(env),
     }),
+    // Deliberately not enforced: ThrottlerGuard is not registered as an APP_GUARD, so every
+    // @Throttle in the API is a declaration and nothing more. Its default tracker keys on
+    // req.ip, and no request reaches this API carrying a client address — browser calls are
+    // proxied through the web app's /v1 rewrite and server-rendered pages call it directly
+    // from the Next container, so every caller looks like the same one. Enforcing that would
+    // spend one person's budget on everybody. Registering the guard needs a tracker that
+    // keys on the session user, and a client address that survives the hop, first.
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,

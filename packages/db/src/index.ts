@@ -8,6 +8,7 @@ export type {
   CalendarEventReminder,
   CalendarEventRepeatPeriod,
   CalendarEventType,
+  EmailLoginTokenPurpose,
   FeatureFlagScope,
   InvitationMode,
   InvitationTargetProvider,
@@ -23,5 +24,6 @@ export type {
   PlatformRole,
   SessionRevokeReason,
   SessionType,
+  WebAuthnChallengeType,
   WebsiteSectionType,
 } from '@prisma/client';

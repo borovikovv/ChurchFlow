@@ -9,7 +9,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import type { OrganizationMember } from '../types';
 import { Avatar } from '@/components/ui/avatar';
 import { MailIcon, PhoneIcon } from '@/components/icons/action-icons';
-import { MemberIdentitySummary } from './member-summary';
+import { MemberAccessMethodsSummary, MemberIdentitySummary } from './member-summary';
 import { GroupBadge } from '@/features/groups/components/group-badge';
 
 export function MemberCard({
@@ -59,6 +59,7 @@ export function MemberCard({
         />
         <MemberRoleStatus role={member.role} />
       </div>
+      <MemberAccessMethodsSummary methods={member.accessMethods} />
       {member.activeClaim?.status === 'REQUESTED' ? (
         <small className="truncate text-[var(--muted)]">
           {t('requestedBy', {

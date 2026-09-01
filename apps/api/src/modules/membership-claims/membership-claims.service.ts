@@ -125,8 +125,10 @@ export class MembershipClaimsService {
       ) {
         throw new ConflictException('Membership claim is no longer available');
       }
-      if (error instanceof Error && error.message === 'TELEGRAM_ACCOUNT_REQUIRED') {
-        throw new UnauthorizedException('An active Telegram account is required');
+      if (error instanceof Error && error.message === 'SIGN_IN_ACCOUNT_REQUIRED') {
+        throw new UnauthorizedException(
+          'A Telegram account or a verified email address is required',
+        );
       }
       throw error;
     }

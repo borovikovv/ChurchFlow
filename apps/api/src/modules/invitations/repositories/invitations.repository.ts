@@ -184,8 +184,9 @@ export class InvitationsRepository {
       select: {
         id: true,
         deletedAt: true,
+        emailVerified: true,
         accounts: {
-          where: { provider: 'telegram', deletedAt: null },
+          where: { provider: { in: ['telegram', 'email'] }, deletedAt: null },
           select: { provider: true, providerAccountId: true },
         },
       },

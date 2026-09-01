@@ -3,11 +3,7 @@ import { getCurrentUser, requireServerSession } from '@/auth/session';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs } from '@/components/ui/tabs';
 import { getMessages } from '@/i18n/messages';
-import {
-  organizationProfileNotificationsRoute,
-  organizationProfileRoute,
-  organizationProfileSessionsRoute,
-} from '@/features/organizations/routes';
+import { profileTabItems } from '@/features/profile/profile-tabs';
 import { SessionList } from '@/features/sessions/components/session-list';
 import { getSessions } from '@/features/sessions/server/actions';
 
@@ -28,17 +24,7 @@ export default async function OrganizationProfileSessionsPage({
   return (
     <main className="stack">
       <PageHeader title={messages.profile.title} description={messages.sessions.description} />
-      <Tabs
-        label={messages.profile.settings}
-        items={[
-          { label: messages.profile.title, href: organizationProfileRoute(orgId) },
-          {
-            label: messages.profile.notifications,
-            href: organizationProfileNotificationsRoute(orgId),
-          },
-          { label: messages.sessions.title, href: organizationProfileSessionsRoute(orgId) },
-        ]}
-      />
+      <Tabs label={messages.profile.settings} items={profileTabItems(orgId, messages)} />
       {sessionsResult.ok ? (
         <SessionList sessions={sessionsResult.data} locale={user.locale} />
       ) : (

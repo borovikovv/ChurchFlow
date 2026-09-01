@@ -30,7 +30,7 @@ export interface OrganizationRequestTableRow {
   organizationName: string;
   contactName: string;
   contactEmail: string | null;
-  contactTelegramId: string;
+  contactTelegramId: string | null;
   contactTelegramUsername: string | null;
   status: string;
   createdAt: string;
@@ -152,7 +152,8 @@ export function OrganizationRequestsTable({ data }: { data: OrganizationRequestT
     },
     {
       id: 'contact',
-      accessorFn: (row) => row.contactEmail ?? row.contactTelegramUsername ?? row.contactTelegramId,
+      accessorFn: (row) =>
+        row.contactEmail ?? row.contactTelegramUsername ?? row.contactTelegramId ?? '',
       header: t('tables.contact'),
     },
     {

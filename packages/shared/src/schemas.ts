@@ -21,6 +21,7 @@ import {
   ORGANIZATION_GROUP_MEMBER_ROLES,
   ORGANIZATION_GROUP_NAME_MAX_LENGTH,
   ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH,
+  MEMBER_ACCESS_METHODS,
   MEMBER_TABS,
   MEMBER_PAGE_SIZE_OPTIONS,
   MEMBER_CSV_TEMPLATE_COLUMNS,
@@ -83,6 +84,7 @@ export const organizationMemberAccountStateSchema = z.enum([
 export const organizationMembersAccessFilterSchema = z.enum([
   'all',
   'connected',
+  'email',
   'offline',
   'requested',
   'suspended',
@@ -97,6 +99,7 @@ export const organizationGroupColorSchema = z
   .regex(ORGANIZATION_GROUP_COLOR_PATTERN, 'Color must be a hex value such as #2563EB')
   .transform((value) => value.toUpperCase());
 export const organizationGroupIdsSchema = z.array(uuidSchema);
+export const memberAccessMethodSchema = z.enum(MEMBER_ACCESS_METHODS);
 
 const organizationGroupIdsQuerySchema = z.preprocess((value) => {
   if (Array.isArray(value)) return value.flatMap((item) => String(item).split(','));

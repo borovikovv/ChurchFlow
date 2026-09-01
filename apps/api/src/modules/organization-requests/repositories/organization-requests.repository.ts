@@ -41,7 +41,7 @@ export interface OrganizationRequestListItem {
   organizationName: string;
   contactName: string;
   contactEmail: string | null;
-  contactTelegramId: string;
+  contactTelegramId: string | null;
   contactTelegramUsername: string | null;
   status: OrganizationRequestStatus;
   createdAt: Date;
@@ -78,14 +78,7 @@ export class OrganizationRequestsRepository {
     staleBefore: Date,
   ): Promise<CreatedOrganizationRequest> {
     return this.prisma.$transaction(async (tx) => {
-      const requester = await tx.user.findFirst({
-        where: {
-          id: requestedByUserId,
-          deletedAt: null,
-          accounts: { some: { provider: 'telegram', deletedAt: null } },
-        },
-        select: { id: true },
-      });
+      const requester = await this.findEligibleRequester(tx, requestedByUserId);
       if (!requester) {
         throw new Error('ORGANIZATION_REQUEST_REQUESTER_INACTIVE');
       }
@@ -181,7 +174,7 @@ export class OrganizationRequestsRepository {
       if (previousRequest.status !== 'EXPIRED' || previousRequest.createdOrganizationId) {
         throw new Error('ORGANIZATION_REQUEST_NOT_RESUBMITTABLE');
       }
-      if (!previousRequest.requestedBy || previousRequest.requestedBy.accounts.length === 0) {
+      if (!(await this.findEligibleRequester(tx, requestedByUserId))) {
         throw new Error('ORGANIZATION_REQUEST_REQUESTER_INACTIVE');
       }
 
@@ -396,14 +389,9 @@ export class OrganizationRequestsRepository {
       if (!request.requestedByUserId) {
         throw new Error('ORGANIZATION_REQUEST_MISSING_REQUESTER');
       }
-      const requester = await tx.user.findFirst({
-        where: {
-          id: request.requestedByUserId,
-          deletedAt: null,
-          accounts: { some: { provider: 'telegram', deletedAt: null } },
-        },
-        select: { id: true },
-      });
+      // The same question submission asked. Approving on a narrower rule than the one that
+      // accepted the request would strand every requester who has no Telegram account.
+      const requester = await this.findEligibleRequester(tx, request.requestedByUserId);
       if (!requester) {
         throw new Error('ORGANIZATION_REQUEST_REQUESTER_INACTIVE');
       }
@@ -534,6 +522,29 @@ export class OrganizationRequestsRepository {
     });
   }
 
+  // Asking for an organization needs a sign-in method whose owner has proved it, not Telegram
+  // in particular: a confirmed address is one, and email is how somebody with no Telegram
+  // reaches this form at all.
+  private async findEligibleRequester(
+    client: Pick<PrismaService, 'user'>,
+    requestedByUserId: string,
+  ): Promise<{ id: string } | null> {
+    return client.user.findFirst({
+      where: {
+        id: requestedByUserId,
+        deletedAt: null,
+        OR: [
+          { accounts: { some: { provider: 'telegram', deletedAt: null } } },
+          {
+            emailVerified: { not: null },
+            accounts: { some: { provider: 'email', deletedAt: null } },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+  }
+
   private async expireStalePending(
     client: Pick<PrismaService, 'organizationRequest'>,
     staleBefore: Date,
@@ -619,10 +630,10 @@ export class OrganizationRequestsRepository {
       organizationName: request.organizationName,
       contactName: request.contactName,
       contactEmail: request.contactEmail,
+      // Absent for a requester who signed in with an address. Left null rather than filled
+      // with a placeholder standing in for an account that is not there.
       contactTelegramId:
-        request.contactTelegramId ??
-        request.requestedBy?.accounts[0]?.providerAccountId ??
-        'linked Telegram account',
+        request.contactTelegramId ?? request.requestedBy?.accounts[0]?.providerAccountId ?? null,
       contactTelegramUsername: request.contactTelegramUsername,
       status: request.status,
       createdAt: request.createdAt,

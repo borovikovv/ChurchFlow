@@ -46,6 +46,7 @@ import type {
   updateOrganizationGroupSchema,
   addOrganizationGroupMembersSchema,
   updateOrganizationGroupMemberSchema,
+  memberAccessMethodSchema,
   listCalendarEventsQuerySchema,
   createCalendarEventSchema,
   updateCalendarEventSchema,
@@ -147,6 +148,7 @@ export type AddOrganizationGroupMembersInput = z.infer<typeof addOrganizationGro
 export type UpdateOrganizationGroupMemberInput = z.infer<
   typeof updateOrganizationGroupMemberSchema
 >;
+export type MemberAccessMethod = z.infer<typeof memberAccessMethodSchema>;
 export type ListCalendarEventsQuery = z.infer<typeof listCalendarEventsQuerySchema>;
 export type CreateCalendarEventInput = z.infer<typeof createCalendarEventSchema>;
 export type UpdateCalendarEventInput = z.infer<typeof updateCalendarEventSchema>;

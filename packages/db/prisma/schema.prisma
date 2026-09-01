@@ -8,6 +8,8 @@ datasource db {
 
 enum AuthProvider {
   telegram
+  email
+  passkey
 }
 
 enum InvitationTargetProvider {
@@ -34,6 +36,16 @@ enum SessionRevokeReason {
   admin
   expired
   user_deleted
+}
+
+enum EmailLoginTokenPurpose {
+  sign_in
+  verify_email
+}
+
+enum WebAuthnChallengeType {
+  registration
+  authentication
 }
 
 enum OrganizationRole {
@@ -266,6 +278,8 @@ model User {
 
   accounts                        AuthAccount[]
   sessions                        Session[]
+  emailLoginTokens                EmailLoginToken[]
+  webAuthnChallenges              WebAuthnChallenge[]
   memberships                     OrganizationMember[]
   createdMemberships              OrganizationMember[]            @relation("MembershipCreator")
   requestedMembershipClaims       MembershipClaim[]               @relation("MembershipClaimRequester")
@@ -313,6 +327,11 @@ model AuthAccount {
   providerAccountId String       @map("provider_account_id")
   credentialId      String?      @map("credential_id")
   publicKey         String?      @map("public_key")
+  signCount         Int          @default(0) @map("sign_count")
+  transports        String[]     @default([])
+  aaguid            String?
+  backedUp          Boolean?     @map("backed_up")
+  label             String?
   metadata          Json         @default("{}")
   lastUsedAt        DateTime?    @map("last_used_at")
   createdAt         DateTime     @default(now()) @map("created_at")
@@ -347,6 +366,45 @@ model Session {
 
   @@index([userId, expiresAt])
   @@map("sessions")
+}
+
+model EmailLoginToken {
+  id           String                 @id @default(uuid()) @db.Uuid
+  email        String                 @db.Citext
+  userId       String?                @map("user_id") @db.Uuid
+  purpose      EmailLoginTokenPurpose @default(sign_in)
+  tokenHash    String                 @unique @map("token_hash")
+  codeHash     String?                @map("code_hash")
+  attemptCount Int                    @default(0) @map("attempt_count")
+  redirectTo   String?                @map("redirect_to")
+  expiresAt    DateTime               @map("expires_at")
+  consumedAt   DateTime?              @map("consumed_at")
+  requestIp    String?                @map("request_ip")
+  userAgent    String?                @map("user_agent")
+  createdAt    DateTime               @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, expiresAt])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("email_login_tokens")
+}
+
+model WebAuthnChallenge {
+  id            String                @id @default(uuid()) @db.Uuid
+  challengeHash String                @unique @map("challenge_hash")
+  type          WebAuthnChallengeType
+  userId        String?               @map("user_id") @db.Uuid
+  expiresAt     DateTime              @map("expires_at")
+  consumedAt    DateTime?             @map("consumed_at")
+  createdAt     DateTime              @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("webauthn_challenges")
 }
 
 model Organization {
