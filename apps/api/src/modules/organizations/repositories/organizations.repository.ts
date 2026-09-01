@@ -136,6 +136,14 @@ export class OrganizationsRepository {
               description: input.description ?? null,
             },
           },
+          // Entitlement resolution reads a missing subscription as "no entitlements", so the
+          // row is created with the organization rather than left to a later job. No
+          // restrictAfter: only organizations that predate billing get a transition window.
+          subscription: {
+            create: {
+              status: 'PENDING',
+            },
+          },
         },
       });
 
