@@ -82,6 +82,10 @@ export const NOTIFICATION_TYPES = [
   'PRAYER_REQUEST_CREATED',
   'BIRTHDAY_DIGEST',
   'ORGANIZATION_ANNOUNCEMENT',
+  'SUBSCRIPTION_REQUIRED',
+  'SUBSCRIPTION_PAYMENT_FAILED',
+  'SUBSCRIPTION_RESTRICTED',
+  'SUBSCRIPTION_RENEWED',
 ] as const;
 
 export const AUDIT_ENTITY_TYPES = [
@@ -97,6 +101,7 @@ export const AUDIT_ENTITY_TYPES = [
   'OrganizationMemberRelationship',
   'OrganizationRequest',
   'PrayerRequest',
+  'Subscription',
   'User',
 ] as const;
 

@@ -251,6 +251,7 @@ test('membership claim generation stores a hash and returns only the raw URL', a
         `https://churchflow.test/member-claims/accept?token=${token}`,
     },
     createUserLocaleService(),
+    { assert: async () => undefined },
   );
 
   const result = await service.generate('organization', 'membership', 'owner');
@@ -276,6 +277,7 @@ test('membership claim email failure does not fail the persisted claim', async (
       sendMembershipClaimEmail: async () => Promise.reject(new Error('provider unavailable')),
     },
     createUserLocaleService(),
+    { assert: async () => undefined },
   );
 
   const result = await service.generate('organization', 'membership', 'owner');
@@ -305,6 +307,7 @@ test('public membership claim validation does not expose member PII or Telegram 
     },
     {},
     createUserLocaleService(),
+    { assert: async () => undefined },
   );
 
   const result = await service.validate('raw-token-that-is-long-enough-for-validation');
@@ -335,6 +338,7 @@ test('revoked membership claim is invalid for public validation', async () => {
     },
     {},
     createUserLocaleService(),
+    { assert: async () => undefined },
   );
 
   assert.deepEqual(await service.validate('raw-token-that-is-long-enough-for-validation'), {
@@ -347,6 +351,7 @@ test('duplicate membership during claim approval returns a conflict', async () =
     { approve: async () => ({ conflict: true, expired: false }) },
     {},
     createUserLocaleService(),
+    { assert: async () => undefined },
   );
 
   await assert.rejects(
@@ -357,9 +362,10 @@ test('duplicate membership during claim approval returns a conflict', async () =
 
 test('expired membership claim request is rejected after expiry is persisted', async () => {
   const service = new MembershipClaimsService(
-    { request: async () => ({ expired: true }) },
+    { findByTokenHash: async () => null, request: async () => ({ expired: true }) },
     {},
     createUserLocaleService(),
+    { assert: async () => undefined },
   );
 
   await assert.rejects(

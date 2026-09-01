@@ -1,12 +1,17 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../../common/guards/session-auth.guard';
 import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
+import { ENTITLEMENTS } from '@churchflow/shared';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
+import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
 import { MediaService } from './media.service';
 import { ConfirmMemberPhotoUploadDto, CreateMemberPhotoUploadDto } from './dto/member-photo.dto';
 
 @Controller('organizations/:organizationId/media')
-@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
 export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
@@ -16,6 +21,7 @@ export class MediaController {
   }
 
   @Post('calendar-events/image-upload')
+  @RequireEntitlement(ENTITLEMENTS.filesUpload)
   createCalendarEventImageUpload(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateMemberPhotoUploadDto,
@@ -29,6 +35,7 @@ export class MediaController {
   }
 
   @Post('calendar-events/image-confirm')
+  @RequireEntitlement(ENTITLEMENTS.filesUpload)
   confirmCalendarEventImage(
     @Param('organizationId') organizationId: string,
     @Body() body: ConfirmMemberPhotoUploadDto,
@@ -42,6 +49,7 @@ export class MediaController {
   }
 
   @Post('website-sections/background-upload')
+  @RequireEntitlement(ENTITLEMENTS.filesUpload)
   createWebsiteSectionBackgroundUpload(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateMemberPhotoUploadDto,
@@ -55,6 +63,7 @@ export class MediaController {
   }
 
   @Post('website-sections/background-confirm')
+  @RequireEntitlement(ENTITLEMENTS.filesUpload)
   confirmWebsiteSectionBackground(
     @Param('organizationId') organizationId: string,
     @Body() body: ConfirmMemberPhotoUploadDto,
@@ -68,6 +77,7 @@ export class MediaController {
   }
 
   @Post('organization-logo/upload')
+  @RequireEntitlement(ENTITLEMENTS.filesUpload)
   createOrganizationLogoUpload(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateMemberPhotoUploadDto,
@@ -81,6 +91,7 @@ export class MediaController {
   }
 
   @Post('organization-logo/confirm')
+  @RequireEntitlement(ENTITLEMENTS.filesUpload)
   confirmOrganizationLogo(
     @Param('organizationId') organizationId: string,
     @Body() body: ConfirmMemberPhotoUploadDto,
@@ -94,6 +105,7 @@ export class MediaController {
   }
 
   @Post('members/:membershipId/photo-upload')
+  @RequireEntitlement(ENTITLEMENTS.filesUpload)
   createPhotoUpload(
     @Param('organizationId') organizationId: string,
     @Param('membershipId') membershipId: string,
@@ -109,6 +121,7 @@ export class MediaController {
     );
   }
   @Post('members/:membershipId/photo-confirm')
+  @RequireEntitlement(ENTITLEMENTS.filesUpload)
   confirmPhoto(
     @Param('organizationId') organizationId: string,
     @Param('membershipId') membershipId: string,

@@ -144,6 +144,14 @@ enum FeatureFlagScope {
   USER
 }
 
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  RESTRICTED
+  CANCELED
+}
+
 enum CalendarEventType {
   BIRTHDAY
   ANNIVERSARY
@@ -187,6 +195,10 @@ enum NotificationType {
   PRAYER_REQUEST_CREATED
   BIRTHDAY_DIGEST
   ORGANIZATION_ANNOUNCEMENT
+  SUBSCRIPTION_REQUIRED
+  SUBSCRIPTION_PAYMENT_FAILED
+  SUBSCRIPTION_RESTRICTED
+  SUBSCRIPTION_RENEWED
 }
 
 enum BudgetGroup {
@@ -301,6 +313,7 @@ model User {
   notificationPreferences         NotificationPreference[]
   telegramNotificationBinding     TelegramNotificationBinding?
   telegramNotificationLinkTokens  TelegramNotificationLinkToken[]
+  grantedBillingExemptions        Subscription[]
 
   @@map("users")
 }
@@ -443,6 +456,7 @@ model Organization {
   budgetExchanges         BudgetExchange[]
   budgetOpeningBalances   BudgetOpeningBalance[]
   prayerRequests          PrayerRequest[]
+  subscription            Subscription?
 
   @@index([status])
   @@index([slug])
@@ -1251,4 +1265,83 @@ model FeatureFlag {
   @@index([organizationId])
   @@index([userId])
   @@map("feature_flags")
+}
+
+model Subscription {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @unique @map("organization_id") @db.Uuid
+  status         SubscriptionStatus @default(PENDING)
+
+  // Pinned when the LiqPay subscription is created. LiqPay fixes amount and currency at
+  // subscribe time, so these are never recomputed per charge; a price change means
+  // re-subscribing. usdReference records what the UAH amount was an equivalent of.
+  amountMinor  Int?      @map("amount_minor")
+  currency     String?   @db.VarChar(3)
+  usdReference Decimal?  @map("usd_reference") @db.Decimal(12, 2)
+  fxRateUsedAt DateTime? @map("fx_rate_used_at")
+
+  // Two deliberately separate timers that happen to share a length. restrictAfter is the
+  // one-off rollout window given to organizations that already existed at migration time;
+  // graceEndsAt is the recurring grace period after a failed payment.
+  restrictAfter       DateTime? @map("restrict_after")
+  graceEndsAt         DateTime? @map("grace_ends_at")
+  currentPeriodEndsAt DateTime? @map("current_period_ends_at")
+
+  // Card data never reaches us. Only the LiqPay token and display metadata are stored.
+  liqpayOrderId      String?   @unique @map("liqpay_order_id")
+  liqpaySubscribedAt DateTime? @map("liqpay_subscribed_at")
+
+  // A checkout the payer has not completed yet. The live subscription keeps charging until the
+  // new one is confirmed, so abandoning the LiqPay page costs nothing. On the first successful
+  // callback this is promoted to liqpayOrderId and the old order is queued for cancellation.
+  pendingLiqpayOrderId String?   @unique @map("pending_liqpay_order_id")
+  pendingAmountMinor   Int?      @map("pending_amount_minor")
+  pendingFxRateUsedAt  DateTime? @map("pending_fx_rate_used_at")
+
+  // An order LiqPay still needs to stop charging. Set when unsubscribe fails or when a
+  // replacement supersedes an old order; the dunning job retries until LiqPay accepts it.
+  pendingUnsubscribeOrderId String? @map("pending_unsubscribe_order_id")
+  cardMask           String?   @map("card_mask")
+  cardBrand          String?   @map("card_brand")
+  cardExpiry         String?   @map("card_expiry")
+
+  // Complimentary access. Granted only by a platform admin, never self-service.
+  isExempt              Boolean   @default(false) @map("is_exempt")
+  exemptReason          String?   @map("exempt_reason")
+  exemptGrantedByUserId String?   @map("exempt_granted_by_user_id") @db.Uuid
+  exemptGrantedAt       DateTime? @map("exempt_granted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  exemptGrantedBy User?             @relation(fields: [exemptGrantedByUserId], references: [id], onDelete: SetNull)
+  callbacks       BillingCallback[]
+
+  @@unique([id, organizationId])
+  @@index([status])
+  @@index([status, graceEndsAt])
+  @@index([status, restrictAfter])
+  @@index([exemptGrantedByUserId])
+  @@index([pendingUnsubscribeOrderId])
+  @@map("subscriptions")
+}
+
+model BillingCallback {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  subscriptionId String    @map("subscription_id") @db.Uuid
+  orderId        String    @map("order_id")
+  paymentId      String    @map("payment_id")
+  status         String
+  payload        Json      @default("{}")
+  processedAt    DateTime? @map("processed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([orderId, paymentId])
+  @@index([organizationId])
+  @@index([subscriptionId])
+  @@map("billing_callbacks")
 }

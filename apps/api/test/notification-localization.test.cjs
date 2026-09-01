@@ -37,6 +37,17 @@ const BODY_SAMPLES = [
   { key: 'membersImported', memberCount: 12 },
   { key: 'prayerRequestCreated', authorName: 'Maria', requestTitle: 'Healing' },
   { key: 'birthdayDigest', birthdays: ['Maria'], anniversaries: ['Ivan'] },
+  {
+    key: 'subscriptionDeadline',
+    deadline: '2026-09-08T12:00:00.000Z',
+    timeZone: 'Europe/Kyiv',
+  },
+  { key: 'subscriptionRestricted' },
+  {
+    key: 'subscriptionRenewed',
+    nextChargeAt: '2026-10-01T12:00:00.000Z',
+    timeZone: 'Europe/Kyiv',
+  },
 ];
 
 test('every notification title is translated into every supported locale', () => {
@@ -331,6 +342,7 @@ test('an invitation is written in the invitee locale, not the inviter one', asyn
     },
     { record: async () => undefined },
     localeService,
+    { assert: async () => undefined },
   );
 
   await invitations.createForOrganization(
@@ -362,6 +374,7 @@ test('an invitee without an account falls back to the inviter locale', async () 
     },
     { record: async () => undefined },
     localeService,
+    { assert: async () => undefined },
   );
 
   await invitations.createForOrganization(

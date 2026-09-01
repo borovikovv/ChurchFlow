@@ -1,11 +1,15 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { membershipClaimTokenSchema } from '@churchflow/shared';
+import { ENTITLEMENTS, membershipClaimTokenSchema } from '@churchflow/shared';
 import {
   SessionAuthGuard,
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
+import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
 import { MembershipClaimTokenDto } from './dto/membership-claim-token.dto';
 import { MembershipClaimsService } from './membership-claims.service';
 
@@ -33,7 +37,8 @@ export class MembershipClaimsController {
   }
 
   @Post('organizations/:organizationId/memberships/:membershipId/claim')
-  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   generate(
     @Param('organizationId') organizationId: string,
     @Param('membershipId') membershipId: string,
@@ -43,7 +48,8 @@ export class MembershipClaimsController {
   }
 
   @Post('organizations/:organizationId/membership-claims/:claimId/refresh')
-  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   refresh(
     @Param('organizationId') organizationId: string,
     @Param('claimId') claimId: string,
@@ -53,7 +59,8 @@ export class MembershipClaimsController {
   }
 
   @Post('organizations/:organizationId/membership-claims/:claimId/revoke')
-  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   revoke(
     @Param('organizationId') organizationId: string,
     @Param('claimId') claimId: string,
@@ -63,7 +70,8 @@ export class MembershipClaimsController {
   }
 
   @Post('organizations/:organizationId/membership-claims/:claimId/approve')
-  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   approve(
     @Param('organizationId') organizationId: string,
     @Param('claimId') claimId: string,
@@ -73,7 +81,8 @@ export class MembershipClaimsController {
   }
 
   @Post('organizations/:organizationId/membership-claims/:claimId/reject')
-  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   reject(
     @Param('organizationId') organizationId: string,
     @Param('claimId') claimId: string,

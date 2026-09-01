@@ -30,6 +30,14 @@ export class OrganizationsRepository {
                 logoAssetId: true,
               },
             },
+            subscription: {
+              select: {
+                status: true,
+                isExempt: true,
+                restrictAfter: true,
+                graceEndsAt: true,
+              },
+            },
             _count: {
               select: {
                 members: {
@@ -136,6 +144,14 @@ export class OrganizationsRepository {
               description: input.description ?? null,
             },
           },
+          // Entitlement resolution reads a missing subscription as "no entitlements", so the
+          // row is created with the organization rather than left to a later job. No
+          // restrictAfter: only organizations that predate billing get a transition window.
+          subscription: {
+            create: {
+              status: 'PENDING',
+            },
+          },
         },
       });
 
@@ -185,7 +201,60 @@ export class OrganizationsRepository {
         website: true,
         members: { include: { user: true }, orderBy: { createdAt: 'desc' } },
         invitations: { orderBy: { createdAt: 'desc' } },
+        subscription: {
+          include: {
+            exemptGrantedBy: { select: { id: true, displayName: true, email: true } },
+          },
+        },
       },
+    });
+  }
+
+  /**
+   * Complimentary access is an override applied when entitlements are resolved; it deliberately
+   * does not touch `status`. Revoking therefore drops the organization straight back to whatever
+   * its subscription actually was - PENDING, PAST_DUE or RESTRICTED - with no way to leave it
+   * looking ACTIVE by accident.
+   */
+  async setBillingExemption(input: {
+    organizationId: string;
+    actorUserId: string;
+    reason: string | null;
+  }) {
+    const granting = input.reason !== null;
+
+    return this.prisma.$transaction(async (tx) => {
+      const subscription = await tx.subscription.update({
+        where: { organizationId: input.organizationId },
+        data: granting
+          ? {
+              isExempt: true,
+              exemptReason: input.reason,
+              exemptGrantedByUserId: input.actorUserId,
+              exemptGrantedAt: new Date(),
+            }
+          : {
+              isExempt: false,
+              exemptReason: null,
+              exemptGrantedByUserId: null,
+              exemptGrantedAt: null,
+            },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: granting ? 'GRANT_BILLING_EXEMPTION' : 'REVOKE_BILLING_EXEMPTION',
+          entityType: 'Subscription',
+          entityId: subscription.id,
+          metadata: granting
+            ? { reason: input.reason, subscriptionStatus: subscription.status }
+            : { subscriptionStatus: subscription.status },
+        },
+      });
+
+      return subscription;
     });
   }
 

@@ -14,7 +14,12 @@ import {
   SessionAuthGuard,
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
+import { ENTITLEMENTS } from '@churchflow/shared';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
+import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
 import { CalendarEventsService } from './calendar-events.service';
 import {
   CreateCalendarEventDto,
@@ -25,7 +30,7 @@ import {
 } from './dto/calendar-event.dto';
 
 @Controller('organizations/:organizationId/calendar-events')
-@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
 export class CalendarEventsController {
   constructor(private readonly calendarEventsService: CalendarEventsService) {}
 
@@ -56,6 +61,7 @@ export class CalendarEventsController {
   }
 
   @Post()
+  @RequireEntitlement(ENTITLEMENTS.calendarWrite)
   create(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateCalendarEventDto,
@@ -65,6 +71,7 @@ export class CalendarEventsController {
   }
 
   @Patch(':eventId')
+  @RequireEntitlement(ENTITLEMENTS.calendarWrite)
   update(
     @Param('organizationId') organizationId: string,
     @Param('eventId') eventId: string,
@@ -80,6 +87,7 @@ export class CalendarEventsController {
   }
 
   @Patch(':eventId/completion')
+  @RequireEntitlement(ENTITLEMENTS.calendarWrite)
   toggleCompletion(
     @Param('organizationId') organizationId: string,
     @Param('eventId') eventId: string,
@@ -95,6 +103,7 @@ export class CalendarEventsController {
   }
 
   @Delete(':eventId')
+  @RequireEntitlement(ENTITLEMENTS.calendarWrite)
   delete(
     @Param('organizationId') organizationId: string,
     @Param('eventId') eventId: string,

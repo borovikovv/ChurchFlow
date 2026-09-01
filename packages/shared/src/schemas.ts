@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PhoneNumberUtil } from 'google-libphonenumber';
+import { ENTITLEMENT_VALUES, SUBSCRIPTION_STATUSES } from './entitlements.js';
 import {
   APP_LOCALES,
   AUDIT_ENTITY_TYPES,
@@ -728,6 +729,40 @@ export const updateOrganizationSchema = z
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: 'At least one organization field is required',
   });
+
+// What the dashboard needs to render the Billing section. Entitlements travel with it so the
+// web layer disables the same actions the API refuses, from one source rather than its own copy
+// of the rules.
+export const subscriptionSummarySchema = z.object({
+  status: z.enum(SUBSCRIPTION_STATUSES),
+  isExempt: z.boolean(),
+  exemptReason: z.string().nullable(),
+  amountMinor: z.number().int().nullable(),
+  currency: z.string().nullable(),
+  currentPeriodEndsAt: z.string().nullable(),
+  restrictAfter: z.string().nullable(),
+  graceEndsAt: z.string().nullable(),
+  card: z
+    .object({
+      mask: z.string().nullable(),
+      brand: z.string().nullable(),
+    })
+    .nullable(),
+  entitlements: z.array(z.enum(ENTITLEMENT_VALUES)),
+});
+
+export const billingCheckoutSchema = z.object({
+  checkoutUrl: z.string().url(),
+  data: z.string(),
+  signature: z.string(),
+});
+
+// Complimentary billing access. Platform-admin only: `isExempt` is never accepted from an
+// organization-scoped payload, so no owner can grant it to themselves. A reason is required
+// because the grant is audit-logged and has to be explicable later.
+export const grantBillingExemptionSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+});
 
 export const listAuditLogsQuerySchema = z.object({
   cursor: uuidSchema.optional(),

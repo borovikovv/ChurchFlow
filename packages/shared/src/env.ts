@@ -79,6 +79,17 @@ export const apiEnvSchema = z
     S3_BUCKET: z.string().min(1),
     S3_ACCESS_KEY_ID: z.string().min(1),
     S3_SECRET_ACCESS_KEY: z.string().min(1),
+    LIQPAY_PUBLIC_KEY: optionalNonEmptyString,
+    LIQPAY_PRIVATE_KEY: optionalNonEmptyString,
+    LIQPAY_CALLBACK_URL: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().url().optional(),
+    ),
+    LIQPAY_RESULT_URL: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().url().optional(),
+    ),
+    BILLING_ENFORCEMENT_ENABLED: optionalBooleanFlag(false),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV === 'production') {
@@ -92,6 +103,25 @@ export const apiEnvSchema = z
             code: z.ZodIssueCode.custom,
             path: [key],
             message: `${key} is required in production`,
+          });
+        }
+      }
+    }
+
+    // Enforcement without a payment provider configured would leave every organization
+    // restricted and unable to pay its way out. Dev and test may still enable it without
+    // LiqPay keys, because that is exactly how the entitlement guard gets exercised locally.
+    if (env.NODE_ENV === 'production' && env.BILLING_ENFORCEMENT_ENABLED) {
+      for (const key of [
+        'LIQPAY_PUBLIC_KEY',
+        'LIQPAY_PRIVATE_KEY',
+        'LIQPAY_CALLBACK_URL',
+      ] as const) {
+        if (!env[key]) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required when BILLING_ENFORCEMENT_ENABLED=true`,
           });
         }
       }

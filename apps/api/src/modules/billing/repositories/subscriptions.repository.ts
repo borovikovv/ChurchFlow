@@ -1,0 +1,298 @@
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@churchflow/db';
+import type { SubscriptionEntitlementState } from '@churchflow/shared';
+import { PrismaService } from '../../../prisma/prisma.service';
+
+// Who hears about billing: the same people who are allowed to pay.
+const ADMIN_MEMBERS_SELECT = {
+  members: {
+    where: {
+      role: { in: ['OWNER', 'ADMIN'] },
+      status: 'ACTIVE',
+      removedAt: null,
+      userId: { not: null },
+    },
+    select: { id: true },
+  },
+} satisfies Prisma.OrganizationSelect;
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+@Injectable()
+export class SubscriptionsRepository {
+  constructor(private readonly prisma: PrismaService) {}
+
+  findEntitlementState(organizationId: string): Promise<SubscriptionEntitlementState | null> {
+    return this.prisma.subscription.findUnique({
+      where: { organizationId },
+      select: {
+        status: true,
+        isExempt: true,
+        restrictAfter: true,
+        graceEndsAt: true,
+      },
+    });
+  }
+
+  findByOrganizationId(organizationId: string) {
+    return this.prisma.subscription.findUnique({
+      where: { organizationId },
+      include: { organization: { select: { id: true, name: true } } },
+    });
+  }
+
+  /** Matches the live order and the not-yet-paid one, since either can produce a callback. */
+  findByOrderId(orderId: string) {
+    return this.prisma.subscription.findFirst({
+      where: { OR: [{ liqpayOrderId: orderId }, { pendingLiqpayOrderId: orderId }] },
+    });
+  }
+
+  /**
+   * Pins the price. LiqPay fixes amount and currency when the subscription is created, so the
+   * UAH figure is stored once here and never recomputed per charge; changing the price means
+   * re-subscribing. `usdReference` records what that amount was an equivalent of.
+   */
+  /**
+   * Records an offered checkout without touching the live subscription. Nothing here changes
+   * what the organization is charged or whether it keeps access: an abandoned LiqPay page must
+   * cost the church nothing, so the swap happens only when a payment actually succeeds.
+   */
+  startPendingCheckout(input: {
+    organizationId: string;
+    actorUserId: string;
+    orderId: string;
+    amountMinor: number;
+    fxRateUsedAt: Date;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const subscription = await tx.subscription.update({
+        where: { organizationId: input.organizationId },
+        data: {
+          pendingLiqpayOrderId: input.orderId,
+          pendingAmountMinor: input.amountMinor,
+          pendingFxRateUsedAt: input.fxRateUsedAt,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: 'START_SUBSCRIPTION',
+          entityType: 'Subscription',
+          entityId: subscription.id,
+          metadata: { amountMinor: input.amountMinor },
+        },
+      });
+
+      return subscription;
+    });
+  }
+
+  /**
+   * Records the callback and applies its state change in one transaction. Idempotency is the
+   * unique (order_id, payment_id) index rather than a read-then-write check, so two callbacks
+   * racing each other cannot both apply.
+   */
+  async applyCallback(input: {
+    subscriptionId: string;
+    organizationId: string;
+    orderId: string;
+    paymentId: string;
+    status: string;
+    previousStatus: string;
+    nextStatus: string | null;
+    payload: Prisma.InputJsonObject;
+    update: Prisma.SubscriptionUpdateInput | null;
+  }): Promise<{ duplicate: boolean }> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.billingCallback.create({
+          data: {
+            organizationId: input.organizationId,
+            subscriptionId: input.subscriptionId,
+            orderId: input.orderId,
+            paymentId: input.paymentId,
+            status: input.status,
+            payload: input.payload,
+            processedAt: new Date(),
+          },
+        });
+
+        if (input.update) {
+          await tx.subscription.update({
+            where: { id: input.subscriptionId },
+            data: input.update,
+          });
+
+          // No actor: the change came from LiqPay, not a person. The audit row is written in the
+          // same transaction as the state change so the log can never disagree with the row.
+          await tx.auditLog.create({
+            data: {
+              organizationId: input.organizationId,
+              action: 'UPDATE_SUBSCRIPTION',
+              entityType: 'Subscription',
+              entityId: input.subscriptionId,
+              metadata: {
+                from: input.previousStatus,
+                to: input.nextStatus,
+                callbackStatus: input.status,
+              },
+            },
+          });
+        }
+      });
+
+      return { duplicate: false };
+    } catch (error: unknown) {
+      if (isUniqueConstraintError(error)) {
+        return { duplicate: true };
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * `pendingUnsubscribeOrderId` carries the order LiqPay has not agreed to stop charging yet.
+   * Without it a failed unsubscribe would leave us showing CANCELED while the card keeps being
+   * charged every month, with nothing in the system that knows to try again.
+   */
+  cancel(organizationId: string, actorUserId: string, unconfirmedOrderId: string | null) {
+    return this.prisma.$transaction(async (tx) => {
+      const subscription = await tx.subscription.update({
+        where: { organizationId },
+        data: {
+          status: 'CANCELED',
+          graceEndsAt: null,
+          pendingLiqpayOrderId: null,
+          pendingAmountMinor: null,
+          pendingFxRateUsedAt: null,
+          pendingUnsubscribeOrderId: unconfirmedOrderId,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'CANCEL_SUBSCRIPTION',
+          entityType: 'Subscription',
+          entityId: subscription.id,
+        },
+      });
+
+      return subscription;
+    });
+  }
+
+  /**
+   * Subscriptions whose deadline has passed. Exempt rows are excluded here rather than at the
+   * call site: a complimentary organization must never be walked into RESTRICTED by a job.
+   *
+   * PENDING rows with no `restrictAfter` are left alone on purpose. They are organizations
+   * created after rollout, which entitlement resolution already treats as read-only, so
+   * flipping their status would only produce a misleading "you are now read-only" notice.
+   */
+  listRestrictionDue(now: Date) {
+    return this.prisma.subscription.findMany({
+      where: {
+        isExempt: false,
+        organization: { status: 'ACTIVE', deletedAt: null },
+        OR: [
+          { status: 'PENDING', restrictAfter: { lte: now } },
+          { status: 'PAST_DUE', graceEndsAt: { lte: now } },
+        ],
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        status: true,
+        organization: { select: ADMIN_MEMBERS_SELECT },
+      },
+    });
+  }
+
+  /** Organizations still inside their rollout window, so they can be warned before it closes. */
+  listTransitionWindowOpen(now: Date) {
+    return this.prisma.subscription.findMany({
+      where: {
+        isExempt: false,
+        status: 'PENDING',
+        restrictAfter: { gt: now },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        restrictAfter: true,
+        organization: { select: ADMIN_MEMBERS_SELECT },
+      },
+    });
+  }
+
+  /**
+   * Active subscriptions whose paid period ended without any callback arriving. Nothing else in
+   * the system notices an undelivered callback, so without this a single lost webhook grants an
+   * organization free access indefinitely.
+   */
+  listUnconfirmedRenewals(cutoff: Date) {
+    return this.prisma.subscription.findMany({
+      where: {
+        isExempt: false,
+        status: 'ACTIVE',
+        currentPeriodEndsAt: { lte: cutoff },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        organization: { select: ADMIN_MEMBERS_SELECT },
+      },
+    });
+  }
+
+  listPendingUnsubscribes() {
+    return this.prisma.subscription.findMany({
+      where: { pendingUnsubscribeOrderId: { not: null } },
+      select: { id: true, organizationId: true, pendingUnsubscribeOrderId: true },
+    });
+  }
+
+  clearPendingUnsubscribe(subscriptionId: string) {
+    return this.prisma.subscription.update({
+      where: { id: subscriptionId },
+      data: { pendingUnsubscribeOrderId: null },
+    });
+  }
+
+  markPastDue(subscriptionId: string, graceEndsAt: Date) {
+    return this.prisma.subscription.update({
+      where: { id: subscriptionId },
+      data: { status: 'PAST_DUE', graceEndsAt },
+    });
+  }
+
+  restrict(subscriptionId: string) {
+    return this.prisma.subscription.update({
+      where: { id: subscriptionId },
+      data: { status: 'RESTRICTED', graceEndsAt: null },
+    });
+  }
+
+  listAdminMembershipIds(organizationId: string) {
+    return this.prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        role: { in: ['OWNER', 'ADMIN'] },
+        status: 'ACTIVE',
+        removedAt: null,
+        userId: { not: null },
+      },
+      select: { id: true },
+    });
+  }
+}
