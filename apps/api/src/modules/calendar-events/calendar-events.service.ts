@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   ForbiddenException,
   Injectable,
@@ -338,8 +339,7 @@ export class CalendarEventsService {
       events.filter(
         (event) => isBirthdayOrAnniversaryEvent(event.type) && hasCelebratableMember(event),
       ),
-      windowStart,
-      windowEnd,
+      now,
     );
 
     return {
@@ -352,8 +352,7 @@ export class CalendarEventsService {
 
   private async createMilestoneDigestNotifications(
     milestoneEvents: CalendarEventRecord[],
-    windowStart: Date,
-    windowEnd: Date,
+    now: Date,
   ) {
     let createdCount = 0;
     let emailSentCount = 0;
@@ -373,7 +372,7 @@ export class CalendarEventsService {
       for (const [timeZone, membershipIds] of groupReminderRecipientsByTimeZone(
         recipientMemberships,
       )) {
-        const digest = collectMilestoneDigest(organizationEvents, windowStart, windowEnd, timeZone);
+        const digest = collectMilestoneDigest(organizationEvents, now, timeZone);
         if (!digest) continue;
 
         try {
@@ -390,7 +389,7 @@ export class CalendarEventsService {
               anniversaries: digest.anniversaries,
             },
             url: `/dashboard/${organizationId}/calendar`,
-            dedupeKey: `birthday-digest:${digest.date}:${timeZone}`,
+            dedupeKey: milestoneDigestDedupeKey(digest, timeZone),
           });
           createdCount += result.createdCount;
           emailSentCount += result.emailSentCount;
@@ -696,38 +695,58 @@ function milestoneDigestTitleKey(digest: MilestoneDigest): NotificationTitleKey 
 
 function collectMilestoneDigest(
   events: CalendarEventRecord[],
-  windowStart: Date,
-  windowEnd: Date,
+  now: Date,
   timeZone: string,
 ): MilestoneDigest | null {
+  if (now < allDayNotificationInstant(now, timeZone)) return null;
+
+  const digestDate = milestoneDigestDate(now);
   const birthdays: string[] = [];
   const anniversaries: string[] = [];
-  let digestDate: string | null = null;
 
   for (const event of events) {
-    const occurrenceStarts = notificationOccurrenceStarts(
-      event,
-      { kind: 'event', offsetMs: 0 },
-      windowStart,
-      windowEnd,
-      timeZone,
-    );
-    const occurrenceStart = occurrenceStarts.at(0);
-    if (!occurrenceStart) continue;
+    if (!celebratesOnDigestDate(event, now, digestDate, timeZone)) continue;
 
-    digestDate ??= milestoneDigestDate(occurrenceStart);
     const name = milestoneMemberName(event);
     if (event.type === CALENDAR_EVENT_TYPE.birthday) birthdays.push(name);
     else anniversaries.push(name);
   }
 
-  if (!digestDate) return null;
+  if (birthdays.length === 0 && anniversaries.length === 0) return null;
 
   return {
     date: digestDate,
     birthdays: birthdays.sort((left, right) => left.localeCompare(right)),
     anniversaries: anniversaries.sort((left, right) => left.localeCompare(right)),
   };
+}
+
+function celebratesOnDigestDate(
+  event: CalendarEventRecord,
+  now: Date,
+  digestDate: string,
+  timeZone: string,
+): boolean {
+  const occurrenceStarts = safeNotificationOccurrenceStarts(
+    event,
+    0,
+    new Date(now.getTime() - ALL_DAY_OCCURRENCE_PADDING_MS),
+    new Date(now.getTime() + ALL_DAY_OCCURRENCE_PADDING_MS),
+    timeZone,
+  );
+
+  return occurrenceStarts.some(
+    (occurrenceStart) => milestoneDigestDate(occurrenceStart) === digestDate,
+  );
+}
+
+function milestoneDigestDedupeKey(digest: MilestoneDigest, timeZone: string): string {
+  const fingerprint = createHash('sha256')
+    .update(JSON.stringify([digest.birthdays, digest.anniversaries]))
+    .digest('hex')
+    .slice(0, 12);
+
+  return `birthday-digest:${digest.date}:${timeZone}:${fingerprint}`;
 }
 
 function hasCelebratableMember(event: CalendarEventRecord): boolean {

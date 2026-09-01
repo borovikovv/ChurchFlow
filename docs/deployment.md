@@ -213,6 +213,7 @@ Do not pass database credentials, Telegram credentials, Resend API keys, or S3/R
    - `environment=stage`
 
    Stage accepts any branch, so feature branches can be deployed there. `prod` still only accepts `main`.
+
 5. Verify from the server:
    ```bash
    cd /opt/churchflow/stage
@@ -235,6 +236,19 @@ Do not pass database credentials, Telegram credentials, Resend API keys, or S3/R
    - production API -> `127.0.0.1:4100`
 
 Stage and prod can share `churchflow-internal` because their service aliases are environment-specific: `churchflow-stage-api` and `churchflow-production-api`.
+
+## Milestone Backfill
+
+Birthday and anniversary notifications are driven by `calendar_events` rows linked to a membership. The API creates them whenever a member profile is created, imported, or edited, so profiles that already existed before the milestone calendar release have no rows and are never announced.
+
+Run once per environment after deploying that release, from a shell with the environment's `DATABASE_URL`:
+
+```bash
+pnpm --filter @churchflow/api members:backfill-milestone-events --dry-run --locale=uk
+pnpm --filter @churchflow/api members:backfill-milestone-events --locale=uk
+```
+
+The dry run prints how many milestones are missing without writing anything. `--locale` picks the language of the generated event titles, and `--organization=<uuid>` limits the run to one organization. The script skips memberships that already have a milestone event, so it is safe to re-run.
 
 ## Health Checks
 

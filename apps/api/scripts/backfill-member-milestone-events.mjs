@@ -73,7 +73,10 @@ async function main() {
 async function loadMissingMilestones(client, organizationId) {
   const result = await client.query(
     `select m.organization_id, m.id as membership_id, p.display_name, t.type,
-            (case when t.type = 'BIRTHDAY' then p.birthday else p.anniversary end) as milestone_date
+            to_char(
+              (case when t.type = 'BIRTHDAY' then p.birthday else p.anniversary end),
+              'YYYY-MM-DD'
+            ) as milestone_date
      from organization_member_profiles p
      join organization_members m on m.id = p.membership_id
      join organizations o on o.id = m.organization_id

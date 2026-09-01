@@ -85,7 +85,72 @@ test('birthdays and anniversaries on the same day arrive as one grouped notifica
   assert.deepEqual(digest.bodyMessage.birthdays, ['Ivan', 'Maria']);
   assert.deepEqual(digest.bodyMessage.anniversaries, ['Petro']);
   assert.deepEqual(digest.recipientMembershipIds, ['member-a', 'member-b']);
-  assert.equal(digest.dedupeKey, 'birthday-digest:2026-08-31:Europe/Kyiv');
+  assert.match(digest.dedupeKey, /^birthday-digest:2026-08-31:Europe\/Kyiv:[0-9a-f]{12}$/);
+});
+
+test('a digest still goes out when the notification hour run was missed', async () => {
+  const { service, created } = createService([
+    milestoneEvent({
+      id: 'birthday-maria',
+      type: 'BIRTHDAY',
+      title: 'День народження: Maria',
+      displayName: 'Maria',
+    }),
+    milestoneEvent({
+      id: 'anniversary-petro',
+      type: 'ANNIVERSARY',
+      title: 'Річниця: Petro',
+      displayName: 'Petro',
+    }),
+  ]);
+
+  // 14:00 in Europe/Kyiv, hours after the notification hour.
+  await service.createDueReminderNotifications(new Date('2026-08-31T11:00:00.000Z'));
+
+  assert.equal(created.length, 1);
+  assert.deepEqual(created[0].bodyMessage.birthdays, ['Maria']);
+  assert.deepEqual(created[0].bodyMessage.anniversaries, ['Petro']);
+});
+
+test('repeated runs over the same milestones keep one dedupe key', async () => {
+  const events = [
+    milestoneEvent({
+      id: 'birthday-maria',
+      type: 'BIRTHDAY',
+      title: 'День народження: Maria',
+      displayName: 'Maria',
+    }),
+  ];
+  const first = createService(events);
+  const second = createService(events);
+
+  await first.service.createDueReminderNotifications(DIGEST_RUN_AT);
+  await second.service.createDueReminderNotifications(new Date('2026-08-31T06:05:00.000Z'));
+
+  assert.equal(first.created[0].dedupeKey, second.created[0].dedupeKey);
+});
+
+test('a milestone added later in the day is announced by a new digest', async () => {
+  const maria = milestoneEvent({
+    id: 'birthday-maria',
+    type: 'BIRTHDAY',
+    title: 'День народження: Maria',
+    displayName: 'Maria',
+  });
+  const ivan = milestoneEvent({
+    id: 'birthday-ivan',
+    type: 'BIRTHDAY',
+    title: 'День народження: Ivan',
+    displayName: 'Ivan',
+  });
+  const morning = createService([maria]);
+  const afternoon = createService([maria, ivan]);
+
+  await morning.service.createDueReminderNotifications(DIGEST_RUN_AT);
+  await afternoon.service.createDueReminderNotifications(new Date('2026-08-31T11:00:00.000Z'));
+
+  assert.deepEqual(afternoon.created[0].bodyMessage.birthdays, ['Ivan', 'Maria']);
+  assert.notEqual(morning.created[0].dedupeKey, afternoon.created[0].dedupeKey);
 });
 
 test('a milestone digest is only sent at the all-day notification hour', async () => {
