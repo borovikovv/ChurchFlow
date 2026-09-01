@@ -30,6 +30,14 @@ export class OrganizationsRepository {
                 logoAssetId: true,
               },
             },
+            subscription: {
+              select: {
+                status: true,
+                isExempt: true,
+                restrictAfter: true,
+                graceEndsAt: true,
+              },
+            },
             _count: {
               select: {
                 members: {

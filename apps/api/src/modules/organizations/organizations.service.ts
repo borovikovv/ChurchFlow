@@ -13,6 +13,7 @@ import {
   type UpdateOrganizationInput,
 } from '@churchflow/shared';
 import { AuditService } from '../audit/audit.service';
+import { EntitlementsService } from '../billing/entitlements.service';
 import { OrganizationRequestsRepository } from '../organization-requests/repositories/organization-requests.repository';
 import { OrganizationsRepository } from './repositories/organizations.repository';
 
@@ -53,6 +54,7 @@ export class OrganizationsService {
     private readonly organizationsRepository: OrganizationsRepository,
     private readonly organizationRequestsRepository: OrganizationRequestsRepository,
     private readonly auditService: AuditService,
+    private readonly entitlementsService: EntitlementsService,
   ) {}
 
   async create(input: z.infer<typeof createOrganizationSchema>, ownerUserId: string) {
@@ -70,7 +72,16 @@ export class OrganizationsService {
   }
 
   async listMine(userId: string) {
-    return this.organizationsRepository.listMine(userId);
+    const organizations = await this.organizationsRepository.listMine(userId);
+    const now = new Date();
+
+    // Entitlements travel with the organization list so the dashboard shell can reflect a
+    // restriction on every page without a fetch of its own per route.
+    return organizations.map(({ subscription, ...organization }) => ({
+      ...organization,
+      subscriptionStatus: subscription?.status ?? null,
+      entitlements: this.entitlementsService.resolve(subscription, now),
+    }));
   }
 
   async listAdmin(status?: string) {

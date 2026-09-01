@@ -960,13 +960,35 @@
     color: var(--muted);
   }
 
-  .status-archived {
+  .status-archived,
+  .status-canceled {
     border-color: var(--line);
     background: var(--surface-subtle);
     color: var(--muted);
   }
 
+  /* Sits above every dashboard page of a restricted organization, so the reason a write just
+     failed is visible wherever the member happens to be. */
+  .restricted-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    border: 1px solid rgba(154, 103, 0, 0.25);
+    border-radius: 10px;
+    background: #fff8c5;
+    color: var(--warning);
+  }
+
+  .restricted-banner strong {
+    color: var(--warning);
+  }
+
   .status-pending,
+  .status-past-due,
   .status-suspended {
     border-color: rgba(154, 103, 0, 0.25);
     background: #fff8c5;
@@ -974,6 +996,7 @@
   }
 
   .status-rejected,
+  .status-restricted,
   .status-deleted,
   .status-revoked {
     border-color: rgba(207, 34, 46, 0.25);

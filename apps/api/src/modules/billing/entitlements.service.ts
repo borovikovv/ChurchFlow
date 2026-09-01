@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   ORGANIZATION_RESTRICTED_ERROR_CODE,
   type Entitlement,
+  type SubscriptionEntitlementState,
   hasEntitlement,
   resolveEntitlements,
 } from '@churchflow/shared';
@@ -29,6 +30,17 @@ export class EntitlementsService {
   ): Promise<readonly Entitlement[]> {
     const subscription = await this.subscriptionsRepository.findEntitlementState(organizationId);
 
+    return this.resolve(subscription, now);
+  }
+
+  /**
+   * For callers that already hold the subscription row. Listing an account's organizations would
+   * otherwise cost one subscription query per organization to answer the same question.
+   */
+  resolve(
+    subscription: SubscriptionEntitlementState | null,
+    now: Date = new Date(),
+  ): readonly Entitlement[] {
     return resolveEntitlements({
       subscription,
       now,

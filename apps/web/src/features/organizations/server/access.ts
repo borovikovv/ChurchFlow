@@ -1,3 +1,4 @@
+import type { Entitlement, SubscriptionStatus } from '@churchflow/shared';
 import { apiFetch } from '@/api/client';
 
 export type OrganizationMembershipRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
@@ -19,6 +20,8 @@ export interface OrganizationAccessRecord {
   website: {
     logoAssetId: string | null;
   } | null;
+  subscriptionStatus: SubscriptionStatus | null;
+  entitlements: Entitlement[];
   _count?: {
     members: number;
     invitations: number;
@@ -52,6 +55,17 @@ export function isOrganizationAdminRole(role: OrganizationMembershipRole): boole
 
 export function isPlatformAdminRoleValue(role: PlatformRole | null | undefined): boolean {
   return role === 'ADMIN' || role === 'SUPER_ADMIN';
+}
+
+/**
+ * The web layer never decides what a subscription allows; it reads the entitlements the API
+ * resolved. Keeping a second copy of the rules here is how the two drift apart.
+ */
+export function organizationHasEntitlement(
+  organization: OrganizationAccessRecord | undefined,
+  entitlement: Entitlement,
+): boolean {
+  return organization?.entitlements?.includes(entitlement) ?? false;
 }
 
 export async function getOrganizationAccessState(

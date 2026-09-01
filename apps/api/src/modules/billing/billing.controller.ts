@@ -6,10 +6,14 @@ import {
   HttpStatus,
   Param,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ORG_PERMISSIONS } from '@churchflow/shared';
-import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
   RequireOrganizationPermission,
@@ -40,15 +44,21 @@ export class BillingController {
   @Post('organizations/:organizationId/billing/checkout')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.billingManage)
-  async startCheckout(@Param('organizationId') organizationId: string) {
-    return this.billingService.startCheckout(organizationId);
+  async startCheckout(
+    @Param('organizationId') organizationId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.billingService.startCheckout(organizationId, actorUserId(request));
   }
 
   @Post('organizations/:organizationId/billing/cancel')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.billingManage)
-  async cancel(@Param('organizationId') organizationId: string) {
-    return this.billingService.cancel(organizationId);
+  async cancel(
+    @Param('organizationId') organizationId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.billingService.cancel(organizationId, actorUserId(request));
   }
 
   /**
@@ -61,4 +71,13 @@ export class BillingController {
   async handleLiqPayCallback(@Body() body: LiqPayCallbackDto) {
     return this.billingService.handleCallback(body.data, body.signature);
   }
+}
+
+function actorUserId(request: AuthenticatedRequest): string {
+  const userId = request.auth?.userId;
+  if (!userId) {
+    throw new Error('Authenticated request missing auth payload');
+  }
+
+  return userId;
 }

@@ -61,7 +61,7 @@ export class BillingService {
    * parameters, the payer enters the card on LiqPay, and the callback activates the
    * subscription. Card details never reach us.
    */
-  async startCheckout(organizationId: string): Promise<BillingCheckout> {
+  async startCheckout(organizationId: string, actorUserId: string): Promise<BillingCheckout> {
     const subscription = await this.requireSubscription(organizationId);
 
     if (subscription.isExempt) {
@@ -87,6 +87,7 @@ export class BillingService {
 
     await this.subscriptionsRepository.startSubscription({
       organizationId,
+      actorUserId,
       orderId,
       amountMinor,
       currency: BILLING_CURRENCY,
@@ -103,14 +104,14 @@ export class BillingService {
     });
   }
 
-  async cancel(organizationId: string): Promise<SubscriptionSummary> {
+  async cancel(organizationId: string, actorUserId: string): Promise<SubscriptionSummary> {
     const subscription = await this.requireSubscription(organizationId);
 
     if (subscription.liqpayOrderId) {
       await this.liqPayService.unsubscribe(subscription.liqpayOrderId);
     }
 
-    await this.subscriptionsRepository.cancel(organizationId);
+    await this.subscriptionsRepository.cancel(organizationId, actorUserId);
 
     return this.getSummary(organizationId);
   }
@@ -156,6 +157,8 @@ export class BillingService {
       orderId: callback.orderId,
       paymentId: callback.paymentId,
       status: callback.status ?? 'unknown',
+      previousStatus: subscription.status,
+      nextStatus: transition?.status ?? null,
       payload: { data } satisfies Prisma.InputJsonObject,
       update: transition
         ? {

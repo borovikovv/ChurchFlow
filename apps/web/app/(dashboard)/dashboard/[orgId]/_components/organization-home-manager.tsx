@@ -2,10 +2,11 @@
 
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import type { AuditLogListItem } from '@churchflow/shared';
+import type { AuditLogListItem, SubscriptionSummary } from '@churchflow/shared';
 import { StatusBadge } from '@/components/ui/status-badge';
 import type { HomeOrganization, OrganizationRole } from '../types';
 import { AuditLogsSection } from './audit-logs-section';
+import { BillingSection } from './billing-section';
 import { EditOrganizationDialog } from './edit-organization-dialog';
 import { OrganizationLogo } from './organization-logo';
 
@@ -14,6 +15,8 @@ interface OrganizationHomeManagerProps {
   organizationRole: OrganizationRole | null;
   auditLogs: AuditLogListItem[];
   auditNextCursor: string | null;
+  subscription: SubscriptionSummary | null;
+  subscriptionError: string | null;
 }
 
 export function OrganizationHomeManager({
@@ -21,6 +24,8 @@ export function OrganizationHomeManager({
   organizationRole,
   auditLogs,
   auditNextCursor,
+  subscription,
+  subscriptionError,
 }: OrganizationHomeManagerProps) {
   const t = useTranslations('home');
   const [currentOrganization, setCurrentOrganization] = useState(organization);
@@ -65,6 +70,14 @@ export function OrganizationHomeManager({
           ) : null}
         </dl>
       </div>
+
+      {canManage ? (
+        <BillingSection
+          loadError={subscriptionError}
+          organizationId={currentOrganization.id}
+          subscription={subscription}
+        />
+      ) : null}
 
       {canManage ? (
         <AuditLogsSection

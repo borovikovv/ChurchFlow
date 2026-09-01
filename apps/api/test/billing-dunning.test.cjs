@@ -198,12 +198,13 @@ const PENDING_SUBSCRIPTION = {
 test('the hryvnia amount is pinned at subscribe time from the published rate', async () => {
   const { service, started } = checkoutService({ subscription: PENDING_SUBSCRIPTION });
 
-  const checkout = await service.startCheckout('organization');
+  const checkout = await service.startCheckout('organization', 'actor');
 
   // 4.5 USD at 41.5 UAH/USD = 186.75 UAH = 18675 kopiykas, fixed for the subscription's life.
   assert.equal(started[0].amountMinor, 18_675);
   assert.equal(started[0].currency, 'UAH');
   assert.equal(started[0].usdReference, 4.5);
+  assert.equal(started[0].actorUserId, 'actor');
   assert.ok(started[0].fxRateUsedAt instanceof Date);
 
   const payload = JSON.parse(Buffer.from(checkout.data, 'base64').toString('utf8'));
@@ -216,7 +217,7 @@ test('replacing a card cancels the old subscription before creating a new one', 
     subscription: { ...PENDING_SUBSCRIPTION, status: 'ACTIVE', liqpayOrderId: 'old-order' },
   });
 
-  await service.startCheckout('organization');
+  await service.startCheckout('organization', 'actor');
 
   assert.deepEqual(unsubscribed, ['old-order']);
   assert.notEqual(started[0].orderId, 'old-order');
@@ -227,7 +228,7 @@ test('an organization with complimentary access is not sent to checkout', async 
     subscription: { ...PENDING_SUBSCRIPTION, isExempt: true },
   });
 
-  await assert.rejects(() => service.startCheckout('organization'), /complimentary/i);
+  await assert.rejects(() => service.startCheckout('organization', 'actor'), /complimentary/i);
   assert.equal(started.length, 0);
 });
 
@@ -235,5 +236,5 @@ test('checkout refuses rather than guessing a price when no rate is published', 
   const { service } = checkoutService({ subscription: PENDING_SUBSCRIPTION });
   service.currencyRatesService = { getCurrent: async () => null };
 
-  await assert.rejects(() => service.startCheckout('organization'), /exchange rate/i);
+  await assert.rejects(() => service.startCheckout('organization', 'actor'), /exchange rate/i);
 });

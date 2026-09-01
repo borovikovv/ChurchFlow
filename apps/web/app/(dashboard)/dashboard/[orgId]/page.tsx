@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { apiFetch } from '@/api/client';
 import { getOrganizationAccessState } from '@/features/organizations/server/access';
-import type { AuditLogsPage } from '@churchflow/shared';
+import type { AuditLogsPage, SubscriptionSummary } from '@churchflow/shared';
 import { OrganizationHomeManager } from './_components/organization-home-manager';
 import type { OrganizationHomeApiResponse } from './types';
 
@@ -33,12 +33,16 @@ export default async function OrganizationDashboardPage({
   }
 
   const logoAssetId = organization.website?.logoAssetId ?? null;
-  const [logoUrlResult, auditResult] = await Promise.all([
+  const canManage = organizationRole === 'OWNER' || organizationRole === 'ADMIN';
+  const [logoUrlResult, auditResult, billingResult] = await Promise.all([
     logoAssetId
       ? apiFetch<{ url: string }>(`/organizations/${organization.id}/media/${logoAssetId}/read-url`)
       : Promise.resolve(null),
-    organizationRole === 'OWNER' || organizationRole === 'ADMIN'
+    canManage
       ? apiFetch<AuditLogsPage>(`/organizations/${organization.id}/audit-logs?limit=10`)
+      : Promise.resolve(null),
+    canManage
+      ? apiFetch<SubscriptionSummary>(`/organizations/${organization.id}/billing`)
       : Promise.resolve(null),
   ]);
   const logoUrl = logoUrlResult?.ok ? logoUrlResult.data.url : null;
@@ -58,6 +62,8 @@ export default async function OrganizationDashboardPage({
       organizationRole={organizationRole}
       auditLogs={auditPage.items}
       auditNextCursor={auditPage.nextCursor}
+      subscription={billingResult?.ok ? billingResult.data : null}
+      subscriptionError={billingResult && !billingResult.ok ? billingResult.error.message : null}
     />
   );
 }

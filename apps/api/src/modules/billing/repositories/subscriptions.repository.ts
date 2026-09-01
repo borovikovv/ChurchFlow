@@ -54,22 +54,38 @@ export class SubscriptionsRepository {
    */
   startSubscription(input: {
     organizationId: string;
+    actorUserId: string;
     orderId: string;
     amountMinor: number;
     currency: string;
     usdReference: number;
     fxRateUsedAt: Date;
   }) {
-    return this.prisma.subscription.update({
-      where: { organizationId: input.organizationId },
-      data: {
-        liqpayOrderId: input.orderId,
-        liqpaySubscribedAt: null,
-        amountMinor: input.amountMinor,
-        currency: input.currency,
-        usdReference: new Prisma.Decimal(input.usdReference),
-        fxRateUsedAt: input.fxRateUsedAt,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const subscription = await tx.subscription.update({
+        where: { organizationId: input.organizationId },
+        data: {
+          liqpayOrderId: input.orderId,
+          liqpaySubscribedAt: null,
+          amountMinor: input.amountMinor,
+          currency: input.currency,
+          usdReference: new Prisma.Decimal(input.usdReference),
+          fxRateUsedAt: input.fxRateUsedAt,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: 'START_SUBSCRIPTION',
+          entityType: 'Subscription',
+          entityId: subscription.id,
+          metadata: { amountMinor: input.amountMinor, currency: input.currency },
+        },
+      });
+
+      return subscription;
     });
   }
 
@@ -84,6 +100,8 @@ export class SubscriptionsRepository {
     orderId: string;
     paymentId: string;
     status: string;
+    previousStatus: string;
+    nextStatus: string | null;
     payload: Prisma.InputJsonObject;
     update: Prisma.SubscriptionUpdateInput | null;
   }): Promise<{ duplicate: boolean }> {
@@ -106,6 +124,22 @@ export class SubscriptionsRepository {
             where: { id: input.subscriptionId },
             data: input.update,
           });
+
+          // No actor: the change came from LiqPay, not a person. The audit row is written in the
+          // same transaction as the state change so the log can never disagree with the row.
+          await tx.auditLog.create({
+            data: {
+              organizationId: input.organizationId,
+              action: 'UPDATE_SUBSCRIPTION',
+              entityType: 'Subscription',
+              entityId: input.subscriptionId,
+              metadata: {
+                from: input.previousStatus,
+                to: input.nextStatus,
+                callbackStatus: input.status,
+              },
+            },
+          });
         }
       });
 
@@ -119,10 +153,24 @@ export class SubscriptionsRepository {
     }
   }
 
-  cancel(organizationId: string) {
-    return this.prisma.subscription.update({
-      where: { organizationId },
-      data: { status: 'CANCELED', graceEndsAt: null },
+  cancel(organizationId: string, actorUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const subscription = await tx.subscription.update({
+        where: { organizationId },
+        data: { status: 'CANCELED', graceEndsAt: null },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'CANCEL_SUBSCRIPTION',
+          entityType: 'Subscription',
+          entityId: subscription.id,
+        },
+      });
+
+      return subscription;
     });
   }
 
