@@ -10,6 +10,7 @@ import type { OrganizationMember } from '../types';
 import { Avatar } from '@/components/ui/avatar';
 import { MailIcon, PhoneIcon } from '@/components/icons/action-icons';
 import { MemberAccessMethodsSummary, MemberIdentitySummary } from './member-summary';
+import { GroupBadge } from '@/features/groups/components/group-badge';
 
 export function MemberCard({
   actions,
@@ -44,6 +45,13 @@ export function MemberCard({
         {actions}
       </div>
       <MemberCardContact email={member.profile.email} phone={member.profile.phone} />
+      {member.groups.length > 0 ? (
+        <div className="flex min-w-0 flex-wrap gap-1.5">
+          {member.groups.map((group) => (
+            <GroupBadge group={group} key={group.id} />
+          ))}
+        </div>
+      ) : null}
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <StatusBadge
           status={member.accountState}

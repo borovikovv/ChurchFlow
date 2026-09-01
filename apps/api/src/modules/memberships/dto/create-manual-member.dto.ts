@@ -14,5 +14,5 @@ export class CreateManualMemberDto implements CreateManualOrganizationMemberInpu
   biography?: string | null;
   familyNotes?: string | null;
   role!: 'MEMBER' | 'VIEWER';
-  ministries?: CreateManualOrganizationMemberInput['ministries'];
+  groups?: CreateManualOrganizationMemberInput['groups'];
 }

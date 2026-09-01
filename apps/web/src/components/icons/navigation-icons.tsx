@@ -18,6 +18,17 @@ export function MembersIcon({ className }: IconProps) {
   );
 }
 
+export function GroupsIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="12" cy="6" r="2.5" />
+      <circle cx="5.5" cy="16" r="2.5" />
+      <circle cx="18.5" cy="16" r="2.5" />
+      <path d="M10.2 7.8 7.3 13.8M13.8 7.8l2.9 6M8 16h8" />
+    </Icon>
+  );
+}
+
 export function CalendarIcon({ className }: IconProps) {
   return (
     <Icon className={className}>

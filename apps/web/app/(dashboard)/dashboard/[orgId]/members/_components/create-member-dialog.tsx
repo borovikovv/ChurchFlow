@@ -1,8 +1,8 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createManualOrganizationMemberSchema, MEMBER_MINISTRIES } from '@churchflow/shared';
-import type { MemberMinistry } from '@churchflow/shared';
+import { createManualOrganizationMemberSchema } from '@churchflow/shared';
+import type { OrganizationGroupBadge } from '@churchflow/shared';
 import { useTranslations } from 'next-intl';
 import { useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -27,7 +27,7 @@ type FormValues = z.output<typeof formSchema>;
 const createMemberDefaultValues = {
   role: 'MEMBER',
   prepareAccess: false,
-  ministries: [],
+  groups: [],
 } satisfies Partial<FormInput>;
 
 interface PreparedAccess {
@@ -41,7 +41,7 @@ interface CreatedMember {
   id: string;
   role: string;
   source: string;
-  ministries: MemberMinistry[];
+  groups: OrganizationGroupBadge[];
   profile: {
     displayName: string;
     email: string | null;
@@ -52,16 +52,19 @@ interface CreatedMember {
 }
 
 export function CreateMemberDialog({
+  groupOptions,
   organizationId,
   onCreated,
   triggerClassName,
 }: {
+  groupOptions: OrganizationGroupBadge[];
   organizationId: string;
   onCreated: (member: CreatedMember) => void;
   triggerClassName?: string;
 }) {
   const t = useTranslations('members');
   const commonT = useTranslations('common');
+  const groupsT = useTranslations('groups');
   const dialogRef = useRef<HTMLDialogElement>(null);
   const formId = useId();
   const [preparedAccess, setPreparedAccess] = useState<PreparedAccess | null>(null);
@@ -75,7 +78,7 @@ export function CreateMemberDialog({
     resolver: zodResolver(formSchema),
     mode: 'onBlur',
     reValidateMode: 'onChange',
-    defaultValues: { role: 'MEMBER', prepareAccess: false, ministries: [] },
+    defaultValues: createMemberDefaultValues,
   });
 
   const submit = handleSubmit(async (values) => {
@@ -167,19 +170,21 @@ export function CreateMemberDialog({
                 <option value="MEMBER">{t('roleLabels.MEMBER')}</option>
                 <option value="VIEWER">{t('roleLabels.VIEWER')}</option>
               </FormSelect>
-              <fieldset className="grid gap-2 rounded-md border border-[var(--line)] p-3">
-                <legend className="px-1 font-semibold">{t('ministries')}</legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {MEMBER_MINISTRIES.map((ministry) => (
-                    <FormCheckbox
-                      key={ministry}
-                      label={t(`ministry.${ministry}`)}
-                      value={ministry}
-                      {...register('ministries')}
-                    />
-                  ))}
-                </div>
-              </fieldset>
+              {groupOptions.length > 0 ? (
+                <fieldset className="grid gap-2 rounded-md border border-[var(--line)] p-3">
+                  <legend className="px-1 font-semibold">{groupsT('title')}</legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {groupOptions.map((group) => (
+                      <FormCheckbox
+                        key={group.id}
+                        label={group.name}
+                        value={group.id}
+                        {...register('groups')}
+                      />
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
               <FormDatePicker
                 control={control}
                 name="memberSince"

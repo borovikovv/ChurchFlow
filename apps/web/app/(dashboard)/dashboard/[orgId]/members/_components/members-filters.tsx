@@ -14,8 +14,8 @@ const FILTERS_BUTTON_CLASS_NAME =
 export function MembersFilters({
   accessOptions,
   accessValue,
-  ministryOptions,
-  ministryValue,
+  groupOptions,
+  groupValue,
   preserved,
   showAccessFilter,
   typeOptions,
@@ -23,16 +23,17 @@ export function MembersFilters({
   variant,
 }: MembersFiltersProps) {
   const t = useTranslations('members');
+  const groupsT = useTranslations('groups');
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const controls = (
     <>
       <QueryFilterMultiSelect
-        label={t('ministries')}
+        label={groupsT('title')}
         labelClassName="sr-only"
-        name="ministries"
-        options={ministryOptions}
-        placeholder={t('allMinistries')}
+        name="groups"
+        options={groupOptions}
+        placeholder={groupsT('allGroups')}
         preserveParams={{
           access: preserved.access,
           pageSize: preserved.pageSize,
@@ -41,7 +42,7 @@ export function MembersFilters({
           type: preserved.type,
         }}
         selectClassName="w-full"
-        value={ministryValue}
+        value={groupValue}
       />
       <div className="filter-bar min-w-0 flex-wrap">
         {showAccessFilter ? (
@@ -51,7 +52,7 @@ export function MembersFilters({
             name="access"
             options={accessOptions}
             preserveParams={{
-              ministries: preserved.ministries,
+              groups: preserved.groups,
               pageSize: preserved.pageSize,
               search: preserved.search,
               type: preserved.type,
@@ -67,7 +68,7 @@ export function MembersFilters({
           options={typeOptions}
           preserveParams={{
             access: preserved.access,
-            ministries: preserved.ministries,
+            groups: preserved.groups,
             pageSize: preserved.pageSize,
             search: preserved.search,
             tab: preserved.tab,

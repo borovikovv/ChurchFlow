@@ -7,7 +7,7 @@ export class ListMembershipsQueryDto implements ListOrganizationMembersQuery {
   access!: ListOrganizationMembersQuery['access'];
   cursor!: ListOrganizationMembersQuery['cursor'];
   membershipId!: ListOrganizationMembersQuery['membershipId'];
-  ministries!: ListOrganizationMembersQuery['ministries'];
+  groups!: ListOrganizationMembersQuery['groups'];
   page!: ListOrganizationMembersQuery['page'];
   pageSize!: ListOrganizationMembersQuery['pageSize'];
   search!: ListOrganizationMembersQuery['search'];

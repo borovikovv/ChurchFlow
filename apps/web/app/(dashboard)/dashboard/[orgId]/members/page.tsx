@@ -26,15 +26,14 @@ import {
   type OrganizationMembersTab,
   organizationMembersTypeFilterSchema,
   type OrganizationMembersTypeFilter,
-  memberMinistriesSchema,
-  type MemberMinistry,
+  organizationGroupIdsSchema,
 } from '@churchflow/shared';
 
 type MembersSearchParams = {
   access?: string;
   error?: string;
   message?: string;
-  ministries?: string;
+  groups?: string;
   page?: string;
   pageSize?: string;
   search?: string;
@@ -45,6 +44,7 @@ type MembersSearchParams = {
 const emptyMembersPayload: MembersPayload = {
   actorRole: null,
   actorMembershipId: null,
+  groups: [],
   memberCandidates: [],
   pagination: {
     page: 1,
@@ -73,7 +73,7 @@ export default async function MembersDashboardPage({
     message,
     error,
     access = 'all',
-    ministries = '',
+    groups = '',
     page = '1',
     pageSize = String(DEFAULT_MEMBER_PAGE_SIZE),
     search = '',
@@ -83,7 +83,7 @@ export default async function MembersDashboardPage({
   const user = await getCurrentUser();
   const messages = getMessages(user?.locale ?? 'en');
   const memberAccess = parseMemberAccess(access);
-  const memberMinistries = parseMemberMinistries(ministries);
+  const memberGroups = parseMemberGroups(groups);
   const memberPage = parseMemberPage(page);
   const memberPageSize = parseMemberPageSize(pageSize);
   const memberTab = parseMemberTab(tab);
@@ -92,7 +92,7 @@ export default async function MembersDashboardPage({
   const membersResult = await loadMembersAction({
     organizationId: orgId,
     access: memberAccess,
-    ministries: memberMinistries,
+    groups: memberGroups,
     page: memberPage,
     pageSize: memberPageSize,
     tab: memberTab,
@@ -119,6 +119,7 @@ export default async function MembersDashboardPage({
         </div>
         {canManage ? (
           <MembersActions
+            groupOptions={payload.groups}
             manageInvitation={manageInlineInvitationAction}
             organizationId={orgId}
             variant="fab"
@@ -131,7 +132,7 @@ export default async function MembersDashboardPage({
 
       <MembersManager
         memberAccess={memberAccess}
-        memberMinistries={memberMinistries}
+        memberGroups={memberGroups}
         memberPage={memberPage}
         memberPageSize={memberPageSize}
         memberSearch={memberSearch}
@@ -174,9 +175,9 @@ function parseMemberSearch(search: string): string {
   return search.trim().slice(0, 100);
 }
 
-function parseMemberMinistries(ministries: string): MemberMinistry[] {
-  const parsedMinistries = memberMinistriesSchema.safeParse(ministries.split(',').filter(Boolean));
-  return parsedMinistries.success ? parsedMinistries.data : [];
+function parseMemberGroups(groups: string): string[] {
+  const parsedGroups = organizationGroupIdsSchema.safeParse(groups.split(',').filter(Boolean));
+  return parsedGroups.success ? parsedGroups.data : [];
 }
 
 function parseMemberPage(page: string): number {

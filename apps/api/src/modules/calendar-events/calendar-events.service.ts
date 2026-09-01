@@ -84,7 +84,7 @@ export class CalendarEventsService {
         anniversary: formatDateOnly(member.profile?.anniversary ?? null),
         photoAssetId: member.profile?.profilePhotoAssetId ?? null,
         photoUrl: member.user?.avatarUrl ?? null,
-        ministries: member.ministries.map(({ ministry }) => ministry),
+        groups: member.groups.map(({ group }) => group),
       })),
       events: events.flatMap((event) => expandEvent(event, rangeStart, rangeEnd)),
     };

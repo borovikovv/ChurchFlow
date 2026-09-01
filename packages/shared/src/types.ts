@@ -39,8 +39,14 @@ import type {
   calendarEventReminderSchema,
   calendarEventRepeatPeriodSchema,
   calendarServiceRoleSchema,
+  organizationGroupIconSchema,
+  organizationGroupMemberRoleSchema,
+  organizationGroupBadgeSchema,
+  createOrganizationGroupSchema,
+  updateOrganizationGroupSchema,
+  addOrganizationGroupMembersSchema,
+  updateOrganizationGroupMemberSchema,
   memberAccessMethodSchema,
-  memberMinistrySchema,
   listCalendarEventsQuerySchema,
   createCalendarEventSchema,
   updateCalendarEventSchema,
@@ -133,8 +139,16 @@ export type CalendarEventType = z.infer<typeof calendarEventTypeSchema>;
 export type CalendarEventReminder = z.infer<typeof calendarEventReminderSchema>;
 export type CalendarEventRepeatPeriod = z.infer<typeof calendarEventRepeatPeriodSchema>;
 export type CalendarServiceRole = z.infer<typeof calendarServiceRoleSchema>;
+export type OrganizationGroupIcon = z.infer<typeof organizationGroupIconSchema>;
+export type OrganizationGroupMemberRole = z.infer<typeof organizationGroupMemberRoleSchema>;
+export type OrganizationGroupBadge = z.infer<typeof organizationGroupBadgeSchema>;
+export type CreateOrganizationGroupInput = z.infer<typeof createOrganizationGroupSchema>;
+export type UpdateOrganizationGroupInput = z.infer<typeof updateOrganizationGroupSchema>;
+export type AddOrganizationGroupMembersInput = z.infer<typeof addOrganizationGroupMembersSchema>;
+export type UpdateOrganizationGroupMemberInput = z.infer<
+  typeof updateOrganizationGroupMemberSchema
+>;
 export type MemberAccessMethod = z.infer<typeof memberAccessMethodSchema>;
-export type MemberMinistry = z.infer<typeof memberMinistrySchema>;
 export type ListCalendarEventsQuery = z.infer<typeof listCalendarEventsQuerySchema>;
 export type CreateCalendarEventInput = z.infer<typeof createCalendarEventSchema>;
 export type UpdateCalendarEventInput = z.infer<typeof updateCalendarEventSchema>;
@@ -228,7 +242,7 @@ export interface CalendarMemberOption {
   anniversary: string | null;
   photoAssetId: string | null;
   photoUrl: string | null;
-  ministries: MemberMinistry[];
+  groups: OrganizationGroupBadge[];
 }
 
 export interface CalendarPreferences {
@@ -241,6 +255,36 @@ export interface CalendarEventsPayload {
   events: CalendarEventItem[];
   preferences: CalendarPreferences;
   members: CalendarMemberOption[];
+}
+
+export interface OrganizationGroupMemberItem {
+  membershipId: string;
+  displayName: string;
+  photoUrl: string | null;
+  role: OrganizationGroupMemberRole;
+  responsibility: string | null;
+}
+
+export interface OrganizationGroupListItem extends OrganizationGroupBadge {
+  description: string | null;
+  memberCount: number;
+  leaders: Array<{ membershipId: string; displayName: string }>;
+}
+
+export interface OrganizationGroupDetail extends OrganizationGroupBadge {
+  description: string | null;
+  members: OrganizationGroupMemberItem[];
+}
+
+export interface OrganizationGroupsPayload {
+  canManage: boolean;
+  groups: OrganizationGroupListItem[];
+}
+
+export interface OrganizationGroupDetailPayload {
+  canManage: boolean;
+  group: OrganizationGroupDetail;
+  memberCandidates: Array<{ id: string; displayName: string }>;
 }
 
 export interface PrayerRequestAuthor {

@@ -1,6 +1,7 @@
 import type { AuditLogListItem } from '@churchflow/shared';
 
 const BUDGET_ENTITY_TYPE = 'Budget';
+const ORGANIZATION_GROUP_ENTITY_TYPE = 'OrganizationGroup';
 
 const BUDGET_AMOUNT_CURRENCIES: Record<string, string> = {
   amountUah: 'UAH',
@@ -154,6 +155,11 @@ export function auditMetadataSummary(
     return budgetMetadataSummary(log, labels);
   }
 
+  if (log.entityType === ORGANIZATION_GROUP_ENTITY_TYPE) {
+    const summary = organizationGroupMetadataSummary(log, labels);
+    if (summary) return summary;
+  }
+
   const changedFields = log.metadata['changedFields'];
   if (Array.isArray(changedFields) && changedFields.length > 0) {
     return labels.changedFields(changedFields.map(String).join(', '));
@@ -170,6 +176,26 @@ export function auditMetadataSummary(
   }
 
   return log.entityType;
+}
+
+function organizationGroupMetadataSummary(
+  log: AuditLogListItem,
+  labels: { changedFields: (fields: string) => string },
+): string | null {
+  const name = log.metadata['name'];
+  if (typeof name === 'string') return name;
+
+  const addedMembershipIds = log.metadata['addedMembershipIds'];
+  if (Array.isArray(addedMembershipIds)) {
+    return labels.changedFields(`+${String(addedMembershipIds.length)}`);
+  }
+
+  if (typeof log.metadata['removedMembershipId'] === 'string') {
+    return labels.changedFields('-1');
+  }
+
+  const changedFields = Object.keys(log.metadata).filter((field) => field !== 'membershipId');
+  return changedFields.length > 0 ? labels.changedFields(changedFields.join(', ')) : null;
 }
 
 function budgetMetadataSummary(
