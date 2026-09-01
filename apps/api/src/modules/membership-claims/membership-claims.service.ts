@@ -12,7 +12,7 @@ import { Prisma } from '@churchflow/db';
 import { ENTITLEMENTS } from '@churchflow/shared';
 import { UserLocaleService } from '../../common/locale/user-locale.service';
 import { EmailService } from '../email/email.service';
-import { EntitlementsService } from '../billing/entitlements.service';
+import { EntitlementsService, RESTRICTED_OUTSIDER_MESSAGE } from '../billing/entitlements.service';
 import { MembershipClaimsRepository } from './repositories/membership-claims.repository';
 
 const CLAIM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -119,6 +119,7 @@ export class MembershipClaimsService {
       await this.entitlementsService.assert(
         claim.membership.organizationId,
         ENTITLEMENTS.membersWrite,
+        { message: RESTRICTED_OUTSIDER_MESSAGE },
       );
     }
 

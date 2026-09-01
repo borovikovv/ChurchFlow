@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { PhoneNumberUtil } from 'google-libphonenumber';
-import { ENTITLEMENTS, SUBSCRIPTION_STATUSES } from './entitlements.js';
+import { ENTITLEMENT_VALUES, SUBSCRIPTION_STATUSES } from './entitlements.js';
 import {
   APP_LOCALES,
   AUDIT_ENTITY_TYPES,
@@ -693,7 +693,7 @@ export const subscriptionSummarySchema = z.object({
       brand: z.string().nullable(),
     })
     .nullable(),
-  entitlements: z.array(z.enum(Object.values(ENTITLEMENTS) as [string, ...string[]])),
+  entitlements: z.array(z.enum(ENTITLEMENT_VALUES)),
 });
 
 export const billingCheckoutSchema = z.object({

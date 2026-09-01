@@ -12,6 +12,10 @@ const {
   SubscriptionEntitlementGuard,
 } = require('../dist/common/guards/subscription-entitlement.guard');
 const { HttpExceptionFilter } = require('../dist/common/filters/http-exception.filter');
+const { Reflector } = require('@nestjs/core');
+const { BillingController } = require('../dist/modules/billing/billing.controller');
+const { BillingService } = require('../dist/modules/billing/billing.service');
+const { MembershipsController } = require('../dist/modules/memberships/memberships.controller');
 const {
   OrganizationsRepository,
 } = require('../dist/modules/organizations/repositories/organizations.repository');
@@ -121,6 +125,94 @@ test('an array organization id is narrowed to its first value', async () => {
     context({ organizationId: [ORGANIZATION_ID, 'other'] }),
   );
   assert.equal(allowed, true);
+});
+
+function realMetadataGuard(subscription) {
+  return new SubscriptionEntitlementGuard(entitlementsService(subscription), new Reflector());
+}
+
+function handlerContext(controller, handler) {
+  return {
+    switchToHttp: () => ({
+      getRequest: () => ({ params: { organizationId: ORGANIZATION_ID }, auth: { userId: 'u' } }),
+    }),
+    getHandler: () => handler,
+    getClass: () => controller,
+  };
+}
+
+test('billing stays reachable while the organization is restricted', async () => {
+  // Read against the real decorators rather than a stubbed reflector: the invariant is held by
+  // the absence of @RequireEntitlement on these routes, and nothing else guards that absence.
+  // A restricted church with no way to pay would have no way out.
+  const guard = realMetadataGuard(restricted());
+
+  for (const handler of [
+    BillingController.prototype.getSummary,
+    BillingController.prototype.startCheckout,
+    BillingController.prototype.cancel,
+  ]) {
+    const allowed = await guard.canActivate(handlerContext(BillingController, handler));
+    assert.equal(allowed, true);
+  }
+});
+
+test('while the same guard still refuses a write on that organization', async () => {
+  // The contrast matters: without it the test above would pass even if the guard were inert.
+  const guard = realMetadataGuard(restricted());
+
+  await assert.rejects(
+    () =>
+      guard.canActivate(
+        handlerContext(MembershipsController, MembershipsController.prototype.createManual),
+      ),
+    (error) => error.getResponse().code === ORGANIZATION_RESTRICTED_ERROR_CODE,
+  );
+});
+
+test('the billing summary reports the state and the entitlements together', async () => {
+  const service = new BillingService(
+    {
+      findByOrganizationId: async () => ({
+        status: 'PAST_DUE',
+        isExempt: false,
+        exemptReason: null,
+        amountMinor: 18_675,
+        currency: 'UAH',
+        currentPeriodEndsAt: new Date('2026-10-01T00:00:00.000Z'),
+        restrictAfter: null,
+        graceEndsAt: new Date('2026-09-08T00:00:00.000Z'),
+        cardMask: '424242******4242',
+        cardBrand: 'visa',
+        organization: { id: ORGANIZATION_ID, name: 'Grace Church' },
+      }),
+    },
+    { listForOrganization: async () => [ENTITLEMENTS.membersRead] },
+    {},
+    {},
+    {},
+  );
+
+  const summary = await service.getSummary(ORGANIZATION_ID);
+
+  assert.equal(summary.status, 'PAST_DUE');
+  assert.equal(summary.amountMinor, 18_675);
+  assert.equal(summary.graceEndsAt, '2026-09-08T00:00:00.000Z');
+  assert.deepEqual(summary.card, { mask: '424242******4242', brand: 'visa' });
+  // The web disables what the API refuses by reading this, never by re-deriving the rules.
+  assert.deepEqual(summary.entitlements, [ENTITLEMENTS.membersRead]);
+});
+
+test('a summary for an organization with no subscription row is a not-found, not an empty one', async () => {
+  const service = new BillingService(
+    { findByOrganizationId: async () => null },
+    { listForOrganization: async () => [] },
+    {},
+    {},
+    {},
+  );
+
+  await assert.rejects(() => service.getSummary(ORGANIZATION_ID), /not found/i);
 });
 
 test('no organization-scoped payload can grant complimentary access to itself', () => {

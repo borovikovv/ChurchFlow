@@ -1,7 +1,6 @@
 import type { SubscriptionStatus } from '@churchflow/db';
 import { BILLING_GRACE_PERIOD_DAYS } from '@churchflow/shared';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { addMonths, daysFromNow } from './billing-time';
 
 // LiqPay reports the outcome of a charge in `status`. Anything not listed here - the wait_*
 // family, 3DS challenges, and statuses LiqPay may add later - means "not decided yet" and must
@@ -16,36 +15,50 @@ export interface SubscriptionTransitionState {
   currentPeriodEndsAt: Date | null;
 }
 
-export function addMonths(from: Date, months: number): Date {
-  const next = new Date(from.getTime());
-  next.setUTCMonth(next.getUTCMonth() + months);
-
-  return next;
+export interface SubscriptionTransitionInput {
+  current: SubscriptionTransitionState;
+  callbackStatus: string;
+  now: Date;
+  /**
+   * True when the callback belongs to a checkout the organization deliberately started, rather
+   * than to the subscription that is already running.
+   */
+  isNewSubscription: boolean;
 }
 
 /**
  * Turns a LiqPay callback status into the subscription's next state, or null when the callback
  * carries no decision. Pure, so the whole state machine is testable without a database.
  *
- * Two rules are easy to get wrong and are the reason this is a function rather than inline
+ * Three rules are easy to get wrong and are the reason this is a function rather than inline
  * branching. A repeated failure must not push the grace deadline further out, otherwise a
- * failing card buys unlimited time. And a failure arriving after the organization is already
- * RESTRICTED must not walk it back to PAST_DUE, which would hand back write access.
+ * failing card buys unlimited time. A failure arriving after the organization is already
+ * RESTRICTED must not walk it back to PAST_DUE, which would hand back write access. And a
+ * charge landing on a subscription the organization has cancelled must not revive it - only a
+ * checkout it started itself may bring a cancelled subscription back.
  */
-export function transitionForCallbackStatus(input: {
-  current: SubscriptionTransitionState;
-  callbackStatus: string;
-  now: Date;
-}): SubscriptionTransitionState | null {
-  const { current, callbackStatus, now } = input;
+export function transitionForCallbackStatus(
+  input: SubscriptionTransitionInput,
+): SubscriptionTransitionState | null {
+  const { current, callbackStatus, now, isNewSubscription } = input;
   const status = callbackStatus.trim().toLowerCase();
 
   if (PAID_STATUSES.has(status)) {
+    if (current.status === 'CANCELED' && !isNewSubscription) {
+      return null;
+    }
+
     return {
       status: 'ACTIVE',
       graceEndsAt: null,
       currentPeriodEndsAt: addMonths(now, 1),
     };
+  }
+
+  // A checkout that did not succeed must not disturb the subscription that is still running.
+  // The live one keeps its own state until its own charges say otherwise.
+  if (isNewSubscription) {
+    return null;
   }
 
   if (CANCELED_STATUSES.has(status)) {
@@ -57,7 +70,7 @@ export function transitionForCallbackStatus(input: {
   }
 
   if (FAILED_STATUSES.has(status)) {
-    if (current.status === 'RESTRICTED') {
+    if (current.status === 'RESTRICTED' || current.status === 'CANCELED') {
       return null;
     }
 
@@ -66,7 +79,7 @@ export function transitionForCallbackStatus(input: {
       graceEndsAt:
         current.status === 'PAST_DUE' && current.graceEndsAt
           ? current.graceEndsAt
-          : new Date(now.getTime() + BILLING_GRACE_PERIOD_DAYS * DAY_MS),
+          : daysFromNow(now, BILLING_GRACE_PERIOD_DAYS),
       currentPeriodEndsAt: current.currentPeriodEndsAt,
     };
   }

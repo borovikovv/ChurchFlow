@@ -19,7 +19,7 @@ import { ENTITLEMENTS, type CreateOrganizationInvitationInput } from '@churchflo
 import { AuditService } from '../audit/audit.service';
 import { UserLocaleService } from '../../common/locale/user-locale.service';
 import { EmailService } from '../email/email.service';
-import { EntitlementsService } from '../billing/entitlements.service';
+import { EntitlementsService, RESTRICTED_OUTSIDER_MESSAGE } from '../billing/entitlements.service';
 import { InvitationsRepository } from './repositories/invitations.repository';
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -239,7 +239,9 @@ export class InvitationsService {
     // Accepting an invitation creates a member, so it is a members.write action. Neither
     // accept route carries an :organizationId, so the entitlement guard cannot see them;
     // the organization is only known once the invitation is loaded.
-    await this.entitlementsService.assert(invitation.organizationId, ENTITLEMENTS.membersWrite);
+    await this.entitlementsService.assert(invitation.organizationId, ENTITLEMENTS.membersWrite, {
+      message: RESTRICTED_OUTSIDER_MESSAGE,
+    });
 
     if (
       invitation.acceptedAt !== null ||

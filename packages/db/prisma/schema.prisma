@@ -1211,6 +1211,17 @@ model Subscription {
   // Card data never reaches us. Only the LiqPay token and display metadata are stored.
   liqpayOrderId      String?   @unique @map("liqpay_order_id")
   liqpaySubscribedAt DateTime? @map("liqpay_subscribed_at")
+
+  // A checkout the payer has not completed yet. The live subscription keeps charging until the
+  // new one is confirmed, so abandoning the LiqPay page costs nothing. On the first successful
+  // callback this is promoted to liqpayOrderId and the old order is queued for cancellation.
+  pendingLiqpayOrderId String?   @unique @map("pending_liqpay_order_id")
+  pendingAmountMinor   Int?      @map("pending_amount_minor")
+  pendingFxRateUsedAt  DateTime? @map("pending_fx_rate_used_at")
+
+  // An order LiqPay still needs to stop charging. Set when unsubscribe fails or when a
+  // replacement supersedes an old order; the dunning job retries until LiqPay accepts it.
+  pendingUnsubscribeOrderId String? @map("pending_unsubscribe_order_id")
   cardMask           String?   @map("card_mask")
   cardBrand          String?   @map("card_brand")
   cardExpiry         String?   @map("card_expiry")
@@ -1233,6 +1244,7 @@ model Subscription {
   @@index([status, graceEndsAt])
   @@index([status, restrictAfter])
   @@index([exemptGrantedByUserId])
+  @@index([pendingUnsubscribeOrderId])
   @@map("subscriptions")
 }
 

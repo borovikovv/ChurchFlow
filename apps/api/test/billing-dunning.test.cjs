@@ -30,8 +30,9 @@ test('every scheduled query skips organizations with complimentary access', asyn
 
   await repository.listRestrictionDue(NOW);
   await repository.listTransitionWindowOpen(NOW);
+  await repository.listUnconfirmedRenewals(NOW);
 
-  assert.equal(queries.length, 2);
+  assert.equal(queries.length, 3);
   for (const query of queries) {
     assert.equal(query.where.isExempt, false);
   }
@@ -59,13 +60,21 @@ test('deleted and suspended organizations are left out of dunning', async () => 
   assert.deepEqual(queries[0].where.organization, { status: 'ACTIVE', deletedAt: null });
 });
 
-function scheduler({ due = [], open = [] } = {}) {
+function scheduler({ due = [], open = [], unconfirmed = [], pendingStops = [] } = {}) {
   const restricted = [];
+  const pastDue = [];
   const notified = [];
+  const stopped = [];
 
   const repository = {
     listRestrictionDue: async () => due,
     listTransitionWindowOpen: async () => open,
+    listUnconfirmedRenewals: async () => unconfirmed,
+    listPendingUnsubscribes: async () => pendingStops,
+    markPastDue: async (id, graceEndsAt) => {
+      pastDue.push({ id, graceEndsAt });
+      return {};
+    },
     restrict: async (id) => {
       restricted.push(id);
       return {};
@@ -76,6 +85,10 @@ function scheduler({ due = [], open = [] } = {}) {
     notifyOrganizationAdmins: async (input) => {
       notified.push(input);
     },
+    stopSupersededOrder: async (id, orderId) => {
+      stopped.push({ id, orderId });
+      return orderId !== 'stubborn-order';
+    },
   };
 
   const lock = {
@@ -85,7 +98,9 @@ function scheduler({ due = [], open = [] } = {}) {
   return {
     instance: new BillingDunningScheduler(repository, billingService, lock),
     restricted,
+    pastDue,
     notified,
+    stopped,
   };
 }
 
@@ -139,6 +154,8 @@ test('a held lock means the job does no work at all', async () => {
       throw new Error('should not run while another instance holds the lock');
     },
     listTransitionWindowOpen: async () => [],
+    listUnconfirmedRenewals: async () => [],
+    listPendingUnsubscribes: async () => [],
     restrict: async () => ({}),
   };
 
@@ -151,7 +168,58 @@ test('a held lock means the job does no work at all', async () => {
   await instance.handleDunning();
 });
 
-function checkoutService({ subscription }) {
+test('a paid period that ended with no callback is not left running for free', async () => {
+  // Nothing else in the system notices an undelivered callback, so without this the
+  // organization keeps full access forever.
+  const { instance, pastDue, notified } = scheduler({
+    unconfirmed: [
+      {
+        id: 'subscription',
+        organizationId: 'organization',
+        organization: { members: [{ id: 'membership' }] },
+      },
+    ],
+  });
+
+  const result = await instance.run(NOW);
+
+  assert.equal(result.reconciledCount, 1);
+  // PAST_DUE, not RESTRICTED: the payment is unconfirmed rather than known to have failed, so
+  // the organization still gets its full grace period.
+  assert.equal(pastDue[0].id, 'subscription');
+  assert.equal(pastDue[0].graceEndsAt.toISOString(), '2026-09-08T12:00:00.000Z');
+  assert.equal(notified[0].type, 'SUBSCRIPTION_PAYMENT_FAILED');
+});
+
+test('reconciliation allows for a late settlement before acting', async () => {
+  const { repository, queries } = capturingRepository();
+
+  await repository.listUnconfirmedRenewals(NOW);
+
+  assert.equal(queries[0].where.status, 'ACTIVE');
+  assert.equal(queries[0].where.isExempt, false);
+  assert.ok(queries[0].where.currentPeriodEndsAt.lte instanceof Date);
+});
+
+test('a cancellation LiqPay has not accepted is retried until it does', async () => {
+  const { instance, stopped } = scheduler({
+    pendingStops: [
+      { id: 'a', organizationId: 'org-a', pendingUnsubscribeOrderId: 'order-a' },
+      { id: 'b', organizationId: 'org-b', pendingUnsubscribeOrderId: 'stubborn-order' },
+    ],
+  });
+
+  const result = await instance.run(NOW);
+
+  assert.deepEqual(
+    stopped.map((entry) => entry.orderId),
+    ['order-a', 'stubborn-order'],
+  );
+  // Only the one LiqPay accepted is counted as stopped; the other stays queued for next time.
+  assert.equal(result.stoppedCount, 1);
+});
+
+function checkoutService({ subscription, unsubscribeOk = true, onCancel = () => {} }) {
   const started = [];
   const unsubscribed = [];
 
@@ -166,14 +234,18 @@ function checkoutService({ subscription }) {
   });
   liqPayService.unsubscribe = async (orderId) => {
     unsubscribed.push(orderId);
-    return true;
+    return unsubscribeOk;
   };
 
   const service = new BillingService(
     {
       findByOrganizationId: async () => subscription,
-      startSubscription: async (input) => {
+      startPendingCheckout: async (input) => {
         started.push(input);
+        return {};
+      },
+      cancel: async (...args) => {
+        onCancel(args);
         return {};
       },
     },
@@ -202,25 +274,56 @@ test('the hryvnia amount is pinned at subscribe time from the published rate', a
 
   // 4.5 USD at 41.5 UAH/USD = 186.75 UAH = 18675 kopiykas, fixed for the subscription's life.
   assert.equal(started[0].amountMinor, 18_675);
-  assert.equal(started[0].currency, 'UAH');
-  assert.equal(started[0].usdReference, 4.5);
   assert.equal(started[0].actorUserId, 'actor');
   assert.ok(started[0].fxRateUsedAt instanceof Date);
 
+  // Currency and the USD reference are constants, so they land on the live row when the
+  // checkout is paid for rather than being carried through the pending one.
   const payload = JSON.parse(Buffer.from(checkout.data, 'base64').toString('utf8'));
   assert.equal(payload.amount, 186.75);
+  assert.equal(payload.currency, 'UAH');
 });
 
-test('replacing a card cancels the old subscription before creating a new one', async () => {
-  // Otherwise the organization ends up with two live LiqPay subscriptions and pays twice.
+test('offering a replacement card leaves the running subscription charging', async () => {
+  // The payer may close the LiqPay tab. Cancelling the live order first would leave the church
+  // with no subscription, nothing charging it, and no code path that ever notices.
   const { service, started, unsubscribed } = checkoutService({
     subscription: { ...PENDING_SUBSCRIPTION, status: 'ACTIVE', liqpayOrderId: 'old-order' },
   });
 
   await service.startCheckout('organization', 'actor');
 
-  assert.deepEqual(unsubscribed, ['old-order']);
+  assert.deepEqual(unsubscribed, []);
   assert.notEqual(started[0].orderId, 'old-order');
+  // The offered price is held aside; the live one is only replaced once a payment succeeds.
+  assert.ok('amountMinor' in started[0]);
+  assert.equal('currency' in started[0], false);
+});
+
+test('cancelling remembers an unsubscribe LiqPay would not accept', async () => {
+  const canceled = [];
+  const { service } = checkoutService({
+    subscription: { ...PENDING_SUBSCRIPTION, status: 'ACTIVE', liqpayOrderId: 'old-order' },
+    unsubscribeOk: false,
+    onCancel: (args) => canceled.push(args),
+  });
+
+  await service.cancel('organization', 'actor');
+
+  // Otherwise the card keeps being charged behind a subscription we show as cancelled.
+  assert.deepEqual(canceled, [['organization', 'actor', 'old-order']]);
+});
+
+test('cancelling clears the retry when LiqPay accepts it', async () => {
+  const canceled = [];
+  const { service } = checkoutService({
+    subscription: { ...PENDING_SUBSCRIPTION, status: 'ACTIVE', liqpayOrderId: 'old-order' },
+    onCancel: (args) => canceled.push(args),
+  });
+
+  await service.cancel('organization', 'actor');
+
+  assert.deepEqual(canceled, [['organization', 'actor', null]]);
 });
 
 test('an organization with complimentary access is not sent to checkout', async () => {

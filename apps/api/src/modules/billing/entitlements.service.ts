@@ -9,6 +9,18 @@ import {
 } from '@churchflow/shared';
 import { SubscriptionsRepository } from './repositories/subscriptions.repository';
 
+/** Written for someone who can act on it: an owner, an admin, or a platform administrator. */
+const RESTRICTED_MEMBER_MESSAGE =
+  'This organization is restricted because it has no active subscription. Subscribe, or ask a platform administrator to grant complimentary access.';
+
+/**
+ * For refusals aimed at people outside the organization - an invitee, someone claiming a
+ * membership - who can neither subscribe nor request complimentary access, and for whom the
+ * message above would only be confusing.
+ */
+export const RESTRICTED_OUTSIDER_MESSAGE =
+  'This organization is not accepting new members at the moment.';
+
 @Injectable()
 export class EntitlementsService {
   constructor(
@@ -66,16 +78,15 @@ export class EntitlementsService {
   async assert(
     organizationId: string,
     entitlement: Entitlement,
-    now: Date = new Date(),
+    options: { now?: Date; message?: string } = {},
   ): Promise<void> {
-    if (await this.has(organizationId, entitlement, now)) {
+    if (await this.has(organizationId, entitlement, options.now ?? new Date())) {
       return;
     }
 
     throw new ForbiddenException({
       code: ORGANIZATION_RESTRICTED_ERROR_CODE,
-      message:
-        'This organization is restricted because it has no active subscription. Subscribe, or ask a platform administrator to grant complimentary access.',
+      message: options.message ?? RESTRICTED_MEMBER_MESSAGE,
     });
   }
 }

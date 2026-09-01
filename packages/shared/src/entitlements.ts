@@ -15,6 +15,22 @@ export const ENTITLEMENTS = {
 
 export type Entitlement = (typeof ENTITLEMENTS)[keyof typeof ENTITLEMENTS];
 
+/** The same values as a tuple, for the zod enums that describe them on the wire. */
+export const ENTITLEMENT_VALUES = [
+  ENTITLEMENTS.membersRead,
+  ENTITLEMENTS.membersWrite,
+  ENTITLEMENTS.calendarRead,
+  ENTITLEMENTS.calendarWrite,
+  ENTITLEMENTS.prayersRead,
+  ENTITLEMENTS.prayersWrite,
+  ENTITLEMENTS.websiteRead,
+  ENTITLEMENTS.websiteWrite,
+  ENTITLEMENTS.filesRead,
+  ENTITLEMENTS.filesUpload,
+  ENTITLEMENTS.budgetRead,
+  ENTITLEMENTS.budgetWrite,
+] as const;
+
 /**
  * Returned by the API when an action is refused because of the organization's subscription
  * rather than because of who is asking. The web layer branches on this to offer billing
@@ -40,10 +56,17 @@ export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 export const BILLING_TRANSITION_WINDOW_DAYS = 7;
 export const BILLING_GRACE_PERIOD_DAYS = 7;
 
+/**
+ * How long a paid period may be over before silence is treated as a failed charge. LiqPay may
+ * settle a day late, so this is not zero; leaving it unbounded would mean a single undelivered
+ * callback grants an organization free access forever.
+ */
+export const BILLING_RECONCILIATION_GRACE_DAYS = 2;
+
 /** The price is charged in UAH, at the equivalent of this many US dollars per month. */
 export const SUBSCRIPTION_USD_REFERENCE_AMOUNT = 4.5;
 
-export const ALL_ENTITLEMENTS: readonly Entitlement[] = Object.freeze(Object.values(ENTITLEMENTS));
+export const ALL_ENTITLEMENTS: readonly Entitlement[] = Object.freeze([...ENTITLEMENT_VALUES]);
 
 export const READ_ENTITLEMENTS: readonly Entitlement[] = Object.freeze([
   ENTITLEMENTS.membersRead,

@@ -18,24 +18,20 @@ import {
 import { CurrencyRatesService } from '../currency-rates/currency-rates.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EntitlementsService } from './entitlements.service';
-import { LiqPayService } from './liqpay.service';
+import { LiqPayService, type LiqPayCallback } from './liqpay.service';
 import { SubscriptionsRepository } from './repositories/subscriptions.repository';
+import { BILLING_TIME_ZONE, dayKey } from './billing-time';
 import {
   transitionForCallbackStatus,
   type SubscriptionTransitionState,
 } from './subscription-transitions';
 
 const BILLING_CURRENCY = 'UAH';
-const BILLING_TIME_ZONE = 'Europe/Kyiv';
 const NOTIFICATION_PREFERENCE_KEY = 'organizationUpdatesEnabled' as const;
 
 type SubscriptionRecord = NonNullable<
   Awaited<ReturnType<SubscriptionsRepository['findByOrganizationId']>>
 >;
-
-function dayKey(value: Date): string {
-  return value.toISOString().slice(0, 10);
-}
 
 @Injectable()
 export class BillingService {
@@ -68,12 +64,6 @@ export class BillingService {
       throw new ConflictException('This organization already has complimentary access');
     }
 
-    // Replacing a card reuses this path. Cancelling the old LiqPay subscription before writing
-    // the new order id is what stops an organization ending up billed twice.
-    if (subscription.liqpayOrderId) {
-      await this.liqPayService.unsubscribe(subscription.liqpayOrderId);
-    }
-
     const now = new Date();
     const rates = await this.currencyRatesService.getCurrent(now);
     if (!rates) {
@@ -85,13 +75,14 @@ export class BillingService {
     const amountMinor = Math.round(SUBSCRIPTION_USD_REFERENCE_AMOUNT * rates.usdToUah * 100);
     const orderId = randomUUID();
 
-    await this.subscriptionsRepository.startSubscription({
+    // Nothing about the live subscription changes here. Replacing a card goes through the same
+    // path, and cancelling the old order before the new one is paid for would leave an
+    // organization that closes the LiqPay tab with no subscription and nothing charging it.
+    await this.subscriptionsRepository.startPendingCheckout({
       organizationId,
       actorUserId,
       orderId,
       amountMinor,
-      currency: BILLING_CURRENCY,
-      usdReference: SUBSCRIPTION_USD_REFERENCE_AMOUNT,
       fxRateUsedAt: now,
     });
 
@@ -107,11 +98,17 @@ export class BillingService {
   async cancel(organizationId: string, actorUserId: string): Promise<SubscriptionSummary> {
     const subscription = await this.requireSubscription(organizationId);
 
+    // A refused or unreachable unsubscribe is remembered, not swallowed: otherwise the card
+    // keeps being charged every month behind a subscription we are showing as cancelled.
+    let unconfirmedOrderId: string | null = null;
     if (subscription.liqpayOrderId) {
-      await this.liqPayService.unsubscribe(subscription.liqpayOrderId);
+      const stopped = await this.liqPayService.unsubscribe(subscription.liqpayOrderId);
+      if (!stopped) {
+        unconfirmedOrderId = subscription.liqpayOrderId;
+      }
     }
 
-    await this.subscriptionsRepository.cancel(organizationId, actorUserId);
+    await this.subscriptionsRepository.cancel(organizationId, actorUserId, unconfirmedOrderId);
 
     return this.getSummary(organizationId);
   }
@@ -145,30 +142,43 @@ export class BillingService {
       return { ok: true as const };
     }
 
+    const orderId = callback.orderId;
+    const isNewSubscription = subscription.pendingLiqpayOrderId === orderId;
     const transition = transitionForCallbackStatus({
       current: subscription,
       callbackStatus: callback.status ?? '',
       now,
+      isNewSubscription,
     });
+
+    const supersededOrderId =
+      transition?.status === 'ACTIVE' &&
+      isNewSubscription &&
+      subscription.liqpayOrderId &&
+      subscription.liqpayOrderId !== orderId
+        ? subscription.liqpayOrderId
+        : null;
 
     const { duplicate } = await this.subscriptionsRepository.applyCallback({
       subscriptionId: subscription.id,
       organizationId: subscription.organizationId,
-      orderId: callback.orderId,
+      orderId,
       paymentId: callback.paymentId,
       status: callback.status ?? 'unknown',
       previousStatus: subscription.status,
       nextStatus: transition?.status ?? null,
       payload: { data } satisfies Prisma.InputJsonObject,
       update: transition
-        ? {
-            status: transition.status,
-            graceEndsAt: transition.graceEndsAt,
-            currentPeriodEndsAt: transition.currentPeriodEndsAt,
-            ...(transition.status === 'ACTIVE' ? { liqpaySubscribedAt: now } : {}),
-            ...(callback.cardMask ? { cardMask: callback.cardMask } : {}),
-            ...(callback.cardBrand ? { cardBrand: callback.cardBrand } : {}),
-          }
+        ? this.buildCallbackUpdate({
+            pendingAmountMinor: subscription.pendingAmountMinor,
+            pendingFxRateUsedAt: subscription.pendingFxRateUsedAt,
+            transition,
+            callback,
+            orderId,
+            isNewSubscription,
+            supersededOrderId,
+            now,
+          })
         : null,
     });
 
@@ -176,9 +186,69 @@ export class BillingService {
       return { ok: true as const };
     }
 
+    if (supersededOrderId) {
+      await this.stopSupersededOrder(subscription.id, supersededOrderId);
+    }
+
     await this.notifyTransition(subscription, transition);
 
     return { ok: true as const };
+  }
+
+  private buildCallbackUpdate(input: {
+    pendingAmountMinor: number | null;
+    pendingFxRateUsedAt: Date | null;
+    transition: SubscriptionTransitionState;
+    callback: LiqPayCallback;
+    orderId: string;
+    isNewSubscription: boolean;
+    supersededOrderId: string | null;
+    now: Date;
+  }): Prisma.SubscriptionUpdateInput {
+    const { transition, callback, isNewSubscription, now } = input;
+    const update: Prisma.SubscriptionUpdateInput = {
+      status: transition.status,
+      graceEndsAt: transition.graceEndsAt,
+      currentPeriodEndsAt: transition.currentPeriodEndsAt,
+      ...(callback.cardMask ? { cardMask: callback.cardMask } : {}),
+      ...(callback.cardBrand ? { cardBrand: callback.cardBrand } : {}),
+    };
+
+    if (transition.status !== 'ACTIVE') {
+      return update;
+    }
+
+    if (!isNewSubscription) {
+      return { ...update, liqpaySubscribedAt: now };
+    }
+
+    // The checkout has been paid for, so it becomes the live subscription. Its price moves
+    // across with it, and the order it replaces is queued for cancellation rather than being
+    // cancelled hopefully in advance.
+    return {
+      ...update,
+      liqpaySubscribedAt: now,
+      liqpayOrderId: input.orderId,
+      pendingLiqpayOrderId: null,
+      amountMinor: input.pendingAmountMinor,
+      currency: BILLING_CURRENCY,
+      usdReference: new Prisma.Decimal(SUBSCRIPTION_USD_REFERENCE_AMOUNT),
+      fxRateUsedAt: input.pendingFxRateUsedAt,
+      pendingAmountMinor: null,
+      pendingFxRateUsedAt: null,
+      ...(input.supersededOrderId ? { pendingUnsubscribeOrderId: input.supersededOrderId } : {}),
+    };
+  }
+
+  /** Best effort now, retried by the dunning job for as long as the order id is still stored. */
+  async stopSupersededOrder(subscriptionId: string, orderId: string): Promise<boolean> {
+    if (!(await this.liqPayService.unsubscribe(orderId))) {
+      return false;
+    }
+
+    await this.subscriptionsRepository.clearPendingUnsubscribe(subscriptionId);
+
+    return true;
   }
 
   private async notifyTransition(
