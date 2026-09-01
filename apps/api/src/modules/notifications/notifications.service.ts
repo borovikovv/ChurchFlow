@@ -220,6 +220,13 @@ export class NotificationsService {
     return { createdCount: result.createdCount, ...sentCounts };
   }
 
+  async createSubscriptionNotifications(input: CreateNotificationsForMembershipsInput) {
+    const result = await this.notificationsRepository.createNotificationsForMemberships(input);
+    const sentCounts = await this.dispatchToEnabledServices(input, result, input.preferenceKey);
+
+    return { createdCount: result.createdCount, ...sentCounts };
+  }
+
   async createBirthdayDigestNotifications(now = new Date()) {
     const digestDate = formatDateKey(now);
     const groups = await this.notificationsRepository.listBirthdayDigestGroups(now);

@@ -18,6 +18,10 @@ export const NOTIFICATION_TITLE_KEYS = [
   'serviceAssigned',
   'serviceReminder',
   'serviceStarts',
+  'subscriptionPaymentFailed',
+  'subscriptionRenewed',
+  'subscriptionRequired',
+  'subscriptionRestricted',
   'taskAssigned',
   'taskDue',
   'taskReminder',
@@ -52,6 +56,13 @@ export const notificationBodyMessageSchema = z.discriminatedUnion('key', [
     birthdays: z.array(z.string()),
     anniversaries: z.array(z.string()),
   }),
+  z.object({ key: z.literal('subscriptionDeadline'), deadline: z.string(), timeZone: z.string() }),
+  z.object({ key: z.literal('subscriptionRestricted') }),
+  z.object({
+    key: z.literal('subscriptionRenewed'),
+    nextChargeAt: z.string(),
+    timeZone: z.string(),
+  }),
 ]);
 
 export type NotificationBodyMessage = z.infer<typeof notificationBodyMessageSchema>;
@@ -73,6 +84,9 @@ interface NotificationMessageCatalog {
     memberRemoved: (params: { memberName: string }) => string;
     membersImported: (params: { memberCount: number }) => string;
     prayerRequestCreated: (params: { authorName: string; requestTitle: string }) => string;
+    subscriptionDeadline: (params: { deadline: string }) => string;
+    subscriptionRenewed: (params: { nextChargeAt: string }) => string;
+    subscriptionRestricted: () => string;
   };
   platformAdmin: {
     organizationRequestBody: (params: {
@@ -103,6 +117,10 @@ const NOTIFICATION_MESSAGE_CATALOG = {
       serviceAssigned: 'You were assigned to a service',
       serviceReminder: 'Service reminder',
       serviceStarts: 'Service starts',
+      subscriptionPaymentFailed: 'Subscription payment failed',
+      subscriptionRenewed: 'Subscription renewed',
+      subscriptionRequired: 'A subscription is required',
+      subscriptionRestricted: 'Organization is now read-only',
       taskAssigned: 'You were assigned a task',
       taskDue: 'Task due',
       taskReminder: 'Task reminder',
@@ -125,6 +143,12 @@ const NOTIFICATION_MESSAGE_CATALOG = {
         `${String(params.memberCount)} members were imported to the organization.`,
       prayerRequestCreated: (params) =>
         `${params.authorName} asked for prayer: ${params.requestTitle}`,
+      subscriptionDeadline: (params) =>
+        `Full access continues until ${params.deadline}. After that the organization becomes read-only: existing data stays readable, but nothing new can be created.`,
+      subscriptionRenewed: (params) =>
+        `The payment went through. The next charge is on ${params.nextChargeAt}.`,
+      subscriptionRestricted: () =>
+        'The organization is now read-only. Existing members, events, prayer requests, pages and files stay readable; creating and editing resumes as soon as a payment succeeds.',
     },
     platformAdmin: {
       organizationRequestBody: (params) =>
@@ -151,6 +175,10 @@ const NOTIFICATION_MESSAGE_CATALOG = {
       serviceAssigned: 'Вас призначено на служіння',
       serviceReminder: 'Нагадування про служіння',
       serviceStarts: 'Початок служіння',
+      subscriptionPaymentFailed: 'Платіж за підпискою не пройшов',
+      subscriptionRenewed: 'Підписку продовжено',
+      subscriptionRequired: 'Потрібна підписка',
+      subscriptionRestricted: 'Організація перейшла в режим читання',
       taskAssigned: 'Вам призначено завдання',
       taskDue: 'Термін виконання завдання',
       taskReminder: 'Нагадування про завдання',
@@ -173,6 +201,11 @@ const NOTIFICATION_MESSAGE_CATALOG = {
         `До організації імпортовано учасників: ${String(params.memberCount)}.`,
       prayerRequestCreated: (params) =>
         `${params.authorName} просить молитви: ${params.requestTitle}`,
+      subscriptionDeadline: (params) =>
+        `Повний доступ діє до ${params.deadline}. Після цього організація перейде в режим читання: наявні дані лишаться доступними, але створювати нове буде не можна.`,
+      subscriptionRenewed: (params) => `Платіж пройшов. Наступне списання ${params.nextChargeAt}.`,
+      subscriptionRestricted: () =>
+        'Організація перейшла в режим читання. Наявні учасники, події, молитовні потреби, сторінки та файли лишаються доступними; створення й редагування відновляться одразу після успішного платежу.',
     },
     platformAdmin: {
       organizationRequestBody: (params) =>
@@ -236,6 +269,22 @@ export function renderNotificationBody(
         authorName: message.authorName ?? catalog.unknownMember,
         requestTitle: message.requestTitle,
       });
+    case 'subscriptionDeadline':
+      return catalog.bodies.subscriptionDeadline({
+        deadline: formatDateTime(new Date(message.deadline), {
+          intlLocale: catalog.intlLocale,
+          timeZone: message.timeZone,
+        }),
+      });
+    case 'subscriptionRenewed':
+      return catalog.bodies.subscriptionRenewed({
+        nextChargeAt: formatDateTime(new Date(message.nextChargeAt), {
+          intlLocale: catalog.intlLocale,
+          timeZone: message.timeZone,
+        }),
+      });
+    case 'subscriptionRestricted':
+      return catalog.bodies.subscriptionRestricted();
   }
 }
 
