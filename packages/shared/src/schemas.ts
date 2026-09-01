@@ -674,6 +674,13 @@ export const updateOrganizationSchema = z
     message: 'At least one organization field is required',
   });
 
+// Complimentary billing access. Platform-admin only: `isExempt` is never accepted from an
+// organization-scoped payload, so no owner can grant it to themselves. A reason is required
+// because the grant is audit-logged and has to be explicable later.
+export const grantBillingExemptionSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+});
+
 export const listAuditLogsQuerySchema = z.object({
   cursor: uuidSchema.optional(),
   entityType: z.enum(AUDIT_ENTITY_TYPES).optional(),

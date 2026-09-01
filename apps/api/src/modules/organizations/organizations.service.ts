@@ -135,6 +135,34 @@ export class OrganizationsService {
     return organization;
   }
 
+  /**
+   * Only reachable through the platform-admin routes. No organization-scoped endpoint accepts
+   * `isExempt`, so an owner or organization admin has no path to granting it to themselves.
+   */
+  async grantBillingExemption(id: string, actorUserId: string, reason: string) {
+    return this.setBillingExemption(id, actorUserId, reason);
+  }
+
+  async revokeBillingExemption(id: string, actorUserId: string) {
+    return this.setBillingExemption(id, actorUserId, null);
+  }
+
+  private async setBillingExemption(id: string, actorUserId: string, reason: string | null) {
+    try {
+      return await this.organizationsRepository.setBillingExemption({
+        organizationId: id,
+        actorUserId,
+        reason,
+      });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('Organization was not found');
+      }
+
+      throw error;
+    }
+  }
+
   async archive(id: string, actorUserId: string) {
     return this.changeStatus(id, actorUserId, 'ARCHIVE');
   }

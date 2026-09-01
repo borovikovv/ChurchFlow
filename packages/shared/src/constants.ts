@@ -96,6 +96,7 @@ export const AUDIT_ENTITY_TYPES = [
   'OrganizationMemberRelationship',
   'OrganizationRequest',
   'PrayerRequest',
+  'Subscription',
   'User',
 ] as const;
 

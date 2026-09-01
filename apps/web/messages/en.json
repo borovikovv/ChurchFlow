@@ -923,6 +923,7 @@
       "OrganizationMemberRelationship": "Member relationships",
       "OrganizationRequest": "Organization requests",
       "PrayerRequest": "Prayer requests",
+      "Subscription": "Subscription",
       "User": "Users"
     }
   },

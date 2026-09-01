@@ -11,6 +11,7 @@ import type {
   listAuditLogsQuerySchema,
   organizationSchema,
   organizationWebsiteSchema,
+  grantBillingExemptionSchema,
   updateOrganizationSchema,
   rejectOrganizationRequestSchema,
   updateOrganizationMemberRoleSchema,
@@ -84,6 +85,7 @@ export type UserSession = z.infer<typeof userSessionSchema>;
 export type Organization = z.infer<typeof organizationSchema>;
 export type OrganizationWebsite = z.infer<typeof organizationWebsiteSchema>;
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
+export type GrantBillingExemptionInput = z.infer<typeof grantBillingExemptionSchema>;
 export type ListAuditLogsQuery = z.infer<typeof listAuditLogsQuerySchema>;
 export type AuditLogListItem = z.infer<typeof auditLogListItemSchema>;
 export type AuditLogsPage = z.infer<typeof auditLogsPageSchema>;

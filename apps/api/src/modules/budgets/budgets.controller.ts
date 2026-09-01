@@ -15,7 +15,12 @@ import {
   SessionAuthGuard,
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
+import { ENTITLEMENTS } from '@churchflow/shared';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
+import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
 import { BudgetsService } from './budgets.service';
 import {
   BudgetExchangeDto,
@@ -30,7 +35,7 @@ import {
 } from './dto/budget.dto';
 
 @Controller('organizations/:organizationId/budget')
-@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
 export class BudgetsController {
   constructor(private readonly budgetsService: BudgetsService) {}
 
@@ -44,6 +49,7 @@ export class BudgetsController {
   }
 
   @Put('base-currency')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   updateBaseCurrency(
     @Param('organizationId') organizationId: string,
     @Body() body: UpdateBudgetBaseCurrencyDto,
@@ -53,6 +59,7 @@ export class BudgetsController {
   }
 
   @Put('opening-balance')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   updateOpeningBalance(
     @Param('organizationId') organizationId: string,
     @Body() body: UpdateBudgetOpeningBalanceDto,
@@ -66,6 +73,7 @@ export class BudgetsController {
   }
 
   @Post('months')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   createMonth(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateBudgetMonthDto,
@@ -75,6 +83,7 @@ export class BudgetsController {
   }
 
   @Post('categories')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   createCategory(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateBudgetCategoryDto,
@@ -84,6 +93,7 @@ export class BudgetsController {
   }
 
   @Patch('categories/:categoryId')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   updateCategory(
     @Param('organizationId') organizationId: string,
     @Param('categoryId') categoryId: string,
@@ -99,6 +109,7 @@ export class BudgetsController {
   }
 
   @Delete('categories/:categoryId')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   deleteCategory(
     @Param('organizationId') organizationId: string,
     @Param('categoryId') categoryId: string,
@@ -112,6 +123,7 @@ export class BudgetsController {
   }
 
   @Delete('months/:monthId')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   deleteMonth(
     @Param('organizationId') organizationId: string,
     @Param('monthId') monthId: string,
@@ -121,6 +133,7 @@ export class BudgetsController {
   }
 
   @Post('months/:monthId/rows')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   addMonthRow(
     @Param('organizationId') organizationId: string,
     @Param('monthId') monthId: string,
@@ -130,6 +143,7 @@ export class BudgetsController {
   }
 
   @Delete('months/:monthId/rows/last')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   removeLastMonthRow(
     @Param('organizationId') organizationId: string,
     @Param('monthId') monthId: string,
@@ -143,6 +157,7 @@ export class BudgetsController {
   }
 
   @Post('months/:monthId/exchanges')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   createExchange(
     @Param('organizationId') organizationId: string,
     @Param('monthId') monthId: string,
@@ -158,6 +173,7 @@ export class BudgetsController {
   }
 
   @Put('exchanges/:exchangeId')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   updateExchange(
     @Param('organizationId') organizationId: string,
     @Param('exchangeId') exchangeId: string,
@@ -173,6 +189,7 @@ export class BudgetsController {
   }
 
   @Delete('exchanges/:exchangeId')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   deleteExchange(
     @Param('organizationId') organizationId: string,
     @Param('exchangeId') exchangeId: string,
@@ -186,6 +203,7 @@ export class BudgetsController {
   }
 
   @Patch('months/:monthId/rows/:rowIndex/categories/:categoryId')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   updateEntry(
     @Param('organizationId') organizationId: string,
     @Param('monthId') monthId: string,
@@ -205,6 +223,7 @@ export class BudgetsController {
   }
 
   @Patch('months/:monthId/rows/:rowIndex/categories/:categoryId/notes/:field')
+  @RequireEntitlement(ENTITLEMENTS.budgetWrite)
   updateEntryNote(
     @Param('organizationId') organizationId: string,
     @Param('monthId') monthId: string,

@@ -9,8 +9,10 @@ import {
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { Prisma } from '@churchflow/db';
+import { ENTITLEMENTS } from '@churchflow/shared';
 import { UserLocaleService } from '../../common/locale/user-locale.service';
 import { EmailService } from '../email/email.service';
+import { EntitlementsService } from '../billing/entitlements.service';
 import { MembershipClaimsRepository } from './repositories/membership-claims.repository';
 
 const CLAIM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -23,6 +25,7 @@ export class MembershipClaimsService {
     private readonly repository: MembershipClaimsRepository,
     private readonly emailService: EmailService,
     private readonly userLocaleService: UserLocaleService,
+    private readonly entitlementsService: EntitlementsService,
   ) {}
 
   async validate(rawToken: string) {
@@ -108,6 +111,17 @@ export class MembershipClaimsService {
   }
 
   async request(rawToken: string, actorUserId: string) {
+    // Claiming a membership binds a user to it, so it is a members.write action. This route has
+    // no :organizationId, so the claim is resolved first and the entitlement checked before the
+    // repository is allowed to write.
+    const claim = await this.repository.findByTokenHash(this.hash(rawToken));
+    if (claim) {
+      await this.entitlementsService.assert(
+        claim.membership.organizationId,
+        ENTITLEMENTS.membersWrite,
+      );
+    }
+
     try {
       const result = await this.repository.request(this.hash(rawToken), actorUserId);
       if (result.expired) throw new GoneException('Membership claim has expired');

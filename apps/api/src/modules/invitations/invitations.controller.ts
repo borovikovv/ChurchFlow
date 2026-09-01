@@ -1,10 +1,14 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { invitationTokenQuerySchema } from '@churchflow/shared';
+import { ENTITLEMENTS, invitationTokenQuerySchema } from '@churchflow/shared';
 import {
   SessionAuthGuard,
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
+import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CreateOrganizationInvitationDto } from './dto/create-organization-invitation.dto';
 import { InvitationsService } from './invitations.service';
@@ -14,7 +18,8 @@ export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
   @Post('organizations/:organizationId/invitations')
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(SessionAuthGuard, SubscriptionEntitlementGuard)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async create(
     @Param('organizationId') organizationId: string,
@@ -55,7 +60,8 @@ export class InvitationsController {
   }
 
   @Post('organizations/:organizationId/invitations/:id/revoke')
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(SessionAuthGuard, SubscriptionEntitlementGuard)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   async revoke(
     @Param('organizationId') organizationId: string,
     @Param('id') id: string,
@@ -65,7 +71,8 @@ export class InvitationsController {
   }
 
   @Post('organizations/:organizationId/invitations/:id/resend')
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(SessionAuthGuard, SubscriptionEntitlementGuard)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async resend(
     @Param('organizationId') organizationId: string,

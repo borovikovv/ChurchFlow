@@ -15,6 +15,13 @@ export const ENTITLEMENTS = {
 
 export type Entitlement = (typeof ENTITLEMENTS)[keyof typeof ENTITLEMENTS];
 
+/**
+ * Returned by the API when an action is refused because of the organization's subscription
+ * rather than because of who is asking. The web layer branches on this to offer billing
+ * instead of rendering a bare permission error.
+ */
+export const ORGANIZATION_RESTRICTED_ERROR_CODE = 'ORGANIZATION_RESTRICTED';
+
 export const SUBSCRIPTION_STATUSES = [
   'PENDING',
   'ACTIVE',

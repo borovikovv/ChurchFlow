@@ -331,6 +331,7 @@ test('an invitation is written in the invitee locale, not the inviter one', asyn
     },
     { record: async () => undefined },
     localeService,
+    { assert: async () => undefined },
   );
 
   await invitations.createForOrganization(
@@ -362,6 +363,7 @@ test('an invitee without an account falls back to the inviter locale', async () 
     },
     { record: async () => undefined },
     localeService,
+    { assert: async () => undefined },
   );
 
   await invitations.createForOrganization(

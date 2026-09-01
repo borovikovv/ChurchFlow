@@ -732,6 +732,7 @@ test('claimable invitation cannot grant an elevated role', async () => {
     {},
     {},
     createUserLocaleService(),
+    { assert: async () => undefined },
   );
 
   await assert.rejects(
@@ -816,6 +817,7 @@ test('expired invitation cannot be accepted', async () => {
     {},
     {},
     createUserLocaleService(),
+    { assert: async () => undefined },
   );
 
   await assert.rejects(service.accept('raw-invitation-token', 'user'), /Invitation has expired/);
@@ -848,6 +850,7 @@ test('targeted invitation requires the matching Telegram account', async () => {
     {},
     {},
     createUserLocaleService(),
+    { assert: async () => undefined },
   );
 
   await assert.rejects(
@@ -871,6 +874,7 @@ test('invitation email failure still returns the generated link', async () => {
     },
     { record: async () => undefined },
     createUserLocaleService(),
+    { assert: async () => undefined },
   );
 
   const result = await service.createForOrganization(

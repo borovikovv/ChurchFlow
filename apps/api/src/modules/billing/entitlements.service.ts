@@ -1,6 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type Entitlement, hasEntitlement, resolveEntitlements } from '@churchflow/shared';
+import {
+  ORGANIZATION_RESTRICTED_ERROR_CODE,
+  type Entitlement,
+  hasEntitlement,
+  resolveEntitlements,
+} from '@churchflow/shared';
 import { SubscriptionsRepository } from './repositories/subscriptions.repository';
 
 @Injectable()
@@ -39,5 +44,26 @@ export class EntitlementsService {
     const granted = await this.listForOrganization(organizationId, now);
 
     return hasEntitlement(granted, entitlement);
+  }
+
+  /**
+   * Refuses the action when the subscription does not cover it. The message is written for
+   * both audiences at once: an owner reads "subscribe", a platform admin reads "ask for
+   * complimentary access", so neither is left staring at a bare 403.
+   */
+  async assert(
+    organizationId: string,
+    entitlement: Entitlement,
+    now: Date = new Date(),
+  ): Promise<void> {
+    if (await this.has(organizationId, entitlement, now)) {
+      return;
+    }
+
+    throw new ForbiddenException({
+      code: ORGANIZATION_RESTRICTED_ERROR_CODE,
+      message:
+        'This organization is restricted because it has no active subscription. Subscribe, or ask a platform administrator to grant complimentary access.',
+    });
   }
 }
