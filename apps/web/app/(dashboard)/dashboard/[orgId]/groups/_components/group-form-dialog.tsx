@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import type { CreateOrganizationGroupInput, OrganizationGroupListItem } from '@churchflow/shared';
+import type { CreateOrganizationGroupInput, OrganizationGroupBadge } from '@churchflow/shared';
 import {
   createOrganizationGroupSchema,
   DEFAULT_ORGANIZATION_GROUP_COLOR,
@@ -28,7 +28,7 @@ export function GroupFormDialog({
   triggerVariant,
   onSubmit,
 }: {
-  group?: OrganizationGroupListItem;
+  group?: OrganizationGroupBadge & { description: string | null };
   submitLabel: string;
   title: string;
   triggerClassName?: string;

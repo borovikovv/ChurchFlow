@@ -1,16 +1,16 @@
 export const GROUP_COLOR_PRESETS = [
-  '#7C3AED',
-  '#2563EB',
-  '#0D9488',
-  '#B45309',
-  '#4F46E5',
-  '#059669',
-  '#DC2626',
-  '#DB2777',
-  '#EA580C',
-  '#CA8A04',
-  '#475569',
-  '#0EA5E9',
+  '#C4B5FD', // violet
+  '#93C5FD', // blue
+  '#5EEAD4', // teal
+  '#FCD34D', // amber
+  '#A5B4FC', // indigo
+  '#6EE7B7', // emerald
+  '#FCA5A5', // red
+  '#F9A8D4', // pink
+  '#FDBA74', // orange
+  '#FDE047', // yellow
+  '#94A3B8', // slate
+  '#7DD3FC', // sky
 ] as const;
 
 const DARK_FOREGROUND = '#111827';

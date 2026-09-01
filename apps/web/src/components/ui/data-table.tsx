@@ -361,8 +361,9 @@ function createPaginationItems(page: number, pageCount: number): Array<number | 
   return items;
 }
 
+/** A dialog opened from a row stays a DOM descendant of it, so its clicks must not navigate. */
 function isInteractiveTableTarget(target: EventTarget | null): boolean {
   return target instanceof Element
-    ? Boolean(target.closest('a, button, input, select, textarea, summary, details'))
+    ? Boolean(target.closest('a, button, input, select, textarea, summary, details, dialog'))
     : false;
 }

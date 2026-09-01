@@ -223,7 +223,7 @@ export const DEFAULT_ORGANIZATION_GROUP_ICON = 'smallGroup';
 /** Six-digit hex, so the badge foreground can be derived from a predictable channel split. */
 export const ORGANIZATION_GROUP_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
-export const DEFAULT_ORGANIZATION_GROUP_COLOR = '#2563EB';
+export const DEFAULT_ORGANIZATION_GROUP_COLOR = '#93C5FD';
 
 export const ORGANIZATION_GROUP_MEMBER_ROLES = ['LEADER', 'MEMBER'] as const;
 

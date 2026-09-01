@@ -4,19 +4,22 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import type {
   AddOrganizationGroupMembersInput,
+  CreateOrganizationGroupInput,
   OrganizationGroupDetailPayload,
   OrganizationGroupMemberItem,
 } from '@churchflow/shared';
 import { Avatar } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { Button, ButtonLink } from '@/components/ui/button';
 import { GroupBadge } from '@/features/groups/components/group-badge';
-import { organizationMemberRoute } from '@/features/organizations/routes';
+import { organizationGroupsRoute, organizationMemberRoute } from '@/features/organizations/routes';
 import Link from 'next/link';
 import {
   addGroupMembersAction,
   removeGroupMemberAction,
+  updateGroupAction,
   updateGroupMemberAction,
 } from '../../actions';
+import { GroupFormDialog } from '../../_components/group-form-dialog';
 import { GroupMemberFormDialog } from './group-member-form-dialog';
 
 export function GroupDetailManager({
@@ -27,6 +30,7 @@ export function GroupDetailManager({
   organizationId: string;
 }) {
   const t = useTranslations('groups');
+  const commonT = useTranslations('common');
   const [group, setGroup] = useState(initialPayload.group);
   const [error, setError] = useState<string | null>(null);
   const canManage = initialPayload.canManage;
@@ -35,6 +39,17 @@ export function GroupDetailManager({
     (candidate) => !memberIds.has(candidate.id),
   );
   const leaders = group.members.filter((member) => member.role === 'LEADER');
+
+  const updateGroup = async (updates: CreateOrganizationGroupInput) => {
+    const result = await updateGroupAction({ organizationId, groupId: group.id, group: updates });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+
+    setError(null);
+    setGroup(result.group);
+  };
 
   const addMember = async (member: AddOrganizationGroupMembersInput['members'][number]) => {
     const result = await addGroupMembersAction({
@@ -84,6 +99,28 @@ export function GroupDetailManager({
 
   return (
     <div className="stack">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <ButtonLink
+          className="w-full sm:w-auto"
+          href={organizationGroupsRoute(organizationId)}
+          variant="secondary"
+        >
+          {t('backToGroups')}
+        </ButtonLink>
+        {canManage ? (
+          <GroupFormDialog
+            group={group}
+            title={t('editTitle')}
+            triggerLabel={t('edit')}
+            triggerVariant="secondary"
+            submitLabel={commonT('save')}
+            onSubmit={(updates, closeDialog) => {
+              void updateGroup(updates);
+              closeDialog();
+            }}
+          />
+        ) : null}
+      </div>
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <GroupBadge group={group} />
