@@ -2,7 +2,7 @@ import type { SelectOption } from '@/components/forms/form-select';
 
 export interface MembersFilterParams {
   access?: string | undefined;
-  ministries?: string | undefined;
+  groups?: string | undefined;
   pageSize?: string | undefined;
   search?: string | undefined;
   tab?: string | undefined;
@@ -12,8 +12,8 @@ export interface MembersFilterParams {
 export interface MembersFiltersProps {
   accessOptions: SelectOption[];
   accessValue: string;
-  ministryOptions: SelectOption[];
-  ministryValue: string[];
+  groupOptions: SelectOption[];
+  groupValue: string[];
   preserved: MembersFilterParams;
   showAccessFilter: boolean;
   typeOptions: SelectOption[];

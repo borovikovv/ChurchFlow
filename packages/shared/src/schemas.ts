@@ -15,8 +15,13 @@ import {
   BUDGET_ENTRY_FIELDS,
   BUDGET_GROUPS,
   DEFAULT_MEMBER_PAGE_SIZE,
+  ORGANIZATION_GROUP_COLOR_PATTERN,
+  ORGANIZATION_GROUP_DESCRIPTION_MAX_LENGTH,
+  ORGANIZATION_GROUP_ICONS,
+  ORGANIZATION_GROUP_MEMBER_ROLES,
+  ORGANIZATION_GROUP_NAME_MAX_LENGTH,
+  ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH,
   MEMBER_ACCESS_METHODS,
-  MEMBER_MINISTRIES,
   MEMBER_TABS,
   MEMBER_PAGE_SIZE_OPTIONS,
   MEMBER_CSV_TEMPLATE_COLUMNS,
@@ -86,15 +91,21 @@ export const organizationMembersAccessFilterSchema = z.enum([
 ]);
 export const organizationMembersTypeFilterSchema = z.enum(['all', 'member', 'visitor']);
 export const organizationMembersTabSchema = z.enum(MEMBER_TABS);
+export const organizationGroupIconSchema = z.enum(ORGANIZATION_GROUP_ICONS);
+export const organizationGroupMemberRoleSchema = z.enum(ORGANIZATION_GROUP_MEMBER_ROLES);
+export const organizationGroupColorSchema = z
+  .string()
+  .trim()
+  .regex(ORGANIZATION_GROUP_COLOR_PATTERN, 'Color must be a hex value such as #2563EB')
+  .transform((value) => value.toUpperCase());
+export const organizationGroupIdsSchema = z.array(uuidSchema);
 export const memberAccessMethodSchema = z.enum(MEMBER_ACCESS_METHODS);
-export const memberMinistrySchema = z.enum(MEMBER_MINISTRIES);
-export const memberMinistriesSchema = z.array(memberMinistrySchema);
 
-const memberMinistriesQuerySchema = z.preprocess((value) => {
+const organizationGroupIdsQuerySchema = z.preprocess((value) => {
   if (Array.isArray(value)) return value.flatMap((item) => String(item).split(','));
   if (typeof value === 'string') return value.split(',').filter(Boolean);
   return value;
-}, memberMinistriesSchema.default([]));
+}, organizationGroupIdsSchema.default([]));
 
 export const listOrganizationMembersQuerySchema = z.object({
   access: organizationMembersAccessFilterSchema.default('all'),
@@ -103,7 +114,7 @@ export const listOrganizationMembersQuerySchema = z.object({
   tab: organizationMembersTabSchema.default('active'),
   type: organizationMembersTypeFilterSchema.default('all'),
   search: z.string().trim().max(100).default(''),
-  ministries: memberMinistriesQuerySchema,
+  groups: organizationGroupIdsQuerySchema,
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce
     .number()
@@ -587,6 +598,50 @@ export const createMemberPhotoUploadSchema = z.object({
 
 export const confirmMemberPhotoUploadSchema = z.object({ assetId: uuidSchema });
 
+export const organizationGroupBadgeSchema = z.object({
+  id: uuidSchema,
+  name: z.string(),
+  icon: organizationGroupIconSchema,
+  color: z.string(),
+});
+
+export const createOrganizationGroupSchema = z.object({
+  name: z.string().trim().min(2).max(ORGANIZATION_GROUP_NAME_MAX_LENGTH),
+  description: nullableTrimmedString(ORGANIZATION_GROUP_DESCRIPTION_MAX_LENGTH),
+  icon: organizationGroupIconSchema,
+  color: organizationGroupColorSchema,
+});
+
+export const updateOrganizationGroupSchema = z
+  .object({
+    name: z.string().trim().min(2).max(ORGANIZATION_GROUP_NAME_MAX_LENGTH).optional(),
+    description: nullableTrimmedString(ORGANIZATION_GROUP_DESCRIPTION_MAX_LENGTH),
+    icon: organizationGroupIconSchema.optional(),
+    color: organizationGroupColorSchema.optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'At least one group field is required',
+  });
+
+const organizationGroupMemberInputSchema = z.object({
+  membershipId: uuidSchema,
+  role: organizationGroupMemberRoleSchema.default('MEMBER'),
+  responsibility: nullableTrimmedString(ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH),
+});
+
+export const addOrganizationGroupMembersSchema = z.object({
+  members: z.array(organizationGroupMemberInputSchema).min(1).max(200),
+});
+
+export const updateOrganizationGroupMemberSchema = z
+  .object({
+    role: organizationGroupMemberRoleSchema.optional(),
+    responsibility: nullableTrimmedString(ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'At least one membership field is required',
+  });
+
 export const createManualOrganizationMemberSchema = z.object({
   displayName: z.string().trim().min(2).max(160),
   email: nullableEmail,
@@ -598,7 +653,7 @@ export const createManualOrganizationMemberSchema = z.object({
   biography: nullableTrimmedString(5000),
   familyNotes: nullableTrimmedString(3000),
   role: z.enum(['MEMBER', 'VIEWER']).default('MEMBER'),
-  ministries: memberMinistriesSchema.optional(),
+  groups: organizationGroupIdsSchema.optional(),
 });
 
 export const importOrganizationMembersCsvResultSchema = z.object({
@@ -617,7 +672,7 @@ export const importOrganizationMembersCsvResultSchema = z.object({
       id: uuidSchema,
       role: organizationRoleSchema,
       source: membershipSourceSchema,
-      ministries: memberMinistriesSchema,
+      groups: z.array(organizationGroupBadgeSchema),
       profile: z.object({
         displayName: z.string(),
         email: z.string().nullable(),
@@ -640,7 +695,7 @@ export const updateOrganizationMemberProfileSchema = z
     anniversary: nullablePastOrTodayDate,
     biography: nullableTrimmedString(5000),
     familyNotes: nullableTrimmedString(3000),
-    ministries: memberMinistriesSchema.optional(),
+    groups: organizationGroupIdsSchema.optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: 'At least one profile field is required',

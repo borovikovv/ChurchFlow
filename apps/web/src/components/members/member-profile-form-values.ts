@@ -14,6 +14,6 @@ export function memberProfileFormValues(
     anniversary: member.profile.anniversary?.slice(0, 10) ?? null,
     biography: member.profile.biography,
     familyNotes: member.profile.familyNotes,
-    ministries: [...member.ministries],
+    groups: member.groups.map((group) => group.id),
   };
 }

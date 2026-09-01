@@ -91,6 +91,7 @@ export const AUDIT_ENTITY_TYPES = [
   'MediaAsset',
   'MembershipClaim',
   'Organization',
+  'OrganizationGroup',
   'OrganizationInvitation',
   'OrganizationMember',
   'OrganizationMemberRelationship',
@@ -192,33 +193,48 @@ export const DEFAULT_BUDGET_CATEGORIES = [
   { group: BUDGET_GROUP.other, type: BUDGET_CATEGORY_TYPE.expense, name: 'Other expenses' },
 ] as const;
 
-export const MEMBER_MINISTRIES = [
-  'PREACHING',
-  'WORSHIP',
-  'DEACON',
-  'MINISTER',
-  'TEACHER',
-  'MISSIONARY',
-  'EVANGELIST',
-  'CHAPLAIN',
-  'CHILDREN',
-  'YOUTH',
-  'MEDIA',
+export const ORGANIZATION_GROUP_ICONS = [
+  'preaching',
+  'worship',
+  'choir',
+  'prayer',
+  'teaching',
+  'children',
+  'youth',
+  'women',
+  'men',
+  'family',
+  'missions',
+  'evangelism',
+  'media',
+  'sound',
+  'hospitality',
+  'ushers',
+  'charity',
+  'smallGroup',
+  'deacons',
+  'leadership',
+  'finance',
+  'transport',
 ] as const;
 
-export const MEMBER_MINISTRY = {
-  preaching: 'PREACHING',
-  worship: 'WORSHIP',
-  deacon: 'DEACON',
-  minister: 'MINISTER',
-  teacher: 'TEACHER',
-  missionary: 'MISSIONARY',
-  evangelist: 'EVANGELIST',
-  chaplain: 'CHAPLAIN',
-  children: 'CHILDREN',
-  youth: 'YOUTH',
-  media: 'MEDIA',
+export const DEFAULT_ORGANIZATION_GROUP_ICON = 'smallGroup';
+
+/** Six-digit hex, so the badge foreground can be derived from a predictable channel split. */
+export const ORGANIZATION_GROUP_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+export const DEFAULT_ORGANIZATION_GROUP_COLOR = '#93C5FD';
+
+export const ORGANIZATION_GROUP_MEMBER_ROLES = ['LEADER', 'MEMBER'] as const;
+
+export const ORGANIZATION_GROUP_MEMBER_ROLE = {
+  leader: 'LEADER',
+  member: 'MEMBER',
 } as const;
+
+export const ORGANIZATION_GROUP_NAME_MAX_LENGTH = 80;
+export const ORGANIZATION_GROUP_DESCRIPTION_MAX_LENGTH = 500;
+export const ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH = 200;
 
 export const MEMBER_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 export const DEFAULT_MEMBER_PAGE_SIZE = 10;
@@ -230,7 +246,7 @@ export const MEMBER_CSV_TEMPLATE_COLUMNS = [
   'email',
   'phone',
   'role',
-  'ministries',
+  'groups',
   'memberSince',
   'birthday',
   'anniversary',

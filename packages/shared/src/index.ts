@@ -3,6 +3,7 @@ export * from './budget-totals.js';
 export * from './constants.js';
 export * from './env.js';
 export * from './locale.js';
+export * from './member-csv-template.js';
 export * from './passkeys.js';
 export * from './schemas.js';
 export * from './types.js';

@@ -13,6 +13,7 @@ import { OrganizationsModule } from './modules/organizations/organizations.modul
 import { OrganizationRequestsModule } from './modules/organization-requests/organization-requests.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
+import { GroupsModule } from './modules/groups/groups.module';
 import { WebsitesModule } from './modules/websites/websites.module';
 import { PagesModule } from './modules/pages/pages.module';
 import { MediaModule } from './modules/media/media.module';
@@ -60,6 +61,7 @@ import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.
     OrganizationRequestsModule,
     OrganizationsModule,
     MembershipsModule,
+    GroupsModule,
     MembershipClaimsModule,
     CalendarEventsModule,
     PrayerRequestsModule,

@@ -1,6 +1,6 @@
 import type { Route } from 'next';
 import type { ReactNode, RefObject } from 'react';
-import type { MemberMinistry } from '@churchflow/shared';
+import type { OrganizationGroupBadge } from '@churchflow/shared';
 import type { MemberActiveClaim } from './member-access.types';
 
 export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
@@ -51,7 +51,7 @@ export interface EditableMember {
   role: OrganizationRole;
   status: OrganizationMemberStatus;
   accountState: string;
-  ministries: MemberMinistry[];
+  groups: OrganizationGroupBadge[];
   profile: {
     displayName: string;
     email: string | null;
@@ -91,13 +91,14 @@ export type DeleteRelationshipAction = (
 ) => Promise<{ ok: boolean; error?: string }>;
 
 export type MemberProfileUpdate = Partial<EditableMember['profile']> & {
-  ministries?: MemberMinistry[];
+  groups?: string[];
 };
 
 export interface EditMemberDialogProps {
   member: EditableMember;
   organizationId: string;
   action: ProfileUpdateAction;
+  groupOptions: OrganizationGroupBadge[];
   memberCandidates: Array<{ id: string; displayName: string }>;
   createRelationship: CreateRelationshipAction;
   deleteRelationship: DeleteRelationshipAction;
@@ -141,6 +142,7 @@ export interface MemberActionsProps {
   removeMember: MemberLifecycleAction;
   restoreMember: MemberLifecycleAction;
   claimAction: FormAction;
+  groupOptions: OrganizationGroupBadge[];
   memberCandidates: Array<{ id: string; displayName: string }>;
   viewHref?: Route | undefined;
   createRelationship: CreateRelationshipAction;

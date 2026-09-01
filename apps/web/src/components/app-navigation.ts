@@ -5,6 +5,7 @@ import type { AppNavGroup } from '@/lib/nav-groups';
 import {
   BudgetIcon,
   CalendarIcon,
+  GroupsIcon,
   HomeIcon,
   MembersIcon,
   PrayerIcon,
@@ -14,6 +15,7 @@ import {
 import {
   organizationBudgetRoute,
   organizationCalendarRoute,
+  organizationGroupsRoute,
   organizationHomeRoute,
   organizationMembersRoute,
   organizationPrayerRequestsRoute,
@@ -33,6 +35,7 @@ export interface AppNavItem {
 export interface DashboardNavigationLabels {
   budget: string;
   calendar: string;
+  groups: string;
   home: string;
   members: string;
   prayerRequests: string;
@@ -77,6 +80,12 @@ export function dashboardNavigationItems(
       href: organizationMembersRoute(organizationId),
       label: access.labels.members,
       icon: MembersIcon,
+      group: 'primary',
+    },
+    {
+      href: organizationGroupsRoute(organizationId),
+      label: access.labels.groups,
+      icon: GroupsIcon,
       group: 'primary',
     },
     {

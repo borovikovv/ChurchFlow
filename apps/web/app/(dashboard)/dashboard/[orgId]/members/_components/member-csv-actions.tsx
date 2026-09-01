@@ -1,6 +1,6 @@
 'use client';
 
-import { MEMBER_CSV_TEMPLATE_COLUMNS } from '@churchflow/shared';
+import { createMembersCsvTemplate } from '@churchflow/shared';
 import { useTranslations } from 'next-intl';
 import { useRef, useTransition } from 'react';
 import { toast } from 'react-toastify';
@@ -95,39 +95,13 @@ export function MemberCsvActions({
 }
 
 function downloadTemplate() {
-  const blob = new Blob([createTemplateCsv()], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob([createMembersCsvTemplate()], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = 'churchflow-members-template.csv';
   link.click();
   URL.revokeObjectURL(url);
-}
-
-function createTemplateCsv(): string {
-  return [
-    MEMBER_CSV_TEMPLATE_COLUMNS.join(','),
-    [
-      'Jane Doe',
-      'jane@example.com',
-      '+380501112233',
-      'MEMBER',
-      'WORSHIP;TEACHER',
-      '2024-01-14',
-      '1991-05-20',
-      '',
-      'Small group leader',
-      '',
-      '',
-    ]
-      .map(escapeCsvValue)
-      .join(','),
-  ].join('\n');
-}
-
-function escapeCsvValue(value: string): string {
-  if (!/[",\n\r]/.test(value)) return value;
-  return `"${value.replaceAll('"', '""')}"`;
 }
 
 function PlusIcon() {

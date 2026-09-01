@@ -15,7 +15,6 @@ import { GiveMemberAccessDialog } from './give-member-access-dialog';
 import { MemberPhotoField, validateMemberPhoto } from './member-photo-upload';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  MEMBER_MINISTRIES,
   updateOrganizationMemberProfileSchema,
   type UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
@@ -54,6 +53,7 @@ export function EditMemberDialog({
   member,
   organizationId,
   action,
+  groupOptions,
   memberCandidates,
   createRelationship,
   deleteRelationship,
@@ -69,6 +69,7 @@ export function EditMemberDialog({
 }: EditMemberDialogProps) {
   const t = useTranslations('members');
   const commonT = useTranslations('common');
+  const groupsT = useTranslations('groups');
   const formId = useId();
   const [photo, setPhoto] = useState<File | null>(null);
   const [savedPhotoUrl, setSavedPhotoUrl] = useState(member.profile.photoUrl);
@@ -200,7 +201,7 @@ export function EditMemberDialog({
         ...(values.anniversary !== undefined ? { anniversary: values.anniversary } : {}),
         ...(values.biography !== undefined ? { biography: values.biography } : {}),
         ...(values.familyNotes !== undefined ? { familyNotes: values.familyNotes } : {}),
-        ...(values.ministries !== undefined ? { ministries: values.ministries } : {}),
+        ...(values.groups !== undefined ? { groups: values.groups } : {}),
         photoUrl: nextPhotoUrl,
       });
       onRelationshipsChanged?.(savedRelationships);
@@ -327,19 +328,21 @@ export function EditMemberDialog({
               error={errors.familyNotes?.message}
               {...register('familyNotes')}
             />
-            <fieldset className="flex flex-col gap-2 rounded-md border border-[var(--line)] p-3">
-              <legend className="px-1 font-semibold">{t('ministries')}</legend>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {MEMBER_MINISTRIES.map((ministry) => (
-                  <FormCheckbox
-                    key={ministry}
-                    label={t(`ministry.${ministry}`)}
-                    value={ministry}
-                    {...register('ministries')}
-                  />
-                ))}
-              </div>
-            </fieldset>
+            {groupOptions.length > 0 ? (
+              <fieldset className="flex flex-col gap-2 rounded-md border border-[var(--line)] p-3">
+                <legend className="px-1 font-semibold">{groupsT('title')}</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {groupOptions.map((group) => (
+                    <FormCheckbox
+                      key={group.id}
+                      label={group.name}
+                      value={group.id}
+                      {...register('groups')}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
             {canManageRelationships ? (
               <fieldset className="flex flex-col gap-3 border-t border-[var(--line)] pt-4">
                 <legend className="pr-2 font-semibold">{t('familyRelationships')}</legend>
@@ -694,6 +697,7 @@ export function MemberActions({
   removeMember,
   restoreMember,
   claimAction,
+  groupOptions,
   memberCandidates,
   viewHref,
   createRelationship,
@@ -745,6 +749,7 @@ export function MemberActions({
           member={member}
           organizationId={organizationId}
           action={updateProfile}
+          groupOptions={groupOptions}
           memberCandidates={memberCandidates}
           createRelationship={createRelationship}
           deleteRelationship={deleteRelationship}

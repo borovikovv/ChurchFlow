@@ -216,6 +216,8 @@ enum BudgetCurrency {
   EUR
 }
 
+/// Superseded by OrganizationGroup. Kept for one release so the groups migration can be
+/// reverted without restoring a backup; dropped by a follow-up migration.
 enum MemberMinistry {
   PREACHING
   WORSHIP
@@ -228,6 +230,36 @@ enum MemberMinistry {
   CHILDREN
   YOUTH
   MEDIA
+}
+
+enum OrganizationGroupIcon {
+  preaching
+  worship
+  choir
+  prayer
+  teaching
+  children
+  youth
+  women
+  men
+  family
+  missions
+  evangelism
+  media
+  sound
+  hospitality
+  ushers
+  charity
+  smallGroup
+  deacons
+  leadership
+  finance
+  transport
+}
+
+enum OrganizationGroupMemberRole {
+  LEADER
+  MEMBER
 }
 
 model User {
@@ -261,6 +293,7 @@ model User {
   auditLogs                       AuditLog[]
   featureFlags                    FeatureFlag[]
   createdCalendarEvents           CalendarEvent[]                 @relation("CalendarEventCreator")
+  createdOrganizationGroups       OrganizationGroup[]             @relation("OrganizationGroupCreator")
   calendarPreferences             CalendarPreference[]
   authoredPrayerRequests          PrayerRequest[]                 @relation("PrayerRequestAuthor")
   archivedPrayerRequests          PrayerRequest[]                 @relation("PrayerRequestArchiver")
@@ -398,6 +431,7 @@ model Organization {
   calendarEvents          CalendarEvent[]
   calendarPreferences     CalendarPreference[]
   memberMinistries        OrganizationMemberMinistry[]
+  groups                  OrganizationGroup[]
   preacherQueue           PreacherQueueEntry[]
   calendarServices        CalendarServiceDetails[]
   serviceParticipants     CalendarServiceParticipant[]
@@ -442,11 +476,13 @@ model OrganizationMember {
   assignedCalendarTasks CalendarEventAssignee[]
   serviceParticipants   CalendarServiceParticipant[]
   ministries            OrganizationMemberMinistry[]
+  groups                OrganizationGroupMember[]
   preacherQueueEntries  PreacherQueueEntry[]
   prayerRequests        PrayerRequest[]                  @relation("PrayerRequestMembershipAuthor")
   notifications         Notification[]
 
   @@unique([organizationId, userId])
+  @@unique([id, organizationId])
   @@index([organizationId])
   @@index([userId])
   @@index([organizationId, role])
@@ -502,6 +538,7 @@ model OrganizationMemberRelationship {
   @@map("organization_member_relationships")
 }
 
+/// Superseded by OrganizationGroupMember. See the note on MemberMinistry.
 model OrganizationMemberMinistry {
   organizationId String         @map("organization_id") @db.Uuid
   membershipId   String         @map("membership_id") @db.Uuid
@@ -515,6 +552,48 @@ model OrganizationMemberMinistry {
   @@index([organizationId, ministry])
   @@index([organizationId, membershipId], map: "organization_member_ministries_organization_id_membership_id_id")
   @@map("organization_member_ministries")
+}
+
+model OrganizationGroup {
+  id              String                @id @default(uuid()) @db.Uuid
+  organizationId  String                @map("organization_id") @db.Uuid
+  /// Citext, so "Youth" and "youth" cannot coexist and CSV import can match a name case-insensitively.
+  name            String                @db.Citext
+  description     String?
+  icon            OrganizationGroupIcon
+  color           String                @db.VarChar(7)
+  isSystem        Boolean               @default(false) @map("is_system")
+  createdByUserId String?               @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?                     @relation("OrganizationGroupCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  members      OrganizationGroupMember[]
+
+  @@unique([organizationId, name])
+  @@unique([id, organizationId])
+  @@index([organizationId])
+  @@index([createdByUserId])
+  @@map("organization_groups")
+}
+
+model OrganizationGroupMember {
+  organizationId String                      @map("organization_id") @db.Uuid
+  groupId        String                      @map("group_id") @db.Uuid
+  membershipId   String                      @map("membership_id") @db.Uuid
+  role           OrganizationGroupMemberRole @default(MEMBER)
+  responsibility String?
+  createdAt      DateTime                    @default(now()) @map("created_at")
+
+  group      OrganizationGroup  @relation(fields: [groupId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  membership OrganizationMember @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@id([groupId, membershipId])
+  @@index([organizationId, groupId], map: "organization_group_members_organization_id_group_id_idx")
+  @@index([organizationId, membershipId], map: "organization_group_members_organization_id_membership_id_idx")
+  @@index([membershipId])
+  @@map("organization_group_members")
 }
 
 model MembershipClaim {
@@ -1033,17 +1112,17 @@ model BudgetMonth {
 }
 
 model BudgetEntry {
-  id         String   @id @default(uuid()) @db.Uuid
-  monthId        String @map("month_id") @db.Uuid
-  categoryId     String @map("category_id") @db.Uuid
-  organizationId String @map("organization_id") @db.Uuid
-  rowIndex   Int      @default(0) @map("row_index")
-  amountUah  Decimal  @default(0) @map("amount_uah") @db.Decimal(12, 2)
-  amountUsd  Decimal  @default(0) @map("amount_usd") @db.Decimal(12, 2)
-  amountEur  Decimal  @default(0) @map("amount_eur") @db.Decimal(12, 2)
-  note       String?
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid()) @db.Uuid
+  monthId        String   @map("month_id") @db.Uuid
+  categoryId     String   @map("category_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  rowIndex       Int      @default(0) @map("row_index")
+  amountUah      Decimal  @default(0) @map("amount_uah") @db.Decimal(12, 2)
+  amountUsd      Decimal  @default(0) @map("amount_usd") @db.Decimal(12, 2)
+  amountEur      Decimal  @default(0) @map("amount_eur") @db.Decimal(12, 2)
+  note           String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   month    BudgetMonth       @relation(fields: [monthId, organizationId], references: [id, organizationId], onDelete: Cascade)
   category BudgetCategory    @relation(fields: [categoryId, organizationId], references: [id, organizationId], onDelete: Cascade)
