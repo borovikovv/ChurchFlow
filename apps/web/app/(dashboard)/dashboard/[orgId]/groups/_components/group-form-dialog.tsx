@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import type { CreateOrganizationGroupInput, OrganizationGroupBadge } from '@churchflow/shared';
 import {
@@ -38,7 +38,7 @@ export function GroupFormDialog({
 }) {
   const t = useTranslations('groups');
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const formId = `group-form-${group?.id ?? 'new'}`;
+  const formId = useId();
   const defaultValues = {
     name: group?.name ?? '',
     description: group?.description ?? '',
