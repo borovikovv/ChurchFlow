@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import type {
   OrganizationMembersAccessFilter,
-  MemberMinistry,
   OrganizationMembersTab,
   OrganizationMembersTypeFilter,
 } from '@churchflow/shared';
@@ -28,7 +27,7 @@ export function useRefreshMembers(organizationId: string): () => void {
 export function useMembersQuery({
   access,
   initialPayload,
-  ministries,
+  groups,
   organizationId,
   page,
   pageSize,
@@ -38,7 +37,7 @@ export function useMembersQuery({
 }: {
   access: OrganizationMembersAccessFilter;
   initialPayload: MembersPayload;
-  ministries: MemberMinistry[];
+  groups: string[];
   organizationId: string;
   page: number;
   pageSize: number;
@@ -47,7 +46,7 @@ export function useMembersQuery({
   type: OrganizationMembersTypeFilter;
 }) {
   const queryClient = useQueryClient();
-  const ministriesKey = ministries.join(',');
+  const groupsKey = groups.join(',');
   const queryKey = useMemo(
     () =>
       [
@@ -55,12 +54,12 @@ export function useMembersQuery({
         access,
         type,
         search,
-        ministriesKey,
+        groupsKey,
         page,
         pageSize,
         tab,
       ] as const,
-    [access, ministriesKey, organizationId, page, pageSize, search, tab, type],
+    [access, groupsKey, organizationId, page, pageSize, search, tab, type],
   );
   const query = useQuery({
     queryKey,
@@ -68,7 +67,7 @@ export function useMembersQuery({
       const result = await loadMembersAction({
         organizationId,
         access,
-        ministries,
+        groups,
         page,
         pageSize,
         tab,

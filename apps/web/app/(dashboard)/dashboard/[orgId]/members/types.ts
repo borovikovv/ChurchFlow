@@ -1,4 +1,4 @@
-import type { MemberMinistry } from '@churchflow/shared';
+import type { OrganizationGroupBadge } from '@churchflow/shared';
 
 export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 export type OrganizationMemberStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'REMOVED';
@@ -23,7 +23,7 @@ export interface OrganizationMember {
   role: OrganizationRole;
   status: OrganizationMemberStatus;
   source: string;
-  ministries: MemberMinistry[];
+  groups: OrganizationGroupBadge[];
   accountState: AccountState;
   claimedAt: string | null;
   archivedAt: string | null;
@@ -69,6 +69,7 @@ export interface PendingInvitation {
 export interface MembersPayload {
   actorRole: OrganizationRole | null;
   actorMembershipId: string | null;
+  groups: OrganizationGroupBadge[];
   memberCandidates: Array<{ id: string; displayName: string }>;
   pagination: {
     page: number;

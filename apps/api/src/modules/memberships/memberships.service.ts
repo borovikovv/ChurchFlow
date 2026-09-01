@@ -16,7 +16,6 @@ import type {
   CreateOrganizationMemberRelationshipInput,
   CreateManualOrganizationMemberInput,
   ImportOrganizationMembersCsvResult,
-  MemberMinistry,
   OrganizationMembersAccessFilter,
   OrganizationMembersTab,
   OrganizationMembersTypeFilter,
@@ -40,28 +39,30 @@ export class MembershipsService {
     tab: OrganizationMembersTab,
     type: OrganizationMembersTypeFilter,
     search: string,
-    ministries: MemberMinistry[],
+    groups: string[],
     page: number,
     pageSize: number,
     membershipId?: string,
     cursor?: string,
   ) {
-    const [membersPage, pendingInvitations, actorMembership] = await Promise.all([
-      this.membershipsRepository.listForOrganization(
-        organizationId,
-        access,
-        tab,
-        type,
-        search,
-        ministries,
-        page,
-        pageSize,
-        membershipId,
-        cursor,
-      ),
-      this.invitationsRepository.listPendingForOrganization(organizationId),
-      this.membershipsRepository.findActiveMembership(organizationId, actorUserId),
-    ]);
+    const [membersPage, pendingInvitations, actorMembership, organizationGroups] =
+      await Promise.all([
+        this.membershipsRepository.listForOrganization(
+          organizationId,
+          access,
+          tab,
+          type,
+          search,
+          groups,
+          page,
+          pageSize,
+          membershipId,
+          cursor,
+        ),
+        this.invitationsRepository.listPendingForOrganization(organizationId),
+        this.membershipsRepository.findActiveMembership(organizationId, actorUserId),
+        this.membershipsRepository.listGroups(organizationId),
+      ]);
     const { candidates, counts, members, nextCursor, page: currentPage, total } = membersPage;
 
     const canManageProfiles =
@@ -78,6 +79,7 @@ export class MembershipsService {
         nextCursor,
       },
       counts,
+      groups: organizationGroups,
       memberCandidates: candidates.map((candidate) => ({
         id: candidate.id,
         displayName:
@@ -106,7 +108,7 @@ export class MembershipsService {
           role: member.role,
           status: member.status,
           source: member.source,
-          ministries: member.ministries.map(({ ministry }) => ministry),
+          groups: member.groups.map(({ group }) => group),
           claimedAt: member.claimedAt,
           accountState,
           profile: member.profile
@@ -241,6 +243,9 @@ export class MembershipsService {
       if (error instanceof Error && error.message === 'ACTOR_CANNOT_MANAGE_MEMBERS') {
         throw new ForbiddenException('Only organization owners and admins can create members');
       }
+      if (error instanceof Error && error.message === 'UNKNOWN_GROUP') {
+        throw new BadRequestException('Some groups do not belong to this organization');
+      }
       throw error;
     }
   }
@@ -250,7 +255,8 @@ export class MembershipsService {
     csv: string,
     actorUserId: string,
   ): Promise<ImportOrganizationMembersCsvResult> {
-    const parsed = parseMembersCsv(csv);
+    const organizationGroups = await this.membershipsRepository.listGroups(organizationId);
+    const parsed = parseMembersCsv(csv, organizationGroups);
     if (parsed.totalRows === 0 && parsed.errors.length > 0) {
       const firstError = parsed.errors[0];
       throw new BadRequestException({
@@ -329,6 +335,9 @@ export class MembershipsService {
       }
       if (error instanceof Error && error.message === 'MEMBERSHIP_NOT_FOUND') {
         throw new NotFoundException('Organization member was not found');
+      }
+      if (error instanceof Error && error.message === 'UNKNOWN_GROUP') {
+        throw new BadRequestException('Some groups do not belong to this organization');
       }
       throw error;
     }

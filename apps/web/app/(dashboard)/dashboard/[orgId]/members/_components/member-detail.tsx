@@ -7,7 +7,8 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EditMemberDialog } from '@/components/members/member-actions';
 import type { MemberProfileUpdate } from '@/components/members/member-actions.types';
-import { organizationMembersRoute } from '@/features/organizations/routes';
+import { organizationGroupRoute, organizationMembersRoute } from '@/features/organizations/routes';
+import { GroupBadge } from '@/features/groups/components/group-badge';
 import type { MembersPayload, OrganizationMember } from '../types';
 import { Avatar } from '@/components/ui/avatar';
 
@@ -33,6 +34,7 @@ export function MemberDetail({
   const t = useTranslations('members');
   const commonT = useTranslations('common');
   const profileT = useTranslations('profile');
+  const groupsT = useTranslations('groups');
   const locale = useLocale();
   const router = useRouter();
   const editDialogRef = useRef<HTMLDialogElement>(null);
@@ -47,10 +49,10 @@ export function MemberDetail({
       : organizationMembersRoute(organizationId);
 
   function updateProfile(updates: MemberProfileUpdate) {
-    const { ministries, ...profileUpdates } = updates;
+    const { groups, ...profileUpdates } = updates;
     setMember((current) => ({
       ...current,
-      ...(ministries ? { ministries } : {}),
+      ...(groups ? { groups: payload.groups.filter((group) => groups.includes(group.id)) } : {}),
       profile: {
         ...current.profile,
         ...profileUpdates,
@@ -82,6 +84,7 @@ export function MemberDetail({
             {...actions}
             member={member}
             organizationId={organizationId}
+            groupOptions={payload.groups}
             memberCandidates={memberCandidates}
             onProfileUpdated={updateProfile}
             onRelationshipsChanged={updateRelationships}
@@ -162,16 +165,15 @@ export function MemberDetail({
             </DetailSection>
           ) : null}
 
-          <DetailSection title={t('ministries')}>
-            {member.ministries.length > 0 ? (
+          <DetailSection title={groupsT('title')}>
+            {member.groups.length > 0 ? (
               <div className="flex flex-wrap gap-2">
-                {member.ministries.map((ministry) => (
-                  <span
-                    className="rounded-full border border-[var(--line)] bg-[var(--surface-subtle)] px-2.5 py-1 text-sm font-semibold"
-                    key={ministry}
-                  >
-                    {t(`ministry.${ministry}`)}
-                  </span>
+                {member.groups.map((group) => (
+                  <GroupBadge
+                    group={group}
+                    href={organizationGroupRoute(organizationId, group.id)}
+                    key={group.id}
+                  />
                 ))}
               </div>
             ) : (

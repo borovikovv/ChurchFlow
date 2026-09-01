@@ -2,13 +2,35 @@ import { Injectable } from '@nestjs/common';
 import type { OrganizationRole, Prisma } from '@churchflow/db';
 import type {
   CreateManualOrganizationMemberInput,
-  MemberMinistry,
   OrganizationMembersAccessFilter,
   OrganizationMembersTab,
   OrganizationMembersTypeFilter,
   UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+
+const groupBadgeSelect = { id: true, name: true, icon: true, color: true } as const;
+
+type GroupBadgeRecord = Prisma.OrganizationGroupGetPayload<{ select: typeof groupBadgeSelect }>;
+
+type MembershipsTransaction = Prisma.TransactionClient;
+
+async function resolveOrganizationGroups(
+  tx: MembershipsTransaction,
+  organizationId: string,
+  groupIds: string[],
+): Promise<GroupBadgeRecord[]> {
+  const requested = [...new Set(groupIds)];
+  if (requested.length === 0) return [];
+
+  const groups = await tx.organizationGroup.findMany({
+    where: { organizationId, id: { in: requested } },
+    select: groupBadgeSelect,
+  });
+  if (groups.length !== requested.length) throw new Error('UNKNOWN_GROUP');
+
+  return groups;
+}
 
 @Injectable()
 export class MembershipsRepository {
@@ -20,7 +42,7 @@ export class MembershipsRepository {
     tab: OrganizationMembersTab,
     type: OrganizationMembersTypeFilter,
     search: string,
-    ministries: MemberMinistry[],
+    groups: string[],
     page: number,
     pageSize: number,
     membershipId?: string,
@@ -71,12 +93,12 @@ export class MembershipsRepository {
           ],
         }
       : {};
-    const ministriesWhere: Prisma.OrganizationMemberWhereInput =
-      ministries.length > 0
+    const groupsWhere: Prisma.OrganizationMemberWhereInput =
+      groups.length > 0
         ? {
-            ministries: {
+            groups: {
               some: {
-                ministry: { in: ministries },
+                groupId: { in: groups },
               },
             },
           }
@@ -92,7 +114,7 @@ export class MembershipsRepository {
       removedAt: null,
       ...typeWhere[type],
       ...searchWhere,
-      ...ministriesWhere,
+      ...groupsWhere,
     };
     const effectiveAccess = tab === 'archived' ? 'all' : access;
     const where: Prisma.OrganizationMemberWhereInput = {
@@ -122,7 +144,7 @@ export class MembershipsRepository {
       where,
       include: {
         profile: true,
-        ministries: true,
+        groups: { include: { group: { select: groupBadgeSelect } } },
         user: {
           select: {
             id: true,
@@ -239,12 +261,13 @@ export class MembershipsRepository {
         },
         include: { profile: true },
       });
-      if (input.ministries && input.ministries.length > 0) {
-        await tx.organizationMemberMinistry.createMany({
-          data: input.ministries.map((ministry) => ({
+      const groups = await resolveOrganizationGroups(tx, organizationId, input.groups ?? []);
+      if (groups.length > 0) {
+        await tx.organizationGroupMember.createMany({
+          data: groups.map((group) => ({
             organizationId,
+            groupId: group.id,
             membershipId: membership.id,
-            ministry,
           })),
         });
       }
@@ -262,13 +285,7 @@ export class MembershipsRepository {
 
       return {
         ...membership,
-        ministries:
-          input.ministries?.map((ministry) => ({
-            organizationId,
-            membershipId: membership.id,
-            ministry,
-            createdAt: new Date(),
-          })) ?? [],
+        groups,
       };
     });
   }
@@ -301,7 +318,7 @@ export class MembershipsRepository {
         id: string;
         role: string;
         source: string;
-        ministries: MemberMinistry[];
+        groups: GroupBadgeRecord[];
         profile: {
           displayName: string;
           email: string | null;
@@ -337,12 +354,13 @@ export class MembershipsRepository {
           include: { profile: true },
         });
 
-        if (row.ministries && row.ministries.length > 0) {
-          await tx.organizationMemberMinistry.createMany({
-            data: row.ministries.map((ministry) => ({
+        const groups = await resolveOrganizationGroups(tx, organizationId, row.groups ?? []);
+        if (groups.length > 0) {
+          await tx.organizationGroupMember.createMany({
+            data: groups.map((group) => ({
               organizationId,
+              groupId: group.id,
               membershipId: membership.id,
-              ministry,
             })),
           });
         }
@@ -362,7 +380,7 @@ export class MembershipsRepository {
           id: membership.id,
           role: membership.role,
           source: membership.source,
-          ministries: row.ministries ?? [],
+          groups,
           profile: {
             displayName: membership.profile?.displayName ?? row.displayName,
             email: membership.profile?.email ?? null,
@@ -448,15 +466,20 @@ export class MembershipsRepository {
         },
       });
 
-      if (input.ministries !== undefined) {
-        await tx.organizationMemberMinistry.deleteMany({ where: { membershipId } });
-        if (input.ministries.length > 0) {
-          await tx.organizationMemberMinistry.createMany({
-            data: input.ministries.map((ministry) => ({
-              organizationId,
-              membershipId,
-              ministry,
-            })),
+      if (input.groups !== undefined) {
+        const groups = await resolveOrganizationGroups(tx, organizationId, input.groups);
+        const groupIds = groups.map((group) => group.id);
+        await tx.organizationGroupMember.deleteMany({
+          where: {
+            organizationId,
+            membershipId,
+            ...(groupIds.length > 0 ? { groupId: { notIn: groupIds } } : {}),
+          },
+        });
+        if (groupIds.length > 0) {
+          await tx.organizationGroupMember.createMany({
+            data: groupIds.map((groupId) => ({ organizationId, groupId, membershipId })),
+            skipDuplicates: true,
           });
         }
       }
@@ -595,6 +618,14 @@ export class MembershipsRepository {
         },
       });
       return { deletedRelationshipId: relationshipId };
+    });
+  }
+
+  listGroups(organizationId: string): Promise<GroupBadgeRecord[]> {
+    return this.prisma.organizationGroup.findMany({
+      where: { organizationId },
+      select: groupBadgeSelect,
+      orderBy: { name: 'asc' },
     });
   }
 

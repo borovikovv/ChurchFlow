@@ -17,13 +17,13 @@ import { MembersFilters } from './members-filters';
 import { Avatar } from '@/components/ui/avatar';
 import { MemberContactSummary, MemberIdentitySummary } from './member-summary';
 import type {
-  MemberMinistry,
   OrganizationMembersAccessFilter,
   OrganizationMembersTab,
   OrganizationMembersTypeFilter,
 } from '@churchflow/shared';
-import { MEMBER_MINISTRIES, MEMBER_PAGE_SIZE_OPTIONS } from '@churchflow/shared';
-import { organizationMemberRoute } from '@/features/organizations/routes';
+import { MEMBER_PAGE_SIZE_OPTIONS } from '@churchflow/shared';
+import { GroupBadge } from '@/features/groups/components/group-badge';
+import { organizationGroupRoute, organizationMemberRoute } from '@/features/organizations/routes';
 import { useMembersQuery } from '../_hooks/use-members-query';
 import { MemberSearchInput } from './member-search-input';
 
@@ -45,7 +45,7 @@ export function MembersManager({
   organizationId,
   initialPayload,
   memberAccess,
-  memberMinistries,
+  memberGroups,
   memberPage,
   memberPageSize,
   memberSearch,
@@ -57,7 +57,7 @@ export function MembersManager({
   organizationId: string;
   initialPayload: MembersPayload;
   memberAccess: OrganizationMembersAccessFilter;
-  memberMinistries: MemberMinistry[];
+  memberGroups: string[];
   memberPage: number;
   memberPageSize: number;
   memberSearch: string;
@@ -66,11 +66,12 @@ export function MembersManager({
   manageInvitation: ComponentProps<typeof InviteAppUserForm>['action'];
 } & MemberActionProps) {
   const t = useTranslations('members');
+  const groupsT = useTranslations('groups');
   const paginationT = useTranslations('pagination');
   const { data: payload, refresh: refreshMembers } = useMembersQuery({
     access: memberAccess,
     initialPayload,
-    ministries: memberMinistries,
+    groups: memberGroups,
     organizationId,
     page: memberPage,
     pageSize: memberPageSize,
@@ -100,13 +101,13 @@ export function MembersManager({
     { label: t('roleLabels.MEMBER'), value: 'member' },
     { label: t('roleLabels.VIEWER'), value: 'visitor' },
   ];
-  const memberMinistryFilterOptions = MEMBER_MINISTRIES.map((ministry) => ({
-    label: t(`ministry.${ministry}`),
-    value: ministry,
+  const memberGroupFilterOptions = payload.groups.map((group) => ({
+    label: group.name,
+    value: group.id,
   }));
   const preservedAccess =
     memberAccess === 'all' || memberTab === 'archived' ? undefined : memberAccess;
-  const preservedMinistries = memberMinistries.length > 0 ? memberMinistries.join(',') : undefined;
+  const preservedGroups = memberGroups.length > 0 ? memberGroups.join(',') : undefined;
   const preservedPageSize =
     memberPageSize === MEMBER_PAGE_SIZE_OPTIONS[0] ? undefined : String(memberPageSize);
   const preservedTab = memberTab === 'archived' ? memberTab : undefined;
@@ -114,13 +115,13 @@ export function MembersManager({
   const preservedSearch = memberSearch || undefined;
   const activeMembersHref = createMembersTabHref(organizationId, {
     access: preservedAccess,
-    ministries: preservedMinistries,
+    groups: preservedGroups,
     pageSize: preservedPageSize,
     search: preservedSearch,
     type: preservedType,
   });
   const archivedMembersHref = createMembersTabHref(organizationId, {
-    ministries: preservedMinistries,
+    groups: preservedGroups,
     pageSize: preservedPageSize,
     search: preservedSearch,
     tab: 'archived',
@@ -129,6 +130,7 @@ export function MembersManager({
   const renderMemberActions = (member: OrganizationMember) => (
     <MemberActions
       {...actions}
+      groupOptions={payload.groups}
       member={member}
       organizationId={organizationId}
       viewHref={organizationMemberRoute(organizationId, member.id)}
@@ -152,7 +154,7 @@ export function MembersManager({
   const membersQuery = {
     organizationId,
     access: memberAccess,
-    ministries: memberMinistries,
+    groups: memberGroups,
     page: memberPage,
     pageSize: memberPageSize,
     search: memberSearch,
@@ -161,7 +163,7 @@ export function MembersManager({
   };
   const membersCardListKey = [
     memberAccess,
-    memberMinistries.join('|'),
+    memberGroups.join('|'),
     memberPage,
     memberPageSize,
     memberSearch,
@@ -183,7 +185,7 @@ export function MembersManager({
     pageSizeOptions: [...MEMBER_PAGE_SIZE_OPTIONS],
     preserveParams: {
       access: preservedAccess,
-      ministries: preservedMinistries,
+      groups: preservedGroups,
       search: preservedSearch,
       tab: preservedTab,
       type: preservedType,
@@ -218,6 +220,14 @@ export function MembersManager({
       accessorFn: (member) => member.profile.phone ?? member.profile.email ?? '',
       header: t('contact'),
       cell: ({ row }) => <MemberContactSummary profile={row.original.profile} />,
+    },
+    {
+      id: 'groups',
+      accessorFn: (member) => member.groups.map((group) => group.name).join(', '),
+      header: groupsT('title'),
+      cell: ({ row }) => (
+        <MemberGroupBadges member={row.original} organizationId={organizationId} />
+      ),
     },
     {
       accessorKey: 'accountState',
@@ -261,11 +271,11 @@ export function MembersManager({
   const filterProps = {
     accessOptions: memberAccessFilterOptions,
     accessValue: memberAccess === 'all' ? '' : memberAccess,
-    ministryOptions: memberMinistryFilterOptions,
-    ministryValue: memberMinistries,
+    groupOptions: memberGroupFilterOptions,
+    groupValue: memberGroups,
     preserved: {
       access: preservedAccess,
-      ministries: preservedMinistries,
+      groups: preservedGroups,
       pageSize: preservedPageSize,
       search: preservedSearch,
       tab: preservedTab,
@@ -306,7 +316,7 @@ export function MembersManager({
             placeholder={t('searchByNamePlaceholder')}
             preserveParams={{
               access: preservedAccess,
-              ministries: preservedMinistries,
+              groups: preservedGroups,
               pageSize: preservedPageSize,
               tab: preservedTab,
               type: preservedType,
@@ -317,6 +327,7 @@ export function MembersManager({
         </div>
         {canManage ? (
           <MembersActions
+            groupOptions={payload.groups}
             manageInvitation={manageInvitation}
             organizationId={organizationId}
             variant="toolbar"
@@ -371,4 +382,26 @@ function createMembersTabHref(organizationId: string, params: Record<string, str
 function LocalizedStatusBadge({ status, label }: { status: string; label: string }) {
   const normalized = status.toLowerCase().replaceAll('_', '-');
   return <span className={`status-badge status-${normalized}`}>{label}</span>;
+}
+
+function MemberGroupBadges({
+  member,
+  organizationId,
+}: {
+  member: OrganizationMember;
+  organizationId: string;
+}) {
+  if (member.groups.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {member.groups.map((group) => (
+        <GroupBadge
+          group={group}
+          href={organizationGroupRoute(organizationId, group.id)}
+          key={group.id}
+        />
+      ))}
+    </div>
+  );
 }

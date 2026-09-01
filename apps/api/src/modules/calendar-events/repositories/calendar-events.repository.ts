@@ -75,7 +75,9 @@ export class CalendarEventsRepository {
       },
       include: {
         profile: true,
-        ministries: true,
+        groups: {
+          include: { group: { select: { id: true, name: true, icon: true, color: true } } },
+        },
         user: { select: { displayName: true, email: true, avatarUrl: true } },
       },
       orderBy: { createdAt: 'asc' },

@@ -68,6 +68,7 @@ export function AppShell({
         labels: {
           budget: t('budget'),
           calendar: t('calendar'),
+          groups: t('groups'),
           home: t('home'),
           members: t('members'),
           prayerRequests: t('prayerRequests'),
