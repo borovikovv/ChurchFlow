@@ -335,10 +335,12 @@ export class CalendarEventsService {
       }
     }
 
+    const milestoneCandidates = await this.calendarEventsRepository.listMilestoneDigestCandidates(
+      new Date(now.getTime() - ALL_DAY_OCCURRENCE_PADDING_MS),
+      new Date(now.getTime() + ALL_DAY_OCCURRENCE_PADDING_MS),
+    );
     const digests = await this.createMilestoneDigestNotifications(
-      events.filter(
-        (event) => isBirthdayOrAnniversaryEvent(event.type) && hasCelebratableMember(event),
-      ),
+      milestoneCandidates.filter(hasCelebratableMember),
       now,
     );
 

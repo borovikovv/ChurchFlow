@@ -10,29 +10,63 @@ const MILESTONE_STARTS_AT = new Date('2020-08-30T21:00:00.000Z');
 // 09:00 in Europe/Kyiv on 2026-08-31.
 const DIGEST_RUN_AT = new Date('2026-08-31T06:00:00.000Z');
 
-function milestoneEvent({ id, type, title, displayName, status = 'ACTIVE', removedAt = null }) {
+function milestoneEvent({
+  id,
+  type,
+  title,
+  displayName = null,
+  status = 'ACTIVE',
+  removedAt = null,
+  repeatPeriod = 'YEARLY',
+}) {
   return {
     id,
     organizationId: 'organization',
     createdByUserId: null,
-    linkedMembershipId: `${id}-membership`,
-    linkedMembership: { status, removedAt, profile: { displayName }, user: null },
+    linkedMembershipId: displayName === null ? null : `${id}-membership`,
+    linkedMembership:
+      displayName === null ? null : { status, removedAt, profile: { displayName }, user: null },
     type,
     title,
     startsAt: MILESTONE_STARTS_AT,
     endsAt: null,
     allDay: true,
     reminder: null,
-    repeatPeriod: 'YEARLY',
+    repeatPeriod,
     assignees: [],
     serviceDetails: null,
   };
 }
 
+// Mirrors the `listReminderCandidates` query: only repeating or reminded events survive once
+// their start is older than the reminder window.
+function reminderCandidates(events, windowEnd) {
+  return events.filter(
+    (event) =>
+      event.startsAt < windowEnd &&
+      (event.repeatPeriod !== 'NONE' ||
+        event.reminder !== null ||
+        event.startsAt >= new Date(windowEnd.getTime() - 5 * 60 * 1000)),
+  );
+}
+
+// Mirrors the `listMilestoneDigestCandidates` query.
+function digestCandidates(events, rangeStart, rangeEnd) {
+  return events.filter(
+    (event) =>
+      (event.type === 'BIRTHDAY' || event.type === 'ANNIVERSARY') &&
+      event.startsAt < rangeEnd &&
+      (event.repeatPeriod !== 'NONE' || event.startsAt >= rangeStart),
+  );
+}
+
 function createService(events) {
   const created = [];
   const repository = {
-    listReminderCandidates: async () => events,
+    listReminderCandidates: async (_windowStart, windowEnd) =>
+      reminderCandidates(events, windowEnd),
+    listMilestoneDigestCandidates: async (rangeStart, rangeEnd) =>
+      digestCandidates(events, rangeStart, rangeEnd),
     findCreatorMembershipId: async () => null,
     listAdminNotificationRecipientMembershipIds: async () => [],
     listCalendarEventNotificationRecipientMembershipIds: async () => ['member-a', 'member-b'],
@@ -226,4 +260,43 @@ test('milestones of removed or archived members are not announced', async () => 
   assert.equal(created[0].titleKey, 'birthdayDigestBirthdays');
   assert.deepEqual(created[0].bodyMessage.birthdays, ['Maria']);
   assert.deepEqual(created[0].bodyMessage.anniversaries, []);
+});
+
+test('one-off milestones that started earlier today are still grouped into the digest', async () => {
+  const { service, created } = createService([
+    {
+      ...milestoneEvent({
+        id: 'birthday-all-day',
+        type: 'BIRTHDAY',
+        title: 'Це день народження весь день',
+        repeatPeriod: 'NONE',
+      }),
+      // 2026-08-31T00:00 in Europe/Kyiv: it starts hours before the digest runs.
+      startsAt: new Date('2026-08-30T21:00:00.000Z'),
+    },
+    {
+      ...milestoneEvent({
+        id: 'anniversary-all-day',
+        type: 'ANNIVERSARY',
+        title: 'Це річниця',
+        repeatPeriod: 'NONE',
+      }),
+      startsAt: new Date('2026-08-30T21:00:00.000Z'),
+    },
+    milestoneEvent({
+      id: 'birthday-yearly',
+      type: 'BIRTHDAY',
+      title: 'А це день народження о 10:00',
+    }),
+  ]);
+
+  await service.createDueReminderNotifications(DIGEST_RUN_AT);
+
+  assert.equal(created.length, 1);
+  assert.equal(created[0].titleKey, 'birthdayDigestBirthdaysAndAnniversaries');
+  assert.deepEqual(created[0].bodyMessage.birthdays, [
+    'А це день народження о 10:00',
+    'Це день народження весь день',
+  ]);
+  assert.deepEqual(created[0].bodyMessage.anniversaries, ['Це річниця']);
 });

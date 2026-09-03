@@ -167,6 +167,26 @@ export class CalendarEventsRepository {
     });
   }
 
+  async listMilestoneDigestCandidates(
+    rangeStart: Date,
+    rangeEnd: Date,
+  ): Promise<CalendarEventRecord[]> {
+    return this.prisma.calendarEvent.findMany({
+      where: {
+        deletedAt: null,
+        type: { in: [CALENDAR_EVENT_TYPE.birthday, CALENDAR_EVENT_TYPE.anniversary] },
+        startsAt: { lt: rangeEnd },
+        OR: [
+          { repeatPeriod: { not: CALENDAR_EVENT_REPEAT_PERIOD.none } },
+          { startsAt: { gte: rangeStart } },
+        ],
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      include: calendarEventInclude,
+      orderBy: { startsAt: 'asc' },
+    });
+  }
+
   async listReminderRecipientMemberships(
     organizationId: string,
     membershipIds: string[],
