@@ -146,6 +146,17 @@ Required variables for `prod` use the production domains and ports:
 - `TELEGRAM_REDIRECT_URI=https://mychurchflow.org/v1/auth/telegram/callback`
 - the production equivalents of the remaining variables above.
 
+Optional variables for LiqPay billing. Leave them blank to keep billing unconfigured: the checkout
+endpoint then answers `503` and nothing else changes.
+
+- `LIQPAY_CALLBACK_URL=https://api-stage.mychurchflow.org/v1/billing/liqpay/callback` — LiqPay calls
+  this from its own servers, so it must be publicly reachable. Its signature is the authentication.
+- `LIQPAY_RESULT_URL=https://stage.mychurchflow.org/dashboard` — where the payer's browser lands
+  after checkout.
+- `BILLING_ENFORCEMENT_ENABLED=false` — set to `true` only once the LiqPay keys are in place. It
+  makes every organization without an active subscription read-only, and the API refuses to boot in
+  production with enforcement on and no keys.
+
 Optional variables with defaults, used by the nightly notification retention job:
 
 - `NOTIFICATIONS_RETENTION_DAYS=365` — deletes every notification older than this.
@@ -191,6 +202,13 @@ Optional Telegram bot secrets, required when bot notifications or webhooks are e
 
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_WEBHOOK_SECRET`
+
+Optional LiqPay secrets, required when `BILLING_ENFORCEMENT_ENABLED=true`. Both keys must come from
+the same pair in the LiqPay dashboard; stage uses the test pair, whose keys are prefixed
+`sandbox_`:
+
+- `LIQPAY_PUBLIC_KEY`
+- `LIQPAY_PRIVATE_KEY`
 
 Required when `EMAIL_PROVIDER=resend`:
 
