@@ -2,7 +2,7 @@
 
 import type { Route } from 'next';
 import { usePathname, useRouter } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from './button';
 import type { DataTablePagination } from './data-table';
 
@@ -18,6 +18,7 @@ type CardListPagination = Pick<
 >;
 
 export interface CardListLoadMore {
+  autoLoad?: boolean;
   hasMore: boolean;
   isLoading: boolean;
   label: string;
@@ -77,25 +78,57 @@ export function CardList<TData>({
 }
 
 function CardListLoadMoreControl({
+  autoLoad,
   hasMore,
   isLoading,
   label,
   loadingLabel,
   onLoadMore,
 }: CardListLoadMore) {
+  const sentinelRef = useLoadOnVisible({
+    enabled: Boolean(autoLoad) && hasMore && !isLoading,
+    onVisible: onLoadMore,
+  });
+
   if (!hasMore) return null;
 
   return (
-    <Button
-      className="min-h-11 w-full"
-      disabled={isLoading}
-      type="button"
-      variant="secondary"
-      onClick={onLoadMore}
-    >
-      {isLoading ? loadingLabel : label}
-    </Button>
+    <div className="grid min-w-0" ref={sentinelRef}>
+      <Button
+        className="min-h-11 w-full"
+        disabled={isLoading}
+        type="button"
+        variant="secondary"
+        onClick={onLoadMore}
+      >
+        {isLoading ? loadingLabel : label}
+      </Button>
+    </div>
   );
+}
+
+function useLoadOnVisible({ enabled, onVisible }: { enabled: boolean; onVisible: () => void }) {
+  const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
+  // The caller rebuilds onVisible on every render, so the observer reads it through a ref
+  // instead of resubscribing each time.
+  const onVisibleRef = useRef(onVisible);
+  onVisibleRef.current = onVisible;
+
+  useEffect(() => {
+    if (!enabled || !sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) onVisibleRef.current();
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinel);
+
+    return () => observer.disconnect();
+  }, [enabled, sentinel]);
+
+  return setSentinel;
 }
 
 function CardListPaginationControls({

@@ -48,6 +48,7 @@ export function MembersCardList({
         getCardClassName={(member) => (member.status === 'ARCHIVED' ? 'opacity-75' : undefined)}
         getCardKey={getMemberKey}
         loadMore={{
+          autoLoad: true,
           hasMore,
           isLoading,
           label: t('loadMore'),

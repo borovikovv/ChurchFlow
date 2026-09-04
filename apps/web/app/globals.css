@@ -942,6 +942,7 @@
     color: var(--muted);
     font-size: 12px;
     font-weight: 700;
+    white-space: nowrap;
   }
 
   .status-active,
@@ -952,6 +953,12 @@
     border-color: rgba(26, 127, 55, 0.25);
     background: #dafbe1;
     color: var(--success-strong);
+  }
+
+  .status-owner {
+    border-color: rgba(9, 105, 218, 0.25);
+    background: #ddf4ff;
+    color: var(--accent-strong);
   }
 
   .status-off {
