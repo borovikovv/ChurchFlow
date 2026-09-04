@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { AppLocale } from '@churchflow/shared';
-import { formatDateTime } from '../../common/time/date-time';
+import { formatDate, formatDateTime } from '../../common/time/date-time';
 
 export const NOTIFICATION_TITLE_KEYS = [
   'anniversary',
@@ -34,6 +34,7 @@ const eventTimeParamsShape = {
 export const notificationBodyMessageSchema = z.discriminatedUnion('key', [
   z.object({ key: z.literal('eventStartsAt'), ...eventTimeParamsShape }),
   z.object({ key: z.literal('eventScheduledFor'), ...eventTimeParamsShape }),
+  z.object({ key: z.literal('eventOnDate'), ...eventTimeParamsShape }),
   z.object({
     key: z.literal('calendarEventLinked'),
     memberName: z.string().nullable(),
@@ -67,6 +68,7 @@ interface NotificationMessageCatalog {
   bodies: {
     birthdayDigest: (params: { birthdays: string[]; anniversaries: string[] }) => string;
     calendarEventLinked: (params: EventTimeTexts & { memberName: string }) => string;
+    eventOnDate: (params: EventTimeTexts) => string;
     eventScheduledFor: (params: EventTimeTexts) => string;
     eventStartsAt: (params: EventTimeTexts) => string;
     memberAdded: (params: { memberName: string }) => string;
@@ -117,6 +119,7 @@ const NOTIFICATION_MESSAGE_CATALOG = {
           .join('\n'),
       calendarEventLinked: (params) =>
         `${params.memberName} was linked to ${params.eventTitle}, starting at ${params.startsAt}.`,
+      eventOnDate: (params) => `${params.eventTitle} is on ${params.startsAt}.`,
       eventScheduledFor: (params) => `${params.eventTitle} is scheduled for ${params.startsAt}.`,
       eventStartsAt: (params) => `${params.eventTitle} starts at ${params.startsAt}.`,
       memberAdded: (params) => `${params.memberName} was added to the organization.`,
@@ -165,6 +168,7 @@ const NOTIFICATION_MESSAGE_CATALOG = {
           .join('\n'),
       calendarEventLinked: (params) =>
         `${params.memberName} прив’язано до «${params.eventTitle}», початок ${params.startsAt}.`,
+      eventOnDate: (params) => `«${params.eventTitle}» — ${params.startsAt}.`,
       eventScheduledFor: (params) => `«${params.eventTitle}» заплановано на ${params.startsAt}.`,
       eventStartsAt: (params) => `«${params.eventTitle}» починається ${params.startsAt}.`,
       memberAdded: (params) => `${params.memberName} додано до організації.`,
@@ -217,6 +221,8 @@ export function renderNotificationBody(
         ...eventTimeTexts(message, locale),
         memberName: message.memberName ?? catalog.unknownMember,
       });
+    case 'eventOnDate':
+      return catalog.bodies.eventOnDate(eventDateTexts(message, locale));
     case 'eventScheduledFor':
       return catalog.bodies.eventScheduledFor(eventTimeTexts(message, locale));
     case 'eventStartsAt':
@@ -251,6 +257,19 @@ export function renderPlatformAdminOrganizationRequestBody(
   locale: AppLocale,
 ): string {
   return NOTIFICATION_MESSAGE_CATALOG[locale].platformAdmin.organizationRequestBody(params);
+}
+
+function eventDateTexts(
+  message: { eventTitle: string; startsAt: string; timeZone: string },
+  locale: AppLocale,
+): EventTimeTexts {
+  return {
+    eventTitle: message.eventTitle,
+    startsAt: formatDate(new Date(message.startsAt), {
+      intlLocale: NOTIFICATION_MESSAGE_CATALOG[locale].intlLocale,
+      timeZone: message.timeZone,
+    }),
+  };
 }
 
 function eventTimeTexts(

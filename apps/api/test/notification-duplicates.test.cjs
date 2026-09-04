@@ -98,6 +98,7 @@ test('linked recipients still receive the start notification when a reminder is 
   const service = new CalendarEventsService(
     {
       listReminderCandidates: async () => [event],
+      listMilestoneDigestCandidates: async () => [],
       findCreatorMembershipId: async () => 'membership-creator',
       listAdminNotificationRecipientMembershipIds: async () => ['membership-admin'],
       listCalendarEventNotificationRecipientMembershipIds: async () => [
