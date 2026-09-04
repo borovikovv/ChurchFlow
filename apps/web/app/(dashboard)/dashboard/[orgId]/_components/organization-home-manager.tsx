@@ -27,7 +27,7 @@ export function OrganizationHomeManager({
   const canManage = organizationRole === 'OWNER' || organizationRole === 'ADMIN';
 
   return (
-    <div className="stack gap-20">
+    <div className="stack gap-10">
       <div className="stack">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">

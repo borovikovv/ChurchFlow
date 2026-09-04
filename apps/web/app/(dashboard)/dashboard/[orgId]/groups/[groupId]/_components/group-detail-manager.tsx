@@ -143,7 +143,7 @@ export function GroupDetailManager({
       <section className="stack min-w-0">
         <h2>{t('leaders')}</h2>
         {leaders.length > 0 ? (
-          <ul className="m-0 grid list-none gap-2 p-0">
+          <ul className="m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-2 p-0">
             {leaders.map((leader) => (
               <li className="min-w-0" key={leader.membershipId}>
                 <Link
