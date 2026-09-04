@@ -16,6 +16,8 @@ export const ORG_PERMISSIONS = {
   billingManage: 'billing.manage',
 } as const;
 
+export const BUDGET_AUDIT_ENTITY_TYPE = 'Budget';
+
 export const PUBLIC_SECTION_TYPES = ['hero', 'about', 'schedule', 'gallery', 'contact'] as const;
 
 export const CALENDAR_EVENT_TYPES = [

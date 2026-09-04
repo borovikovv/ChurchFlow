@@ -16,7 +16,10 @@ import {
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
 import { ENTITLEMENTS } from '@churchflow/shared';
-import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
+import {
+  OrganizationAccessGuard,
+  RequireOrganizationOwner,
+} from '../../common/guards/organization-access.guard';
 import {
   RequireEntitlement,
   SubscriptionEntitlementGuard,
@@ -36,6 +39,7 @@ import {
 
 @Controller('organizations/:organizationId/budget')
 @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+@RequireOrganizationOwner()
 export class BudgetsController {
   constructor(private readonly budgetsService: BudgetsService) {}
 

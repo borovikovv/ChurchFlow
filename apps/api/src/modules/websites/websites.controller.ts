@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { ENTITLEMENTS, ORG_PERMISSIONS } from '@churchflow/shared';
+import { ENTITLEMENTS } from '@churchflow/shared';
 import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
-  RequireOrganizationPermission,
+  RequireOrganizationOwner,
 } from '../../common/guards/organization-access.guard';
 import {
   RequireEntitlement,
@@ -24,14 +24,14 @@ export class WebsitesController {
 
   @Get('organizations/:organizationId/website')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   async dashboardWebsite(@Param('organizationId') organizationId: string) {
     return this.websitesService.findByOrganizationId(organizationId);
   }
 
   @Patch('organizations/:organizationId/website')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async updateSettings(
     @Param('organizationId') organizationId: string,
@@ -42,7 +42,7 @@ export class WebsitesController {
 
   @Post('organizations/:organizationId/website/publish')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async setPublished(
     @Param('organizationId') organizationId: string,

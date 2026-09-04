@@ -6,7 +6,7 @@ import { getCurrentUser, type CurrentUser } from '@/auth/session';
 import { AppShell } from '@/components/app-shell';
 import {
   getOrganizationAccessState,
-  isOrganizationAdminRole,
+  isOrganizationOwnerRole,
   type OrganizationAccessRecord,
 } from '@/features/organizations/server/access';
 import { PublicAppHeader } from '@/components/public-app-header';
@@ -38,7 +38,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const user = await getCurrentUser();
   const access = user ? await getOrganizationAccessState(user) : null;
-  const adminOrganizationIds = adminOrganizationIdsFromAccess(access?.organizations);
+  const ownerOrganizationIds = ownerOrganizationIdsFromAccess(access?.organizations);
   const locale = await resolveLocale(user);
   const messages = getMessages(locale);
 
@@ -51,9 +51,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               <AppShell
                 avatarUrl={user.avatarUrl}
                 canOpenAdmin={access?.canOpenAdmin ?? false}
-                budgetOrganizationIds={adminOrganizationIds}
+                budgetOrganizationIds={ownerOrganizationIds}
                 displayName={user.displayName ?? user.email ?? messages.common.churchFlowUser}
-                websiteOrganizationIds={adminOrganizationIds}
+                websiteOrganizationIds={ownerOrganizationIds}
               >
                 {children}
               </AppShell>
@@ -84,12 +84,12 @@ async function resolveLocale(user: CurrentUser | null): Promise<AppLocale> {
   return resolveAppLocaleFromAcceptLanguage(requestHeaders.get('accept-language') ?? undefined);
 }
 
-function adminOrganizationIdsFromAccess(
+function ownerOrganizationIdsFromAccess(
   organizations: OrganizationAccessRecord[] | undefined,
 ): string[] {
   return (
     organizations
-      ?.filter((organization) => isOrganizationAdminRole(organization.role))
+      ?.filter((organization) => isOrganizationOwnerRole(organization.role))
       .map((organization) => organization.id) ?? []
   );
 }

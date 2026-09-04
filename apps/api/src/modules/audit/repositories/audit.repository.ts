@@ -19,7 +19,7 @@ export class AuditRepository {
           deletedAt: null,
         },
       },
-      select: { id: true },
+      select: { id: true, role: true },
     });
   }
 
@@ -27,12 +27,16 @@ export class AuditRepository {
     organizationId: string;
     cursor?: string;
     entityType?: string;
+    excludedEntityTypes?: string[];
     limit: number;
   }) {
     return this.prisma.auditLog.findMany({
       where: {
         organizationId: input.organizationId,
         ...(input.entityType ? { entityType: input.entityType } : {}),
+        ...(input.excludedEntityTypes?.length
+          ? { entityType: { notIn: input.excludedEntityTypes } }
+          : {}),
       },
       take: input.limit + 1,
       ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),

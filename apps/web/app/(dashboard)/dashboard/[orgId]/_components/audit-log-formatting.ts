@@ -1,6 +1,4 @@
-import type { AuditLogListItem } from '@churchflow/shared';
-
-const BUDGET_ENTITY_TYPE = 'Budget';
+import { BUDGET_AUDIT_ENTITY_TYPE, type AuditLogListItem } from '@churchflow/shared';
 
 const BUDGET_AMOUNT_CURRENCIES: Record<string, string> = {
   amountUah: 'UAH',
@@ -160,7 +158,7 @@ export function auditMetadataSummary(
     metadataStatus: (status: string) => string;
   },
 ): string {
-  if (log.entityType === BUDGET_ENTITY_TYPE) {
+  if (log.entityType === BUDGET_AUDIT_ENTITY_TYPE) {
     return budgetMetadataSummary(log, labels);
   }
 

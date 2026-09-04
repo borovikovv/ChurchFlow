@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@churchflow/db';
 import {
+  BUDGET_AUDIT_ENTITY_TYPE,
   BUDGET_GROUPS,
   DEFAULT_BUDGET_MONTH_ROW_COUNT,
   DEFAULT_BUDGET_CATEGORIES,
@@ -15,11 +16,7 @@ import {
   type UpdateBudgetOpeningBalanceInput,
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
-import {
-  BUDGET_AUDIT_ENTITY_TYPE,
-  buildBudgetAmountChanges,
-  changedCategoryFields,
-} from '../budget-audit-metadata';
+import { buildBudgetAmountChanges, changedCategoryFields } from '../budget-audit-metadata';
 
 const budgetMonthInclude = Prisma.validator<Prisma.BudgetMonthInclude>()({
   entries: {
@@ -832,7 +829,7 @@ export class BudgetsRepository {
       where: {
         organizationId,
         userId: actorUserId,
-        role: { in: ['OWNER', 'ADMIN'] },
+        role: 'OWNER',
         status: 'ACTIVE',
         removedAt: null,
         organization: { status: 'ACTIVE', deletedAt: null },

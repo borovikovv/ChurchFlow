@@ -15,9 +15,12 @@ import type { AuthenticatedRequest } from './session-auth.guard';
 export type OrganizationPermission = (typeof ORG_PERMISSIONS)[keyof typeof ORG_PERMISSIONS];
 
 const ORGANIZATION_PERMISSION_KEY = 'organizationPermission';
+const ORGANIZATION_OWNER_KEY = 'organizationOwner';
 
 export const RequireOrganizationPermission = (permission: OrganizationPermission) =>
   SetMetadata(ORGANIZATION_PERMISSION_KEY, permission);
+
+export const RequireOrganizationOwner = () => SetMetadata(ORGANIZATION_OWNER_KEY, true);
 
 @Injectable()
 export class OrganizationAccessGuard implements CanActivate {
@@ -84,6 +87,15 @@ export class OrganizationAccessGuard implements CanActivate {
     const membership = user.memberships[0];
     if (!membership) {
       throw new ForbiddenException('Organization access is required');
+    }
+
+    const ownerRequired = this.reflector.getAllAndOverride<boolean | undefined>(
+      ORGANIZATION_OWNER_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
+    if (ownerRequired && membership.role !== 'OWNER') {
+      throw new ForbiddenException('Organization owner role is required');
     }
 
     const requiredPermission = this.reflector.getAllAndOverride<OrganizationPermission | undefined>(

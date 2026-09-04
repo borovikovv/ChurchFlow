@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@churchflow/db';
+import { BUDGET_AUDIT_ENTITY_TYPE } from '@churchflow/shared';
 import type { AuditLogsPage, ListAuditLogsQuery } from '@churchflow/shared';
 import { AuditRepository } from './repositories/audit.repository';
 
@@ -21,11 +22,17 @@ export class AuditService {
       throw new ForbiddenException('Only organization owners and admins can view audit logs');
     }
 
+    const canReadBudgetHistory = actorMembership.role === 'OWNER';
+    if (!canReadBudgetHistory && query.entityType === BUDGET_AUDIT_ENTITY_TYPE) {
+      throw new ForbiddenException('Only organization owners can view budget audit logs');
+    }
+
     const logs = await this.auditRepository.listForOrganization({
       organizationId,
       limit: query.limit,
       ...(query.cursor ? { cursor: query.cursor } : {}),
       ...(query.entityType ? { entityType: query.entityType } : {}),
+      ...(canReadBudgetHistory ? {} : { excludedEntityTypes: [BUDGET_AUDIT_ENTITY_TYPE] }),
     });
     const items = logs.slice(0, query.limit);
     const next = logs.length > query.limit ? logs[query.limit] : null;

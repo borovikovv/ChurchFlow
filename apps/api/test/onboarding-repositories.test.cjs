@@ -430,6 +430,12 @@ test('duplicate direct organization slug is exposed as conflict', async () => {
   );
 });
 
+function permissionReflector(permission) {
+  return {
+    getAllAndOverride: (key) => (key === 'organizationPermission' ? permission : undefined),
+  };
+}
+
 function organizationAccessContext() {
   return {
     switchToHttp: () => ({
@@ -481,7 +487,7 @@ test('a member is authorized with a single query that also scopes the organizati
         },
       },
     },
-    { getAllAndOverride: () => 'members.manage' },
+    permissionReflector('members.manage'),
   );
 
   assert.equal(await guard.canActivate(organizationAccessContext()), true);
@@ -504,7 +510,7 @@ test('a member without the required permission is refused', async () => {
         }),
       },
     },
-    { getAllAndOverride: () => 'members.manage' },
+    permissionReflector('members.manage'),
   );
 
   await assert.rejects(
