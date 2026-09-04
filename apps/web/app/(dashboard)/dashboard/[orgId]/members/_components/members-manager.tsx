@@ -25,7 +25,7 @@ import type {
   OrganizationMembersTab,
   OrganizationMembersTypeFilter,
 } from '@churchflow/shared';
-import { MEMBER_PAGE_SIZE_OPTIONS } from '@churchflow/shared';
+import { DEFAULT_MEMBER_PAGE_SIZE, MEMBER_PAGE_SIZE_OPTIONS } from '@churchflow/shared';
 import { GroupBadge } from '@/features/groups/components/group-badge';
 import { organizationGroupRoute, organizationMemberRoute } from '@/features/organizations/routes';
 import { useMembersQuery } from '../_hooks/use-members-query';
@@ -114,7 +114,7 @@ export function MembersManager({
     memberAccess === 'all' || memberTab === 'archived' ? undefined : memberAccess;
   const preservedGroups = memberGroups.length > 0 ? memberGroups.join(',') : undefined;
   const preservedPageSize =
-    memberPageSize === MEMBER_PAGE_SIZE_OPTIONS[0] ? undefined : String(memberPageSize);
+    memberPageSize === DEFAULT_MEMBER_PAGE_SIZE ? undefined : String(memberPageSize);
   const preservedTab = memberTab === 'archived' ? memberTab : undefined;
   const preservedType = memberType === 'all' ? undefined : memberType;
   const preservedSearch = memberSearch || undefined;
