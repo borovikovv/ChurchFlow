@@ -659,7 +659,8 @@
       "softDelete": "Soft delete",
       "softDeleteTitle": "Soft delete organization?",
       "softDeleteDescription": "Soft delete {name}. Tenant access will be blocked, but its data will remain stored.",
-      "softDeleteConfirm": "Soft delete organization"
+      "softDeleteConfirm": "Soft delete organization",
+      "unknownAction": "Unknown action."
     },
     "organizationRequestDetail": {
       "description": "Review requester identity and decide whether to create this tenant.",

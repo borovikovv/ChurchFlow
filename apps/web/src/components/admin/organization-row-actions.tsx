@@ -3,7 +3,7 @@
 import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useActionState, useId, useRef, useState, type RefObject } from 'react';
+import { useId, useRef, useState, useTransition, type RefObject } from 'react';
 import { FormInput } from '@/components/forms/form-input';
 import { Button } from '@/components/ui/button';
 import { FormDialog } from '@/components/ui/form-dialog';
@@ -12,17 +12,13 @@ import {
   TableRowActions,
   tableRowActionClassNameFor,
 } from '@/components/ui/table-row-actions';
-import {
-  manageOrganizationBillingExemption,
-  type OrganizationBillingActionState,
-} from './organization-billing.actions';
-
-const initialState: OrganizationBillingActionState = { message: null, error: null };
+import { manageOrganizationBillingExemption } from './organization-billing.actions';
+import { toastActionResult } from './toast-action-result';
 
 /**
  * Rendered only for platform admins, and only on organization rows: a request has no
  * subscription to be exempt from. The caller keys this on `isExempt` so a successful grant
- * remounts it, which both resets the action state and closes the menu.
+ * remounts it, which closes the menu and swaps the dialog over to revoking.
  */
 export function OrganizationRowActions({
   isExempt,
@@ -39,10 +35,15 @@ export function OrganizationRowActions({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const formId = useId();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [state, formAction, pending] = useActionState(
-    manageOrganizationBillingExemption,
-    initialState,
-  );
+  // The submit button sits in the dialog footer, outside the form, so useFormStatus cannot see
+  // it pending.
+  const [pending, startTransition] = useTransition();
+
+  const formAction = (formData: FormData) => {
+    startTransition(async () => {
+      toastActionResult(await manageOrganizationBillingExemption(formData));
+    });
+  };
 
   const detail = (key: string) => t(`organizationDetail.${key}`);
 
@@ -99,7 +100,6 @@ export function OrganizationRowActions({
           {isExempt ? null : (
             <FormInput label={detail('exemptionReason')} maxLength={500} name="reason" required />
           )}
-          {state.error ? <p className="form-error m-0">{state.error}</p> : null}
         </form>
       </FormDialog>
     </TableRowActions>

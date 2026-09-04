@@ -659,7 +659,8 @@
       "softDelete": "М'яко видалити",
       "softDeleteTitle": "М'яко видалити організацію?",
       "softDeleteDescription": "М'яко видалити {name}. Доступ до tenant буде заблоковано, але дані залишаться збереженими.",
-      "softDeleteConfirm": "М'яко видалити організацію"
+      "softDeleteConfirm": "М'яко видалити організацію",
+      "unknownAction": "Невідома дія."
     },
     "organizationRequestDetail": {
       "description": "Перевірте особу заявника та вирішіть, чи створювати цей tenant.",

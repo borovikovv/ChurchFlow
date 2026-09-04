@@ -11,7 +11,6 @@ export interface OrganizationBillingActionState {
 }
 
 export async function manageOrganizationBillingExemption(
-  previousState: OrganizationBillingActionState,
   formData: FormData,
 ): Promise<OrganizationBillingActionState> {
   const organizationId = String(formData.get('organizationId'));
