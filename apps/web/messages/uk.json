@@ -611,7 +611,8 @@
       "allOrganizations": "Усі організації",
       "myOrganizations": "Мої організації",
       "status": "Статус",
-      "allStatuses": "Усі статуси"
+      "allStatuses": "Усі статуси",
+      "adminPage": "Сторінка адміністрування"
     },
     "organizationDetail": {
       "billing": "Оплата",
@@ -691,7 +692,8 @@
       "contact": "Контакт",
       "submitted": "Надіслано",
       "emptyOrganizations": "Немає організацій для цього фільтра.",
-      "emptyRequests": "Немає заявок на організації для цього фільтра."
+      "emptyRequests": "Немає заявок на організації для цього фільтра.",
+      "actionsFor": "Дії для {name}"
     },
     "statuses": {
       "ACTIVE": "Активна",

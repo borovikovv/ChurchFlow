@@ -97,7 +97,10 @@ export default async function AdminOrganizationsPage({
 
       {!result.ok ? <p className="form-error">{result.error.message}</p> : null}
 
-      <OrganizationsTable data={result.ok ? result.data : []} />
+      <OrganizationsTable
+        canManageBilling={access.isPlatformAdmin}
+        data={result.ok ? result.data : []}
+      />
     </main>
   );
 }

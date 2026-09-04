@@ -30,6 +30,7 @@ type WorkspaceOrganizationRow = {
     invitations: number;
   };
   role?: string;
+  isExempt?: boolean;
 };
 
 type OrganizationWorkspaceSource = {
@@ -38,6 +39,7 @@ type OrganizationWorkspaceSource = {
   slug: string;
   status: string;
   createdAt: Date;
+  subscription?: { isExempt: boolean } | null;
   _count?: {
     members: number;
     invitations: number;
@@ -231,6 +233,7 @@ export class OrganizationsService {
       status: organization.status,
       createdAt: organization.createdAt.toISOString(),
       itemType: 'organization',
+      isExempt: organization.subscription?.isExempt ?? false,
       ...(organization._count ? { _count: organization._count } : {}),
       ...(organization.role ? { role: organization.role } : {}),
     };

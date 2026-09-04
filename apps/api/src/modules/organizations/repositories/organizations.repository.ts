@@ -82,6 +82,7 @@ export class OrganizationsRepository {
                 logoAssetId: true,
               },
             },
+            subscription: { select: { isExempt: true } },
             _count: {
               select: {
                 members: {
@@ -178,6 +179,7 @@ export class OrganizationsRepository {
       ...(status ? { where: { status: status as OrganizationStatus } } : {}),
       include: {
         website: true,
+        subscription: { select: { isExempt: true } },
         _count: {
           select: {
             members: {

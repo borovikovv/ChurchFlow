@@ -611,7 +611,8 @@
       "allOrganizations": "All organizations",
       "myOrganizations": "My organizations",
       "status": "Status",
-      "allStatuses": "All statuses"
+      "allStatuses": "All statuses",
+      "adminPage": "Admin page"
     },
     "organizationDetail": {
       "billing": "Billing",
@@ -691,7 +692,8 @@
       "contact": "Contact",
       "submitted": "Submitted",
       "emptyOrganizations": "No organizations match this filter.",
-      "emptyRequests": "No organization requests match this filter."
+      "emptyRequests": "No organization requests match this filter.",
+      "actionsFor": "Actions for {name}"
     },
     "statuses": {
       "ACTIVE": "Active",
