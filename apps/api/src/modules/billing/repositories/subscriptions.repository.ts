@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@churchflow/db';
+import { Prisma, type SubscriptionStatus } from '@churchflow/db';
 import type { SubscriptionEntitlementState } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { queueUnsubscribe } from '../billing-unsubscribe-queue';
 
 // Who hears about billing: the same people who are allowed to pay.
 const ADMIN_MEMBERS_SELECT = {
@@ -33,6 +34,18 @@ export interface CheckoutResolution {
 
 function isUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+/**
+ * The subscription moved between being read and being written, so the change computed from that
+ * reading no longer describes it. Raised rather than swallowed: the caller has to decide again on
+ * the current state, and applying the stale change would overwrite whatever moved it.
+ */
+export class StaleSubscriptionStateError extends Error {
+  constructor(readonly subscriptionId: string) {
+    super('Subscription state changed while the callback was being applied');
+    this.name = 'StaleSubscriptionStateError';
+  }
 }
 
 @Injectable()
@@ -147,9 +160,10 @@ export class SubscriptionsRepository {
   }
 
   /**
-   * Records the callback and applies its state change in one transaction. Idempotency is the
-   * unique (order_id, payment_id) index rather than a read-then-write check, so two callbacks
-   * racing each other cannot both apply.
+   * Records the callback and applies its state change in one transaction. A redelivery of the
+   * same callback is stopped by the unique (order_id, payment_id, status) index rather than by a
+   * read-then-write check; two callbacks for *different* payments are stopped by the state guard
+   * on the update, which refuses a change computed from a reading that no longer holds.
    */
   async applyCallback(input: {
     subscriptionId: string;
@@ -157,10 +171,12 @@ export class SubscriptionsRepository {
     orderId: string;
     paymentId: string;
     status: string;
-    previousStatus: string;
+    previousStatus: SubscriptionStatus;
     nextStatus: string | null;
+    /** The live order the decision was made against, guarding the write against a racing one. */
+    expectedLiqpayOrderId: string | null;
     payload: Prisma.InputJsonObject;
-    update: Prisma.SubscriptionUpdateInput | null;
+    update: Prisma.SubscriptionUpdateManyMutationInput | null;
     checkout: CheckoutResolution | null;
     /** An order this callback supersedes, queued for LiqPay to stop charging. */
     unsubscribeOrderId: string | null;
@@ -205,7 +221,7 @@ export class SubscriptionsRepository {
         }
 
         if (input.unsubscribeOrderId) {
-          await this.queueUnsubscribe(tx, {
+          await queueUnsubscribe(tx, {
             organizationId: input.organizationId,
             subscriptionId: input.subscriptionId,
             orderId: input.unsubscribeOrderId,
@@ -213,10 +229,22 @@ export class SubscriptionsRepository {
         }
 
         if (input.update) {
-          await tx.subscription.update({
-            where: { id: input.subscriptionId },
+          // Conditional on purpose. Two callbacks for different orders read the same subscription
+          // before either writes, and an unconditional update would let the second one land on
+          // state the first had already replaced - leaving the order it displaced charging a card
+          // with nothing queued to stop it.
+          const { count } = await tx.subscription.updateMany({
+            where: {
+              id: input.subscriptionId,
+              status: input.previousStatus,
+              liqpayOrderId: input.expectedLiqpayOrderId,
+            },
             data: input.update,
           });
+
+          if (count === 0) {
+            throw new StaleSubscriptionStateError(input.subscriptionId);
+          }
 
           // No actor: the change came from LiqPay, not a person. The audit row is written in the
           // same transaction as the state change so the log can never disagree with the row.
@@ -241,6 +269,10 @@ export class SubscriptionsRepository {
       // A unique violation only means "already delivered" when it was the callback row that
       // collided. Any other one raised inside the same transaction - the live order id, say - is
       // a real failure, and reporting it as a duplicate would silently drop a state change.
+      if (error instanceof StaleSubscriptionStateError) {
+        throw error;
+      }
+
       if (isUniqueConstraintError(error) && (await this.hasCallback(input))) {
         return { duplicate: true };
       }
@@ -263,26 +295,6 @@ export class SubscriptionsRepository {
   }
 
   /**
-   * Queued rather than written to a slot on the subscription: LiqPay may owe us more than one
-   * cancellation at a time, and an order dropped here is an order that keeps charging a card.
-   * Requeueing an order already listed reopens its row instead of adding a second one.
-   */
-  private queueUnsubscribe(
-    tx: Prisma.TransactionClient,
-    input: { organizationId: string; subscriptionId: string; orderId: string },
-  ) {
-    return tx.billingUnsubscribeRequest.upsert({
-      where: { orderId: input.orderId },
-      create: {
-        organizationId: input.organizationId,
-        subscriptionId: input.subscriptionId,
-        orderId: input.orderId,
-      },
-      update: { resolvedAt: null },
-    });
-  }
-
-  /**
    * An unsubscribe LiqPay refused is queued, because the alternative is showing CANCELED while
    * the card keeps being charged every month. Only the order this cancellation actually stopped
    * is resolved: an order queued by an earlier failure is still charging and stays queued.
@@ -302,7 +314,7 @@ export class SubscriptionsRepository {
       });
 
       if (unsubscribe && !unsubscribe.stopped) {
-        await this.queueUnsubscribe(tx, {
+        await queueUnsubscribe(tx, {
           organizationId,
           subscriptionId: subscription.id,
           orderId: unsubscribe.orderId,
@@ -434,16 +446,39 @@ export class SubscriptionsRepository {
     });
   }
 
-  markPastDue(subscriptionId: string, graceEndsAt: Date) {
-    return this.prisma.subscription.update({
-      where: { id: subscriptionId },
-      data: { status: 'PAST_DUE', graceEndsAt },
+  /**
+   * Both of these repeat the predicate their row was selected by, and report how many rows they
+   * actually changed. The job reads a batch and then writes to it one row at a time, so a
+   * callback arriving in between would otherwise be overwritten by a decision made before it -
+   * an organization that has just paid pushed into PAST_DUE or RESTRICTED by the same pass that
+   * found it overdue.
+   */
+  markPastDueIfStillUnconfirmed(input: {
+    subscriptionId: string;
+    cutoff: Date;
+    graceEndsAt: Date;
+  }) {
+    return this.prisma.subscription.updateMany({
+      where: {
+        id: input.subscriptionId,
+        isExempt: false,
+        status: 'ACTIVE',
+        currentPeriodEndsAt: { lte: input.cutoff },
+      },
+      data: { status: 'PAST_DUE', graceEndsAt: input.graceEndsAt },
     });
   }
 
-  restrict(subscriptionId: string) {
-    return this.prisma.subscription.update({
-      where: { id: subscriptionId },
+  restrictIfStillDue(subscriptionId: string, now: Date) {
+    return this.prisma.subscription.updateMany({
+      where: {
+        id: subscriptionId,
+        isExempt: false,
+        OR: [
+          { status: 'PENDING', restrictAfter: { lte: now } },
+          { status: 'PAST_DUE', graceEndsAt: { lte: now } },
+        ],
+      },
       data: { status: 'RESTRICTED', graceEndsAt: null },
     });
   }

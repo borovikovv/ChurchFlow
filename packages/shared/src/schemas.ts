@@ -693,6 +693,10 @@ export const subscriptionSummarySchema = z.object({
       brand: z.string().nullable(),
     })
     .nullable(),
+  // Whether there is a payment obligation left to stop, which is not the same question as
+  // whether the organization currently has access. A restricted subscription and one covered by
+  // complimentary access can both still have LiqPay charging a card behind them.
+  canCancel: z.boolean(),
   entitlements: z.array(z.enum(ENTITLEMENT_VALUES)),
 });
 

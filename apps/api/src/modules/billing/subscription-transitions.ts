@@ -26,6 +26,35 @@ export function classifyCallbackStatus(callbackStatus: string): CallbackOutcome 
   return 'undecided';
 }
 
+/**
+ * What a callback is reporting about, decided from the order it names rather than from the order
+ * id alone. A checkout that was abandoned or has already been superseded is not a purchase we may
+ * act on, and treating it as one lets a stale LiqPay tab revive a cancelled subscription or push
+ * the live one aside.
+ */
+export type CallbackRole =
+  /** A charge against the order the subscription already runs on. */
+  | 'renewal'
+  /** A checkout still open, so paying for it is a purchase the organization is making now. */
+  | 'new-checkout'
+  /** An order we will not honour: abandoned, or paid but since replaced by another one. */
+  | 'retired-checkout';
+
+export function callbackRole(input: {
+  /** Null when the callback belongs to an order LiqPay charges directly, not to a checkout. */
+  checkoutStatus: 'PROPOSED' | 'PAID' | 'ABANDONED' | null;
+  /** True when the order is the one the subscription currently runs on. */
+  isLiveOrder: boolean;
+}): CallbackRole {
+  if (input.checkoutStatus === null || input.isLiveOrder) {
+    // LiqPay reports every monthly charge against the order that created the subscription, so an
+    // order that is already live is never a new purchase however it was found.
+    return input.checkoutStatus === 'ABANDONED' ? 'retired-checkout' : 'renewal';
+  }
+
+  return input.checkoutStatus === 'PROPOSED' ? 'new-checkout' : 'retired-checkout';
+}
+
 export interface SubscriptionTransitionState {
   status: SubscriptionStatus;
   graceEndsAt: Date | null;

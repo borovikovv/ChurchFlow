@@ -21,6 +21,6 @@ import { SubscriptionsRepository } from './repositories/subscriptions.repository
     SubscriptionsRepository,
     BillingDunningScheduler,
   ],
-  exports: [EntitlementsService],
+  exports: [EntitlementsService, BillingService],
 })
 export class BillingModule {}

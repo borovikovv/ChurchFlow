@@ -160,12 +160,22 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
 
       {current.isExempt ? (
         <p className="m-0 text-[var(--muted)]">{t('billing.complimentaryNotice')}</p>
-      ) : (
+      ) : null}
+
+      {/*
+        Cancelling is offered on `canCancel` rather than on the access status: a restricted
+        organization, or one given complimentary access on top of a subscription it was already
+        paying for, can still have LiqPay charging its card. Subscribing stays tied to the status,
+        because an exempt organization has nothing to buy.
+      */}
+      {current.isExempt && !current.canCancel ? null : (
         <div className="actions">
-          <Button disabled={pending} onClick={handleCheckout} type="button">
-            {hasSubscription ? t('billing.replaceCard') : t('billing.subscribe')}
-          </Button>
-          {hasSubscription ? (
+          {current.isExempt ? null : (
+            <Button disabled={pending} onClick={handleCheckout} type="button">
+              {hasSubscription ? t('billing.replaceCard') : t('billing.subscribe')}
+            </Button>
+          )}
+          {current.canCancel ? (
             <Button disabled={pending} onClick={handleCancel} type="button" variant="danger">
               {t('billing.cancel')}
             </Button>

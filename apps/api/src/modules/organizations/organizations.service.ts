@@ -13,6 +13,7 @@ import {
   type UpdateOrganizationInput,
 } from '@churchflow/shared';
 import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import { EntitlementsService } from '../billing/entitlements.service';
 import { OrganizationRequestsRepository } from '../organization-requests/repositories/organization-requests.repository';
 import { OrganizationsRepository } from './repositories/organizations.repository';
@@ -83,6 +84,7 @@ export class OrganizationsService {
     private readonly organizationRequestsRepository: OrganizationRequestsRepository,
     private readonly auditService: AuditService,
     private readonly entitlementsService: EntitlementsService,
+    private readonly billingService: BillingService,
   ) {}
 
   async create(input: z.infer<typeof createOrganizationSchema>, ownerUserId: string) {
@@ -192,11 +194,27 @@ export class OrganizationsService {
 
   private async setBillingExemption(id: string, actorUserId: string, reason: string | null) {
     try {
-      return await this.organizationsRepository.setBillingExemption({
-        organizationId: id,
-        actorUserId,
-        reason,
-      });
+      const { subscription, stoppedOrderId } =
+        await this.organizationsRepository.setBillingExemption({
+          organizationId: id,
+          actorUserId,
+          reason,
+        });
+
+      // The grant has already queued the order, so this only asks LiqPay now rather than waiting
+      // for the nightly job. A refusal leaves the queued request open to be retried.
+      if (stoppedOrderId) {
+        await this.billingService.stopOrder(stoppedOrderId);
+        await this.billingService.notifyOrganizationAdmins({
+          organizationId: id,
+          type: 'SUBSCRIPTION_CANCELED',
+          titleKey: 'subscriptionCanceled',
+          bodyMessage: { key: 'subscriptionCanceledComplimentary' },
+          dedupeKey: `canceled-complimentary:${stoppedOrderId}`,
+        });
+      }
+
+      return subscription;
     } catch (error: unknown) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new NotFoundException('Organization was not found');

@@ -7,6 +7,28 @@ const LIQPAY_CHECKOUT_URL = 'https://www.liqpay.ua/api/3/checkout';
 const LIQPAY_REQUEST_URL = 'https://www.liqpay.ua/api/request';
 const LIQPAY_REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * LiqPay answers an unsubscribe with 200 whether or not it stopped anything, so the body is what
+ * decides. These codes mean there is nothing left to stop - the order is unknown to LiqPay, or it
+ * was never recurring - and retrying them forever would keep a request queued that LiqPay will
+ * never acknowledge. Every other code, and anything unrecognised, is retried instead: a queue
+ * entry too many is noise, while one dropped early is a card charged in silence.
+ */
+const TERMINAL_UNSUBSCRIBE_ERRORS = new Set([
+  'payment_not_found',
+  'payment_not_subscribed',
+  'order_id_empty',
+]);
+
+/** What LiqPay said about an order we asked it to stop charging. */
+export type UnsubscribeOutcome =
+  /** LiqPay accepted the cancellation. */
+  | 'stopped'
+  /** LiqPay has no recurring charge for this order, so there is nothing left to cancel. */
+  | 'not-charging'
+  /** Undecided: the request has to be repeated before the order can be considered stopped. */
+  | 'retry';
+
 export interface LiqPayCheckout {
   checkoutUrl: string;
   data: string;
@@ -135,9 +157,11 @@ export class LiqPayService {
   /**
    * Best effort by design. If LiqPay cannot be reached the local subscription is still moved on;
    * leaving our state stuck because a third party is down would be worse than a stale
-   * subscription there, which the next callback reconciles.
+   * subscription there, which the next callback reconciles. What the caller must not do is treat
+   * an undecided answer as a cancellation, which is why this reports three outcomes rather than
+   * a boolean: only `retry` means the order may still be charging.
    */
-  async unsubscribe(orderId: string): Promise<boolean> {
+  async unsubscribe(orderId: string): Promise<UnsubscribeOutcome> {
     const { data, signature } = this.encode({
       public_key: this.requiredKey('LIQPAY_PUBLIC_KEY'),
       version: LIQPAY_API_VERSION,
@@ -160,10 +184,10 @@ export class LiqPayService {
           status: response.status,
         });
 
-        return false;
+        return 'retry';
       }
 
-      return true;
+      return this.classifyUnsubscribe(orderId, await readJsonObject(response));
     } catch (error: unknown) {
       this.logger.warn({
         event: 'LiqPay unsubscribe failed',
@@ -171,8 +195,40 @@ export class LiqPayService {
         message: error instanceof Error ? error.message : 'unknown error',
       });
 
-      return false;
+      return 'retry';
     }
+  }
+
+  private classifyUnsubscribe(
+    orderId: string,
+    body: Record<string, unknown> | null,
+  ): UnsubscribeOutcome {
+    if (!body) {
+      this.logger.warn({ event: 'LiqPay unsubscribe answered with an unreadable body', orderId });
+
+      return 'retry';
+    }
+
+    const result = optionalString(body['result'])?.toLowerCase() ?? null;
+    const status = optionalString(body['status'])?.toLowerCase() ?? null;
+    if (result === 'ok' || status === 'unsubscribed') {
+      return 'stopped';
+    }
+
+    const errorCode = optionalString(body['err_code']) ?? optionalString(body['code']);
+    const terminal = errorCode !== null && TERMINAL_UNSUBSCRIBE_ERRORS.has(errorCode.toLowerCase());
+
+    this.logger.warn({
+      event: terminal
+        ? 'LiqPay has no recurring charge left for this order'
+        : 'LiqPay unsubscribe was not accepted',
+      orderId,
+      result,
+      status,
+      errorCode,
+    });
+
+    return terminal ? 'not-charging' : 'retry';
   }
 
   private encode(payload: Record<string, unknown>): { data: string; signature: string } {
@@ -193,6 +249,20 @@ export class LiqPayService {
 
     return value;
   }
+}
+
+/** LiqPay is not consistent about content types here, so the body is parsed rather than trusted. */
+async function readJsonObject(response: Response): Promise<Record<string, unknown> | null> {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(await response.text());
+  } catch {
+    return null;
+  }
+
+  return typeof payload === 'object' && payload !== null
+    ? (payload as Record<string, unknown>)
+    : null;
 }
 
 /** LiqPay expects `YYYY-MM-DD HH:mm:ss` in UTC. */

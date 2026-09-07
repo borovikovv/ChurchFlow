@@ -21,19 +21,27 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EntitlementsService } from './entitlements.service';
 import { LiqPayService, type LiqPayCallback } from './liqpay.service';
 import {
+  StaleSubscriptionStateError,
   SubscriptionsRepository,
   type CheckoutResolution,
   type SubscriptionOrderMatch,
 } from './repositories/subscriptions.repository';
 import { BILLING_TIME_ZONE, dayKey, minutesAgo } from './billing-time';
 import {
+  callbackRole,
   classifyCallbackStatus,
   transitionForCallbackStatus,
   type CallbackOutcome,
+  type CallbackRole,
   type SubscriptionTransitionState,
 } from './subscription-transitions';
 
 const BILLING_CURRENCY = 'UAH';
+
+// A callback is decided against state read before the transaction that writes it. A concurrent
+// change invalidates that reading rather than being overwritten, and the decision is made again.
+// More than a couple of collisions on one subscription is not contention, it is a bug.
+const CALLBACK_APPLY_ATTEMPTS = 3;
 const NOTIFICATION_PREFERENCE_KEY = 'organizationUpdatesEnabled' as const;
 
 type SubscriptionRecord = NonNullable<
@@ -120,11 +128,13 @@ export class BillingService {
     const subscription = await this.requireSubscription(organizationId);
 
     // A refused or unreachable unsubscribe is remembered, not swallowed: otherwise the card
-    // keeps being charged every month behind a subscription we are showing as cancelled.
+    // keeps being charged every month behind a subscription we are showing as cancelled. Only an
+    // undecided answer leaves the order queued - an order LiqPay has no recurring charge for is
+    // as stopped as one it just cancelled, and requeueing it would retry it nightly forever.
     const unsubscribe = subscription.liqpayOrderId
       ? {
           orderId: subscription.liqpayOrderId,
-          stopped: await this.liqPayService.unsubscribe(subscription.liqpayOrderId),
+          stopped: (await this.liqPayService.unsubscribe(subscription.liqpayOrderId)) !== 'retry',
         }
       : null;
 
@@ -135,8 +145,8 @@ export class BillingService {
 
   /**
    * Public, unauthenticated, and therefore trusted only after the signature checks out. Every
-   * callback is persisted before it is acted on, and the unique (order_id, payment_id) index
-   * makes a repeat delivery a no-op rather than a second state change.
+   * callback is persisted before it is acted on, and the unique (order_id, payment_id, status)
+   * index makes a repeat delivery a no-op rather than a second state change.
    */
   async handleCallback(data: string, signature: string, now: Date = new Date()) {
     if (!this.liqPayService.verifySignature(data, signature)) {
@@ -154,49 +164,99 @@ export class BillingService {
       throw new BadRequestException('LiqPay callback is missing a payment id');
     }
 
-    const match = await this.subscriptionsRepository.findByOrderId(callback.orderId);
+    const orderId = callback.orderId;
+    const paymentId = callback.paymentId;
+
+    // The unique index makes one callback delivered twice harmless. It says nothing about two
+    // different payments arriving at once, which is what this loop is for: the write refuses
+    // state that moved under it, and the decision is then made again on what the row now holds.
+    for (let attempt = 1; attempt <= CALLBACK_APPLY_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.applyCallbackOnce({ data, callback, orderId, paymentId, now });
+      } catch (error: unknown) {
+        if (
+          !(error instanceof StaleSubscriptionStateError) ||
+          attempt === CALLBACK_APPLY_ATTEMPTS
+        ) {
+          throw error;
+        }
+
+        this.logger.warn({
+          event: 'LiqPay callback raced another change and is being reapplied',
+          orderId,
+          attempt,
+        });
+      }
+    }
+
+    // Unreachable: the loop returns or throws. Better a 500 LiqPay redelivers than a silent 200.
+    throw new ServiceUnavailableException('The callback could not be applied');
+  }
+
+  private async applyCallbackOnce(input: {
+    data: string;
+    callback: LiqPayCallback;
+    orderId: string;
+    paymentId: string;
+    now: Date;
+  }): Promise<{ ok: true }> {
+    const { data, callback, orderId, paymentId, now } = input;
+
+    const match = await this.subscriptionsRepository.findByOrderId(orderId);
     if (!match) {
       // Acknowledge anyway: retrying will not make an unknown order familiar.
-      this.logger.warn({ event: 'LiqPay callback for unknown order', orderId: callback.orderId });
+      this.logger.warn({ event: 'LiqPay callback for unknown order', orderId });
 
       return { ok: true as const };
     }
 
     const { subscription, checkoutOrder } = match;
-    const orderId = callback.orderId;
 
-    // A checkout stops being "new" once it is the live order: LiqPay reports every monthly
-    // renewal against the order that created the subscription, and treating those as new
-    // checkouts would re-pin the price on each charge.
-    const isNewSubscription = checkoutOrder !== null && subscription.liqpayOrderId !== orderId;
+    const role = callbackRole({
+      checkoutStatus: checkoutOrder?.status ?? null,
+      isLiveOrder: subscription.liqpayOrderId === orderId,
+    });
+    const isNewSubscription = role === 'new-checkout';
+    const outcome = classifyCallbackStatus(callback.status ?? '');
 
     if (checkoutOrder) {
       this.warnOnAmountMismatch(checkoutOrder, callback);
     }
 
-    const transition = transitionForCallbackStatus({
-      current: subscription,
-      callbackStatus: callback.status ?? '',
-      now,
-      isNewSubscription,
-    });
+    // A retired order decides nothing about the subscription whatever it reports: it was
+    // abandoned, or it has already been replaced by the order that is live now. Letting one
+    // through is how a tab left open on a cancelled subscription revives it, and how last
+    // month's order takes the live one's place when its own renewal lands late.
+    const transition =
+      role === 'retired-checkout'
+        ? null
+        : transitionForCallbackStatus({
+            current: subscription,
+            callbackStatus: callback.status ?? '',
+            now,
+            isNewSubscription,
+          });
 
-    const supersededOrderId =
-      transition?.status === 'ACTIVE' &&
-      isNewSubscription &&
-      subscription.liqpayOrderId &&
-      subscription.liqpayOrderId !== orderId
-        ? subscription.liqpayOrderId
-        : null;
+    const unsubscribeOrderId = orderToStop({
+      role,
+      outcome,
+      orderId,
+      liveOrderId: subscription.liqpayOrderId,
+      activated: transition?.status === 'ACTIVE',
+    });
 
     const { duplicate } = await this.subscriptionsRepository.applyCallback({
       subscriptionId: subscription.id,
       organizationId: subscription.organizationId,
       orderId,
-      paymentId: callback.paymentId,
+      paymentId,
       status: callback.status ?? 'unknown',
       previousStatus: subscription.status,
       nextStatus: transition?.status ?? null,
+      // The state this callback was judged against. The write applies only while the row still
+      // holds it, so a payment decided against a subscription that has since moved on is redone
+      // rather than layered on top of someone else's change.
+      expectedLiqpayOrderId: subscription.liqpayOrderId,
       payload: { data } satisfies Prisma.InputJsonObject,
       update: transition
         ? this.buildCallbackUpdate({
@@ -210,24 +270,26 @@ export class BillingService {
         : null,
       // Queued in the same transaction as the swap: an order superseded but never queued is an
       // order still charging the card, with nothing left that knows to stop it.
-      unsubscribeOrderId: supersededOrderId,
+      unsubscribeOrderId,
       checkout: resolveCheckout({
         checkoutOrder,
-        outcome: classifyCallbackStatus(callback.status ?? ''),
+        outcome,
         isNewSubscription,
         activated: transition?.status === 'ACTIVE',
       }),
     });
 
-    if (duplicate || !transition) {
+    if (duplicate) {
       return { ok: true as const };
     }
 
-    if (supersededOrderId) {
-      await this.stopOrder(supersededOrderId);
+    if (unsubscribeOrderId) {
+      await this.stopOrder(unsubscribeOrderId);
     }
 
-    await this.notifyTransition(subscription, transition);
+    if (transition) {
+      await this.notifyTransition(subscription, transition);
+    }
 
     return { ok: true as const };
   }
@@ -239,9 +301,9 @@ export class BillingService {
     orderId: string;
     isNewSubscription: boolean;
     now: Date;
-  }): Prisma.SubscriptionUpdateInput {
+  }): Prisma.SubscriptionUpdateManyMutationInput {
     const { transition, callback, isNewSubscription, now } = input;
-    const update: Prisma.SubscriptionUpdateInput = {
+    const update: Prisma.SubscriptionUpdateManyMutationInput = {
       status: transition.status,
       graceEndsAt: transition.graceEndsAt,
       currentPeriodEndsAt: transition.currentPeriodEndsAt,
@@ -299,7 +361,7 @@ export class BillingService {
 
   /** Best effort now, retried by the dunning job for as long as the request is still open. */
   async stopOrder(orderId: string): Promise<boolean> {
-    if (!(await this.liqPayService.unsubscribe(orderId))) {
+    if ((await this.liqPayService.unsubscribe(orderId)) === 'retry') {
       return false;
     }
 
@@ -353,16 +415,19 @@ export class BillingService {
       | 'SUBSCRIPTION_RENEWED'
       | 'SUBSCRIPTION_PAYMENT_FAILED'
       | 'SUBSCRIPTION_RESTRICTED'
-      | 'SUBSCRIPTION_REQUIRED';
+      | 'SUBSCRIPTION_REQUIRED'
+      | 'SUBSCRIPTION_CANCELED';
     titleKey:
       | 'subscriptionRenewed'
       | 'subscriptionPaymentFailed'
       | 'subscriptionRestricted'
-      | 'subscriptionRequired';
+      | 'subscriptionRequired'
+      | 'subscriptionCanceled';
     bodyMessage:
       | { key: 'subscriptionDeadline'; deadline: string; timeZone: string }
       | { key: 'subscriptionRenewed'; nextChargeAt: string; timeZone: string }
-      | { key: 'subscriptionRestricted' };
+      | { key: 'subscriptionRestricted' }
+      | { key: 'subscriptionCanceledComplimentary' };
     dedupeKey: string;
     recipientMembershipIds?: string[];
   }): Promise<void> {
@@ -410,6 +475,33 @@ export class BillingService {
 }
 
 /**
+ * The order this callback leaves charging a card, if any. Only one order may bill an organization
+ * at a time, so whichever of them is not the live one has to be stopped - and an order missed
+ * here is an order LiqPay keeps charging with nothing left in the system aware of it.
+ */
+function orderToStop(input: {
+  role: CallbackRole;
+  outcome: CallbackOutcome;
+  orderId: string;
+  liveOrderId: string | null;
+  activated: boolean;
+}): string | null {
+  const { role, outcome, orderId, liveOrderId, activated } = input;
+
+  // Paid, for an order we are not honouring. The money was taken and LiqPay now holds a recurring
+  // charge nothing else tracks, so the order is queued against itself rather than ignored.
+  if (role === 'retired-checkout') {
+    return outcome === 'paid' ? orderId : null;
+  }
+
+  if (role === 'new-checkout' && activated && liveOrderId && liveOrderId !== orderId) {
+    return liveOrderId;
+  }
+
+  return null;
+}
+
+/**
  * Which checkout order a callback closes, if any. Only a decided callback closes one: an
  * undecided `wait_*` may still turn into a payment, and retiring its order early would leave that
  * payment matching nothing - the failure this table exists to prevent.
@@ -449,6 +541,10 @@ function toSummary(
     card: subscription.cardMask
       ? { mask: subscription.cardMask, brand: subscription.cardBrand }
       : null,
+    // A live LiqPay order, whatever the organization's access looks like. Reading this off the
+    // status instead is what hid the button from a restricted organization whose card was still
+    // being charged every month.
+    canCancel: subscription.liqpayOrderId !== null && subscription.status !== 'CANCELED',
     entitlements: [...entitlements],
   };
 }

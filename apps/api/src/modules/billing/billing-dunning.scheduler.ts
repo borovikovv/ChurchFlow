@@ -125,9 +125,23 @@ export class BillingDunningScheduler {
     const cutoff = daysFromNow(now, -BILLING_RECONCILIATION_GRACE_DAYS);
     const unconfirmed = await this.subscriptionsRepository.listUnconfirmedRenewals(cutoff);
     const graceEndsAt = daysFromNow(now, BILLING_GRACE_PERIOD_DAYS);
+    let reconciled = 0;
 
     for (const subscription of unconfirmed) {
-      await this.subscriptionsRepository.markPastDue(subscription.id, graceEndsAt);
+      const { count } = await this.subscriptionsRepository.markPastDueIfStillUnconfirmed({
+        subscriptionId: subscription.id,
+        cutoff,
+        graceEndsAt,
+      });
+
+      // The renewal arrived while this pass was running. There is nothing left to reconcile, and
+      // telling an organization that has just paid that its payment failed would be worse than
+      // saying nothing at all.
+      if (count === 0) {
+        continue;
+      }
+
+      reconciled += 1;
       await this.billingService.notifyOrganizationAdmins({
         organizationId: subscription.organizationId,
         type: 'SUBSCRIPTION_PAYMENT_FAILED',
@@ -142,7 +156,7 @@ export class BillingDunningScheduler {
       });
     }
 
-    return unconfirmed.length;
+    return reconciled;
   }
 
   /**
@@ -164,9 +178,18 @@ export class BillingDunningScheduler {
 
   private async restrictExpired(now: Date): Promise<number> {
     const due = await this.subscriptionsRepository.listRestrictionDue(now);
+    let restricted = 0;
 
     for (const subscription of due) {
-      await this.subscriptionsRepository.restrict(subscription.id);
+      const { count } = await this.subscriptionsRepository.restrictIfStillDue(subscription.id, now);
+
+      // A payment landed between the batch being read and this row being written. It is no longer
+      // due, and restricting it would take write access from an organization that just paid.
+      if (count === 0) {
+        continue;
+      }
+
+      restricted += 1;
       await this.billingService.notifyOrganizationAdmins({
         organizationId: subscription.organizationId,
         type: 'SUBSCRIPTION_RESTRICTED',
@@ -177,7 +200,7 @@ export class BillingDunningScheduler {
       });
     }
 
-    return due.length;
+    return restricted;
   }
 
   /**

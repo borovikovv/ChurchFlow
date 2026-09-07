@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { OrganizationRole, OrganizationStatus, PlatformRole, Prisma } from '@churchflow/db';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { queueUnsubscribe } from '../../billing/billing-unsubscribe-queue';
 import type { createOrganizationSchema, UpdateOrganizationInput } from '@churchflow/shared';
 import type { z } from 'zod';
 
@@ -242,12 +243,20 @@ export class OrganizationsRepository {
    * does not touch `status`. Revoking therefore drops the organization straight back to whatever
    * its subscription actually was - PENDING, PAST_DUE or RESTRICTED - with no way to leave it
    * looking ACTIVE by accident.
+   *
+   * What it does replace is the payment. An organization told it pays nothing must not keep
+   * being charged, so a live LiqPay order is queued to be stopped and any checkout still open is
+   * closed - both inside the transaction that records the grant, so neither can happen without
+   * the other. The order that was stopped is reported back for the caller to act on.
    */
   async setBillingExemption(input: {
     organizationId: string;
     actorUserId: string;
     reason: string | null;
-  }) {
+  }): Promise<{
+    subscription: Prisma.SubscriptionGetPayload<Record<string, never>>;
+    stoppedOrderId: string | null;
+  }> {
     const granting = input.reason !== null;
 
     return this.prisma.$transaction(async (tx) => {
@@ -268,6 +277,30 @@ export class OrganizationsRepository {
             },
       });
 
+      // A cancelled subscription has already been through this: its order is either stopped or
+      // queued, and claiming to have stopped it a second time would only mislead.
+      const stoppedOrderId =
+        granting && subscription.liqpayOrderId && subscription.status !== 'CANCELED'
+          ? subscription.liqpayOrderId
+          : null;
+
+      if (granting) {
+        if (stoppedOrderId) {
+          await queueUnsubscribe(tx, {
+            organizationId: input.organizationId,
+            subscriptionId: subscription.id,
+            orderId: stoppedOrderId,
+          });
+        }
+
+        // A checkout left open is a page that can still be paid for. The organization pays
+        // nothing from now on, so nothing payable may be left standing behind it.
+        await tx.billingCheckoutOrder.updateMany({
+          where: { subscriptionId: subscription.id, status: 'PROPOSED' },
+          data: { status: 'ABANDONED', resolvedAt: new Date() },
+        });
+      }
+
       await tx.auditLog.create({
         data: {
           organizationId: input.organizationId,
@@ -276,12 +309,16 @@ export class OrganizationsRepository {
           entityType: 'Subscription',
           entityId: subscription.id,
           metadata: granting
-            ? { reason: input.reason, subscriptionStatus: subscription.status }
+            ? {
+                reason: input.reason,
+                subscriptionStatus: subscription.status,
+                ...(stoppedOrderId ? { stoppedOrderId } : {}),
+              }
             : { subscriptionStatus: subscription.status },
         },
       });
 
-      return subscription;
+      return { subscription, stoppedOrderId };
     });
   }
 

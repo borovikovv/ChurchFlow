@@ -18,6 +18,7 @@ export const NOTIFICATION_TITLE_KEYS = [
   'serviceAssigned',
   'serviceReminder',
   'serviceStarts',
+  'subscriptionCanceled',
   'subscriptionPaymentFailed',
   'subscriptionRenewed',
   'subscriptionRequired',
@@ -58,6 +59,7 @@ export const notificationBodyMessageSchema = z.discriminatedUnion('key', [
   }),
   z.object({ key: z.literal('subscriptionDeadline'), deadline: z.string(), timeZone: z.string() }),
   z.object({ key: z.literal('subscriptionRestricted') }),
+  z.object({ key: z.literal('subscriptionCanceledComplimentary') }),
   z.object({
     key: z.literal('subscriptionRenewed'),
     nextChargeAt: z.string(),
@@ -84,6 +86,7 @@ interface NotificationMessageCatalog {
     memberRemoved: (params: { memberName: string }) => string;
     membersImported: (params: { memberCount: number }) => string;
     prayerRequestCreated: (params: { authorName: string; requestTitle: string }) => string;
+    subscriptionCanceledComplimentary: () => string;
     subscriptionDeadline: (params: { deadline: string }) => string;
     subscriptionRenewed: (params: { nextChargeAt: string }) => string;
     subscriptionRestricted: () => string;
@@ -117,6 +120,7 @@ const NOTIFICATION_MESSAGE_CATALOG = {
       serviceAssigned: 'You were assigned to a service',
       serviceReminder: 'Service reminder',
       serviceStarts: 'Service starts',
+      subscriptionCanceled: 'Subscription stopped',
       subscriptionPaymentFailed: 'Subscription payment failed',
       subscriptionRenewed: 'Subscription renewed',
       subscriptionRequired: 'A subscription is required',
@@ -143,6 +147,8 @@ const NOTIFICATION_MESSAGE_CATALOG = {
         `${String(params.memberCount)} members were imported to the organization.`,
       prayerRequestCreated: (params) =>
         `${params.authorName} asked for prayer: ${params.requestTitle}`,
+      subscriptionCanceledComplimentary: () =>
+        'A platform administrator granted this organization complimentary access, so the paid subscription was stopped and the card will not be charged again. Subscribing again is needed if the complimentary access is ever withdrawn.',
       subscriptionDeadline: (params) =>
         `Full access continues until ${params.deadline}. After that the organization becomes read-only: existing data stays readable, but nothing new can be created.`,
       subscriptionRenewed: (params) =>
@@ -175,6 +181,7 @@ const NOTIFICATION_MESSAGE_CATALOG = {
       serviceAssigned: 'Вас призначено на служіння',
       serviceReminder: 'Нагадування про служіння',
       serviceStarts: 'Початок служіння',
+      subscriptionCanceled: 'Підписку зупинено',
       subscriptionPaymentFailed: 'Платіж за підпискою не пройшов',
       subscriptionRenewed: 'Підписку продовжено',
       subscriptionRequired: 'Потрібна підписка',
@@ -201,6 +208,8 @@ const NOTIFICATION_MESSAGE_CATALOG = {
         `До організації імпортовано учасників: ${String(params.memberCount)}.`,
       prayerRequestCreated: (params) =>
         `${params.authorName} просить молитви: ${params.requestTitle}`,
+      subscriptionCanceledComplimentary: () =>
+        'Адміністратор платформи надав організації безкоштовний доступ, тому платну підписку зупинено й списань з картки більше не буде. Якщо безкоштовний доступ згодом відкличуть, підписку треба буде оформити наново.',
       subscriptionDeadline: (params) =>
         `Повний доступ діє до ${params.deadline}. Після цього організація перейде в режим читання: наявні дані лишаться доступними, але створювати нове буде не можна.`,
       subscriptionRenewed: (params) => `Платіж пройшов. Наступне списання ${params.nextChargeAt}.`,
@@ -285,6 +294,8 @@ export function renderNotificationBody(
       });
     case 'subscriptionRestricted':
       return catalog.bodies.subscriptionRestricted();
+    case 'subscriptionCanceledComplimentary':
+      return catalog.bodies.subscriptionCanceledComplimentary();
   }
 }
 

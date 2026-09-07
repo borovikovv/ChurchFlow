@@ -240,14 +240,28 @@ test('a grant without a reason is rejected', () => {
   assert.throws(() => grantBillingExemptionSchema.parse({ reason: '   ' }));
 });
 
-function exemptionTransaction() {
+function exemptionTransaction({ liqpayOrderId = null, status = 'PAST_DUE' } = {}) {
   const auditRows = [];
   const updates = [];
+  const queued = [];
+  const closedCheckouts = [];
   const tx = {
     subscription: {
       update: async (args) => {
         updates.push(args);
-        return { id: 'subscription', status: 'PAST_DUE' };
+        return { id: 'subscription', status, liqpayOrderId };
+      },
+    },
+    billingUnsubscribeRequest: {
+      upsert: async (args) => {
+        queued.push(args.create.orderId);
+        return args.create;
+      },
+    },
+    billingCheckoutOrder: {
+      updateMany: async (args) => {
+        closedCheckouts.push(args.where);
+        return { count: 0 };
       },
     },
     auditLog: {
@@ -264,6 +278,8 @@ function exemptionTransaction() {
     }),
     auditRows,
     updates,
+    queued,
+    closedCheckouts,
   };
 }
 
@@ -428,4 +444,58 @@ test('an organization that never had complimentary access reports no history', a
   );
 
   assert.deepEqual((await service.getAdmin(ORGANIZATION_ID)).billingExemptionHistory, []);
+});
+
+test('a complimentary grant stops the subscription the organization was paying for', async () => {
+  // Complimentary access replaces the payment rather than sitting on top of it. Leaving the
+  // LiqPay order running kept charging the card of an organization we had just told pays nothing.
+  const { repository, queued, closedCheckouts, auditRows } = exemptionTransaction({
+    liqpayOrderId: 'live-order',
+    status: 'ACTIVE',
+  });
+
+  const result = await repository.setBillingExemption({
+    organizationId: ORGANIZATION_ID,
+    actorUserId: 'platform-admin',
+    reason: 'Partner church',
+  });
+
+  assert.equal(result.stoppedOrderId, 'live-order');
+  assert.deepEqual(queued, ['live-order']);
+  assert.equal(closedCheckouts[0].status, 'PROPOSED');
+  assert.equal(auditRows[0].metadata.stoppedOrderId, 'live-order');
+});
+
+test('a grant over an already cancelled subscription queues nothing to stop', async () => {
+  const { repository, queued } = exemptionTransaction({
+    liqpayOrderId: 'old-order',
+    status: 'CANCELED',
+  });
+
+  const result = await repository.setBillingExemption({
+    organizationId: ORGANIZATION_ID,
+    actorUserId: 'platform-admin',
+    reason: 'Partner church',
+  });
+
+  // Its order is already stopped or already queued; claiming to stop it again would only mislead.
+  assert.equal(result.stoppedOrderId, null);
+  assert.deepEqual(queued, []);
+});
+
+test('revoking complimentary access stops nothing and leaves checkouts alone', async () => {
+  const { repository, queued, closedCheckouts } = exemptionTransaction({
+    liqpayOrderId: 'live-order',
+    status: 'ACTIVE',
+  });
+
+  const result = await repository.setBillingExemption({
+    organizationId: ORGANIZATION_ID,
+    actorUserId: 'platform-admin',
+    reason: null,
+  });
+
+  assert.equal(result.stoppedOrderId, null);
+  assert.deepEqual(queued, []);
+  assert.deepEqual(closedCheckouts, []);
 });

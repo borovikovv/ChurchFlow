@@ -71,6 +71,10 @@ function scheduler({
   pendingStops = [],
   reopenedCount = 0,
   enforcementEnabled = true,
+  // How many rows the guarded writes actually change. Zero is the row that stopped being due
+  // between the batch being read and this write reaching it.
+  restrictedCount = 1,
+  pastDueCount = 1,
 } = {}) {
   const restricted = [];
   const pastDue = [];
@@ -87,13 +91,13 @@ function scheduler({
       reopened.push(input);
       return { count: reopenedCount };
     },
-    markPastDue: async (id, graceEndsAt) => {
-      pastDue.push({ id, graceEndsAt });
-      return {};
+    markPastDueIfStillUnconfirmed: async ({ subscriptionId, cutoff, graceEndsAt }) => {
+      pastDue.push({ id: subscriptionId, cutoff, graceEndsAt });
+      return { count: pastDueCount };
     },
-    restrict: async (id) => {
+    restrictIfStillDue: async (id, now) => {
       restricted.push(id);
-      return {};
+      return { count: restrictedCount, now };
     },
   };
 
@@ -313,7 +317,12 @@ test('reopening a stale window only reaches unenforced rollout windows', async (
   assert.equal('graceEndsAt' in queries[0].where, false);
 });
 
-function checkoutService({ subscription, unsubscribeOk = true, onCancel = () => {} }) {
+function checkoutService({
+  subscription,
+  unsubscribeOk = true,
+  unsubscribeOutcome = null,
+  onCancel = () => {},
+}) {
   const started = [];
   const unsubscribed = [];
 
@@ -328,7 +337,7 @@ function checkoutService({ subscription, unsubscribeOk = true, onCancel = () => 
   });
   liqPayService.unsubscribe = async (orderId) => {
     unsubscribed.push(orderId);
-    return unsubscribeOk;
+    return unsubscribeOutcome ?? (unsubscribeOk ? 'stopped' : 'retry');
   };
 
   const service = new BillingService(
@@ -497,4 +506,69 @@ test('cancelling resolves the order it stopped and leaves every other one queued
 
   assert.deepEqual(queued, []);
   assert.deepEqual(resolved, [{ orderId: 'old-order', resolvedAt: null }]);
+});
+
+test('the nightly writes repeat the predicate the row was selected by', async () => {
+  const { repository, queries } = capturingRepository();
+
+  await repository.restrictIfStillDue('subscription', NOW);
+  await repository.markPastDueIfStillUnconfirmed({
+    subscriptionId: 'subscription',
+    cutoff: NOW,
+    graceEndsAt: NOW,
+  });
+
+  assert.deepEqual(queries[0].where.OR, [
+    { status: 'PENDING', restrictAfter: { lte: NOW } },
+    { status: 'PAST_DUE', graceEndsAt: { lte: NOW } },
+  ]);
+  assert.equal(queries[0].where.id, 'subscription');
+  assert.equal(queries[1].where.status, 'ACTIVE');
+  assert.equal(queries[1].where.currentPeriodEndsAt.lte, NOW);
+  for (const query of queries) {
+    assert.equal(query.where.isExempt, false);
+  }
+});
+
+test('an organization that paid while the pass ran is not restricted by it', async () => {
+  // The batch is read once and written row by row. A callback landing in between used to be
+  // overwritten by a decision taken before it, taking write access from a church that had paid.
+  const { instance, notified } = scheduler({ due: [DUE_ROW], restrictedCount: 0 });
+
+  const result = await instance.run(NOW);
+
+  assert.equal(result.restrictedCount, 0);
+  assert.deepEqual(notified, []);
+});
+
+test('a renewal that arrived mid-pass is not reconciled into PAST_DUE', async () => {
+  const { instance, notified } = scheduler({
+    unconfirmed: [
+      {
+        id: 'subscription',
+        organizationId: 'organization',
+        organization: { members: [{ id: 'membership' }] },
+      },
+    ],
+    pastDueCount: 0,
+  });
+
+  const result = await instance.run(NOW);
+
+  assert.equal(result.reconciledCount, 0);
+  // Telling an organization that has just paid that its payment failed is worse than silence.
+  assert.deepEqual(notified, []);
+});
+
+test('an order LiqPay is no longer charging is not queued for a hopeless retry', async () => {
+  const canceled = [];
+  const { service } = checkoutService({
+    subscription: { ...PENDING_SUBSCRIPTION, status: 'ACTIVE', liqpayOrderId: 'old-order' },
+    unsubscribeOutcome: 'not-charging',
+    onCancel: (args) => canceled.push(args),
+  });
+
+  await service.cancel('organization', 'actor');
+
+  assert.deepEqual(canceled, [['organization', 'actor', { orderId: 'old-order', stopped: true }]]);
 });
