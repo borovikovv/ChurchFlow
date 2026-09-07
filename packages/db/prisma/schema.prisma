@@ -1053,17 +1053,17 @@ model BudgetMonth {
 }
 
 model BudgetEntry {
-  id         String   @id @default(uuid()) @db.Uuid
-  monthId        String @map("month_id") @db.Uuid
-  categoryId     String @map("category_id") @db.Uuid
-  organizationId String @map("organization_id") @db.Uuid
-  rowIndex   Int      @default(0) @map("row_index")
-  amountUah  Decimal  @default(0) @map("amount_uah") @db.Decimal(12, 2)
-  amountUsd  Decimal  @default(0) @map("amount_usd") @db.Decimal(12, 2)
-  amountEur  Decimal  @default(0) @map("amount_eur") @db.Decimal(12, 2)
-  note       String?
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid()) @db.Uuid
+  monthId        String   @map("month_id") @db.Uuid
+  categoryId     String   @map("category_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  rowIndex       Int      @default(0) @map("row_index")
+  amountUah      Decimal  @default(0) @map("amount_uah") @db.Decimal(12, 2)
+  amountUsd      Decimal  @default(0) @map("amount_usd") @db.Decimal(12, 2)
+  amountEur      Decimal  @default(0) @map("amount_eur") @db.Decimal(12, 2)
+  note           String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   month    BudgetMonth       @relation(fields: [monthId, organizationId], references: [id, organizationId], onDelete: Cascade)
   category BudgetCategory    @relation(fields: [categoryId, organizationId], references: [id, organizationId], onDelete: Cascade)
@@ -1222,12 +1222,12 @@ model Subscription {
   // checkout. A single slot on the subscription could only remember the latest one, so paying for
   // a checkout that had since been superseded produced a callback matching no order at all.
 
-  // An order LiqPay still needs to stop charging. Set when unsubscribe fails or when a
-  // replacement supersedes an old order; the dunning job retries until LiqPay accepts it.
-  pendingUnsubscribeOrderId String? @map("pending_unsubscribe_order_id")
-  cardMask           String?   @map("card_mask")
-  cardBrand          String?   @map("card_brand")
-  cardExpiry         String?   @map("card_expiry")
+  // Orders LiqPay still needs to stop charging live in BillingUnsubscribeRequest, one row per
+  // order. A single slot could only hold the latest one, so a cancellation LiqPay accepted
+  // cleared a different order's failed unsubscribe and left that one charging the card forever.
+  cardMask   String? @map("card_mask")
+  cardBrand  String? @map("card_brand")
+  cardExpiry String? @map("card_expiry")
 
   // Complimentary access. Granted only by a platform admin, never self-service.
   isExempt              Boolean   @default(false) @map("is_exempt")
@@ -1238,17 +1238,17 @@ model Subscription {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  exemptGrantedBy User?                  @relation(fields: [exemptGrantedByUserId], references: [id], onDelete: SetNull)
-  callbacks       BillingCallback[]
-  checkoutOrders  BillingCheckoutOrder[]
+  organization        Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  exemptGrantedBy     User?                       @relation(fields: [exemptGrantedByUserId], references: [id], onDelete: SetNull)
+  callbacks           BillingCallback[]
+  checkoutOrders      BillingCheckoutOrder[]
+  unsubscribeRequests BillingUnsubscribeRequest[]
 
   @@unique([id, organizationId])
   @@index([status])
   @@index([status, graceEndsAt])
   @@index([status, restrictAfter])
   @@index([exemptGrantedByUserId])
-  @@index([pendingUnsubscribeOrderId])
   @@map("subscriptions")
 }
 
@@ -1265,7 +1265,12 @@ model BillingCallback {
 
   subscription Subscription @relation(fields: [subscriptionId, organizationId], references: [id, organizationId], onDelete: Cascade)
 
-  @@unique([orderId, paymentId])
+  // LiqPay reports the stages of one payment under the same payment id - wait_secure or
+  // processing first, then success or failure. Without the status in the key the row written for
+  // the undecided stage swallowed the decisive one, and a 3DS payment was charged but never
+  // activated. A redelivery of the same stage is still a duplicate, which is the case this
+  // guards.
+  @@unique([orderId, paymentId, status])
   @@index([organizationId])
   @@index([subscriptionId])
   @@map("billing_callbacks")
@@ -1299,4 +1304,29 @@ model BillingCheckoutOrder {
   @@index([organizationId])
   @@index([subscriptionId, status])
   @@map("billing_checkout_orders")
+}
+
+/**
+ * An order LiqPay has not agreed to stop charging yet: an unsubscribe it refused, or one that a
+ * replacement superseded. One row per order rather than one slot per subscription, because a
+ * subscription can owe LiqPay more than one cancellation at a time and losing any of them means
+ * a card that keeps being charged with nothing in the system aware of it.
+ */
+model BillingUnsubscribeRequest {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  subscriptionId String @map("subscription_id") @db.Uuid
+  orderId        String @unique @map("order_id")
+
+  resolvedAt DateTime? @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subscription Subscription @relation(fields: [subscriptionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([subscriptionId])
+  @@index([resolvedAt])
+  @@map("billing_unsubscribe_requests")
 }

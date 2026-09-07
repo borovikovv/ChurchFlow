@@ -1,5 +1,9 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const { Prisma } = require('@churchflow/db');
+const {
+  SubscriptionsRepository,
+} = require('../dist/modules/billing/repositories/subscriptions.repository');
 const { LiqPayService } = require('../dist/modules/billing/liqpay.service');
 const { BillingService } = require('../dist/modules/billing/billing.service');
 const { transitionForCallbackStatus } = require('../dist/modules/billing/subscription-transitions');
@@ -262,9 +266,9 @@ function billingService({
       applied.push(input);
       return { duplicate };
     },
-    clearPendingUnsubscribe: async (id) => {
-      cleared.push(id);
-      return {};
+    resolveUnsubscribeRequest: async (orderId) => {
+      cleared.push(orderId);
+      return { count: 1 };
     },
     listAdminMembershipIds: async () => [{ id: 'membership' }],
   };
@@ -423,18 +427,20 @@ test('paying for a replacement promotes it and retires the order it replaces', a
   // The price offered at checkout becomes the live price only now, once it has been paid.
   assert.equal(update.amountMinor, 19_000);
   assert.equal(update.fxRateUsedAt, order.fxRateUsedAt);
-  assert.equal(update.pendingUnsubscribeOrderId, 'old-order');
+  // The order it replaces is queued in the same transaction as the swap, so an order LiqPay is
+  // still charging can never be left with nothing that knows to stop it.
+  assert.equal(applied[0].unsubscribeOrderId, 'old-order');
 
   // The paid order is closed, and with it every sibling still open at LiqPay.
   assert.deepEqual(applied[0].checkout, { id: 'checkout-1', outcome: 'paid' });
 
   // The old order is stopped only after the swap is committed, never hopefully in advance.
   assert.deepEqual(unsubscribed, ['old-order']);
-  assert.deepEqual(cleared, ['subscription']);
+  assert.deepEqual(cleared, ['old-order']);
 });
 
 test('an order LiqPay refuses to stop is kept for the dunning job to retry', async () => {
-  const { service, cleared } = billingService({
+  const { service, applied, cleared } = billingService({
     subscription: { ...ACTIVE_SUBSCRIPTION, liqpayOrderId: 'old-order' },
     checkoutOrder: checkoutOrderRow(),
     unsubscribeOk: false,
@@ -447,6 +453,7 @@ test('an order LiqPay refuses to stop is kept for the dunning job to retry', asy
 
   await service.handleCallback(data, signature, NOW);
 
+  assert.equal(applied[0].unsubscribeOrderId, 'old-order');
   assert.deepEqual(cleared, []);
 });
 
@@ -594,4 +601,137 @@ test('a failed checkout closes its order, an undecided one leaves it open', asyn
 
     assert.deepEqual(applied[0].checkout, expected, status);
   }
+});
+
+function uniqueViolation(target) {
+  return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+    code: 'P2002',
+    clientVersion: 'test',
+    meta: { target },
+  });
+}
+
+function callbackRepository({ stored = [], subscriptionUpdateClashes = false } = {}) {
+  const callbacks = stored.map((row) => ({ ...row }));
+  const queued = [];
+
+  const matches = (row, where) =>
+    row.orderId === where.orderId &&
+    row.paymentId === where.paymentId &&
+    row.status === where.status;
+
+  const tx = {
+    billingCallback: {
+      create: async ({ data }) => {
+        if (callbacks.some((row) => matches(row, data))) {
+          throw uniqueViolation('billing_callbacks_order_id_payment_id_status_key');
+        }
+
+        callbacks.push(data);
+
+        return data;
+      },
+    },
+    billingCheckoutOrder: {
+      update: async () => ({}),
+      updateMany: async () => ({ count: 0 }),
+    },
+    billingUnsubscribeRequest: {
+      upsert: async ({ create }) => {
+        queued.push(create.orderId);
+
+        return create;
+      },
+    },
+    subscription: {
+      update: async () => {
+        if (subscriptionUpdateClashes) {
+          throw uniqueViolation('subscriptions_liqpay_order_id_key');
+        }
+
+        return {};
+      },
+    },
+    auditLog: { create: async () => ({}) },
+  };
+
+  const prisma = {
+    // Rolled back like the real thing: a transaction that failed leaves no callback row behind,
+    // and that is exactly what separates a genuine redelivery from a collision elsewhere.
+    $transaction: async (run) => {
+      const committed = callbacks.length;
+
+      try {
+        return await run(tx);
+      } catch (error) {
+        callbacks.length = committed;
+        throw error;
+      }
+    },
+    billingCallback: {
+      findFirst: async ({ where }) => callbacks.find((row) => matches(row, where)) ?? null,
+    },
+  };
+
+  return { repository: new SubscriptionsRepository(prisma), callbacks, queued };
+}
+
+function callbackInput(overrides = {}) {
+  return {
+    subscriptionId: 'subscription',
+    organizationId: 'organization',
+    orderId: 'order-1',
+    paymentId: '99',
+    status: 'success',
+    previousStatus: 'PENDING',
+    nextStatus: 'ACTIVE',
+    payload: {},
+    update: { status: 'ACTIVE' },
+    checkout: null,
+    unsubscribeOrderId: null,
+    ...overrides,
+  };
+}
+
+test('the decision of a 3DS payment applies, rather than being swallowed by the wait before it', async () => {
+  // LiqPay reports both stages of one payment under the same payment id. Deduplicating without
+  // the status meant the card was charged and the subscription stayed PENDING until the next
+  // month's renewal - if the organization had not already been restricted by then.
+  const { repository, callbacks } = callbackRepository();
+
+  const undecided = await repository.applyCallback(
+    callbackInput({ status: 'wait_secure', nextStatus: null, update: null }),
+  );
+  const decisive = await repository.applyCallback(callbackInput({ status: 'success' }));
+
+  assert.equal(undecided.duplicate, false);
+  assert.equal(decisive.duplicate, false);
+  assert.equal(callbacks.length, 2);
+});
+
+test('the same stage delivered twice is still a no-op', async () => {
+  const { repository, callbacks } = callbackRepository({
+    stored: [{ orderId: 'order-1', paymentId: '99', status: 'success' }],
+  });
+
+  const replay = await repository.applyCallback(callbackInput());
+
+  assert.equal(replay.duplicate, true);
+  assert.equal(callbacks.length, 1);
+});
+
+test('a clash somewhere else in the transaction is not reported as a delivered callback', async () => {
+  // Reporting it as a duplicate would drop a callback that changed nothing, and LiqPay would
+  // never retry it.
+  const { repository } = callbackRepository({ subscriptionUpdateClashes: true });
+
+  await assert.rejects(() => repository.applyCallback(callbackInput()), /unique constraint/i);
+});
+
+test('the order a payment supersedes is queued with the state change, not after it', async () => {
+  const { repository, queued } = callbackRepository();
+
+  await repository.applyCallback(callbackInput({ unsubscribeOrderId: 'old-order' }));
+
+  assert.deepEqual(queued, ['old-order']);
 });

@@ -162,6 +162,8 @@ export class SubscriptionsRepository {
     payload: Prisma.InputJsonObject;
     update: Prisma.SubscriptionUpdateInput | null;
     checkout: CheckoutResolution | null;
+    /** An order this callback supersedes, queued for LiqPay to stop charging. */
+    unsubscribeOrderId: string | null;
   }): Promise<{ duplicate: boolean }> {
     try {
       await this.prisma.$transaction(async (tx) => {
@@ -202,6 +204,14 @@ export class SubscriptionsRepository {
           }
         }
 
+        if (input.unsubscribeOrderId) {
+          await this.queueUnsubscribe(tx, {
+            organizationId: input.organizationId,
+            subscriptionId: input.subscriptionId,
+            orderId: input.unsubscribeOrderId,
+          });
+        }
+
         if (input.update) {
           await tx.subscription.update({
             where: { id: input.subscriptionId },
@@ -228,7 +238,10 @@ export class SubscriptionsRepository {
 
       return { duplicate: false };
     } catch (error: unknown) {
-      if (isUniqueConstraintError(error)) {
+      // A unique violation only means "already delivered" when it was the callback row that
+      // collided. Any other one raised inside the same transaction - the live order id, say - is
+      // a real failure, and reporting it as a duplicate would silently drop a state change.
+      if (isUniqueConstraintError(error) && (await this.hasCallback(input))) {
         return { duplicate: true };
       }
 
@@ -236,21 +249,72 @@ export class SubscriptionsRepository {
     }
   }
 
+  private async hasCallback(input: {
+    orderId: string;
+    paymentId: string;
+    status: string;
+  }): Promise<boolean> {
+    const existing = await this.prisma.billingCallback.findFirst({
+      where: { orderId: input.orderId, paymentId: input.paymentId, status: input.status },
+      select: { id: true },
+    });
+
+    return existing !== null;
+  }
+
   /**
-   * `pendingUnsubscribeOrderId` carries the order LiqPay has not agreed to stop charging yet.
-   * Without it a failed unsubscribe would leave us showing CANCELED while the card keeps being
-   * charged every month, with nothing in the system that knows to try again.
+   * Queued rather than written to a slot on the subscription: LiqPay may owe us more than one
+   * cancellation at a time, and an order dropped here is an order that keeps charging a card.
+   * Requeueing an order already listed reopens its row instead of adding a second one.
    */
-  cancel(organizationId: string, actorUserId: string, unconfirmedOrderId: string | null) {
+  private queueUnsubscribe(
+    tx: Prisma.TransactionClient,
+    input: { organizationId: string; subscriptionId: string; orderId: string },
+  ) {
+    return tx.billingUnsubscribeRequest.upsert({
+      where: { orderId: input.orderId },
+      create: {
+        organizationId: input.organizationId,
+        subscriptionId: input.subscriptionId,
+        orderId: input.orderId,
+      },
+      update: { resolvedAt: null },
+    });
+  }
+
+  /**
+   * An unsubscribe LiqPay refused is queued, because the alternative is showing CANCELED while
+   * the card keeps being charged every month. Only the order this cancellation actually stopped
+   * is resolved: an order queued by an earlier failure is still charging and stays queued.
+   */
+  cancel(
+    organizationId: string,
+    actorUserId: string,
+    unsubscribe: { orderId: string; stopped: boolean } | null,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const subscription = await tx.subscription.update({
         where: { organizationId },
         data: {
           status: 'CANCELED',
           graceEndsAt: null,
-          pendingUnsubscribeOrderId: unconfirmedOrderId,
         },
       });
+
+      if (unsubscribe && !unsubscribe.stopped) {
+        await this.queueUnsubscribe(tx, {
+          organizationId,
+          subscriptionId: subscription.id,
+          orderId: unsubscribe.orderId,
+        });
+      }
+
+      if (unsubscribe?.stopped) {
+        await tx.billingUnsubscribeRequest.updateMany({
+          where: { orderId: unsubscribe.orderId, resolvedAt: null },
+          data: { resolvedAt: new Date() },
+        });
+      }
 
       // Checkouts still open at LiqPay are closed here too: an organization that cancelled must
       // not be revived by a page it left behind.
@@ -339,17 +403,34 @@ export class SubscriptionsRepository {
     });
   }
 
-  listPendingUnsubscribes() {
-    return this.prisma.subscription.findMany({
-      where: { pendingUnsubscribeOrderId: { not: null } },
-      select: { id: true, organizationId: true, pendingUnsubscribeOrderId: true },
+  listOpenUnsubscribeRequests() {
+    return this.prisma.billingUnsubscribeRequest.findMany({
+      where: { resolvedAt: null },
+      select: { id: true, organizationId: true, subscriptionId: true, orderId: true },
     });
   }
 
-  clearPendingUnsubscribe(subscriptionId: string) {
-    return this.prisma.subscription.update({
-      where: { id: subscriptionId },
-      data: { pendingUnsubscribeOrderId: null },
+  resolveUnsubscribeRequest(orderId: string) {
+    return this.prisma.billingUnsubscribeRequest.updateMany({
+      where: { orderId, resolvedAt: null },
+      data: { resolvedAt: new Date() },
+    });
+  }
+
+  /**
+   * Rollout windows that ran out while nothing was enforcing them. Their organizations were never
+   * warned, so the window is handed back rather than spent: restricting on the first enforcing
+   * pass would take away write access from every existing church without notice.
+   */
+  reopenStaleTransitionWindows(input: { staleBefore: Date; restrictAfter: Date }) {
+    return this.prisma.subscription.updateMany({
+      where: {
+        isExempt: false,
+        status: 'PENDING',
+        restrictAfter: { lte: input.staleBefore },
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      data: { restrictAfter: input.restrictAfter },
     });
   }
 

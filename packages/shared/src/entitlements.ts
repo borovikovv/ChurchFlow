@@ -70,6 +70,15 @@ export const BILLING_CHECKOUT_REUSE_MINUTES = 30;
  */
 export const BILLING_RECONCILIATION_GRACE_DAYS = 2;
 
+/**
+ * How far past its deadline a rollout window may be found before it is treated as one that
+ * expired while nothing was enforcing it, and is reopened instead of consumed. The dunning job
+ * runs nightly, so a window under enforcement is never more than a day stale; a longer gap means
+ * billing was switched off or the API was not running, and the organizations concerned were
+ * never warned that their window was running out.
+ */
+export const BILLING_ROLLOUT_WINDOW_STALE_DAYS = 2;
+
 /** The price is charged in UAH, at the equivalent of this many US dollars per month. */
 export const SUBSCRIPTION_USD_REFERENCE_AMOUNT = 4.5;
 

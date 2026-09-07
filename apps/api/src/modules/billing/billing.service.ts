@@ -121,15 +121,14 @@ export class BillingService {
 
     // A refused or unreachable unsubscribe is remembered, not swallowed: otherwise the card
     // keeps being charged every month behind a subscription we are showing as cancelled.
-    let unconfirmedOrderId: string | null = null;
-    if (subscription.liqpayOrderId) {
-      const stopped = await this.liqPayService.unsubscribe(subscription.liqpayOrderId);
-      if (!stopped) {
-        unconfirmedOrderId = subscription.liqpayOrderId;
-      }
-    }
+    const unsubscribe = subscription.liqpayOrderId
+      ? {
+          orderId: subscription.liqpayOrderId,
+          stopped: await this.liqPayService.unsubscribe(subscription.liqpayOrderId),
+        }
+      : null;
 
-    await this.subscriptionsRepository.cancel(organizationId, actorUserId, unconfirmedOrderId);
+    await this.subscriptionsRepository.cancel(organizationId, actorUserId, unsubscribe);
 
     return this.getSummary(organizationId);
   }
@@ -206,10 +205,12 @@ export class BillingService {
             callback,
             orderId,
             isNewSubscription,
-            supersededOrderId,
             now,
           })
         : null,
+      // Queued in the same transaction as the swap: an order superseded but never queued is an
+      // order still charging the card, with nothing left that knows to stop it.
+      unsubscribeOrderId: supersededOrderId,
       checkout: resolveCheckout({
         checkoutOrder,
         outcome: classifyCallbackStatus(callback.status ?? ''),
@@ -223,7 +224,7 @@ export class BillingService {
     }
 
     if (supersededOrderId) {
-      await this.stopSupersededOrder(subscription.id, supersededOrderId);
+      await this.stopOrder(supersededOrderId);
     }
 
     await this.notifyTransition(subscription, transition);
@@ -237,7 +238,6 @@ export class BillingService {
     callback: LiqPayCallback;
     orderId: string;
     isNewSubscription: boolean;
-    supersededOrderId: string | null;
     now: Date;
   }): Prisma.SubscriptionUpdateInput {
     const { transition, callback, isNewSubscription, now } = input;
@@ -269,7 +269,6 @@ export class BillingService {
       currency: input.checkoutOrder.currency,
       usdReference: input.checkoutOrder.usdReference,
       fxRateUsedAt: input.checkoutOrder.fxRateUsedAt,
-      ...(input.supersededOrderId ? { pendingUnsubscribeOrderId: input.supersededOrderId } : {}),
     };
   }
 
@@ -298,13 +297,13 @@ export class BillingService {
     });
   }
 
-  /** Best effort now, retried by the dunning job for as long as the order id is still stored. */
-  async stopSupersededOrder(subscriptionId: string, orderId: string): Promise<boolean> {
+  /** Best effort now, retried by the dunning job for as long as the request is still open. */
+  async stopOrder(orderId: string): Promise<boolean> {
     if (!(await this.liqPayService.unsubscribe(orderId))) {
       return false;
     }
 
-    await this.subscriptionsRepository.clearPendingUnsubscribe(subscriptionId);
+    await this.subscriptionsRepository.resolveUnsubscribeRequest(orderId);
 
     return true;
   }

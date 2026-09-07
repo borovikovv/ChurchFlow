@@ -155,7 +155,11 @@ endpoint then answers `503` and nothing else changes.
   after checkout.
 - `BILLING_ENFORCEMENT_ENABLED=false` — set to `true` only once the LiqPay keys are in place. It
   makes every organization without an active subscription read-only, and the API refuses to boot in
-  production with enforcement on and no keys.
+  production with enforcement on and no keys. While it is off the nightly billing job restricts
+  nobody and sends no subscription notices, and the rollout window every organization gets at
+  migration time is handed back rather than spent, so turning enforcement on later still gives each
+  church its full seven days. The job keeps asking LiqPay to stop orders it has not yet stopped,
+  because those charge a card whether or not we are enforcing anything.
 
 Optional variables with defaults, used by the nightly notification retention job:
 

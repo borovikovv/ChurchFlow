@@ -17,6 +17,10 @@ function capturingRepository() {
         queries.push(args);
         return [];
       },
+      updateMany: async (args) => {
+        queries.push(args);
+        return { count: 0 };
+      },
       update: async () => ({}),
     },
   });
@@ -60,17 +64,29 @@ test('deleted and suspended organizations are left out of dunning', async () => 
   assert.deepEqual(queries[0].where.organization, { status: 'ACTIVE', deletedAt: null });
 });
 
-function scheduler({ due = [], open = [], unconfirmed = [], pendingStops = [] } = {}) {
+function scheduler({
+  due = [],
+  open = [],
+  unconfirmed = [],
+  pendingStops = [],
+  reopenedCount = 0,
+  enforcementEnabled = true,
+} = {}) {
   const restricted = [];
   const pastDue = [];
   const notified = [];
   const stopped = [];
+  const reopened = [];
 
   const repository = {
     listRestrictionDue: async () => due,
     listTransitionWindowOpen: async () => open,
     listUnconfirmedRenewals: async () => unconfirmed,
-    listPendingUnsubscribes: async () => pendingStops,
+    listOpenUnsubscribeRequests: async () => pendingStops,
+    reopenStaleTransitionWindows: async (input) => {
+      reopened.push(input);
+      return { count: reopenedCount };
+    },
     markPastDue: async (id, graceEndsAt) => {
       pastDue.push({ id, graceEndsAt });
       return {};
@@ -85,8 +101,8 @@ function scheduler({ due = [], open = [], unconfirmed = [], pendingStops = [] } 
     notifyOrganizationAdmins: async (input) => {
       notified.push(input);
     },
-    stopSupersededOrder: async (id, orderId) => {
-      stopped.push({ id, orderId });
+    stopOrder: async (orderId) => {
+      stopped.push({ orderId });
       return orderId !== 'stubborn-order';
     },
   };
@@ -96,11 +112,14 @@ function scheduler({ due = [], open = [], unconfirmed = [], pendingStops = [] } 
   };
 
   return {
-    instance: new BillingDunningScheduler(repository, billingService, lock),
+    instance: new BillingDunningScheduler(repository, billingService, lock, {
+      isEnforcementEnabled: () => enforcementEnabled,
+    }),
     restricted,
     pastDue,
     notified,
     stopped,
+    reopened,
   };
 }
 
@@ -155,7 +174,8 @@ test('a held lock means the job does no work at all', async () => {
     },
     listTransitionWindowOpen: async () => [],
     listUnconfirmedRenewals: async () => [],
-    listPendingUnsubscribes: async () => [],
+    listOpenUnsubscribeRequests: async () => [],
+    reopenStaleTransitionWindows: async () => ({ count: 0 }),
     restrict: async () => ({}),
   };
 
@@ -163,6 +183,7 @@ test('a held lock means the job does no work at all', async () => {
     repository,
     { notifyOrganizationAdmins: async () => undefined },
     { runOnce: async () => ({ skipped: true }) },
+    { isEnforcementEnabled: () => true },
   );
 
   await instance.handleDunning();
@@ -204,8 +225,8 @@ test('reconciliation allows for a late settlement before acting', async () => {
 test('a cancellation LiqPay has not accepted is retried until it does', async () => {
   const { instance, stopped } = scheduler({
     pendingStops: [
-      { id: 'a', organizationId: 'org-a', pendingUnsubscribeOrderId: 'order-a' },
-      { id: 'b', organizationId: 'org-b', pendingUnsubscribeOrderId: 'stubborn-order' },
+      { id: 'a', organizationId: 'org-a', subscriptionId: 'sub-a', orderId: 'order-a' },
+      { id: 'b', organizationId: 'org-b', subscriptionId: 'sub-b', orderId: 'stubborn-order' },
     ],
   });
 
@@ -217,6 +238,79 @@ test('a cancellation LiqPay has not accepted is retried until it does', async ()
   );
   // Only the one LiqPay accepted is counted as stopped; the other stays queued for next time.
   assert.equal(result.stoppedCount, 1);
+});
+
+test('nothing is restricted or warned while the kill switch is off', async () => {
+  // The rollout migration starts every window at deploy time, before anyone has enabled
+  // enforcement. Running the job anyway would restrict every church that existed at migration
+  // time and tell them their access had ended, while nothing was actually being enforced.
+  const { instance, restricted, notified, reopened } = scheduler({
+    due: [DUE_ROW],
+    open: [
+      {
+        id: 'a',
+        organizationId: 'org-a',
+        restrictAfter: new Date('2026-09-06T12:00:00.000Z'),
+        organization: { members: [{ id: 'm-a' }] },
+      },
+    ],
+    unconfirmed: [{ id: 'b', organizationId: 'org-b', organization: { members: [{ id: 'm-b' }] } }],
+    enforcementEnabled: false,
+  });
+
+  const result = await instance.run(NOW);
+
+  assert.deepEqual(restricted, []);
+  assert.deepEqual(notified, []);
+  assert.deepEqual(reopened, []);
+  assert.equal(result.restrictedCount, 0);
+  assert.equal(result.reconciledCount, 0);
+  assert.equal(result.warnedCount, 0);
+});
+
+test('an order LiqPay is still charging is stopped even with the kill switch off', async () => {
+  // Restriction is a policy we can suspend; a card being charged for a subscription nobody has
+  // is not, so the retries keep running whatever the switch says.
+  const { instance, stopped } = scheduler({
+    pendingStops: [{ id: 'a', organizationId: 'org-a', orderId: 'order-a' }],
+    enforcementEnabled: false,
+  });
+
+  const result = await instance.run(NOW);
+
+  assert.deepEqual(
+    stopped.map((entry) => entry.orderId),
+    ['order-a'],
+  );
+  assert.equal(result.stoppedCount, 1);
+});
+
+test('a rollout window that ran out unenforced is handed back, not spent', async () => {
+  const { instance, reopened } = scheduler({ reopenedCount: 3 });
+
+  const result = await instance.run(NOW);
+
+  assert.equal(result.reopenedCount, 3);
+  // Anything staler than a couple of days had no nightly job watching it, so its churches were
+  // never warned; they get the full window again rather than losing write access unannounced.
+  assert.equal(reopened[0].staleBefore.toISOString(), '2026-08-30T12:00:00.000Z');
+  assert.equal(reopened[0].restrictAfter.toISOString(), '2026-09-08T12:00:00.000Z');
+});
+
+test('reopening a stale window only reaches unenforced rollout windows', async () => {
+  const { repository, queries } = capturingRepository();
+
+  await repository.reopenStaleTransitionWindows({
+    staleBefore: new Date('2026-08-30T12:00:00.000Z'),
+    restrictAfter: new Date('2026-09-08T12:00:00.000Z'),
+  });
+
+  assert.equal(queries[0].where.status, 'PENDING');
+  assert.equal(queries[0].where.isExempt, false);
+  assert.deepEqual(queries[0].where.organization, { status: 'ACTIVE', deletedAt: null });
+  assert.equal(queries[0].where.restrictAfter.lte.toISOString(), '2026-08-30T12:00:00.000Z');
+  // A grace period is a different timer and is never touched here.
+  assert.equal('graceEndsAt' in queries[0].where, false);
 });
 
 function checkoutService({ subscription, unsubscribeOk = true, onCancel = () => {} }) {
@@ -316,10 +410,10 @@ test('cancelling remembers an unsubscribe LiqPay would not accept', async () => 
   await service.cancel('organization', 'actor');
 
   // Otherwise the card keeps being charged behind a subscription we show as cancelled.
-  assert.deepEqual(canceled, [['organization', 'actor', 'old-order']]);
+  assert.deepEqual(canceled, [['organization', 'actor', { orderId: 'old-order', stopped: false }]]);
 });
 
-test('cancelling clears the retry when LiqPay accepts it', async () => {
+test('cancelling reports the order LiqPay accepted, not just that it accepted one', async () => {
   const canceled = [];
   const { service } = checkoutService({
     subscription: { ...PENDING_SUBSCRIPTION, status: 'ACTIVE', liqpayOrderId: 'old-order' },
@@ -328,7 +422,9 @@ test('cancelling clears the retry when LiqPay accepts it', async () => {
 
   await service.cancel('organization', 'actor');
 
-  assert.deepEqual(canceled, [['organization', 'actor', null]]);
+  // Which order was stopped is the whole point: an unsubscribe queued earlier for a different
+  // order is still charging a card and must survive this cancellation.
+  assert.deepEqual(canceled, [['organization', 'actor', { orderId: 'old-order', stopped: true }]]);
 });
 
 test('an organization with complimentary access is not sent to checkout', async () => {
@@ -345,4 +441,60 @@ test('checkout refuses rather than guessing a price when no rate is published', 
   service.currencyRatesService = { getCurrent: async () => null };
 
   await assert.rejects(() => service.startCheckout('organization', 'actor'), /exchange rate/i);
+});
+
+function cancelRepository() {
+  const queued = [];
+  const resolved = [];
+
+  const tx = {
+    subscription: {
+      update: async ({ data }) => {
+        assert.equal(data.status, 'CANCELED');
+
+        return { id: 'subscription' };
+      },
+    },
+    billingUnsubscribeRequest: {
+      upsert: async ({ create }) => {
+        queued.push(create.orderId);
+
+        return create;
+      },
+      updateMany: async ({ where }) => {
+        resolved.push(where);
+
+        return { count: 1 };
+      },
+    },
+    billingCheckoutOrder: { updateMany: async () => ({ count: 0 }) },
+    auditLog: { create: async () => ({}) },
+  };
+
+  const repository = new SubscriptionsRepository({
+    $transaction: async (run) => run(tx),
+  });
+
+  return { repository, queued, resolved };
+}
+
+test('a cancellation LiqPay refused is queued for the dunning job', async () => {
+  const { repository, queued, resolved } = cancelRepository();
+
+  await repository.cancel('organization', 'actor', { orderId: 'old-order', stopped: false });
+
+  assert.deepEqual(queued, ['old-order']);
+  assert.deepEqual(resolved, []);
+});
+
+test('cancelling resolves the order it stopped and leaves every other one queued', async () => {
+  // An order queued by an earlier failed unsubscribe is still charging a card. Clearing it
+  // because a different order was cancelled successfully left that card being charged every
+  // month with nothing in the system aware the subscription existed.
+  const { repository, queued, resolved } = cancelRepository();
+
+  await repository.cancel('organization', 'actor', { orderId: 'old-order', stopped: true });
+
+  assert.deepEqual(queued, []);
+  assert.deepEqual(resolved, [{ orderId: 'old-order', resolvedAt: null }]);
 });
