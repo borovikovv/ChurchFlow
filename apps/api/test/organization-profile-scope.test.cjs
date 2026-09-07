@@ -3,9 +3,9 @@ const test = require('node:test');
 const {
   OrganizationsRepository,
 } = require('../dist/modules/organizations/repositories/organizations.repository');
-const {
-  OrganizationsService,
-} = require('../dist/modules/organizations/organizations.service');
+const { OrganizationsService } = require('../dist/modules/organizations/organizations.service');
+const { MediaRepository } = require('../dist/modules/media/repositories/media.repository');
+const { MediaService } = require('../dist/modules/media/media.service');
 
 const ORGANIZATION_ID = 'organization';
 const ACTOR_USER_ID = 'actor';
@@ -127,4 +127,65 @@ test('the slug rule reaches the caller as a forbidden, not a server error', asyn
 
   // The actor's role is what the repository decides on, so it has to travel with the input.
   assert.equal(passed[0][3], 'ADMIN');
+});
+
+test('replacing the logo writes the logo and nothing else', async () => {
+  // An admin may change the branding, so this write must not double as an edit of the website
+  // record: no creating it, no seeding its title or description from the organization.
+  const calls = [];
+  const tx = {
+    organizationWebsite: {
+      findUnique: async () => ({ logoAssetId: 'old-asset' }),
+      update: async (args) => {
+        calls.push({ model: 'organizationWebsite.update', args });
+        return {};
+      },
+      upsert: async () => {
+        throw new Error('a logo upload must not create the website record');
+      },
+    },
+    organization: {
+      findUniqueOrThrow: async () => {
+        throw new Error('a logo upload must not read organization content');
+      },
+    },
+    mediaAsset: {
+      update: async (args) => {
+        calls.push({ model: 'mediaAsset.update', args });
+        return {};
+      },
+    },
+    auditLog: {
+      create: async () => ({}),
+    },
+  };
+  const media = new MediaRepository({ $transaction: async (run) => run(tx) });
+
+  await media.attachOrganizationLogo(ORGANIZATION_ID, 'new-asset', ACTOR_USER_ID);
+
+  const websiteWrite = calls.find((call) => call.model === 'organizationWebsite.update');
+  assert.deepEqual(websiteWrite.args.data, { logoAssetId: 'new-asset' });
+
+  // The logo it replaces is still retired.
+  const retired = calls.find(
+    (call) => call.model === 'mediaAsset.update' && call.args.where.id === 'old-asset',
+  );
+  assert.ok(retired.args.data.deletedAt instanceof Date);
+});
+
+test('a website section background is refused to anyone but the owner', async () => {
+  const service = new MediaService(
+    { findOwnedOrganization: async () => null },
+    { getOrThrow: () => 'test' },
+  );
+
+  await assert.rejects(
+    () =>
+      service.createWebsiteSectionBackgroundUpload(
+        ORGANIZATION_ID,
+        { filename: 'bg.png', mimeType: 'image/png', byteSize: 1024 },
+        ACTOR_USER_ID,
+      ),
+    /Only organization owners can upload website images/,
+  );
 });

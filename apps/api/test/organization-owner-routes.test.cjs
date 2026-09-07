@@ -1,13 +1,12 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { Reflector } = require('@nestjs/core');
-const {
-  OrganizationAccessGuard,
-} = require('../dist/common/guards/organization-access.guard');
+const { OrganizationAccessGuard } = require('../dist/common/guards/organization-access.guard');
 const { BudgetsController } = require('../dist/modules/budgets/budgets.controller');
 const { WebsitesController } = require('../dist/modules/websites/websites.controller');
 const { PagesController } = require('../dist/modules/pages/pages.controller');
 const { MembershipsController } = require('../dist/modules/memberships/memberships.controller');
+const { MediaController } = require('../dist/modules/media/media.controller');
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -50,6 +49,10 @@ const OWNER_ONLY_ROUTES = [
   [WebsitesController, 'updateSettings'],
   [PagesController, 'dashboardPages'],
   [PagesController, 'createPage'],
+  // The assets that feed owner-only sections: an admin could otherwise upload backgrounds they
+  // are no longer allowed to attach to anything.
+  [MediaController, 'createWebsiteSectionBackgroundUpload'],
+  [MediaController, 'confirmWebsiteSectionBackground'],
 ];
 
 test('the budget and the website are closed to admins', async () => {
@@ -91,6 +94,18 @@ test('routes that are not owner-only stay open to admins', async () => {
     await guard({ role: 'ADMIN' }).canActivate(context(MembershipsController, 'updateRole')),
     true,
   );
+});
+
+test('the organization logo stays an admin action', async () => {
+  // The logo is branding, shown in the dashboard as much as on the public site, so it is not
+  // website content and does not follow the website into owner-only.
+  for (const handler of ['createOrganizationLogoUpload', 'confirmOrganizationLogo']) {
+    assert.equal(
+      await guard({ role: 'ADMIN' }).canActivate(context(MediaController, handler)),
+      true,
+      handler,
+    );
+  }
 });
 
 test('a platform admin still gets through, as everywhere else in this guard', async () => {
