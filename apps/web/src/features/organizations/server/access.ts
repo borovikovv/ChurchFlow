@@ -53,6 +53,10 @@ export function isOrganizationAdminRole(role: OrganizationMembershipRole): boole
   return role === 'OWNER' || role === 'ADMIN';
 }
 
+export function isOrganizationOwnerRole(role: OrganizationMembershipRole): boolean {
+  return role === 'OWNER';
+}
+
 export function isPlatformAdminRoleValue(role: PlatformRole | null | undefined): boolean {
   return role === 'ADMIN' || role === 'SUPER_ADMIN';
 }

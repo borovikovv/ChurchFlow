@@ -3,6 +3,7 @@ import { ENTITLEMENTS, ORG_PERMISSIONS } from '@churchflow/shared';
 import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
+  RequireOrganizationOwner,
   RequireOrganizationPermission,
 } from '../../common/guards/organization-access.guard';
 import {
@@ -15,7 +16,10 @@ import { ReorderSectionsDto } from './dto/reorder-sections.dto';
 import { UpsertPageDto } from './dto/upsert-page.dto';
 import { UpsertSectionDto } from './dto/upsert-section.dto';
 
+// Website content is owner-only. `websiteManage` stays on each route so a member granted that
+// permission explicitly is still refused here rather than by an unrelated rule.
 @Controller()
+@RequireOrganizationOwner()
 export class PagesController {
   constructor(private readonly pagesService: PagesService) {}
 

@@ -15,9 +15,17 @@ import type { AuthenticatedRequest } from './session-auth.guard';
 export type OrganizationPermission = (typeof ORG_PERMISSIONS)[keyof typeof ORG_PERMISSIONS];
 
 const ORGANIZATION_PERMISSION_KEY = 'organizationPermission';
+const ORGANIZATION_OWNER_KEY = 'organizationOwnerOnly';
 
 export const RequireOrganizationPermission = (permission: OrganizationPermission) =>
   SetMetadata(ORGANIZATION_PERMISSION_KEY, permission);
+
+/**
+ * Narrower than any permission: an owner-only route is closed to ADMIN as well, so it cannot be
+ * satisfied by the permission bypass below. Used where a decision belongs to the church itself -
+ * its public site and its money - rather than to whoever helps run it.
+ */
+export const RequireOrganizationOwner = () => SetMetadata(ORGANIZATION_OWNER_KEY, true);
 
 @Injectable()
 export class OrganizationAccessGuard implements CanActivate {
@@ -84,6 +92,15 @@ export class OrganizationAccessGuard implements CanActivate {
     const membership = user.memberships[0];
     if (!membership) {
       throw new ForbiddenException('Organization access is required');
+    }
+
+    const ownerOnly = this.reflector.getAllAndOverride<boolean | undefined>(
+      ORGANIZATION_OWNER_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
+    if (ownerOnly && membership.role !== 'OWNER') {
+      throw new ForbiddenException('Organization owner access is required');
     }
 
     const requiredPermission = this.reflector.getAllAndOverride<OrganizationPermission | undefined>(

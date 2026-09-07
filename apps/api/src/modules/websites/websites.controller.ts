@@ -3,6 +3,7 @@ import { ENTITLEMENTS, ORG_PERMISSIONS } from '@churchflow/shared';
 import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
+  RequireOrganizationOwner,
   RequireOrganizationPermission,
 } from '../../common/guards/organization-access.guard';
 import {
@@ -13,7 +14,9 @@ import { WebsitesService } from './websites.service';
 import { PublishWebsiteDto } from './dto/publish-website.dto';
 import { UpdateWebsiteSettingsDto } from './dto/update-website-settings.dto';
 
+// Owner-only, apart from the public route below, which carries no guard at all.
 @Controller()
+@RequireOrganizationOwner()
 export class WebsitesController {
   constructor(private readonly websitesService: WebsitesService) {}
 

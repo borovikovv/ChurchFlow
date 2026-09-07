@@ -16,7 +16,10 @@ import {
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
 import { ENTITLEMENTS } from '@churchflow/shared';
-import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
+import {
+  OrganizationAccessGuard,
+  RequireOrganizationOwner,
+} from '../../common/guards/organization-access.guard';
 import {
   RequireEntitlement,
   SubscriptionEntitlementGuard,
@@ -34,8 +37,11 @@ import {
   UpdateBudgetOpeningBalanceDto,
 } from './dto/budget.dto';
 
+// The budget is owner-only, reads included: until now any active member could call these routes
+// directly, and only the navigation hid them.
 @Controller('organizations/:organizationId/budget')
 @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+@RequireOrganizationOwner()
 export class BudgetsController {
   constructor(private readonly budgetsService: BudgetsService) {}
 
