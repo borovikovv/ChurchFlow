@@ -209,10 +209,18 @@ export class OrganizationsService {
     }
 
     try {
-      return await this.organizationsRepository.update(id, input, actorUserId);
+      return await this.organizationsRepository.update(
+        id,
+        input,
+        actorUserId,
+        actorMembership.role,
+      );
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'ORGANIZATION_NOT_FOUND') {
         throw new NotFoundException('Organization was not found');
+      }
+      if (error instanceof Error && error.message === 'SLUG_OWNER_ONLY') {
+        throw new ForbiddenException('Only organization owners can change the public address');
       }
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('Organization slug is already in use');

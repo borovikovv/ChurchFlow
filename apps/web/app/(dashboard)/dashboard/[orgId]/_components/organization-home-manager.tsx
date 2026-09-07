@@ -44,6 +44,7 @@ export function OrganizationHomeManager({
           </div>
           {canManage ? (
             <EditOrganizationDialog
+              canEditSlug={organizationRole === 'OWNER'}
               organization={currentOrganization}
               onUpdated={setCurrentOrganization}
             />

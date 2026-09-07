@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { OrganizationStatus, PlatformRole, Prisma } from '@churchflow/db';
+import type { OrganizationRole, OrganizationStatus, PlatformRole, Prisma } from '@churchflow/db';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { createOrganizationSchema, UpdateOrganizationInput } from '@churchflow/shared';
 import type { z } from 'zod';
@@ -295,11 +295,16 @@ export class OrganizationsRepository {
           deletedAt: null,
         },
       },
-      select: { id: true },
+      select: { id: true, role: true },
     });
   }
 
-  async update(id: string, input: UpdateOrganizationInput, actorUserId: string) {
+  async update(
+    id: string,
+    input: UpdateOrganizationInput,
+    actorUserId: string,
+    actorRole: OrganizationRole,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const current = await tx.organization.findFirst({
         where: { id, status: 'ACTIVE', deletedAt: null },
@@ -319,6 +324,13 @@ export class OrganizationsRepository {
         next['name'] = input.name;
       }
       if (input.slug !== undefined && input.slug !== current.slug) {
+        // The slug is the public site address: changing it moves the church's website to a new
+        // URL and 404s every link already handed out. Comparing against the current value first
+        // matters because the edit form always submits the slug, changed or not.
+        if (actorRole !== 'OWNER') {
+          throw new Error('SLUG_OWNER_ONLY');
+        }
+
         data.slug = input.slug;
         changedFields.push('slug');
         previous['slug'] = current.slug;
@@ -344,27 +356,9 @@ export class OrganizationsRepository {
         include: { website: true },
       });
 
-      await tx.websitePage.updateMany({
-        where: {
-          organizationId: id,
-          slug: 'home',
-          title: current.name,
-        },
-        data: { title: organization.name },
-      });
-
-      await tx.organizationWebsite.upsert({
-        where: { organizationId: id },
-        create: {
-          organizationId: id,
-          title: organization.name,
-          description: organization.description,
-        },
-        update: {
-          title: organization.name,
-          description: organization.description,
-        },
-      });
+      // Nothing about the website is written here. The site title, its description and the home
+      // page title belong to the website settings screen; rewriting them from a profile rename
+      // let an editor change published content they were never editing.
 
       await tx.auditLog.create({
         data: {
