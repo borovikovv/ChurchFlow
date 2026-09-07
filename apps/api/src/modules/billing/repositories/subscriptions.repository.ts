@@ -16,6 +16,21 @@ const ADMIN_MEMBERS_SELECT = {
   },
 } satisfies Prisma.OrganizationSelect;
 
+type SubscriptionRow = Prisma.SubscriptionGetPayload<Record<string, never>>;
+type CheckoutOrderRow = Prisma.BillingCheckoutOrderGetPayload<Record<string, never>>;
+
+export interface SubscriptionOrderMatch {
+  subscription: SubscriptionRow;
+  /** Null when the callback belongs to an order LiqPay charges directly, not to a checkout. */
+  checkoutOrder: CheckoutOrderRow | null;
+}
+
+/** How a callback closes the checkout order it arrived for, if it closes it at all. */
+export interface CheckoutResolution {
+  id: string;
+  outcome: 'paid' | 'abandoned';
+}
+
 function isUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
@@ -43,37 +58,76 @@ export class SubscriptionsRepository {
     });
   }
 
-  /** Matches the live order and the not-yet-paid one, since either can produce a callback. */
-  findByOrderId(orderId: string) {
-    return this.prisma.subscription.findFirst({
-      where: { OR: [{ liqpayOrderId: orderId }, { pendingLiqpayOrderId: orderId }] },
+  /**
+   * Resolves a callback to the subscription it belongs to. Every order ever offered has a row of
+   * its own, so a payment for a checkout that has since been superseded still finds its way home
+   * instead of being logged as unknown and dropped.
+   */
+  async findByOrderId(orderId: string): Promise<SubscriptionOrderMatch | null> {
+    const checkoutOrder = await this.prisma.billingCheckoutOrder.findUnique({
+      where: { orderId },
+      include: { subscription: true },
+    });
+
+    if (checkoutOrder) {
+      const { subscription, ...order } = checkoutOrder;
+
+      return { subscription, checkoutOrder: order };
+    }
+
+    const subscription = await this.prisma.subscription.findFirst({
+      where: { liqpayOrderId: orderId },
+    });
+
+    return subscription ? { subscription, checkoutOrder: null } : null;
+  }
+
+  /**
+   * The checkout already offered for this exact price, if it is recent enough to still be the
+   * same intent. Reusing it is what keeps a double click from minting a second LiqPay order that
+   * can be paid independently of the first.
+   */
+  findReusableCheckout(input: { subscriptionId: string; amountMinor: number; createdAfter: Date }) {
+    return this.prisma.billingCheckoutOrder.findFirst({
+      where: {
+        subscriptionId: input.subscriptionId,
+        status: 'PROPOSED',
+        amountMinor: input.amountMinor,
+        createdAt: { gte: input.createdAfter },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   /**
-   * Pins the price. LiqPay fixes amount and currency when the subscription is created, so the
-   * UAH figure is stored once here and never recomputed per charge; changing the price means
-   * re-subscribing. `usdReference` records what that amount was an equivalent of.
-   */
-  /**
    * Records an offered checkout without touching the live subscription. Nothing here changes
    * what the organization is charged or whether it keeps access: an abandoned LiqPay page must
    * cost the church nothing, so the swap happens only when a payment actually succeeds.
+   *
+   * The price is pinned per order rather than on the subscription. LiqPay fixes amount and
+   * currency when the subscription is created, and the order that gets paid is the one whose
+   * price becomes live - which is not always the one offered last.
    */
-  startPendingCheckout(input: {
+  createCheckoutOrder(input: {
     organizationId: string;
+    subscriptionId: string;
     actorUserId: string;
     orderId: string;
     amountMinor: number;
+    currency: string;
+    usdReference: number;
     fxRateUsedAt: Date;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      const subscription = await tx.subscription.update({
-        where: { organizationId: input.organizationId },
+      const checkoutOrder = await tx.billingCheckoutOrder.create({
         data: {
-          pendingLiqpayOrderId: input.orderId,
-          pendingAmountMinor: input.amountMinor,
-          pendingFxRateUsedAt: input.fxRateUsedAt,
+          organizationId: input.organizationId,
+          subscriptionId: input.subscriptionId,
+          orderId: input.orderId,
+          amountMinor: input.amountMinor,
+          currency: input.currency,
+          usdReference: input.usdReference,
+          fxRateUsedAt: input.fxRateUsedAt,
         },
       });
 
@@ -83,12 +137,12 @@ export class SubscriptionsRepository {
           actorUserId: input.actorUserId,
           action: 'START_SUBSCRIPTION',
           entityType: 'Subscription',
-          entityId: subscription.id,
-          metadata: { amountMinor: input.amountMinor },
+          entityId: input.subscriptionId,
+          metadata: { amountMinor: input.amountMinor, orderId: input.orderId },
         },
       });
 
-      return subscription;
+      return checkoutOrder;
     });
   }
 
@@ -107,9 +161,12 @@ export class SubscriptionsRepository {
     nextStatus: string | null;
     payload: Prisma.InputJsonObject;
     update: Prisma.SubscriptionUpdateInput | null;
+    checkout: CheckoutResolution | null;
   }): Promise<{ duplicate: boolean }> {
     try {
       await this.prisma.$transaction(async (tx) => {
+        const resolvedAt = new Date();
+
         await tx.billingCallback.create({
           data: {
             organizationId: input.organizationId,
@@ -118,9 +175,32 @@ export class SubscriptionsRepository {
             paymentId: input.paymentId,
             status: input.status,
             payload: input.payload,
-            processedAt: new Date(),
+            processedAt: resolvedAt,
           },
         });
+
+        if (input.checkout) {
+          await tx.billingCheckoutOrder.update({
+            where: { id: input.checkout.id },
+            data: {
+              status: input.checkout.outcome === 'paid' ? 'PAID' : 'ABANDONED',
+              resolvedAt,
+            },
+          });
+
+          // A paid checkout retires the ones it was offered alongside. Leaving them open would
+          // let a second LiqPay page, opened before this one, still create a parallel charge.
+          if (input.checkout.outcome === 'paid') {
+            await tx.billingCheckoutOrder.updateMany({
+              where: {
+                subscriptionId: input.subscriptionId,
+                status: 'PROPOSED',
+                id: { not: input.checkout.id },
+              },
+              data: { status: 'ABANDONED', resolvedAt },
+            });
+          }
+        }
 
         if (input.update) {
           await tx.subscription.update({
@@ -168,11 +248,15 @@ export class SubscriptionsRepository {
         data: {
           status: 'CANCELED',
           graceEndsAt: null,
-          pendingLiqpayOrderId: null,
-          pendingAmountMinor: null,
-          pendingFxRateUsedAt: null,
           pendingUnsubscribeOrderId: unconfirmedOrderId,
         },
+      });
+
+      // Checkouts still open at LiqPay are closed here too: an organization that cancelled must
+      // not be revived by a page it left behind.
+      await tx.billingCheckoutOrder.updateMany({
+        where: { subscriptionId: subscription.id, status: 'PROPOSED' },
+        data: { status: 'ABANDONED', resolvedAt: new Date() },
       });
 
       await tx.auditLog.create({

@@ -219,14 +219,45 @@ test('an undecided status changes nothing', () => {
   }
 });
 
-function billingService({ subscription, duplicate = false, unsubscribeOk = true } = {}) {
+function billingService({
+  subscription,
+  checkoutOrder = null,
+  duplicate = false,
+  unsubscribeOk = true,
+} = {}) {
   const applied = [];
   const notified = [];
   const unsubscribed = [];
   const cleared = [];
+  const warned = [];
+  // Checkout orders are kept for real rather than stubbed away: reuse is the layer that stops a
+  // second payable LiqPay page from existing, so it has to be exercised against stored rows.
+  const orders = [];
+  const rates = { usdToUah: 41.5, eurToUah: 48.2 };
 
   const repository = {
-    findByOrderId: async () => subscription,
+    findByOrganizationId: async () =>
+      subscription && { ...subscription, organization: { id: 'organization', name: 'Grace' } },
+    findByOrderId: async () => (subscription ? { subscription, checkoutOrder } : null),
+    findReusableCheckout: async ({ subscriptionId, amountMinor, createdAfter }) =>
+      orders.find(
+        (order) =>
+          order.subscriptionId === subscriptionId &&
+          order.status === 'PROPOSED' &&
+          order.amountMinor === amountMinor &&
+          order.createdAt >= createdAfter,
+      ) ?? null,
+    createCheckoutOrder: async (input) => {
+      const order = {
+        id: `checkout-${orders.length + 1}`,
+        status: 'PROPOSED',
+        createdAt: new Date(),
+        ...input,
+      };
+      orders.push(order);
+
+      return order;
+    },
     applyCallback: async (input) => {
       applied.push(input);
       return { duplicate };
@@ -248,7 +279,7 @@ function billingService({ subscription, duplicate = false, unsubscribeOk = true 
     repository,
     { listForOrganization: async () => [] },
     liqPayService,
-    { getCurrent: async () => ({ usdToUah: 41.5, eurToUah: 48.2 }) },
+    { getCurrent: async () => rates },
     {
       createSubscriptionNotifications: async (input) => {
         notified.push(input);
@@ -257,7 +288,24 @@ function billingService({ subscription, duplicate = false, unsubscribeOk = true 
     },
   );
 
-  return { service, applied, notified, unsubscribed, cleared };
+  service.logger = { warn: (entry) => warned.push(entry), log: () => {} };
+
+  return { service, applied, notified, unsubscribed, cleared, orders, rates, warned };
+}
+
+function checkoutOrderRow(overrides = {}) {
+  return {
+    id: 'checkout-1',
+    organizationId: 'organization',
+    subscriptionId: 'subscription',
+    orderId: 'new-order',
+    amountMinor: 19_000,
+    currency: 'UAH',
+    usdReference: 4.5,
+    fxRateUsedAt: new Date('2026-08-30T00:00:00.000Z'),
+    status: 'PROPOSED',
+    ...overrides,
+  };
 }
 
 function signedCallback(payload) {
@@ -272,10 +320,8 @@ const ACTIVE_SUBSCRIPTION = {
   status: 'ACTIVE',
   graceEndsAt: null,
   currentPeriodEndsAt: null,
+  isExempt: false,
   liqpayOrderId: 'order-1',
-  pendingLiqpayOrderId: null,
-  pendingAmountMinor: null,
-  pendingFxRateUsedAt: null,
 };
 
 test('a callback with a bad signature is refused before anything is read', async () => {
@@ -359,15 +405,10 @@ test('an undecided callback is still recorded, but changes no state', async () =
 });
 
 test('paying for a replacement promotes it and retires the order it replaces', async () => {
-  const fxRateUsedAt = new Date('2026-08-30T00:00:00.000Z');
+  const order = checkoutOrderRow();
   const { service, applied, unsubscribed, cleared } = billingService({
-    subscription: {
-      ...ACTIVE_SUBSCRIPTION,
-      liqpayOrderId: 'old-order',
-      pendingLiqpayOrderId: 'new-order',
-      pendingAmountMinor: 19_000,
-      pendingFxRateUsedAt: fxRateUsedAt,
-    },
+    subscription: { ...ACTIVE_SUBSCRIPTION, liqpayOrderId: 'old-order' },
+    checkoutOrder: order,
   });
   const { data, signature } = signedCallback({
     status: 'success',
@@ -379,12 +420,13 @@ test('paying for a replacement promotes it and retires the order it replaces', a
 
   const update = applied[0].update;
   assert.equal(update.liqpayOrderId, 'new-order');
-  assert.equal(update.pendingLiqpayOrderId, null);
   // The price offered at checkout becomes the live price only now, once it has been paid.
   assert.equal(update.amountMinor, 19_000);
-  assert.equal(update.fxRateUsedAt, fxRateUsedAt);
-  assert.equal(update.pendingAmountMinor, null);
+  assert.equal(update.fxRateUsedAt, order.fxRateUsedAt);
   assert.equal(update.pendingUnsubscribeOrderId, 'old-order');
+
+  // The paid order is closed, and with it every sibling still open at LiqPay.
+  assert.deepEqual(applied[0].checkout, { id: 'checkout-1', outcome: 'paid' });
 
   // The old order is stopped only after the swap is committed, never hopefully in advance.
   assert.deepEqual(unsubscribed, ['old-order']);
@@ -393,13 +435,8 @@ test('paying for a replacement promotes it and retires the order it replaces', a
 
 test('an order LiqPay refuses to stop is kept for the dunning job to retry', async () => {
   const { service, cleared } = billingService({
-    subscription: {
-      ...ACTIVE_SUBSCRIPTION,
-      liqpayOrderId: 'old-order',
-      pendingLiqpayOrderId: 'new-order',
-      pendingAmountMinor: 19_000,
-      pendingFxRateUsedAt: NOW,
-    },
+    subscription: { ...ACTIVE_SUBSCRIPTION, liqpayOrderId: 'old-order' },
+    checkoutOrder: checkoutOrderRow(),
     unsubscribeOk: false,
   });
   const { data, signature } = signedCallback({
@@ -414,7 +451,13 @@ test('an order LiqPay refuses to stop is kept for the dunning job to retry', asy
 });
 
 test('a renewal of the running subscription does not disturb its order ids', async () => {
-  const { service, applied } = billingService({ subscription: ACTIVE_SUBSCRIPTION });
+  // The live order still has the checkout row it was created from, and LiqPay reports every
+  // monthly charge against that same order id. Treating those as fresh checkouts would re-pin the
+  // price on each renewal.
+  const { service, applied } = billingService({
+    subscription: ACTIVE_SUBSCRIPTION,
+    checkoutOrder: checkoutOrderRow({ orderId: 'order-1', status: 'PAID' }),
+  });
   const { data, signature } = signedCallback({
     status: 'success',
     order_id: 'order-1',
@@ -425,6 +468,7 @@ test('a renewal of the running subscription does not disturb its order ids', asy
 
   assert.equal('liqpayOrderId' in applied[0].update, false);
   assert.equal('amountMinor' in applied[0].update, false);
+  assert.equal(applied[0].checkout, null);
 });
 
 test('a failed payment notifies with the grace deadline', async () => {
@@ -439,4 +483,115 @@ test('a failed payment notifies with the grace deadline', async () => {
 
   assert.equal(notified[0].type, 'SUBSCRIPTION_PAYMENT_FAILED');
   assert.equal(notified[0].bodyMessage.deadline, '2026-09-08T12:00:00.000Z');
+});
+
+function orderIdOf(checkout) {
+  return JSON.parse(Buffer.from(checkout.data, 'base64').toString('utf8')).order_id;
+}
+
+const PENDING_SUBSCRIPTION = {
+  ...ACTIVE_SUBSCRIPTION,
+  status: 'PENDING',
+  liqpayOrderId: null,
+};
+
+test('clicking subscribe twice offers the same order rather than a second payable page', async () => {
+  // Two orders would mean two LiqPay pages, either of which can still be paid; the one that is
+  // not the subscription's own order used to produce a callback matching nothing at all.
+  const { service, orders } = billingService({ subscription: PENDING_SUBSCRIPTION });
+
+  const first = await service.startCheckout('organization', 'user');
+  const second = await service.startCheckout('organization', 'user');
+
+  assert.equal(orderIdOf(first), orderIdOf(second));
+  assert.equal(orders.length, 1);
+});
+
+test('a checkout priced from a new rate gets its own order, and both stay matchable', async () => {
+  const { service, orders, rates } = billingService({ subscription: PENDING_SUBSCRIPTION });
+
+  const first = await service.startCheckout('organization', 'user');
+  rates.usdToUah = 43.75;
+  const second = await service.startCheckout('organization', 'user');
+
+  assert.notEqual(orderIdOf(first), orderIdOf(second));
+  assert.equal(orders.length, 2);
+  assert.deepEqual(
+    orders.map((order) => order.orderId),
+    [orderIdOf(first), orderIdOf(second)],
+  );
+  assert.equal(orders[0].amountMinor, 18_675);
+  assert.equal(orders[1].amountMinor, 19_688);
+});
+
+test('paying for a superseded checkout activates it at the price that checkout pinned', async () => {
+  // The payer opened checkout twice and paid in the older tab. The subscription no longer points
+  // at that order, so the amount has to come from the order's own row.
+  const superseded = checkoutOrderRow({
+    id: 'checkout-1',
+    orderId: 'first-order',
+    amountMinor: 18_675,
+    fxRateUsedAt: new Date('2026-08-29T00:00:00.000Z'),
+  });
+  const { service, applied } = billingService({
+    subscription: PENDING_SUBSCRIPTION,
+    checkoutOrder: superseded,
+  });
+  const { data, signature } = signedCallback({
+    status: 'success',
+    order_id: 'first-order',
+    payment_id: 61,
+  });
+
+  await service.handleCallback(data, signature, NOW);
+
+  assert.equal(applied[0].update.status, 'ACTIVE');
+  assert.equal(applied[0].update.liqpayOrderId, 'first-order');
+  assert.equal(applied[0].update.amountMinor, 18_675);
+  assert.equal(applied[0].update.fxRateUsedAt, superseded.fxRateUsedAt);
+  assert.deepEqual(applied[0].checkout, { id: 'checkout-1', outcome: 'paid' });
+});
+
+test('a callback charging something else is reported, not adopted as the price', async () => {
+  const { service, applied, warned } = billingService({
+    subscription: PENDING_SUBSCRIPTION,
+    checkoutOrder: checkoutOrderRow(),
+  });
+  const { data, signature } = signedCallback({
+    status: 'success',
+    order_id: 'new-order',
+    payment_id: 62,
+    amount: 1,
+    currency: 'UAH',
+  });
+
+  await service.handleCallback(data, signature, NOW);
+
+  assert.equal(applied[0].update.amountMinor, 19_000);
+  assert.equal(warned.length, 1);
+  assert.equal(warned[0].pinnedAmountMinor, 19_000);
+  assert.equal(warned[0].callbackAmountMinor, 100);
+});
+
+test('a failed checkout closes its order, an undecided one leaves it open', async () => {
+  // wait_secure may still become a payment. Retiring the order early would make that payment
+  // unmatchable - the exact failure the order table exists to prevent.
+  for (const [status, expected] of [
+    ['failure', { id: 'checkout-1', outcome: 'abandoned' }],
+    ['wait_secure', null],
+  ]) {
+    const { service, applied } = billingService({
+      subscription: PENDING_SUBSCRIPTION,
+      checkoutOrder: checkoutOrderRow(),
+    });
+    const { data, signature } = signedCallback({
+      status,
+      order_id: 'new-order',
+      payment_id: 63,
+    });
+
+    await service.handleCallback(data, signature, NOW);
+
+    assert.deepEqual(applied[0].checkout, expected, status);
+  }
 });

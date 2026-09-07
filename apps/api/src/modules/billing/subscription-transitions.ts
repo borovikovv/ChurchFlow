@@ -9,6 +9,23 @@ const PAID_STATUSES = new Set(['success', 'subscribed', 'sandbox']);
 const FAILED_STATUSES = new Set(['failure', 'error', 'reversed']);
 const CANCELED_STATUSES = new Set(['unsubscribed']);
 
+/**
+ * What a callback says about the charge it reports. Kept separate from the state machine because
+ * closing a checkout order needs the same answer: an undecided callback must leave an order open,
+ * since the payment it belongs to may still succeed.
+ */
+export type CallbackOutcome = 'paid' | 'failed' | 'canceled' | 'undecided';
+
+export function classifyCallbackStatus(callbackStatus: string): CallbackOutcome {
+  const status = callbackStatus.trim().toLowerCase();
+
+  if (PAID_STATUSES.has(status)) return 'paid';
+  if (CANCELED_STATUSES.has(status)) return 'canceled';
+  if (FAILED_STATUSES.has(status)) return 'failed';
+
+  return 'undecided';
+}
+
 export interface SubscriptionTransitionState {
   status: SubscriptionStatus;
   graceEndsAt: Date | null;
@@ -41,9 +58,9 @@ export function transitionForCallbackStatus(
   input: SubscriptionTransitionInput,
 ): SubscriptionTransitionState | null {
   const { current, callbackStatus, now, isNewSubscription } = input;
-  const status = callbackStatus.trim().toLowerCase();
+  const outcome = classifyCallbackStatus(callbackStatus);
 
-  if (PAID_STATUSES.has(status)) {
+  if (outcome === 'paid') {
     if (current.status === 'CANCELED' && !isNewSubscription) {
       return null;
     }
@@ -61,7 +78,7 @@ export function transitionForCallbackStatus(
     return null;
   }
 
-  if (CANCELED_STATUSES.has(status)) {
+  if (outcome === 'canceled') {
     return {
       status: 'CANCELED',
       graceEndsAt: null,
@@ -69,7 +86,7 @@ export function transitionForCallbackStatus(
     };
   }
 
-  if (FAILED_STATUSES.has(status)) {
+  if (outcome === 'failed') {
     if (current.status === 'RESTRICTED' || current.status === 'CANCELED') {
       return null;
     }

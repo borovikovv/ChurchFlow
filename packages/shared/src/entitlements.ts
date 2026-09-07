@@ -57,6 +57,13 @@ export const BILLING_TRANSITION_WINDOW_DAYS = 7;
 export const BILLING_GRACE_PERIOD_DAYS = 7;
 
 /**
+ * How long an offered checkout is reused instead of a fresh order being minted. Two clicks
+ * seconds apart are one intent, and every extra order is another LiqPay page that can still be
+ * paid; the window is short enough that a genuinely later attempt is priced anew.
+ */
+export const BILLING_CHECKOUT_REUSE_MINUTES = 30;
+
+/**
  * How long a paid period may be over before silence is treated as a failed charge. LiqPay may
  * settle a day late, so this is not zero; leaving it unbounded would mean a single undelivered
  * callback grants an organization free access forever.

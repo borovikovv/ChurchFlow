@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@churchflow/db';
 import {
+  BILLING_CHECKOUT_REUSE_MINUTES,
   SUBSCRIPTION_USD_REFERENCE_AMOUNT,
   type BillingCheckout,
   type Entitlement,
@@ -19,10 +20,16 @@ import { CurrencyRatesService } from '../currency-rates/currency-rates.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EntitlementsService } from './entitlements.service';
 import { LiqPayService, type LiqPayCallback } from './liqpay.service';
-import { SubscriptionsRepository } from './repositories/subscriptions.repository';
-import { BILLING_TIME_ZONE, dayKey } from './billing-time';
 import {
+  SubscriptionsRepository,
+  type CheckoutResolution,
+  type SubscriptionOrderMatch,
+} from './repositories/subscriptions.repository';
+import { BILLING_TIME_ZONE, dayKey, minutesAgo } from './billing-time';
+import {
+  classifyCallbackStatus,
   transitionForCallbackStatus,
+  type CallbackOutcome,
   type SubscriptionTransitionState,
 } from './subscription-transitions';
 
@@ -32,6 +39,7 @@ const NOTIFICATION_PREFERENCE_KEY = 'organizationUpdatesEnabled' as const;
 type SubscriptionRecord = NonNullable<
   Awaited<ReturnType<SubscriptionsRepository['findByOrganizationId']>>
 >;
+type CheckoutOrderRecord = NonNullable<SubscriptionOrderMatch['checkoutOrder']>;
 
 @Injectable()
 export class BillingService {
@@ -73,18 +81,31 @@ export class BillingService {
     }
 
     const amountMinor = Math.round(SUBSCRIPTION_USD_REFERENCE_AMOUNT * rates.usdToUah * 100);
-    const orderId = randomUUID();
+
+    // A checkout already offered at this price is handed back rather than replaced. Two clicks
+    // seconds apart are one intent, and a second order would be a second payable LiqPay page.
+    const reusable = await this.subscriptionsRepository.findReusableCheckout({
+      subscriptionId: subscription.id,
+      amountMinor,
+      createdAfter: minutesAgo(now, BILLING_CHECKOUT_REUSE_MINUTES),
+    });
+    const orderId = reusable?.orderId ?? randomUUID();
 
     // Nothing about the live subscription changes here. Replacing a card goes through the same
     // path, and cancelling the old order before the new one is paid for would leave an
     // organization that closes the LiqPay tab with no subscription and nothing charging it.
-    await this.subscriptionsRepository.startPendingCheckout({
-      organizationId,
-      actorUserId,
-      orderId,
-      amountMinor,
-      fxRateUsedAt: now,
-    });
+    if (!reusable) {
+      await this.subscriptionsRepository.createCheckoutOrder({
+        organizationId,
+        subscriptionId: subscription.id,
+        actorUserId,
+        orderId,
+        amountMinor,
+        currency: BILLING_CURRENCY,
+        usdReference: SUBSCRIPTION_USD_REFERENCE_AMOUNT,
+        fxRateUsedAt: now,
+      });
+    }
 
     return this.liqPayService.buildSubscribeCheckout({
       orderId,
@@ -134,16 +155,26 @@ export class BillingService {
       throw new BadRequestException('LiqPay callback is missing a payment id');
     }
 
-    const subscription = await this.subscriptionsRepository.findByOrderId(callback.orderId);
-    if (!subscription) {
+    const match = await this.subscriptionsRepository.findByOrderId(callback.orderId);
+    if (!match) {
       // Acknowledge anyway: retrying will not make an unknown order familiar.
       this.logger.warn({ event: 'LiqPay callback for unknown order', orderId: callback.orderId });
 
       return { ok: true as const };
     }
 
+    const { subscription, checkoutOrder } = match;
     const orderId = callback.orderId;
-    const isNewSubscription = subscription.pendingLiqpayOrderId === orderId;
+
+    // A checkout stops being "new" once it is the live order: LiqPay reports every monthly
+    // renewal against the order that created the subscription, and treating those as new
+    // checkouts would re-pin the price on each charge.
+    const isNewSubscription = checkoutOrder !== null && subscription.liqpayOrderId !== orderId;
+
+    if (checkoutOrder) {
+      this.warnOnAmountMismatch(checkoutOrder, callback);
+    }
+
     const transition = transitionForCallbackStatus({
       current: subscription,
       callbackStatus: callback.status ?? '',
@@ -170,8 +201,7 @@ export class BillingService {
       payload: { data } satisfies Prisma.InputJsonObject,
       update: transition
         ? this.buildCallbackUpdate({
-            pendingAmountMinor: subscription.pendingAmountMinor,
-            pendingFxRateUsedAt: subscription.pendingFxRateUsedAt,
+            checkoutOrder,
             transition,
             callback,
             orderId,
@@ -180,6 +210,12 @@ export class BillingService {
             now,
           })
         : null,
+      checkout: resolveCheckout({
+        checkoutOrder,
+        outcome: classifyCallbackStatus(callback.status ?? ''),
+        isNewSubscription,
+        activated: transition?.status === 'ACTIVE',
+      }),
     });
 
     if (duplicate || !transition) {
@@ -196,8 +232,7 @@ export class BillingService {
   }
 
   private buildCallbackUpdate(input: {
-    pendingAmountMinor: number | null;
-    pendingFxRateUsedAt: Date | null;
+    checkoutOrder: CheckoutOrderRecord | null;
     transition: SubscriptionTransitionState;
     callback: LiqPayCallback;
     orderId: string;
@@ -218,26 +253,49 @@ export class BillingService {
       return update;
     }
 
-    if (!isNewSubscription) {
+    if (!isNewSubscription || !input.checkoutOrder) {
       return { ...update, liqpaySubscribedAt: now };
     }
 
-    // The checkout has been paid for, so it becomes the live subscription. Its price moves
-    // across with it, and the order it replaces is queued for cancellation rather than being
-    // cancelled hopefully in advance.
+    // The checkout has been paid for, so it becomes the live subscription. The price comes from
+    // the order that was actually paid rather than from whatever checkout was offered last, and
+    // the order it replaces is queued for cancellation rather than cancelled hopefully in
+    // advance.
     return {
       ...update,
       liqpaySubscribedAt: now,
       liqpayOrderId: input.orderId,
-      pendingLiqpayOrderId: null,
-      amountMinor: input.pendingAmountMinor,
-      currency: BILLING_CURRENCY,
-      usdReference: new Prisma.Decimal(SUBSCRIPTION_USD_REFERENCE_AMOUNT),
-      fxRateUsedAt: input.pendingFxRateUsedAt,
-      pendingAmountMinor: null,
-      pendingFxRateUsedAt: null,
+      amountMinor: input.checkoutOrder.amountMinor,
+      currency: input.checkoutOrder.currency,
+      usdReference: input.checkoutOrder.usdReference,
+      fxRateUsedAt: input.checkoutOrder.fxRateUsedAt,
       ...(input.supersededOrderId ? { pendingUnsubscribeOrderId: input.supersededOrderId } : {}),
     };
+  }
+
+  /**
+   * The pinned price is the one that counts, so a disagreeing callback is reported rather than
+   * adopted: letting the amount on the row follow whatever arrives would erase the only record
+   * of what the organization agreed to pay.
+   */
+  private warnOnAmountMismatch(order: CheckoutOrderRecord, callback: LiqPayCallback): void {
+    if (callback.amountMinor === null) {
+      return;
+    }
+
+    const currencyMatches = callback.currency === null || callback.currency === order.currency;
+    if (callback.amountMinor === order.amountMinor && currencyMatches) {
+      return;
+    }
+
+    this.logger.warn({
+      event: 'LiqPay callback amount does not match the pinned price',
+      orderId: order.orderId,
+      pinnedAmountMinor: order.amountMinor,
+      pinnedCurrency: order.currency,
+      callbackAmountMinor: callback.amountMinor,
+      callbackCurrency: callback.currency,
+    });
   }
 
   /** Best effort now, retried by the dunning job for as long as the order id is still stored. */
@@ -350,6 +408,30 @@ export class BillingService {
 
     return subscription;
   }
+}
+
+/**
+ * Which checkout order a callback closes, if any. Only a decided callback closes one: an
+ * undecided `wait_*` may still turn into a payment, and retiring its order early would leave that
+ * payment matching nothing - the failure this table exists to prevent.
+ */
+function resolveCheckout(input: {
+  checkoutOrder: CheckoutOrderRecord | null;
+  outcome: CallbackOutcome;
+  isNewSubscription: boolean;
+  activated: boolean;
+}): CheckoutResolution | null {
+  const { checkoutOrder, outcome, isNewSubscription, activated } = input;
+
+  if (!checkoutOrder || !isNewSubscription || outcome === 'undecided') {
+    return null;
+  }
+
+  if (outcome === 'paid') {
+    return activated ? { id: checkoutOrder.id, outcome: 'paid' } : null;
+  }
+
+  return { id: checkoutOrder.id, outcome: 'abandoned' };
 }
 
 function toSummary(

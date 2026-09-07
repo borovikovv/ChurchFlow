@@ -152,6 +152,12 @@ enum SubscriptionStatus {
   CANCELED
 }
 
+enum BillingCheckoutStatus {
+  PROPOSED
+  PAID
+  ABANDONED
+}
+
 enum CalendarEventType {
   BIRTHDAY
   ANNIVERSARY
@@ -1212,12 +1218,9 @@ model Subscription {
   liqpayOrderId      String?   @unique @map("liqpay_order_id")
   liqpaySubscribedAt DateTime? @map("liqpay_subscribed_at")
 
-  // A checkout the payer has not completed yet. The live subscription keeps charging until the
-  // new one is confirmed, so abandoning the LiqPay page costs nothing. On the first successful
-  // callback this is promoted to liqpayOrderId and the old order is queued for cancellation.
-  pendingLiqpayOrderId String?   @unique @map("pending_liqpay_order_id")
-  pendingAmountMinor   Int?      @map("pending_amount_minor")
-  pendingFxRateUsedAt  DateTime? @map("pending_fx_rate_used_at")
+  // Checkouts the payer has not completed yet live in BillingCheckoutOrder, one row per offered
+  // checkout. A single slot on the subscription could only remember the latest one, so paying for
+  // a checkout that had since been superseded produced a callback matching no order at all.
 
   // An order LiqPay still needs to stop charging. Set when unsubscribe fails or when a
   // replacement supersedes an old order; the dunning job retries until LiqPay accepts it.
@@ -1235,9 +1238,10 @@ model Subscription {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  exemptGrantedBy User?             @relation(fields: [exemptGrantedByUserId], references: [id], onDelete: SetNull)
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  exemptGrantedBy User?                  @relation(fields: [exemptGrantedByUserId], references: [id], onDelete: SetNull)
   callbacks       BillingCallback[]
+  checkoutOrders  BillingCheckoutOrder[]
 
   @@unique([id, organizationId])
   @@index([status])
@@ -1265,4 +1269,34 @@ model BillingCallback {
   @@index([organizationId])
   @@index([subscriptionId])
   @@map("billing_callbacks")
+}
+
+/**
+ * One row per checkout offered to a payer. LiqPay reports a payment against the order id it was
+ * given, so every order that was ever shown has to stay resolvable: a payer who opens checkout
+ * twice and pays in the older tab is charged for an order the subscription no longer points at.
+ * The price pinned here is the price that becomes live if this particular order is the one paid.
+ */
+model BillingCheckoutOrder {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  subscriptionId String @map("subscription_id") @db.Uuid
+  orderId        String @unique @map("order_id")
+
+  amountMinor  Int      @map("amount_minor")
+  currency     String   @db.VarChar(3)
+  usdReference Decimal  @map("usd_reference") @db.Decimal(12, 2)
+  fxRateUsedAt DateTime @map("fx_rate_used_at")
+
+  status     BillingCheckoutStatus @default(PROPOSED)
+  resolvedAt DateTime?             @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subscription Subscription @relation(fields: [subscriptionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([subscriptionId, status])
+  @@map("billing_checkout_orders")
 }

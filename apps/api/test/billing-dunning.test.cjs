@@ -240,9 +240,10 @@ function checkoutService({ subscription, unsubscribeOk = true, onCancel = () => 
   const service = new BillingService(
     {
       findByOrganizationId: async () => subscription,
-      startPendingCheckout: async (input) => {
+      findReusableCheckout: async () => null,
+      createCheckoutOrder: async (input) => {
         started.push(input);
-        return {};
+        return { id: 'checkout', ...input };
       },
       cancel: async (...args) => {
         onCancel(args);
@@ -277,8 +278,11 @@ test('the hryvnia amount is pinned at subscribe time from the published rate', a
   assert.equal(started[0].actorUserId, 'actor');
   assert.ok(started[0].fxRateUsedAt instanceof Date);
 
-  // Currency and the USD reference are constants, so they land on the live row when the
-  // checkout is paid for rather than being carried through the pending one.
+  // The whole price is pinned on the order, not just the amount: the order that gets paid is the
+  // one whose price becomes live, and that is not always the one offered last.
+  assert.equal(started[0].currency, 'UAH');
+  assert.equal(started[0].usdReference, 4.5);
+
   const payload = JSON.parse(Buffer.from(checkout.data, 'base64').toString('utf8'));
   assert.equal(payload.amount, 186.75);
   assert.equal(payload.currency, 'UAH');
@@ -295,9 +299,10 @@ test('offering a replacement card leaves the running subscription charging', asy
 
   assert.deepEqual(unsubscribed, []);
   assert.notEqual(started[0].orderId, 'old-order');
-  // The offered price is held aside; the live one is only replaced once a payment succeeds.
-  assert.ok('amountMinor' in started[0]);
-  assert.equal('currency' in started[0], false);
+  // The offered price is held on its own order; the live one is only replaced once a payment
+  // succeeds, so nothing here touches the subscription that is still charging.
+  assert.equal(started[0].subscriptionId, 'subscription');
+  assert.equal(started[0].amountMinor, 18_675);
 });
 
 test('cancelling remembers an unsubscribe LiqPay would not accept', async () => {

@@ -18,6 +18,9 @@ export interface LiqPayCallback {
   status: string | null;
   orderId: string | null;
   paymentId: string | null;
+  /** What was actually charged, so it can be checked against the price pinned at checkout. */
+  amountMinor: number | null;
+  currency: string | null;
   cardMask: string | null;
   cardBrand: string | null;
 }
@@ -27,6 +30,16 @@ function optionalString(value: unknown): string | null {
   if (typeof value === 'number') return String(value);
 
   return null;
+}
+
+/** LiqPay reports amounts in major units, and as a number or a string depending on the call. */
+function optionalAmountMinor(value: unknown): number | null {
+  const amount = typeof value === 'string' ? Number(value) : value;
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) {
+    return null;
+  }
+
+  return Math.round(amount * 100);
 }
 
 /**
@@ -83,6 +96,8 @@ export class LiqPayService {
       status: optionalString(record['status']),
       orderId: optionalString(record['order_id']),
       paymentId: optionalString(record['payment_id']),
+      amountMinor: optionalAmountMinor(record['amount']),
+      currency: optionalString(record['currency']),
       cardMask: optionalString(record['sender_card_mask2']),
       cardBrand: optionalString(record['sender_card_type']),
     };
