@@ -19,6 +19,7 @@ const { MembershipsController } = require('../dist/modules/memberships/membershi
 const {
   OrganizationsRepository,
 } = require('../dist/modules/organizations/repositories/organizations.repository');
+const { OrganizationsService } = require('../dist/modules/organizations/organizations.service');
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -361,4 +362,70 @@ test('server errors are never given a client-supplied code', () => {
   assert.equal(response.code, 500);
   assert.equal(response.body.error.code, 'INTERNAL_SERVER_ERROR');
   assert.equal(response.body.error.message, 'Unexpected server error');
+});
+
+test('the admin payload carries who granted complimentary access, even after a revoke', async () => {
+  // A revoke clears exemptGrantedBy off the subscription, so the audit row is the only place the
+  // acting platform admin and the reason survive.
+  const service = new OrganizationsService(
+    {
+      findAdminById: async () => ({
+        id: ORGANIZATION_ID,
+        name: 'Grace Church',
+        subscription: { isExempt: false, exemptReason: null, exemptGrantedBy: null },
+      }),
+      findBillingExemptionHistory: async () => [
+        {
+          id: 'revoke',
+          action: 'REVOKE_BILLING_EXEMPTION',
+          createdAt: new Date('2026-09-04T14:05:00.000Z'),
+          metadata: { subscriptionStatus: 'PENDING' },
+          actor: { displayName: null, email: 'admin@example.test' },
+        },
+        {
+          id: 'grant',
+          action: 'GRANT_BILLING_EXEMPTION',
+          createdAt: new Date('2026-08-31T09:00:00.000Z'),
+          metadata: { reason: 'Partner church' },
+          actor: { displayName: 'Platform Admin', email: 'admin@example.test' },
+        },
+      ],
+    },
+    {},
+    {},
+    {},
+  );
+
+  const organization = await service.getAdmin(ORGANIZATION_ID);
+
+  assert.deepEqual(organization.billingExemptionHistory, [
+    {
+      id: 'revoke',
+      action: 'revoked',
+      at: '2026-09-04T14:05:00.000Z',
+      actorName: 'admin@example.test',
+      reason: null,
+    },
+    {
+      id: 'grant',
+      action: 'granted',
+      at: '2026-08-31T09:00:00.000Z',
+      actorName: 'Platform Admin',
+      reason: 'Partner church',
+    },
+  ]);
+});
+
+test('an organization that never had complimentary access reports no history', async () => {
+  const service = new OrganizationsService(
+    {
+      findAdminById: async () => ({ id: ORGANIZATION_ID, subscription: { isExempt: false } }),
+      findBillingExemptionHistory: async () => [],
+    },
+    {},
+    {},
+    {},
+  );
+
+  assert.deepEqual((await service.getAdmin(ORGANIZATION_ID)).billingExemptionHistory, []);
 });

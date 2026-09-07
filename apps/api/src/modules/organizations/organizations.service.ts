@@ -17,6 +17,32 @@ import { EntitlementsService } from '../billing/entitlements.service';
 import { OrganizationRequestsRepository } from '../organization-requests/repositories/organization-requests.repository';
 import { OrganizationsRepository } from './repositories/organizations.repository';
 
+type BillingExemptionAuditRow = Awaited<
+  ReturnType<OrganizationsRepository['findBillingExemptionHistory']>
+>[number];
+
+export interface BillingExemptionEvent {
+  id: string;
+  action: 'granted' | 'revoked';
+  at: string;
+  actorName: string | null;
+  reason: string | null;
+}
+
+function toBillingExemptionEvent(row: BillingExemptionAuditRow): BillingExemptionEvent {
+  const metadata = row.metadata as { reason?: unknown };
+
+  return {
+    id: row.id,
+    action: row.action === 'GRANT_BILLING_EXEMPTION' ? 'granted' : 'revoked',
+    at: row.createdAt.toISOString(),
+    // Not exemptGrantedBy: that field is null the moment the exemption is revoked, which is
+    // exactly when someone needs to know who granted it.
+    actorName: row.actor?.displayName ?? row.actor?.email ?? null,
+    reason: typeof metadata.reason === 'string' ? metadata.reason : null,
+  };
+}
+
 type WorkspaceOrganizationRow = {
   id: string;
   name: string;
@@ -145,7 +171,11 @@ export class OrganizationsService {
       throw new NotFoundException('Organization was not found');
     }
 
-    return organization;
+    // The subscription row holds the current state only. Everything about a complimentary access
+    // that has since been revoked - who granted it, when, why - is in the audit log.
+    const history = await this.organizationsRepository.findBillingExemptionHistory(id);
+
+    return { ...organization, billingExemptionHistory: history.map(toBillingExemptionEvent) };
   }
 
   /**

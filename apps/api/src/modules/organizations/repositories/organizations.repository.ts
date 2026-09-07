@@ -4,6 +4,8 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import type { createOrganizationSchema, UpdateOrganizationInput } from '@churchflow/shared';
 import type { z } from 'zod';
 
+const BILLING_EXEMPTION_HISTORY_LIMIT = 20;
+
 @Injectable()
 export class OrganizationsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -208,6 +210,29 @@ export class OrganizationsRepository {
             exemptGrantedBy: { select: { id: true, displayName: true, email: true } },
           },
         },
+      },
+    });
+  }
+
+  /**
+   * The history of complimentary access. Revoking clears the grant off the subscription row, so
+   * who granted it, when and why survives only here - and the audit log is not readable from the
+   * admin interface at all.
+   */
+  findBillingExemptionHistory(organizationId: string) {
+    return this.prisma.auditLog.findMany({
+      where: {
+        organizationId,
+        action: { in: ['GRANT_BILLING_EXEMPTION', 'REVOKE_BILLING_EXEMPTION'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: BILLING_EXEMPTION_HISTORY_LIMIT,
+      select: {
+        id: true,
+        action: true,
+        createdAt: true,
+        metadata: true,
+        actor: { select: { displayName: true, email: true } },
       },
     });
   }
