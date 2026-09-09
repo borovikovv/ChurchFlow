@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import type { OrganizationGroupBadge } from '@churchflow/shared';
 import { useState, type ComponentProps } from 'react';
 import { InviteAppUserForm } from '@/components/members/invite-app-user-form';
 import { PlusIcon } from '@/components/icons/action-icons';
@@ -20,10 +21,12 @@ import {
 type ManageInvitationAction = ComponentProps<typeof InviteAppUserForm>['action'];
 
 export function MembersActions({
+  groupOptions,
   manageInvitation,
   organizationId,
   variant,
 }: {
+  groupOptions: OrganizationGroupBadge[];
   manageInvitation: ManageInvitationAction;
   organizationId: string;
   variant: 'toolbar' | 'fab';
@@ -53,6 +56,7 @@ export function MembersActions({
         >
           <div className="grid gap-2 px-5 pt-1 pb-4">
             <CreateMemberDialog
+              groupOptions={groupOptions}
               organizationId={organizationId}
               triggerClassName={MEMBERS_SHEET_BUTTON_CLASS_NAME}
               onCreated={refreshMembers}
@@ -98,6 +102,7 @@ export function MembersActions({
         />
       </FormDialog>
       <CreateMemberDialog
+        groupOptions={groupOptions}
         organizationId={organizationId}
         triggerClassName={`${MEMBERS_ACTION_BUTTON_CLASS_NAME} col-start-2 row-start-2 w-full xl:w-auto`}
         onCreated={refreshMembers}

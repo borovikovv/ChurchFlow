@@ -5,6 +5,7 @@ export const ORGANIZATION_ROUTE_SEGMENTS = {
   calendar: 'calendar',
   budget: 'budget',
   members: 'members',
+  groups: 'groups',
   prayerRequests: 'prayer-requests',
   profile: 'profile',
   website: 'website',
@@ -21,6 +22,14 @@ export function organizationMembersRoute(organizationId: string): Route {
 
 export function organizationMemberRoute(organizationId: string, memberId: string): Route {
   return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.members}/${memberId}` as Route;
+}
+
+export function organizationGroupsRoute(organizationId: string): Route {
+  return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.groups}` as Route;
+}
+
+export function organizationGroupRoute(organizationId: string, groupId: string): Route {
+  return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.groups}/${groupId}` as Route;
 }
 
 export function organizationCalendarRoute(organizationId: string): Route {

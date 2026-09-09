@@ -75,7 +75,9 @@ export class CalendarEventsRepository {
       },
       include: {
         profile: true,
-        ministries: true,
+        groups: {
+          include: { group: { select: { id: true, name: true, icon: true, color: true } } },
+        },
         user: { select: { displayName: true, email: true, avatarUrl: true } },
       },
       orderBy: { createdAt: 'asc' },
@@ -159,6 +161,26 @@ export class CalendarEventsRepository {
           { repeatPeriod: { not: CALENDAR_EVENT_REPEAT_PERIOD.none } },
           { reminder: { not: null } },
           { startsAt: { gte: windowStart } },
+        ],
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      include: calendarEventInclude,
+      orderBy: { startsAt: 'asc' },
+    });
+  }
+
+  async listMilestoneDigestCandidates(
+    rangeStart: Date,
+    rangeEnd: Date,
+  ): Promise<CalendarEventRecord[]> {
+    return this.prisma.calendarEvent.findMany({
+      where: {
+        deletedAt: null,
+        type: { in: [CALENDAR_EVENT_TYPE.birthday, CALENDAR_EVENT_TYPE.anniversary] },
+        startsAt: { lt: rangeEnd },
+        OR: [
+          { repeatPeriod: { not: CALENDAR_EVENT_REPEAT_PERIOD.none } },
+          { startsAt: { gte: rangeStart } },
         ],
         organization: { status: 'ACTIVE', deletedAt: null },
       },

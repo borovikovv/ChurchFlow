@@ -21,7 +21,13 @@ export interface ParsedMemberCsvImport {
 const COLUMN_SET = new Set<string>(MEMBER_CSV_TEMPLATE_COLUMNS);
 const REQUIRED_COLUMNS = ['displayName'] as const satisfies readonly CsvColumn[];
 
-export function parseMembersCsv(csv: string): ParsedMemberCsvImport {
+export function parseMembersCsv(
+  csv: string,
+  organizationGroups: ReadonlyArray<{ id: string; name: string }> = [],
+): ParsedMemberCsvImport {
+  const groupIdsByName = new Map(
+    organizationGroups.map((group) => [group.name.trim().toLowerCase(), group.id]),
+  );
   const records = parseCsvRecords(csv.replace(/^\uFEFF/, ''));
   if (records.length === 0) {
     return {
@@ -75,6 +81,14 @@ export function parseMembersCsv(csv: string): ParsedMemberCsvImport {
       headers.map((header, headerIndex) => [header, record[headerIndex]?.trim() ?? '']),
     ) as Partial<Record<CsvColumn, string>>;
 
+    const groups = resolveGroupIds(csvValue(raw, 'groups'), groupIdsByName);
+    if (groups.unknownNames.length > 0) {
+      for (const name of groups.unknownNames) {
+        errors.push({ row: rowNumber, field: 'groups', message: `Unknown group "${name}".` });
+      }
+      return;
+    }
+
     const parsed = createManualOrganizationMemberSchema.safeParse({
       displayName: csvValue(raw, 'displayName'),
       email: nullableCsvValue(csvValue(raw, 'email')),
@@ -86,7 +100,7 @@ export function parseMembersCsv(csv: string): ParsedMemberCsvImport {
       biography: nullableCsvValue(csvValue(raw, 'biography')),
       familyNotes: nullableCsvValue(csvValue(raw, 'familyNotes')),
       role: csvValue(raw, 'role') || 'MEMBER',
-      ministries: parseMinistries(csvValue(raw, 'ministries')),
+      groups: groups.ids,
     });
 
     if (!parsed.success) {
@@ -106,25 +120,6 @@ export function parseMembersCsv(csv: string): ParsedMemberCsvImport {
   return { rows, errors, totalRows: dataRecords.length };
 }
 
-export function createMembersCsvTemplate(): string {
-  return toCsv([
-    [...MEMBER_CSV_TEMPLATE_COLUMNS],
-    [
-      'Jane Doe',
-      'jane@example.com',
-      '+380501112233',
-      'MEMBER',
-      'WORSHIP;TEACHER',
-      '2024-01-14',
-      '1991-05-20',
-      '',
-      'Small group leader',
-      '',
-      '',
-    ],
-  ]);
-}
-
 function nullableCsvValue(value: string): string | null {
   return value === '' ? null : value;
 }
@@ -133,12 +128,29 @@ function csvValue(row: Partial<Record<CsvColumn, string>>, column: CsvColumn): s
   return row[column] ?? '';
 }
 
-function parseMinistries(value: string): string[] | undefined {
-  if (!value.trim()) return undefined;
-  return value
-    .split(/[;,]/)
-    .map((item) => item.trim().toUpperCase())
+function resolveGroupIds(
+  value: string,
+  groupIdsByName: ReadonlyMap<string, string>,
+): { ids: string[] | undefined; unknownNames: string[] } {
+  if (!value.trim()) return { ids: undefined, unknownNames: [] };
+
+  const names = value
+    .split(';')
+    .map((item) => item.trim())
     .filter(Boolean);
+  const ids: string[] = [];
+  const unknownNames: string[] = [];
+
+  for (const name of names) {
+    const id = groupIdsByName.get(name.toLowerCase());
+    if (id === undefined) {
+      unknownNames.push(name);
+      continue;
+    }
+    if (!ids.includes(id)) ids.push(id);
+  }
+
+  return { ids, unknownNames };
 }
 
 function parseCsvRecords(csv: string): string[][] {
@@ -186,13 +198,4 @@ function parseCsvRecords(csv: string): string[][] {
   }
 
   return rows.filter((record) => record.some((field) => field.trim() !== ''));
-}
-
-function toCsv(rows: string[][]): string {
-  return rows.map((row) => row.map(escapeCsvValue).join(',')).join('\n');
-}
-
-function escapeCsvValue(value: string): string {
-  if (!/[",\n\r]/.test(value)) return value;
-  return `"${value.replaceAll('"', '""')}"`;
 }

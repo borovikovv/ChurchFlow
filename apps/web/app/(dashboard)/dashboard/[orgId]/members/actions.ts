@@ -8,8 +8,8 @@ import { getCurrentUser } from '@/auth/session';
 import type { InlineInvitationState } from '@/components/members/invite-app-user-form';
 import type {
   CreateManualOrganizationMemberInput,
+  OrganizationGroupBadge,
   ImportOrganizationMembersCsvResult,
-  MemberMinistry,
   MembershipClaimMutationResult,
   OrganizationMembersAccessFilter,
   OrganizationMembersTab,
@@ -37,7 +37,7 @@ export async function loadMembersAction(input: {
   access: OrganizationMembersAccessFilter;
   cursor?: string;
   membershipId?: string;
-  ministries: MemberMinistry[];
+  groups: string[];
   page: number;
   pageSize: number;
   tab: OrganizationMembersTab;
@@ -52,8 +52,8 @@ export async function loadMembersAction(input: {
     page: String(input.page),
     pageSize: String(input.pageSize),
   });
-  if (input.ministries.length > 0) {
-    params.set('ministries', input.ministries.join(','));
+  if (input.groups.length > 0) {
+    params.set('groups', input.groups.join(','));
   }
   if (input.membershipId) {
     params.set('membershipId', input.membershipId);
@@ -68,6 +68,7 @@ export async function loadMembersAction(input: {
   if (!result.ok) return { ok: false as const, error: result.error.message };
 
   const payload = result.data;
+  payload.groups = payload.groups ?? [];
   payload.memberCandidates = payload.memberCandidates ?? [];
   await Promise.all(
     payload.members.map(async (member) => {
@@ -101,7 +102,7 @@ export async function loadMemberDetailsAction(input: {
     organizationId: input.organizationId,
     access: 'all',
     membershipId: input.membershipId,
-    ministries: [],
+    groups: [],
     page: 1,
     pageSize: 10,
     tab: 'active',
@@ -176,7 +177,7 @@ export async function createMemberAction(input: {
     id: string;
     role: string;
     source: string;
-    ministries: MemberMinistry[];
+    groups: OrganizationGroupBadge[];
     profile: {
       displayName: string;
       email: string | null;
@@ -324,7 +325,7 @@ export async function updateMemberProfileAction(
         anniversary: formData.get('anniversary') || null,
         biography: formData.get('biography') || null,
         familyNotes: formData.get('familyNotes') || null,
-        ministries: formData.getAll('ministries'),
+        groups: formData.getAll('groups'),
       }),
     },
   );

@@ -58,7 +58,7 @@ export class MembershipsController {
       query.tab,
       query.type,
       query.search,
-      query.ministries,
+      query.groups,
       query.page,
       query.pageSize,
       query.membershipId,

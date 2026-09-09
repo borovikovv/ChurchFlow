@@ -26,6 +26,12 @@ const BODY_SAMPLES = [
     timeZone: 'Europe/Kyiv',
   },
   {
+    key: 'eventOnDate',
+    eventTitle: 'День народження: Maria',
+    startsAt: '2026-09-01T10:00:00.000Z',
+    timeZone: 'Europe/Kyiv',
+  },
+  {
     key: 'calendarEventLinked',
     memberName: 'Maria',
     eventTitle: 'Sunday service',
