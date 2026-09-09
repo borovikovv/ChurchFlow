@@ -13,6 +13,17 @@ const {
   MembershipClaimsRepository,
 } = require('../dist/modules/membership-claims/repositories/membership-claims.repository.js');
 
+function milestoneStubs() {
+  return {
+    user: { findUnique: async () => ({ locale: 'en' }) },
+    calendarEvent: {
+      findFirst: async () => null,
+      create: async () => ({ id: 'milestone-event' }),
+      update: async () => ({ id: 'milestone-event' }),
+    },
+  };
+}
+
 function createUserLocaleService(locale = 'en') {
   return {
     forUser: async () => locale,
@@ -35,6 +46,7 @@ test('manual member repository atomically creates profile and audit without User
           },
         },
         auditLog: { create: async ({ data }) => (captured.audit = data) },
+        ...milestoneStubs(),
       }),
   });
 
@@ -111,6 +123,7 @@ test('ordinary members can update their own member profile', async () => {
           },
         },
         auditLog: { create: async ({ data }) => (audit = data) },
+        ...milestoneStubs(),
       }),
   });
 
@@ -197,6 +210,7 @@ test('audit failure aborts manual member creation', async () => {
           create: async ({ data }) => ({ id: 'manual-member', ...data }),
         },
         auditLog: { create: async () => Promise.reject(new Error('audit unavailable')) },
+        ...milestoneStubs(),
       }),
   });
 

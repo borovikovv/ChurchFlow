@@ -13,5 +13,5 @@ export class UpdateMemberProfileDto implements UpdateOrganizationMemberProfileIn
   anniversary?: string | null;
   biography?: string | null;
   familyNotes?: string | null;
-  ministries?: UpdateOrganizationMemberProfileInput['ministries'];
+  groups?: UpdateOrganizationMemberProfileInput['groups'];
 }

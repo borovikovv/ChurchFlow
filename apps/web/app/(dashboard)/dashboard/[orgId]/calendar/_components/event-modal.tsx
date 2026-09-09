@@ -13,13 +13,10 @@ import type {
   CalendarEventItem,
   CalendarEventType,
   CalendarMemberOption,
-  MemberMinistry,
+  OrganizationGroupBadge,
+  OrganizationGroupIcon,
 } from '@churchflow/shared';
-import {
-  CALENDAR_EVENT_REPEAT_PERIODS,
-  CALENDAR_EVENT_TYPES,
-  MEMBER_MINISTRY,
-} from '@churchflow/shared';
+import { CALENDAR_EVENT_REPEAT_PERIODS, CALENDAR_EVENT_TYPES } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FormDialog } from '@/components/ui/form-dialog';
@@ -33,14 +30,16 @@ import { applyFormValues, autofillMemberEvent, validateCalendarForm } from './ca
 
 const REMINDER_VALUES = ['', 'ONE_HOUR', 'ONE_DAY', 'ONE_WEEK'] as const;
 
+// Groups are named freely, so a service role is matched against the group icon, which stays a
+// fixed set. A group drawn with the preaching icon is who to suggest for the preacher slot.
 const SERVICE_ROLE_PRIORITIES: Record<
   'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead',
-  MemberMinistry[]
+  OrganizationGroupIcon[]
 > = {
-  preacher: [MEMBER_MINISTRY.preaching],
-  serviceHost: [MEMBER_MINISTRY.minister, MEMBER_MINISTRY.deacon, MEMBER_MINISTRY.teacher],
-  worshipLead: [MEMBER_MINISTRY.worship],
-  communionLead: [MEMBER_MINISTRY.deacon, MEMBER_MINISTRY.minister],
+  preacher: ['preaching'],
+  serviceHost: ['leadership', 'deacons', 'teaching'],
+  worshipLead: ['worship'],
+  communionLead: ['deacons', 'leadership'],
 };
 
 export function EventModal({
@@ -489,7 +488,7 @@ function ServiceRoleField({
   clearErrors: UseFormClearErrors<CalendarFormState>;
 }) {
   const t = useTranslations('calendar');
-  const sortedMembers = sortMembersByMinistry(members, SERVICE_ROLE_PRIORITIES[role]);
+  const sortedMembers = sortMembersByGroupIcon(members, SERVICE_ROLE_PRIORITIES[role]);
   const baseName = `serviceDetails.${role}` as const;
 
   return (
@@ -540,16 +539,19 @@ function ServiceRoleField({
   );
 }
 
-function sortMembersByMinistry(members: CalendarMemberOption[], priorities: MemberMinistry[]) {
+function sortMembersByGroupIcon(
+  members: CalendarMemberOption[],
+  priorities: OrganizationGroupIcon[],
+) {
   return [...members].sort((left, right) => {
-    const leftRank = ministryRank(left.ministries, priorities);
-    const rightRank = ministryRank(right.ministries, priorities);
+    const leftRank = groupIconRank(left.groups, priorities);
+    const rightRank = groupIconRank(right.groups, priorities);
     if (leftRank !== rightRank) return leftRank - rightRank;
     return left.displayName.localeCompare(right.displayName);
   });
 }
 
-function ministryRank(ministries: MemberMinistry[], priorities: MemberMinistry[]) {
-  const rank = priorities.findIndex((ministry) => ministries.includes(ministry));
+function groupIconRank(groups: OrganizationGroupBadge[], priorities: OrganizationGroupIcon[]) {
+  const rank = priorities.findIndex((icon) => groups.some((group) => group.icon === icon));
   return rank === -1 ? Number.MAX_SAFE_INTEGER : rank;
 }
