@@ -114,7 +114,7 @@ test('the slug rule reaches the caller as a forbidden, not a server error', asyn
     },
     {},
     { record: async () => undefined },
-    {},
+    { assert: async () => undefined },
   );
 
   await assert.rejects(
@@ -188,4 +188,34 @@ test('a website section background is refused to anyone but the owner', async ()
       ),
     /Only organization owners can upload website images/,
   );
+});
+
+test('a restricted organization cannot change its profile or public slug', async () => {
+  const { ForbiddenException } = require('@nestjs/common');
+  const { ENTITLEMENTS } = require('@churchflow/shared');
+  let writes = 0;
+  const service = new OrganizationsService(
+    {
+      findActiveById: async () => ({ id: ORGANIZATION_ID }),
+      findOrganizationManager: async () => ({ id: 'membership', role: 'OWNER' }),
+      update: async () => {
+        writes++;
+      },
+    },
+    {},
+    {},
+    {
+      assert: async (id, entitlement) => {
+        assert.equal(id, ORGANIZATION_ID);
+        assert.equal(entitlement, ENTITLEMENTS.websiteWrite);
+        throw new ForbiddenException({ code: 'ORGANIZATION_RESTRICTED' });
+      },
+    },
+    {},
+  );
+  await assert.rejects(
+    () => service.update(ORGANIZATION_ID, { slug: 'new-slug', name: 'New name' }, ACTOR_USER_ID),
+    (error) => error.getResponse().code === 'ORGANIZATION_RESTRICTED',
+  );
+  assert.equal(writes, 0);
 });

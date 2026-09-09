@@ -79,6 +79,7 @@ export const apiEnvSchema = z
     S3_BUCKET: z.string().min(1),
     S3_ACCESS_KEY_ID: z.string().min(1),
     S3_SECRET_ACCESS_KEY: z.string().min(1),
+    LIQPAY_MODE: z.enum(['live', 'sandbox']).default('live'),
     LIQPAY_PUBLIC_KEY: optionalNonEmptyString,
     LIQPAY_PRIVATE_KEY: optionalNonEmptyString,
     LIQPAY_CALLBACK_URL: z.preprocess(
@@ -92,6 +93,17 @@ export const apiEnvSchema = z
     BILLING_ENFORCEMENT_ENABLED: optionalBooleanFlag(false),
   })
   .superRefine((env, context) => {
+    for (const key of ['LIQPAY_PUBLIC_KEY', 'LIQPAY_PRIVATE_KEY'] as const) {
+      const value = env[key];
+      if (value && value.startsWith('sandbox_') !== (env.LIQPAY_MODE === 'sandbox')) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} must match LIQPAY_MODE`,
+        });
+      }
+    }
+
     if (env.NODE_ENV === 'production') {
       for (const key of [
         'TELEGRAM_CLIENT_ID',

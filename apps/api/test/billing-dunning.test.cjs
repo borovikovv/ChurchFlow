@@ -50,6 +50,7 @@ test('restriction is due on an expired rollout window or an expired grace period
   assert.deepEqual(queries[0].where.OR, [
     { status: 'PENDING', restrictAfter: { lte: NOW } },
     { status: 'PAST_DUE', graceEndsAt: { lte: NOW } },
+    { cancelRequestedAt: { not: null }, status: { not: 'CANCELED' }, graceEndsAt: { lte: NOW } },
   ]);
   // A PENDING row with no window is a post-rollout organization: already read-only by
   // resolution, so flipping its status would only produce a misleading notice.
@@ -325,6 +326,7 @@ function checkoutService({
 }) {
   const started = [];
   const unsubscribed = [];
+  const resolved = [];
 
   const liqPayService = new LiqPayService({
     get: (key) =>
@@ -342,14 +344,19 @@ function checkoutService({
 
   const service = new BillingService(
     {
+      listAdminMembershipIds: async () => [],
       findByOrganizationId: async () => subscription,
       findReusableCheckout: async () => null,
       createCheckoutOrder: async (input) => {
         started.push(input);
         return { id: 'checkout', ...input };
       },
-      cancel: async (...args) => {
-        onCancel(args);
+      resolveUnsubscribeRequest: async (orderId) => {
+        resolved.push(orderId);
+        return { count: 1 };
+      },
+      cancel: async (input) => {
+        onCancel(input);
         return {};
       },
     },
@@ -359,10 +366,12 @@ function checkoutService({
     { createSubscriptionNotifications: async () => ({ createdCount: 0 }) },
   );
 
-  return { service, started, unsubscribed };
+  return { service, started, unsubscribed, resolved };
 }
 
 const PENDING_SUBSCRIPTION = {
+  cancelRequestedAt: null,
+  unsubscribeRequests: [],
   id: 'subscription',
   organizationId: 'organization',
   status: 'PENDING',
@@ -408,32 +417,41 @@ test('offering a replacement card leaves the running subscription charging', asy
   assert.equal(started[0].amountMinor, 18_675);
 });
 
-test('cancelling remembers an unsubscribe LiqPay would not accept', async () => {
+test('an unsubscribe LiqPay would not accept stays queued for the dunning job', async () => {
   const canceled = [];
-  const { service } = checkoutService({
+  const { service, resolved } = checkoutService({
     subscription: { ...PENDING_SUBSCRIPTION, status: 'ACTIVE', liqpayOrderId: 'old-order' },
     unsubscribeOk: false,
-    onCancel: (args) => canceled.push(args),
+    onCancel: (input) => canceled.push(input),
   });
 
   await service.cancel('organization', 'actor');
 
-  // Otherwise the card keeps being charged behind a subscription we show as cancelled.
-  assert.deepEqual(canceled, [['organization', 'actor', { orderId: 'old-order', stopped: false }]]);
+  // Queued whatever LiqPay answers, because the alternative is a card that keeps being charged
+  // behind a subscription we show as cancelled. `retry` leaves it open for the nightly retry.
+  assert.deepEqual(
+    canceled.map((input) => input.unsubscribeOrderId),
+    ['old-order'],
+  );
+  assert.deepEqual(resolved, []);
 });
 
-test('cancelling reports the order LiqPay accepted, not just that it accepted one', async () => {
+test('an unsubscribe LiqPay accepted closes the request it was queued under', async () => {
   const canceled = [];
-  const { service } = checkoutService({
+  const { service, resolved } = checkoutService({
     subscription: { ...PENDING_SUBSCRIPTION, status: 'ACTIVE', liqpayOrderId: 'old-order' },
-    onCancel: (args) => canceled.push(args),
+    onCancel: (input) => canceled.push(input),
   });
 
   await service.cancel('organization', 'actor');
 
-  // Which order was stopped is the whole point: an unsubscribe queued earlier for a different
+  // Which order was closed is the whole point: an unsubscribe queued earlier for a different
   // order is still charging a card and must survive this cancellation.
-  assert.deepEqual(canceled, [['organization', 'actor', { orderId: 'old-order', stopped: true }]]);
+  assert.deepEqual(
+    canceled.map((input) => input.unsubscribeOrderId),
+    ['old-order'],
+  );
+  assert.deepEqual(resolved, ['old-order']);
 });
 
 test('an organization with complimentary access is not sent to checkout', async () => {
@@ -458,6 +476,11 @@ function cancelRepository() {
 
   const tx = {
     subscription: {
+      findUniqueOrThrow: async () => ({
+        status: 'PENDING',
+        currentPeriodEndsAt: null,
+        graceEndsAt: null,
+      }),
       update: async ({ data }) => {
         assert.equal(data.status, 'CANCELED');
 
@@ -487,25 +510,21 @@ function cancelRepository() {
   return { repository, queued, resolved };
 }
 
-test('a cancellation LiqPay refused is queued for the dunning job', async () => {
+test('cancelling queues the live order before LiqPay is asked anything', async () => {
+  // Queued inside the transaction that records the cancellation. An order queued nowhere is an
+  // order that keeps charging a card with nothing left in the system aware of it.
   const { repository, queued, resolved } = cancelRepository();
 
-  await repository.cancel('organization', 'actor', { orderId: 'old-order', stopped: false });
+  await repository.cancel({
+    organizationId: 'organization',
+    actorUserId: 'actor',
+    expectedUpdatedAt: NOW,
+    data: { status: 'CANCELED' },
+    unsubscribeOrderId: 'old-order',
+  });
 
   assert.deepEqual(queued, ['old-order']);
   assert.deepEqual(resolved, []);
-});
-
-test('cancelling resolves the order it stopped and leaves every other one queued', async () => {
-  // An order queued by an earlier failed unsubscribe is still charging a card. Clearing it
-  // because a different order was cancelled successfully left that card being charged every
-  // month with nothing in the system aware the subscription existed.
-  const { repository, queued, resolved } = cancelRepository();
-
-  await repository.cancel('organization', 'actor', { orderId: 'old-order', stopped: true });
-
-  assert.deepEqual(queued, []);
-  assert.deepEqual(resolved, [{ orderId: 'old-order', resolvedAt: null }]);
 });
 
 test('the nightly writes repeat the predicate the row was selected by', async () => {
@@ -518,13 +537,14 @@ test('the nightly writes repeat the predicate the row was selected by', async ()
     graceEndsAt: NOW,
   });
 
-  assert.deepEqual(queries[0].where.OR, [
+  assert.equal(queries[0].data.status, 'CANCELED');
+  assert.deepEqual(queries[1].where.OR, [
     { status: 'PENDING', restrictAfter: { lte: NOW } },
     { status: 'PAST_DUE', graceEndsAt: { lte: NOW } },
   ]);
-  assert.equal(queries[0].where.id, 'subscription');
-  assert.equal(queries[1].where.status, 'ACTIVE');
-  assert.equal(queries[1].where.currentPeriodEndsAt.lte, NOW);
+  assert.equal(queries[1].where.id, 'subscription');
+  assert.equal(queries[2].where.status, 'ACTIVE');
+  assert.equal(queries[2].where.currentPeriodEndsAt.lte, NOW);
   for (const query of queries) {
     assert.equal(query.where.isExempt, false);
   }
@@ -560,15 +580,14 @@ test('a renewal that arrived mid-pass is not reconciled into PAST_DUE', async ()
   assert.deepEqual(notified, []);
 });
 
-test('an order LiqPay is no longer charging is not queued for a hopeless retry', async () => {
-  const canceled = [];
-  const { service } = checkoutService({
+test('an order LiqPay is no longer charging is not left for a hopeless retry', async () => {
+  const { service, resolved } = checkoutService({
     subscription: { ...PENDING_SUBSCRIPTION, status: 'ACTIVE', liqpayOrderId: 'old-order' },
     unsubscribeOutcome: 'not-charging',
-    onCancel: (args) => canceled.push(args),
   });
 
   await service.cancel('organization', 'actor');
 
-  assert.deepEqual(canceled, [['organization', 'actor', { orderId: 'old-order', stopped: true }]]);
+  // Nothing is charging, so retrying it nightly forever would achieve nothing.
+  assert.deepEqual(resolved, ['old-order']);
 });

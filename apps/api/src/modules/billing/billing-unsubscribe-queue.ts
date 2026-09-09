@@ -23,3 +23,19 @@ export function queueUnsubscribe(
     update: { resolvedAt: null },
   });
 }
+
+/**
+ * Closes a queued request once LiqPay has confirmed the order is no longer charging. Written
+ * against the order rather than the request id, because the same order may have been queued by a
+ * callback and by a cancellation before either was answered.
+ */
+export function resolveUnsubscribe(
+  client: Pick<Prisma.TransactionClient, 'billingUnsubscribeRequest'>,
+  orderId: string,
+  resolvedAt: Date,
+) {
+  return client.billingUnsubscribeRequest.updateMany({
+    where: { orderId, resolvedAt: null },
+    data: { resolvedAt },
+  });
+}

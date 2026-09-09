@@ -100,6 +100,7 @@ export interface SubscriptionEntitlementState {
   isExempt: boolean;
   restrictAfter: Date | null;
   graceEndsAt: Date | null;
+  cancelRequestedAt: Date | null;
 }
 
 export interface EntitlementInput {
@@ -151,6 +152,10 @@ export function resolveEntitlements(input: EntitlementInput): readonly Entitleme
 
   if (subscription.isExempt) {
     return ALL_ENTITLEMENTS;
+  }
+
+  if (subscription.cancelRequestedAt) {
+    return isBeforeDeadline(now, subscription.graceEndsAt) ? ALL_ENTITLEMENTS : READ_ENTITLEMENTS;
   }
 
   return RULES_BY_STATUS[subscription.status](subscription, now);

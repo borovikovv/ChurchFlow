@@ -175,6 +175,7 @@ test('the billing summary reports the state and the entitlements together', asyn
   const service = new BillingService(
     {
       findByOrganizationId: async () => ({
+        unsubscribeRequests: [],
         status: 'PAST_DUE',
         isExempt: false,
         exemptReason: null,
@@ -240,7 +241,11 @@ test('a grant without a reason is rejected', () => {
   assert.throws(() => grantBillingExemptionSchema.parse({ reason: '   ' }));
 });
 
-function exemptionTransaction({ liqpayOrderId = null, status = 'PAST_DUE' } = {}) {
+function exemptionTransaction({
+  liqpayOrderId = null,
+  status = 'PAST_DUE',
+  cancelRequestedAt = null,
+} = {}) {
   const auditRows = [];
   const updates = [];
   const queued = [];
@@ -249,7 +254,7 @@ function exemptionTransaction({ liqpayOrderId = null, status = 'PAST_DUE' } = {}
     subscription: {
       update: async (args) => {
         updates.push(args);
-        return { id: 'subscription', status, liqpayOrderId };
+        return { id: 'subscription', status, liqpayOrderId, cancelRequestedAt };
       },
     },
     billingUnsubscribeRequest: {
@@ -498,4 +503,21 @@ test('revoking complimentary access stops nothing and leaves checkouts alone', a
   assert.equal(result.stoppedOrderId, null);
   assert.deepEqual(queued, []);
   assert.deepEqual(closedCheckouts, []);
+});
+
+test('granting complimentary access during cancellation grace never reopens the unsubscribe request', async () => {
+  for (const status of ['ACTIVE', 'PAST_DUE']) {
+    const { repository, queued } = exemptionTransaction({
+      liqpayOrderId: 'stopped-order',
+      status,
+      cancelRequestedAt: new Date('2026-09-01T12:00:00Z'),
+    });
+    const result = await repository.setBillingExemption({
+      organizationId: ORGANIZATION_ID,
+      actorUserId: 'platform-admin',
+      reason: 'Partner church',
+    });
+    assert.equal(result.stoppedOrderId, null);
+    assert.deepEqual(queued, []);
+  }
 });

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { OrganizationRole, OrganizationStatus, PlatformRole, Prisma } from '@churchflow/db';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { queueUnsubscribe } from '../../billing/billing-unsubscribe-queue';
+import { canRequestCancellation } from '../../billing/subscription-transitions';
 import type { createOrganizationSchema, UpdateOrganizationInput } from '@churchflow/shared';
 import type { z } from 'zod';
 
@@ -39,6 +40,7 @@ export class OrganizationsRepository {
                 isExempt: true,
                 restrictAfter: true,
                 graceEndsAt: true,
+                cancelRequestedAt: true,
               },
             },
             _count: {
@@ -280,9 +282,7 @@ export class OrganizationsRepository {
       // A cancelled subscription has already been through this: its order is either stopped or
       // queued, and claiming to have stopped it a second time would only mislead.
       const stoppedOrderId =
-        granting && subscription.liqpayOrderId && subscription.status !== 'CANCELED'
-          ? subscription.liqpayOrderId
-          : null;
+        granting && canRequestCancellation(subscription) ? subscription.liqpayOrderId : null;
 
       if (granting) {
         if (stoppedOrderId) {

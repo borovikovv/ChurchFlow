@@ -16,8 +16,17 @@ const CANCELED_STATUSES = new Set(['unsubscribed']);
  */
 export type CallbackOutcome = 'paid' | 'failed' | 'canceled' | 'undecided';
 
+function normalizeStatus(callbackStatus: string): string {
+  return callbackStatus.trim().toLowerCase();
+}
+
+/** A settled charge taken back, as opposed to one that never went through. */
+function isChargeback(callbackStatus: string): boolean {
+  return normalizeStatus(callbackStatus) === 'reversed';
+}
+
 export function classifyCallbackStatus(callbackStatus: string): CallbackOutcome {
-  const status = callbackStatus.trim().toLowerCase();
+  const status = normalizeStatus(callbackStatus);
 
   if (PAID_STATUSES.has(status)) return 'paid';
   if (CANCELED_STATUSES.has(status)) return 'canceled';
@@ -59,6 +68,7 @@ export interface SubscriptionTransitionState {
   status: SubscriptionStatus;
   graceEndsAt: Date | null;
   currentPeriodEndsAt: Date | null;
+  cancelRequestedAt: Date | null;
 }
 
 export interface SubscriptionTransitionInput {
@@ -72,6 +82,57 @@ export interface SubscriptionTransitionInput {
   isNewSubscription: boolean;
 }
 
+/** Stop renewals without shortening paid access or restarting an existing grace period. */
+export function cancellationTransition(
+  current: SubscriptionTransitionState,
+  now: Date,
+): SubscriptionTransitionState {
+  if (current.cancelRequestedAt)
+    return {
+      status: current.status,
+      graceEndsAt: current.graceEndsAt,
+      currentPeriodEndsAt: current.currentPeriodEndsAt,
+      cancelRequestedAt: current.cancelRequestedAt,
+    };
+  const graceEndsAt =
+    current.status === 'ACTIVE' && current.currentPeriodEndsAt
+      ? daysFromNow(current.currentPeriodEndsAt, BILLING_GRACE_PERIOD_DAYS)
+      : current.status === 'PAST_DUE'
+        ? current.graceEndsAt
+        : null;
+  // A deadline already behind us grants nothing. Carrying it forward is how cancelling an overdue
+  // subscription announces that access "continues until" a date that has already passed.
+  const remaining = graceEndsAt && graceEndsAt > now ? graceEndsAt : null;
+
+  return {
+    status: remaining ? current.status : 'CANCELED',
+    currentPeriodEndsAt: current.currentPeriodEndsAt,
+    graceEndsAt: remaining,
+    cancelRequestedAt: now,
+  };
+}
+
+/**
+ * A payment taken back after cancellation. Access was granted for money the organization no longer
+ * holds, so the deadline is pulled in to the ordinary grace period while the cancellation itself
+ * stands. A deadline that is already sooner than that is left alone, so a second reversal on the
+ * same period neither extends access nor repeats the notice.
+ */
+function chargebackTransition(
+  current: SubscriptionTransitionState,
+  now: Date,
+): SubscriptionTransitionState | null {
+  const graceEndsAt = daysFromNow(now, BILLING_GRACE_PERIOD_DAYS);
+  if (!current.graceEndsAt || current.graceEndsAt <= graceEndsAt) return null;
+
+  return {
+    status: current.status,
+    currentPeriodEndsAt: current.currentPeriodEndsAt,
+    graceEndsAt,
+    cancelRequestedAt: current.cancelRequestedAt,
+  };
+}
+
 /**
  * Turns a LiqPay callback status into the subscription's next state, or null when the callback
  * carries no decision. Pure, so the whole state machine is testable without a database.
@@ -80,8 +141,8 @@ export interface SubscriptionTransitionInput {
  * branching. A repeated failure must not push the grace deadline further out, otherwise a
  * failing card buys unlimited time. A failure arriving after the organization is already
  * RESTRICTED must not walk it back to PAST_DUE, which would hand back write access. And a
- * charge landing on a subscription the organization has cancelled must not revive it - only a
- * checkout it started itself may bring a cancelled subscription back.
+ * paid charge after cancellation credits access while preserving the cancellation intent.
+ * Only a checkout started by the organization can restore automatic renewal.
  */
 export function transitionForCallbackStatus(
   input: SubscriptionTransitionInput,
@@ -89,15 +150,34 @@ export function transitionForCallbackStatus(
   const { current, callbackStatus, now, isNewSubscription } = input;
   const outcome = classifyCallbackStatus(callbackStatus);
 
+  // A charge reversed after cancellation takes back access that was paid for, so the deadline is
+  // pulled in rather than left standing. Everything else a cancelled subscription can report is
+  // noise it must not act on: a declined renewal is the cancellation working, and the failed
+  // branch below would clear the cancellation and restart renewal reconciliation on top of it.
+  if (!isNewSubscription && current.cancelRequestedAt && outcome !== 'paid') {
+    return isChargeback(callbackStatus) ? chargebackTransition(current, now) : null;
+  }
+
   if (outcome === 'paid') {
-    if (current.status === 'CANCELED' && !isNewSubscription) {
-      return null;
+    if (!isNewSubscription && (current.cancelRequestedAt || current.status === 'CANCELED')) {
+      const periodStart =
+        current.currentPeriodEndsAt && current.currentPeriodEndsAt > now
+          ? current.currentPeriodEndsAt
+          : now;
+      const currentPeriodEndsAt = addMonths(periodStart, 1);
+      return {
+        status: 'ACTIVE',
+        currentPeriodEndsAt,
+        graceEndsAt: daysFromNow(currentPeriodEndsAt, BILLING_GRACE_PERIOD_DAYS),
+        cancelRequestedAt: current.cancelRequestedAt ?? now,
+      };
     }
 
     return {
       status: 'ACTIVE',
       graceEndsAt: null,
       currentPeriodEndsAt: addMonths(now, 1),
+      cancelRequestedAt: null,
     };
   }
 
@@ -108,11 +188,14 @@ export function transitionForCallbackStatus(
   }
 
   if (outcome === 'canceled') {
-    return {
-      status: 'CANCELED',
-      graceEndsAt: null,
-      currentPeriodEndsAt: current.currentPeriodEndsAt,
-    };
+    // Cancelled before this branch recorded a timestamp for it, and the nightly unsubscribe retry
+    // still draws an `unsubscribed` out of LiqPay for such a row. Recording one now would restate
+    // a months-old cancellation as today's, reopening a grace period that has long since closed.
+    if (current.status === 'CANCELED') {
+      return null;
+    }
+
+    return cancellationTransition(current, now);
   }
 
   if (outcome === 'failed') {
@@ -127,8 +210,21 @@ export function transitionForCallbackStatus(
           ? current.graceEndsAt
           : daysFromNow(now, BILLING_GRACE_PERIOD_DAYS),
       currentPeriodEndsAt: current.currentPeriodEndsAt,
+      cancelRequestedAt: null,
     };
   }
 
   return null;
+}
+
+export function canRequestCancellation(subscription: {
+  status: SubscriptionStatus;
+  liqpayOrderId: string | null;
+  cancelRequestedAt: Date | null;
+}): boolean {
+  return (
+    subscription.liqpayOrderId !== null &&
+    subscription.status !== 'CANCELED' &&
+    !subscription.cancelRequestedAt
+  );
 }

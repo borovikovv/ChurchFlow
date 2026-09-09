@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type SubscriptionStatus } from '@churchflow/db';
 import type { SubscriptionEntitlementState } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { queueUnsubscribe } from '../billing-unsubscribe-queue';
+import { queueUnsubscribe, resolveUnsubscribe } from '../billing-unsubscribe-queue';
 
 // Who hears about billing: the same people who are allowed to pay.
 const ADMIN_MEMBERS_SELECT = {
@@ -16,6 +16,21 @@ const ADMIN_MEMBERS_SELECT = {
     select: { id: true },
   },
 } satisfies Prisma.OrganizationSelect;
+
+/** A cancellation whose paid access and grace period have both run out. */
+const cancellationDue = (now: Date) =>
+  ({
+    cancelRequestedAt: { not: null },
+    status: { not: 'CANCELED' },
+    graceEndsAt: { lte: now },
+  }) satisfies Prisma.SubscriptionWhereInput;
+
+/** An unpaid subscription whose rollout window or grace period has run out. */
+const restrictionDue = (now: Date) =>
+  [
+    { status: 'PENDING', restrictAfter: { lte: now } },
+    { status: 'PAST_DUE', graceEndsAt: { lte: now } },
+  ] satisfies Prisma.SubscriptionWhereInput[];
 
 type SubscriptionRow = Prisma.SubscriptionGetPayload<Record<string, never>>;
 type CheckoutOrderRow = Prisma.BillingCheckoutOrderGetPayload<Record<string, never>>;
@@ -60,6 +75,7 @@ export class SubscriptionsRepository {
         isExempt: true,
         restrictAfter: true,
         graceEndsAt: true,
+        cancelRequestedAt: true,
       },
     });
   }
@@ -67,7 +83,10 @@ export class SubscriptionsRepository {
   findByOrganizationId(organizationId: string) {
     return this.prisma.subscription.findUnique({
       where: { organizationId },
-      include: { organization: { select: { id: true, name: true } } },
+      include: {
+        organization: { select: { id: true, name: true } },
+        unsubscribeRequests: { where: { resolvedAt: null }, select: { orderId: true } },
+      },
     });
   }
 
@@ -164,6 +183,10 @@ export class SubscriptionsRepository {
    * same callback is stopped by the unique (order_id, payment_id, status) index rather than by a
    * read-then-write check; two callbacks for *different* payments are stopped by the state guard
    * on the update, which refuses a change computed from a reading that no longer holds.
+   *
+   * What the callback is worth deciding nothing about is decided by the caller: whether the
+   * payment may be credited, which order it leaves charging, and whether it is the cancellation
+   * that closes the checkouts still open.
    */
   async applyCallback(input: {
     subscriptionId: string;
@@ -175,11 +198,17 @@ export class SubscriptionsRepository {
     nextStatus: string | null;
     /** The live order the decision was made against, guarding the write against a racing one. */
     expectedLiqpayOrderId: string | null;
+    expectedCancelRequestedAt: Date | null;
+    expectedUpdatedAt: Date;
+    credited: boolean;
+    issue: string | null;
     payload: Prisma.InputJsonObject;
     update: Prisma.SubscriptionUpdateManyMutationInput | null;
     checkout: CheckoutResolution | null;
     /** An order this callback supersedes, queued for LiqPay to stop charging. */
     unsubscribeOrderId: string | null;
+    /** True only when this callback is what recorded the cancellation. */
+    abandonOpenCheckouts: boolean;
   }): Promise<{ duplicate: boolean }> {
     try {
       await this.prisma.$transaction(async (tx) => {
@@ -194,12 +223,18 @@ export class SubscriptionsRepository {
             status: input.status,
             payload: input.payload,
             processedAt: resolvedAt,
+            credited: input.credited,
+            issue: input.issue,
           },
         });
 
+        if (input.status === 'unsubscribed') {
+          await resolveUnsubscribe(tx, input.orderId, resolvedAt);
+        }
+
         if (input.checkout) {
           await tx.billingCheckoutOrder.update({
-            where: { id: input.checkout.id },
+            where: { id: input.checkout.id, status: 'PROPOSED' },
             data: {
               status: input.checkout.outcome === 'paid' ? 'PAID' : 'ABANDONED',
               resolvedAt,
@@ -238,12 +273,25 @@ export class SubscriptionsRepository {
               id: input.subscriptionId,
               status: input.previousStatus,
               liqpayOrderId: input.expectedLiqpayOrderId,
+              cancelRequestedAt: input.expectedCancelRequestedAt,
+              updatedAt: input.expectedUpdatedAt,
             },
             data: input.update,
           });
 
           if (count === 0) {
             throw new StaleSubscriptionStateError(input.subscriptionId);
+          }
+
+          // A cancellation closes the pages the organization left open at LiqPay. Only the
+          // callback that records it may do so: a paid charge on the old order carries the
+          // cancellation forward untouched, and abandoning on that would quietly retire a
+          // checkout the organization opened to subscribe again.
+          if (input.abandonOpenCheckouts) {
+            await tx.billingCheckoutOrder.updateMany({
+              where: { subscriptionId: input.subscriptionId, status: 'PROPOSED' },
+              data: { status: 'ABANDONED', resolvedAt },
+            });
           }
 
           // No actor: the change came from LiqPay, not a person. The audit row is written in the
@@ -272,6 +320,9 @@ export class SubscriptionsRepository {
       if (error instanceof StaleSubscriptionStateError) {
         throw error;
       }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new StaleSubscriptionStateError(input.subscriptionId);
+      }
 
       if (isUniqueConstraintError(error) && (await this.hasCallback(input))) {
         return { duplicate: true };
@@ -285,9 +336,14 @@ export class SubscriptionsRepository {
     orderId: string;
     paymentId: string;
     status: string;
+    credited: boolean;
   }): Promise<boolean> {
     const existing = await this.prisma.billingCallback.findFirst({
-      where: { orderId: input.orderId, paymentId: input.paymentId, status: input.status },
+      where: {
+        orderId: input.orderId,
+        paymentId: input.paymentId,
+        OR: [{ status: input.status }, ...(input.credited ? [{ credited: true }] : [])],
+      },
       select: { id: true },
     });
 
@@ -295,36 +351,29 @@ export class SubscriptionsRepository {
   }
 
   /**
-   * An unsubscribe LiqPay refused is queued, because the alternative is showing CANCELED while
-   * the card keeps being charged every month. Only the order this cancellation actually stopped
-   * is resolved: an order queued by an earlier failure is still charging and stays queued.
+   * Persist cancellation intent and its fixed access deadline with the order to stop.
+   * The expected version prevents canceling a newer subscription that won a concurrent checkout.
    */
-  cancel(
-    organizationId: string,
-    actorUserId: string,
-    unsubscribe: { orderId: string; stopped: boolean } | null,
-  ) {
+  cancel(input: {
+    organizationId: string;
+    actorUserId: string;
+    /** The state the cancellation was computed from, refusing the write if the row has moved. */
+    expectedUpdatedAt: Date;
+    data: Prisma.SubscriptionUpdateInput;
+    /** The live order to stop, queued rather than called: LiqPay may be down or say no. */
+    unsubscribeOrderId: string | null;
+  }) {
     return this.prisma.$transaction(async (tx) => {
       const subscription = await tx.subscription.update({
-        where: { organizationId },
-        data: {
-          status: 'CANCELED',
-          graceEndsAt: null,
-        },
+        where: { organizationId: input.organizationId, updatedAt: input.expectedUpdatedAt },
+        data: input.data,
       });
 
-      if (unsubscribe && !unsubscribe.stopped) {
+      if (input.unsubscribeOrderId) {
         await queueUnsubscribe(tx, {
-          organizationId,
+          organizationId: input.organizationId,
           subscriptionId: subscription.id,
-          orderId: unsubscribe.orderId,
-        });
-      }
-
-      if (unsubscribe?.stopped) {
-        await tx.billingUnsubscribeRequest.updateMany({
-          where: { orderId: unsubscribe.orderId, resolvedAt: null },
-          data: { resolvedAt: new Date() },
+          orderId: input.unsubscribeOrderId,
         });
       }
 
@@ -337,8 +386,8 @@ export class SubscriptionsRepository {
 
       await tx.auditLog.create({
         data: {
-          organizationId,
-          actorUserId,
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
           action: 'CANCEL_SUBSCRIPTION',
           entityType: 'Subscription',
           entityId: subscription.id,
@@ -362,15 +411,13 @@ export class SubscriptionsRepository {
       where: {
         isExempt: false,
         organization: { status: 'ACTIVE', deletedAt: null },
-        OR: [
-          { status: 'PENDING', restrictAfter: { lte: now } },
-          { status: 'PAST_DUE', graceEndsAt: { lte: now } },
-        ],
+        OR: [...restrictionDue(now), cancellationDue(now)],
       },
       select: {
         id: true,
         organizationId: true,
         status: true,
+        cancelRequestedAt: true,
         organization: { select: ADMIN_MEMBERS_SELECT },
       },
     });
@@ -404,6 +451,7 @@ export class SubscriptionsRepository {
       where: {
         isExempt: false,
         status: 'ACTIVE',
+        cancelRequestedAt: null,
         currentPeriodEndsAt: { lte: cutoff },
         organization: { status: 'ACTIVE', deletedAt: null },
       },
@@ -423,10 +471,7 @@ export class SubscriptionsRepository {
   }
 
   resolveUnsubscribeRequest(orderId: string) {
-    return this.prisma.billingUnsubscribeRequest.updateMany({
-      where: { orderId, resolvedAt: null },
-      data: { resolvedAt: new Date() },
-    });
+    return resolveUnsubscribe(this.prisma, orderId, new Date());
   }
 
   /**
@@ -463,21 +508,25 @@ export class SubscriptionsRepository {
         id: input.subscriptionId,
         isExempt: false,
         status: 'ACTIVE',
+        cancelRequestedAt: null,
         currentPeriodEndsAt: { lte: input.cutoff },
       },
       data: { status: 'PAST_DUE', graceEndsAt: input.graceEndsAt },
     });
   }
 
-  restrictIfStillDue(subscriptionId: string, now: Date) {
+  async restrictIfStillDue(subscriptionId: string, now: Date) {
+    const canceled = await this.prisma.subscription.updateMany({
+      where: { id: subscriptionId, isExempt: false, ...cancellationDue(now) },
+      data: { status: 'CANCELED' },
+    });
+    if (canceled.count) return canceled;
     return this.prisma.subscription.updateMany({
       where: {
         id: subscriptionId,
         isExempt: false,
-        OR: [
-          { status: 'PENDING', restrictAfter: { lte: now } },
-          { status: 'PAST_DUE', graceEndsAt: { lte: now } },
-        ],
+        cancelRequestedAt: null,
+        OR: restrictionDue(now),
       },
       data: { status: 'RESTRICTED', graceEndsAt: null },
     });

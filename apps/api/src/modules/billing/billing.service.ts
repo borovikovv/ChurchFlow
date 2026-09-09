@@ -29,6 +29,8 @@ import {
 import { BILLING_TIME_ZONE, dayKey, minutesAgo } from './billing-time';
 import {
   callbackRole,
+  cancellationTransition,
+  canRequestCancellation,
   classifyCallbackStatus,
   transitionForCallbackStatus,
   type CallbackOutcome,
@@ -127,19 +129,34 @@ export class BillingService {
   async cancel(organizationId: string, actorUserId: string): Promise<SubscriptionSummary> {
     const subscription = await this.requireSubscription(organizationId);
 
-    // A refused or unreachable unsubscribe is remembered, not swallowed: otherwise the card
-    // keeps being charged every month behind a subscription we are showing as cancelled. Only an
-    // undecided answer leaves the order queued - an order LiqPay has no recurring charge for is
-    // as stopped as one it just cancelled, and requeueing it would retry it nightly forever.
-    const unsubscribe = subscription.liqpayOrderId
-      ? {
-          orderId: subscription.liqpayOrderId,
-          stopped: (await this.liqPayService.unsubscribe(subscription.liqpayOrderId)) !== 'retry',
+    if (!canRequestCancellation(subscription)) return this.getSummary(organizationId);
+
+    const canceled = await this.subscriptionsRepository
+      .cancel({
+        organizationId,
+        actorUserId,
+        expectedUpdatedAt: subscription.updatedAt,
+        data: cancellationTransition(subscription, new Date()),
+        unsubscribeOrderId: subscription.liqpayOrderId,
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+          throw new ConflictException('The subscription changed. Please try canceling again.');
         }
-      : null;
-
-    await this.subscriptionsRepository.cancel(organizationId, actorUserId, unsubscribe);
-
+        throw error;
+      });
+    await this.notifyOrganizationAdmins({
+      organizationId,
+      type: 'SUBSCRIPTION_CANCELED',
+      titleKey: 'subscriptionCancellationRequested',
+      bodyMessage: {
+        key: 'subscriptionCancellationRequested',
+        deadline: canceled.graceEndsAt?.toISOString() ?? null,
+        timeZone: BILLING_TIME_ZONE,
+      },
+      dedupeKey: `cancellation:${canceled.cancelRequestedAt?.toISOString() ?? 'none'}`,
+    });
+    if (subscription.liqpayOrderId) await this.stopOrder(subscription.liqpayOrderId);
     return this.getSummary(organizationId);
   }
 
@@ -160,12 +177,14 @@ export class BillingService {
 
     // Without a payment id there is nothing to make the callback idempotent on, and silently
     // accepting it would mean a retry could apply the same charge twice.
-    if (!callback.paymentId) {
+    const callbackPaymentId =
+      callback.paymentId ?? (callback.status === 'unsubscribed' ? 'unsubscribe' : null);
+    if (!callbackPaymentId) {
       throw new BadRequestException('LiqPay callback is missing a payment id');
     }
 
     const orderId = callback.orderId;
-    const paymentId = callback.paymentId;
+    const paymentId = callbackPaymentId;
 
     // The unique index makes one callback delivered twice harmless. It says nothing about two
     // different payments arriving at once, which is what this loop is for: the write refuses
@@ -219,16 +238,22 @@ export class BillingService {
     const isNewSubscription = role === 'new-checkout';
     const outcome = classifyCallbackStatus(callback.status ?? '');
 
-    if (checkoutOrder) {
-      this.warnOnAmountMismatch(checkoutOrder, callback);
-    }
+    const review = paymentReview(
+      callback,
+      checkoutOrder ?? subscription,
+      role,
+      outcome,
+      this.liqPayService,
+    );
+    const issue = review?.issue ?? null;
+    const blocked = review?.blocks ?? false;
 
     // A retired order decides nothing about the subscription whatever it reports: it was
     // abandoned, or it has already been replaced by the order that is live now. Letting one
     // through is how a tab left open on a cancelled subscription revives it, and how last
     // month's order takes the live one's place when its own renewal lands late.
     const transition =
-      role === 'retired-checkout'
+      blocked || role === 'retired-checkout'
         ? null
         : transitionForCallbackStatus({
             current: subscription,
@@ -240,9 +265,13 @@ export class BillingService {
     const unsubscribeOrderId = orderToStop({
       role,
       outcome,
+      blocked,
       orderId,
       liveOrderId: subscription.liqpayOrderId,
       activated: transition?.status === 'ACTIVE',
+      cancellationPending:
+        !isNewSubscription &&
+        Boolean(subscription.cancelRequestedAt || subscription.status === 'CANCELED'),
     });
 
     const { duplicate } = await this.subscriptionsRepository.applyCallback({
@@ -257,6 +286,10 @@ export class BillingService {
       // holds it, so a payment decided against a subscription that has since moved on is redone
       // rather than layered on top of someone else's change.
       expectedLiqpayOrderId: subscription.liqpayOrderId,
+      expectedCancelRequestedAt: subscription.cancelRequestedAt,
+      expectedUpdatedAt: subscription.updatedAt,
+      credited: outcome === 'paid' && transition !== null,
+      issue,
       payload: { data } satisfies Prisma.InputJsonObject,
       update: transition
         ? this.buildCallbackUpdate({
@@ -271,25 +304,63 @@ export class BillingService {
       // Queued in the same transaction as the swap: an order superseded but never queued is an
       // order still charging the card, with nothing left that knows to stop it.
       unsubscribeOrderId,
-      checkout: resolveCheckout({
-        checkoutOrder,
-        outcome,
-        isNewSubscription,
-        activated: transition?.status === 'ACTIVE',
-      }),
+      // Only a cancellation this callback recorded closes the checkouts still open. Reading it
+      // off the update instead abandons a re-subscribe checkout every time a late charge lands on
+      // the old order, since that update carries the cancellation forward untouched.
+      abandonOpenCheckouts: outcome === 'canceled' && transition !== null,
+      checkout:
+        blocked && checkoutOrder?.status === 'PROPOSED'
+          ? { id: checkoutOrder.id, outcome: 'abandoned' }
+          : resolveCheckout({
+              checkoutOrder,
+              outcome,
+              isNewSubscription,
+              activated: transition?.status === 'ACTIVE',
+            }),
     });
 
     if (duplicate) {
       return { ok: true as const };
     }
 
-    if (unsubscribeOrderId) {
-      await this.stopOrder(unsubscribeOrderId);
-    }
+    if (review) {
+      const context = {
+        issue: review.issue,
+        orderId,
+        paymentId,
+        organizationId: subscription.organizationId,
+      };
 
+      // A price we cannot check is a gap in what we stored, not a suspicious charge. It is worth
+      // knowing about, but telling an organization its successful payment needs review - or
+      // withholding the access it just paid for - would be our bookkeeping made into their
+      // problem.
+      if (!review.blocks) {
+        this.logger.warn({ event: 'Billing payment could not be price-checked', ...context });
+      } else {
+        this.logger.error({ event: 'Billing payment requires review', ...context });
+        await this.notifyOrganizationAdmins({
+          organizationId: subscription.organizationId,
+          type: 'SUBSCRIPTION_PAYMENT_FAILED',
+          titleKey: 'subscriptionPaymentReview',
+          bodyMessage: { key: 'subscriptionPaymentReview' },
+          dedupeKey: `payment-review:${orderId}:${paymentId}`,
+        });
+      }
+    }
+    if (outcome === 'canceled' && subscription.cancelRequestedAt && role === 'renewal') {
+      await this.notifyOrganizationAdmins({
+        organizationId: subscription.organizationId,
+        type: 'SUBSCRIPTION_CANCELED',
+        titleKey: 'subscriptionCancellationConfirmed',
+        bodyMessage: { key: 'subscriptionCancellationConfirmed' },
+        dedupeKey: `cancellation-confirmed:${orderId}`,
+      });
+    }
     if (transition) {
       await this.notifyTransition(subscription, transition);
     }
+    if (unsubscribeOrderId) await this.stopOrder(unsubscribeOrderId);
 
     return { ok: true as const };
   }
@@ -307,11 +378,12 @@ export class BillingService {
       status: transition.status,
       graceEndsAt: transition.graceEndsAt,
       currentPeriodEndsAt: transition.currentPeriodEndsAt,
+      cancelRequestedAt: transition.cancelRequestedAt ?? null,
       ...(callback.cardMask ? { cardMask: callback.cardMask } : {}),
       ...(callback.cardBrand ? { cardBrand: callback.cardBrand } : {}),
     };
 
-    if (transition.status !== 'ACTIVE') {
+    if (transition.cancelRequestedAt || transition.status !== 'ACTIVE') {
       return update;
     }
 
@@ -334,46 +406,85 @@ export class BillingService {
     };
   }
 
-  /**
-   * The pinned price is the one that counts, so a disagreeing callback is reported rather than
-   * adopted: letting the amount on the row follow whatever arrives would erase the only record
-   * of what the organization agreed to pay.
-   */
-  private warnOnAmountMismatch(order: CheckoutOrderRecord, callback: LiqPayCallback): void {
-    if (callback.amountMinor === null) {
-      return;
-    }
-
-    const currencyMatches = callback.currency === null || callback.currency === order.currency;
-    if (callback.amountMinor === order.amountMinor && currencyMatches) {
-      return;
-    }
-
-    this.logger.warn({
-      event: 'LiqPay callback amount does not match the pinned price',
-      orderId: order.orderId,
-      pinnedAmountMinor: order.amountMinor,
-      pinnedCurrency: order.currency,
-      callbackAmountMinor: callback.amountMinor,
-      callbackCurrency: callback.currency,
-    });
-  }
-
   /** Best effort now, retried by the dunning job for as long as the request is still open. */
   async stopOrder(orderId: string): Promise<boolean> {
-    if ((await this.liqPayService.unsubscribe(orderId)) === 'retry') {
+    try {
+      if ((await this.liqPayService.unsubscribe(orderId)) === 'retry') {
+        return false;
+      }
+
+      await this.subscriptionsRepository.resolveUnsubscribeRequest(orderId);
+
+      return true;
+    } catch (error: unknown) {
+      // Every caller has already committed the change this call follows. Failing over it would
+      // report a cancellation that did happen as one that did not, and abandon the rest of the
+      // retry batch besides. The request stays open, which is what gets the order stopped.
+      this.logger.warn({
+        event: 'Stopping a LiqPay order failed',
+        orderId,
+        message: error instanceof Error ? error.message : 'unknown error',
+      });
+
       return false;
     }
-
-    await this.subscriptionsRepository.resolveUnsubscribeRequest(orderId);
-
-    return true;
   }
 
   private async notifyTransition(
-    subscription: { organizationId: string; status: string },
+    subscription: {
+      organizationId: string;
+      status: string;
+      cancelRequestedAt: Date | null;
+      graceEndsAt: Date | null;
+    },
     transition: SubscriptionTransitionState,
   ): Promise<void> {
+    if (transition.cancelRequestedAt) {
+      // The deadline moved in rather than out, so a payment was taken back rather than received.
+      // "Your payment has been credited" is the one thing this must not say.
+      if (
+        subscription.graceEndsAt &&
+        transition.graceEndsAt &&
+        transition.graceEndsAt < subscription.graceEndsAt
+      ) {
+        await this.notifyOrganizationAdmins({
+          organizationId: subscription.organizationId,
+          type: 'SUBSCRIPTION_PAYMENT_FAILED',
+          titleKey: 'subscriptionPaymentFailed',
+          bodyMessage: {
+            key: 'subscriptionDeadline',
+            deadline: transition.graceEndsAt.toISOString(),
+            timeZone: BILLING_TIME_ZONE,
+          },
+          dedupeKey: `payment-failed:${dayKey(transition.graceEndsAt)}`,
+        });
+        return;
+      }
+
+      // Nothing was cancelled before this callback arrived, so there is no earlier request for it
+      // to be an update to: LiqPay stopping the subscription on its own is the request.
+      const firstRequest = subscription.cancelRequestedAt === null;
+      const deadline = transition.graceEndsAt?.toISOString() ?? null;
+      await this.notifyOrganizationAdmins({
+        organizationId: subscription.organizationId,
+        type: 'SUBSCRIPTION_CANCELED',
+        titleKey: firstRequest
+          ? 'subscriptionCancellationRequested'
+          : 'subscriptionCancellationUpdated',
+        bodyMessage: {
+          key: firstRequest
+            ? 'subscriptionCancellationRequested'
+            : 'subscriptionCancellationUpdated',
+          deadline,
+          timeZone: BILLING_TIME_ZONE,
+        },
+        dedupeKey: firstRequest
+          ? `cancellation:${transition.cancelRequestedAt.toISOString()}`
+          : `cancellation-updated:${transition.cancelRequestedAt.toISOString()}:${deadline ?? 'none'}`,
+      });
+      return;
+    }
+
     if (transition.status === 'ACTIVE' && transition.currentPeriodEndsAt) {
       await this.notifyOrganizationAdmins({
         organizationId: subscription.organizationId,
@@ -422,12 +533,28 @@ export class BillingService {
       | 'subscriptionPaymentFailed'
       | 'subscriptionRestricted'
       | 'subscriptionRequired'
-      | 'subscriptionCanceled';
+      | 'subscriptionCanceled'
+      | 'subscriptionCancellationRequested'
+      | 'subscriptionCancellationUpdated'
+      | 'subscriptionCancellationConfirmed'
+      | 'subscriptionCancellationEnded'
+      | 'subscriptionPaymentReview';
     bodyMessage:
       | { key: 'subscriptionDeadline'; deadline: string; timeZone: string }
       | { key: 'subscriptionRenewed'; nextChargeAt: string; timeZone: string }
       | { key: 'subscriptionRestricted' }
-      | { key: 'subscriptionCanceledComplimentary' };
+      | { key: 'subscriptionCanceledComplimentary' }
+      | {
+          key: 'subscriptionCancellationRequested' | 'subscriptionCancellationUpdated';
+          deadline: string | null;
+          timeZone: string;
+        }
+      | {
+          key:
+            | 'subscriptionCancellationEnded'
+            | 'subscriptionCancellationConfirmed'
+            | 'subscriptionPaymentReview';
+        };
     dedupeKey: string;
     recipientMembershipIds?: string[];
   }): Promise<void> {
@@ -482,16 +609,32 @@ export class BillingService {
 function orderToStop(input: {
   role: CallbackRole;
   outcome: CallbackOutcome;
+  blocked: boolean;
   orderId: string;
   liveOrderId: string | null;
   activated: boolean;
+  /** The subscription was already being wound down before this callback arrived. */
+  cancellationPending: boolean;
 }): string | null {
-  const { role, outcome, orderId, liveOrderId, activated } = input;
+  const { role, outcome, blocked, orderId, liveOrderId, activated, cancellationPending } = input;
 
-  // Paid, for an order we are not honouring. The money was taken and LiqPay now holds a recurring
-  // charge nothing else tracks, so the order is queued against itself rather than ignored.
-  if (role === 'retired-checkout') {
-    return outcome === 'paid' ? orderId : null;
+  if (outcome !== 'paid') {
+    return null;
+  }
+
+  // Paid, for an order we are not honouring - abandoned, superseded, or charging a subscription
+  // the organization has already asked to stop. The money was taken and LiqPay now holds a
+  // recurring charge nothing else tracks, so the order is queued against itself rather than
+  // ignored.
+  if (role === 'retired-checkout' || cancellationPending) {
+    return orderId;
+  }
+
+  // A payment held back for review still leaves its order charging, but only a checkout we are
+  // refusing to honour may be stopped over it. Declining to credit a renewal is doubt about one
+  // charge, never grounds for cancelling the payer's live recurring order on their behalf.
+  if (blocked) {
+    return role === 'new-checkout' ? orderId : null;
   }
 
   if (role === 'new-checkout' && activated && liveOrderId && liveOrderId !== orderId) {
@@ -536,6 +679,16 @@ function toSummary(
     amountMinor: subscription.amountMinor,
     currency: subscription.currency,
     currentPeriodEndsAt: subscription.currentPeriodEndsAt?.toISOString() ?? null,
+    cancelRequestedAt: subscription.cancelRequestedAt?.toISOString() ?? null,
+    cancellationPending: Boolean(
+      subscription.cancelRequestedAt &&
+      subscription.unsubscribeRequests.some(
+        (request) => request.orderId === subscription.liqpayOrderId,
+      ),
+    ),
+    previousCancellationPending: subscription.unsubscribeRequests.some(
+      (request) => request.orderId !== subscription.liqpayOrderId,
+    ),
     restrictAfter: subscription.restrictAfter?.toISOString() ?? null,
     graceEndsAt: subscription.graceEndsAt?.toISOString() ?? null,
     card: subscription.cardMask
@@ -544,7 +697,53 @@ function toSummary(
     // A live LiqPay order, whatever the organization's access looks like. Reading this off the
     // status instead is what hid the button from a restricted organization whose card was still
     // being charged every month.
-    canCancel: subscription.liqpayOrderId !== null && subscription.status !== 'CANCELED',
+    canCancel: canRequestCancellation(subscription),
     entitlements: [...entitlements],
   };
+}
+
+interface PaymentReview {
+  issue: string;
+  /**
+   * Whether the payment may still be credited. Two known sums that disagree is a charge we refuse
+   * to honour. A sum we never pinned - a subscription activated before checkout orders existed,
+   * or a callback LiqPay sent without one - is a gap on our side, and the signature has already
+   * proven the callback genuine, so it is recorded and reported rather than held against the payer.
+   */
+  blocks: boolean;
+}
+
+function paymentReview(
+  callback: LiqPayCallback,
+  price: { amountMinor: number | null; currency: string | null },
+  role: CallbackRole,
+  outcome: CallbackOutcome,
+  liqPayService: LiqPayService,
+): PaymentReview | null {
+  if (outcome !== 'paid') return null;
+  if (callback.status === 'sandbox' && !liqPayService.isSandbox()) {
+    return { issue: 'unexpected-sandbox', blocks: true };
+  }
+
+  const comparable =
+    price.amountMinor !== null &&
+    price.amountMinor > 0 &&
+    price.currency !== null &&
+    callback.amountMinor !== null &&
+    callback.currency !== null;
+
+  if (
+    comparable &&
+    (callback.amountMinor !== price.amountMinor || callback.currency !== price.currency)
+  ) {
+    return { issue: 'payment-price-mismatch', blocks: true };
+  }
+  if (role === 'retired-checkout') {
+    return { issue: 'retired-order-payment', blocks: true };
+  }
+  if (!comparable) {
+    return { issue: 'unverifiable-price', blocks: false };
+  }
+
+  return null;
 }

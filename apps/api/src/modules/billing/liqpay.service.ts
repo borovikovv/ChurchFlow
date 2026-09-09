@@ -74,8 +74,14 @@ export class LiqPayService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  isConfigured(): boolean {
-    return Boolean(this.optionalKey('LIQPAY_PUBLIC_KEY') && this.optionalKey('LIQPAY_PRIVATE_KEY'));
+  isSandbox(): boolean {
+    return (
+      this.configService.get<string>('LIQPAY_MODE') === 'sandbox' &&
+      Boolean(
+        this.optionalKey('LIQPAY_PUBLIC_KEY')?.startsWith('sandbox_') &&
+        this.optionalKey('LIQPAY_PRIVATE_KEY')?.startsWith('sandbox_'),
+      )
+    );
   }
 
   /** `base64(sha1(private_key + data + private_key))`, over the base64 `data` field itself. */
@@ -115,7 +121,7 @@ export class LiqPayService {
 
     return {
       action: optionalString(record['action']),
-      status: optionalString(record['status']),
+      status: optionalString(record['status'])?.trim().toLowerCase() ?? null,
       orderId: optionalString(record['order_id']),
       paymentId: optionalString(record['payment_id']),
       amountMinor: optionalAmountMinor(record['amount']),
@@ -162,14 +168,17 @@ export class LiqPayService {
    * a boolean: only `retry` means the order may still be charging.
    */
   async unsubscribe(orderId: string): Promise<UnsubscribeOutcome> {
-    const { data, signature } = this.encode({
-      public_key: this.requiredKey('LIQPAY_PUBLIC_KEY'),
-      version: LIQPAY_API_VERSION,
-      action: 'unsubscribe',
-      order_id: orderId,
-    });
-
     try {
+      // Signing is inside the try for the same reason the request is: missing keys leave the
+      // order charging exactly as an unreachable LiqPay does, and throwing here turned a
+      // cancellation already saved and announced into an error for the person who asked for it.
+      const { data, signature } = this.encode({
+        public_key: this.requiredKey('LIQPAY_PUBLIC_KEY'),
+        version: LIQPAY_API_VERSION,
+        action: 'unsubscribe',
+        order_id: orderId,
+      });
+
       const response = await fetch(LIQPAY_REQUEST_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },

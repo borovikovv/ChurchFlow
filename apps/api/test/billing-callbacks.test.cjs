@@ -152,7 +152,7 @@ test('a reversal is treated as unpaid', () => {
   assert.equal(next.status, 'PAST_DUE');
 });
 
-test('unsubscribing cancels', () => {
+test('unsubscribing preserves the paid period and seven days of grace', () => {
   const next = transitionForCallbackStatus({
     current: { status: 'ACTIVE', graceEndsAt: null, currentPeriodEndsAt: NOW },
     callbackStatus: 'unsubscribed',
@@ -160,10 +160,12 @@ test('unsubscribing cancels', () => {
     isNewSubscription: false,
   });
 
-  assert.equal(next.status, 'CANCELED');
+  assert.equal(next.status, 'ACTIVE');
+  assert.equal(next.graceEndsAt.toISOString(), '2026-09-08T12:00:00.000Z');
+  assert.equal(next.cancelRequestedAt, NOW);
 });
 
-test('a stray charge does not revive a cancelled subscription', () => {
+test('a stray charge credits paid access without reviving auto-renewal', () => {
   // The organization asked to stop. A payment that lands anyway - one already in flight, or a
   // LiqPay unsubscribe that never took - must not put it back on the hook.
   const next = transitionForCallbackStatus({
@@ -173,7 +175,9 @@ test('a stray charge does not revive a cancelled subscription', () => {
     isNewSubscription: false,
   });
 
-  assert.equal(next, null);
+  assert.equal(next.status, 'ACTIVE');
+  assert.deepEqual(next.cancelRequestedAt, NOW);
+  assert.deepEqual(next.graceEndsAt, new Date('2026-10-08T12:00:00Z'));
 });
 
 test('a checkout the organization started does revive a cancelled subscription', () => {
@@ -305,7 +309,11 @@ function billingService({
     },
   );
 
-  service.logger = { warn: (entry) => warned.push(entry), log: () => {} };
+  service.logger = {
+    error: (entry) => warned.push(entry),
+    warn: (entry) => warned.push(entry),
+    log: () => {},
+  };
 
   return { service, applied, notified, unsubscribed, cleared, orders, rates, warned };
 }
@@ -326,12 +334,17 @@ function checkoutOrderRow(overrides = {}) {
 }
 
 function signedCallback(payload) {
-  const data = encode(payload);
+  const data = encode({ amount: 190, currency: 'UAH', ...payload });
 
   return { data, signature: liqPay().sign(data) };
 }
 
 const ACTIVE_SUBSCRIPTION = {
+  amountMinor: 19000,
+  currency: 'UAH',
+  cancelRequestedAt: null,
+  updatedAt: NOW,
+  unsubscribeRequests: [],
   id: 'subscription',
   organizationId: 'organization',
   status: 'ACTIVE',
@@ -510,6 +523,11 @@ function orderIdOf(checkout) {
 }
 
 const PENDING_SUBSCRIPTION = {
+  amountMinor: null,
+  currency: null,
+  cancelRequestedAt: null,
+  updatedAt: NOW,
+  unsubscribeRequests: [],
   ...ACTIVE_SUBSCRIPTION,
   status: 'PENDING',
   liqpayOrderId: null,
@@ -561,6 +579,7 @@ test('paying for a superseded checkout activates it at the price that checkout p
     status: 'success',
     order_id: 'first-order',
     payment_id: 61,
+    amount: 186.75,
   });
 
   await service.handleCallback(data, signature, NOW);
@@ -587,10 +606,10 @@ test('a callback charging something else is reported, not adopted as the price',
 
   await service.handleCallback(data, signature, NOW);
 
-  assert.equal(applied[0].update.amountMinor, 19_000);
+  assert.equal(applied[0].update, null);
+  assert.equal(applied[0].issue, 'payment-price-mismatch');
+  assert.equal(applied[0].credited, false);
   assert.equal(warned.length, 1);
-  assert.equal(warned[0].pinnedAmountMinor, 19_000);
-  assert.equal(warned[0].callbackAmountMinor, 100);
 });
 
 test('a failed checkout closes its order, an undecided one leaves it open', async () => {
@@ -633,16 +652,30 @@ function callbackRepository({
   const callbacks = stored.map((row) => ({ ...row }));
   const queued = [];
   const guarded = [];
+  const closedCheckouts = [];
 
   const matches = (row, where) =>
     row.orderId === where.orderId &&
     row.paymentId === where.paymentId &&
-    row.status === where.status;
+    (where.OR
+      ? where.OR.some(
+          (condition) => condition.status === row.status || (condition.credited && row.credited),
+        )
+      : row.status === where.status);
 
   const tx = {
     billingCallback: {
       create: async ({ data }) => {
-        if (callbacks.some((row) => matches(row, data))) {
+        if (
+          callbacks.some(
+            (row) =>
+              matches(row, data) ||
+              (data.credited &&
+                row.credited &&
+                row.orderId === data.orderId &&
+                row.paymentId === data.paymentId),
+          )
+        ) {
           throw uniqueViolation('billing_callbacks_order_id_payment_id_status_key');
         }
 
@@ -653,9 +686,14 @@ function callbackRepository({
     },
     billingCheckoutOrder: {
       update: async () => ({}),
-      updateMany: async () => ({ count: 0 }),
+      updateMany: async (args) => {
+        closedCheckouts.push(args.where);
+
+        return { count: 0 };
+      },
     },
     billingUnsubscribeRequest: {
+      updateMany: async () => ({ count: 1 }),
       upsert: async ({ create }) => {
         queued.push(create.orderId);
 
@@ -694,7 +732,13 @@ function callbackRepository({
     },
   };
 
-  return { repository: new SubscriptionsRepository(prisma), callbacks, queued, guarded };
+  return {
+    repository: new SubscriptionsRepository(prisma),
+    callbacks,
+    queued,
+    guarded,
+    closedCheckouts,
+  };
 }
 
 function callbackInput(overrides = {}) {
@@ -707,10 +751,15 @@ function callbackInput(overrides = {}) {
     previousStatus: 'PENDING',
     nextStatus: 'ACTIVE',
     expectedLiqpayOrderId: null,
+    expectedCancelRequestedAt: null,
+    expectedUpdatedAt: NOW,
+    credited: false,
+    issue: null,
     payload: {},
     update: { status: 'ACTIVE' },
     checkout: null,
     unsubscribeOrderId: null,
+    abandonOpenCheckouts: false,
     ...overrides,
   };
 }
@@ -760,7 +809,7 @@ test('the order a payment supersedes is queued with the state change, not after 
 
 function silentLiqPay() {
   const service = liqPay();
-  service.logger = { warn: () => {}, log: () => {} };
+  service.logger = { error: () => {}, warn: () => {}, log: () => {} };
 
   return service;
 }
@@ -853,7 +902,7 @@ test('paying for a checkout a cancellation closed does not revive the subscripti
   assert.equal(applied[0].nextStatus, null);
   assert.equal(applied[0].unsubscribeOrderId, 'new-order');
   assert.deepEqual(unsubscribed, ['new-order']);
-  assert.deepEqual(notified, []);
+  assert.equal(notified[0].titleKey, 'subscriptionPaymentReview');
 });
 
 test('a charge on an order that has been replaced does not take the live one back', async () => {
@@ -954,6 +1003,8 @@ test('the state a callback was judged against guards the write', async () => {
     id: 'subscription',
     status: 'PENDING',
     liqpayOrderId: 'live-order',
+    cancelRequestedAt: null,
+    updatedAt: NOW,
   });
 });
 
@@ -970,4 +1021,237 @@ test('a subscription that moved under a callback refuses it instead of overwriti
 
   // Rolled back with the transaction: a callback that changed nothing must not look delivered.
   assert.deepEqual(callbacks, []);
+});
+
+test('provider unsubscribe preserves access without reporting a renewal or changing its charge date', async () => {
+  const { service, applied, notified } = billingService({
+    subscription: { ...ACTIVE_SUBSCRIPTION, currentPeriodEndsAt: new Date('2026-10-01T12:00:00Z') },
+  });
+  const data = encode({
+    order_id: 'order',
+    payment_id: 'unsubscribe-event',
+    status: 'unsubscribed',
+  });
+  await service.handleCallback(data, liqPay().sign(data), NOW);
+  assert.equal(applied[0].update.status, 'ACTIVE');
+  assert.deepEqual(applied[0].update.cancelRequestedAt, NOW);
+  assert.equal('liqpaySubscribedAt' in applied[0].update, false);
+  // Nothing was cancelled before this callback, so there is no earlier request for it to update:
+  // LiqPay stopping the subscription on its own is the request.
+  assert.equal(notified[0].titleKey, 'subscriptionCancellationRequested');
+});
+
+test('a payment reversed after cancellation shortens access instead of reporting it credited', async () => {
+  const { service, applied, notified, unsubscribed } = billingService({
+    subscription: {
+      ...ACTIVE_SUBSCRIPTION,
+      cancelRequestedAt: NOW,
+      currentPeriodEndsAt: new Date('2026-10-01T12:00:00Z'),
+      graceEndsAt: new Date('2026-10-08T12:00:00Z'),
+    },
+  });
+  const { data, signature } = signedCallback({
+    order_id: 'order-1',
+    payment_id: 'chargeback',
+    status: 'reversed',
+  });
+  await service.handleCallback(data, signature, NOW);
+  assert.deepEqual(applied[0].update.graceEndsAt, new Date('2026-09-08T12:00:00Z'));
+  assert.deepEqual(applied[0].update.cancelRequestedAt, NOW);
+  assert.equal(applied[0].credited, false);
+  assert.deepEqual(unsubscribed, []);
+  // "Any additional payment has been credited" is the one thing a chargeback must not say.
+  assert.equal(notified[0].titleKey, 'subscriptionPaymentFailed');
+  assert.equal(notified[0].bodyMessage.deadline, '2026-09-08T12:00:00.000Z');
+});
+
+test('a late charge after requesting cancellation credits access without restarting renewal', async () => {
+  const { service, applied, unsubscribed, notified } = billingService({
+    subscription: {
+      ...ACTIVE_SUBSCRIPTION,
+      cancelRequestedAt: NOW,
+      graceEndsAt: new Date('2026-10-08T12:00:00Z'),
+    },
+  });
+  const data = encode({
+    order_id: 'order-1',
+    payment_id: 'late-charge',
+    status: 'success',
+    amount: 190,
+    currency: 'UAH',
+  });
+  await service.handleCallback(data, liqPay().sign(data), NOW);
+  assert.equal(applied[0].update.status, 'ACTIVE');
+  assert.deepEqual(applied[0].update.cancelRequestedAt, NOW);
+  assert.deepEqual(applied[0].update.graceEndsAt, new Date('2026-10-08T12:00:00Z'));
+  assert.equal(applied[0].credited, true);
+  assert.equal(applied[0].unsubscribeOrderId, 'order-1');
+  assert.deepEqual(unsubscribed, ['order-1']);
+  assert.equal(notified[0].titleKey, 'subscriptionCancellationUpdated');
+});
+
+test('one payment cannot credit two periods through success and subscribed callbacks', async () => {
+  const { repository, callbacks, guarded } = callbackRepository();
+  const first = await repository.applyCallback(callbackInput({ credited: true }));
+  const second = await repository.applyCallback(
+    callbackInput({ credited: true, status: 'subscribed' }),
+  );
+  assert.equal(first.duplicate, false);
+  assert.equal(second.duplicate, true);
+  assert.equal(callbacks.length, 1);
+  assert.equal(guarded.length, 1);
+});
+
+test('only the callback that records a cancellation closes the checkouts left open', async () => {
+  // The update carries the cancellation forward on every later charge too, so deciding from it
+  // would abandon whatever checkout the organization had opened to subscribe again.
+  const update = { status: 'ACTIVE', cancelRequestedAt: NOW };
+
+  const carried = callbackRepository();
+  await carried.repository.applyCallback(callbackInput({ update, abandonOpenCheckouts: false }));
+  assert.deepEqual(carried.closedCheckouts, []);
+
+  const recorded = callbackRepository();
+  await recorded.repository.applyCallback(callbackInput({ update, abandonOpenCheckouts: true }));
+  assert.deepEqual(recorded.closedCheckouts, [
+    { subscriptionId: 'subscription', status: 'PROPOSED' },
+  ]);
+});
+
+test('a paid renewal without a checkout record still validates the pinned price and currency', async () => {
+  for (const payload of [{ amount: 1 }, { currency: 'USD' }]) {
+    const { service, applied, notified, unsubscribed } = billingService({
+      subscription: ACTIVE_SUBSCRIPTION,
+    });
+    const { data, signature } = signedCallback({
+      status: 'success',
+      order_id: 'order-1',
+      payment_id: 'mismatch',
+      ...payload,
+    });
+    await service.handleCallback(data, signature, NOW);
+    assert.equal(applied[0].update, null);
+    assert.equal(applied[0].credited, false);
+    assert.equal(applied[0].issue, 'payment-price-mismatch');
+    assert.equal(notified[0].titleKey, 'subscriptionPaymentReview');
+    // Withholding credit is doubt about one charge. Cancelling the order it arrived on would end
+    // the payer's subscription at LiqPay over a price we are only refusing to trust.
+    assert.equal(applied[0].unsubscribeOrderId, null);
+    assert.deepEqual(unsubscribed, []);
+  }
+});
+
+test('a price we never pinned is reported without withholding the access it paid for', async () => {
+  // Subscriptions activated before checkout orders existed have no price to compare against, and
+  // LiqPay may leave the amount out of a callback its signature has already proven genuine.
+  // Neither is the payer's doing, so the charge is credited and the gap is recorded on the row.
+  for (const [subscription, payload] of [
+    [{ ...ACTIVE_SUBSCRIPTION, amountMinor: null, currency: null }, {}],
+    [ACTIVE_SUBSCRIPTION, { amount: null }],
+    [ACTIVE_SUBSCRIPTION, { currency: null }],
+  ]) {
+    const { service, applied, notified, unsubscribed } = billingService({ subscription });
+    const { data, signature } = signedCallback({
+      status: 'success',
+      order_id: 'order-1',
+      payment_id: 'renewal',
+      ...payload,
+    });
+    await service.handleCallback(data, signature, NOW);
+    assert.equal(applied[0].issue, 'unverifiable-price');
+    assert.equal(applied[0].credited, true);
+    assert.equal(applied[0].update.status, 'ACTIVE');
+    assert.equal(applied[0].unsubscribeOrderId, null);
+    assert.deepEqual(unsubscribed, []);
+    assert.equal(notified[0].titleKey, 'subscriptionRenewed');
+  }
+});
+
+test('a checkout we refuse to honour is stopped at LiqPay rather than left charging', async () => {
+  // The mirror of the renewal case: nothing here is live yet, so the purchase is not recognised
+  // and the order that would go on charging monthly has to be cancelled.
+  const { service, applied, unsubscribed, notified } = billingService({
+    subscription: ACTIVE_SUBSCRIPTION,
+    checkoutOrder: checkoutOrderRow(),
+  });
+  const { data, signature } = signedCallback({
+    status: 'success',
+    order_id: 'new-order',
+    payment_id: 'mismatch',
+    amount: 1,
+  });
+  await service.handleCallback(data, signature, NOW);
+  assert.equal(applied[0].issue, 'payment-price-mismatch');
+  assert.equal(applied[0].credited, false);
+  assert.equal(applied[0].update, null);
+  assert.equal(applied[0].unsubscribeOrderId, 'new-order');
+  assert.deepEqual(unsubscribed, ['new-order']);
+  assert.equal(notified[0].titleKey, 'subscriptionPaymentReview');
+});
+
+test('a late charge on the old order leaves a re-subscribe checkout open', async () => {
+  // The organization cancelled, then started subscribing again. A charge still in flight on the
+  // old order carries the cancellation forward, and closing the new checkout over it would take
+  // the money for a subscription that no longer has an order to honour.
+  const { service, applied } = billingService({
+    subscription: {
+      ...ACTIVE_SUBSCRIPTION,
+      cancelRequestedAt: NOW,
+      graceEndsAt: new Date('2026-10-08T12:00:00Z'),
+    },
+  });
+  const { data, signature } = signedCallback({
+    status: 'success',
+    order_id: 'order-1',
+    payment_id: 'late-charge',
+  });
+  await service.handleCallback(data, signature, NOW);
+  assert.deepEqual(applied[0].update.cancelRequestedAt, NOW);
+  assert.equal(applied[0].abandonOpenCheckouts, false);
+});
+
+test('sandbox payment statuses never activate a live merchant subscription', async () => {
+  const { service, applied } = billingService({ subscription: ACTIVE_SUBSCRIPTION });
+  const { data, signature } = signedCallback({
+    status: ' SANDBOX ',
+    order_id: 'order-1',
+    payment_id: 'sandbox-event',
+  });
+  await service.handleCallback(data, signature, NOW);
+  assert.equal(applied[0].issue, 'unexpected-sandbox');
+  assert.equal(applied[0].credited, false);
+  assert.equal(applied[0].update, null);
+});
+
+test('sandbox acceptance requires explicit sandbox mode and a sandbox key pair', () => {
+  assert.equal(liqPay().isSandbox(), false);
+  assert.equal(liqPay({ LIQPAY_MODE: 'sandbox' }).isSandbox(), false);
+  assert.equal(
+    liqPay({
+      LIQPAY_MODE: 'sandbox',
+      LIQPAY_PUBLIC_KEY: 'sandbox_public',
+      LIQPAY_PRIVATE_KEY: 'sandbox_private',
+    }).isSandbox(),
+    true,
+  );
+  assert.equal(
+    liqPay({
+      LIQPAY_MODE: 'live',
+      LIQPAY_PUBLIC_KEY: 'sandbox_public',
+      LIQPAY_PRIVATE_KEY: 'sandbox_private',
+    }).isSandbox(),
+    false,
+  );
+});
+
+test('unsubscribe confirmations without a charge id are still recorded for queue resolution', async () => {
+  const { service, applied, notified } = billingService({
+    subscription: { ...ACTIVE_SUBSCRIPTION, cancelRequestedAt: NOW },
+  });
+  const { data, signature } = signedCallback({ status: 'unsubscribed', order_id: 'order-1' });
+  await service.handleCallback(data, signature, NOW);
+  assert.equal(applied[0].paymentId, 'unsubscribe');
+  assert.equal(applied[0].status, 'unsubscribed');
+  assert.equal(applied[0].update, null);
+  assert.equal(notified[0].titleKey, 'subscriptionCancellationConfirmed');
 });

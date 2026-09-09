@@ -25,8 +25,8 @@ export interface BillingDunningResult {
 }
 
 /**
- * Moves subscriptions whose deadline has passed into RESTRICTED, and warns organizations still
- * inside their rollout window.
+ * Finalizes expired cancellations as CANCELED and other overdue subscriptions as RESTRICTED, and
+ * warns organizations still inside their rollout window.
  *
  * It deliberately does not retry charges. LiqPay owns the recurring schedule once a subscription
  * exists and reports each attempt through the callback, so retrying here would double-charge.
@@ -190,11 +190,17 @@ export class BillingDunningScheduler {
       }
 
       restricted += 1;
+      // An organization that asked to stop is told its cancellation has taken effect; one that
+      // simply ran out of paid access is told it is now read-only.
+      const notice = subscription.cancelRequestedAt
+        ? ({ type: 'SUBSCRIPTION_CANCELED', key: 'subscriptionCancellationEnded' } as const)
+        : ({ type: 'SUBSCRIPTION_RESTRICTED', key: 'subscriptionRestricted' } as const);
+
       await this.billingService.notifyOrganizationAdmins({
         organizationId: subscription.organizationId,
-        type: 'SUBSCRIPTION_RESTRICTED',
-        titleKey: 'subscriptionRestricted',
-        bodyMessage: { key: 'subscriptionRestricted' },
+        type: notice.type,
+        titleKey: notice.key,
+        bodyMessage: { key: notice.key },
         dedupeKey: `restricted:${dayKey(now)}`,
         recipientMembershipIds: subscription.organization.members.map((member) => member.id),
       });

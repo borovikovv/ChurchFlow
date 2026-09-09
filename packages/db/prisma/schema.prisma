@@ -1210,10 +1210,12 @@ model Subscription {
 
   // Two deliberately separate timers that happen to share a length. restrictAfter is the
   // one-off rollout window given to organizations that already existed at migration time;
-  // graceEndsAt is the recurring grace period after a failed payment.
+  // graceEndsAt ends access after a failed payment or a canceled renewal.
+  // cancelRequestedAt stops renewal while preserving the paid period plus its grace period.
   restrictAfter       DateTime? @map("restrict_after")
   graceEndsAt         DateTime? @map("grace_ends_at")
   currentPeriodEndsAt DateTime? @map("current_period_ends_at")
+  cancelRequestedAt   DateTime? @map("cancel_requested_at")
 
   // Card data never reaches us. Only the LiqPay token and display metadata are stored.
   liqpayOrderId      String?   @unique @map("liqpay_order_id")
@@ -1248,6 +1250,7 @@ model Subscription {
   @@unique([id, organizationId])
   @@index([status])
   @@index([status, graceEndsAt])
+  @@index([graceEndsAt])
   @@index([status, restrictAfter])
   @@index([exemptGrantedByUserId])
   @@map("subscriptions")
@@ -1261,6 +1264,10 @@ model BillingCallback {
   paymentId      String    @map("payment_id")
   status         String
   payload        Json      @default("{}")
+  /// Target of the partial unique index billing_callbacks_payment_credit_key, which Prisma cannot
+  /// express: one payment may be credited to an access period once, whatever else it reports.
+  credited       Boolean   @default(false)
+  issue          String?
   processedAt    DateTime? @map("processed_at")
   createdAt      DateTime  @default(now()) @map("created_at")
 

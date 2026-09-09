@@ -685,6 +685,9 @@ export const subscriptionSummarySchema = z.object({
   amountMinor: z.number().int().nullable(),
   currency: z.string().nullable(),
   currentPeriodEndsAt: z.string().nullable(),
+  cancelRequestedAt: z.string().nullable(),
+  cancellationPending: z.boolean(),
+  previousCancellationPending: z.boolean(),
   restrictAfter: z.string().nullable(),
   graceEndsAt: z.string().nullable(),
   card: z

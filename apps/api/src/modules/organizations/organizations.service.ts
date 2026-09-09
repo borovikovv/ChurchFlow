@@ -8,6 +8,7 @@ import { Prisma, type OrganizationStatus } from '@churchflow/db';
 import type { z } from 'zod';
 import {
   createOrganizationSchema,
+  ENTITLEMENTS,
   type AdminOrganizationWorkspaceStatus,
   type AdminOrganizationWorkspaceView,
   type UpdateOrganizationInput,
@@ -255,6 +256,8 @@ export class OrganizationsService {
         'Only organization owners and admins can update organization details',
       );
     }
+
+    await this.entitlementsService.assert(id, ENTITLEMENTS.websiteWrite);
 
     try {
       return await this.organizationsRepository.update(
