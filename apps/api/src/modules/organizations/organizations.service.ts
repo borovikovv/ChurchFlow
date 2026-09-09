@@ -342,7 +342,7 @@ export class OrganizationsService {
     actorUserId: string,
     action: 'ARCHIVE' | 'SUSPEND' | 'RESTORE' | 'DELETE',
   ) {
-    const organization = await this.organizationsRepository
+    const { organization, stoppedOrderId } = await this.organizationsRepository
       .changeStatus(id, action)
       .catch((error: unknown) => {
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -366,8 +366,19 @@ export class OrganizationsService {
       action,
       entityType: 'Organization',
       entityId: organization.id,
-      metadata: { status: organization.status },
+      // The stopped order is what tells whoever restores the organization that its subscription
+      // is gone rather than dormant, and has to be taken out again.
+      metadata: {
+        status: organization.status,
+        ...(stoppedOrderId ? { stoppedOrderId } : {}),
+      },
     });
+
+    // The order is queued either way, so this only spares the organization the nights between
+    // now and the retry job. A refusal leaves the queued request open for it.
+    if (stoppedOrderId) {
+      await this.billingService.stopOrder(stoppedOrderId);
+    }
 
     return organization;
   }

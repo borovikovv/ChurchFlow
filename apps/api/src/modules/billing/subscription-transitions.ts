@@ -6,8 +6,16 @@ import { addMonths, daysFromNow } from './billing-time';
 // family, 3DS challenges, and statuses LiqPay may add later - means "not decided yet" and must
 // leave the subscription exactly as it was.
 const PAID_STATUSES = new Set(['success', 'subscribed', 'sandbox']);
-const FAILED_STATUSES = new Set(['failure', 'error', 'reversed']);
+const FAILED_STATUS_LIST = ['failure', 'error', 'reversed'] as const;
+const FAILED_STATUSES = new Set<string>(FAILED_STATUS_LIST);
 const CANCELED_STATUSES = new Set(['unsubscribed']);
+
+/**
+ * Exported for the callback log query behind `isOutOfOrderCallback`: once one of these is on
+ * record for a payment, a `success` for the same payment arriving afterwards is a late delivery
+ * of an outcome that has already been superseded, not a new one.
+ */
+export const FAILED_CALLBACK_STATUSES: readonly string[] = FAILED_STATUS_LIST;
 
 /**
  * What a callback says about the charge it reports. Kept separate from the state machine because
@@ -142,7 +150,12 @@ function chargebackTransition(
  * failing card buys unlimited time. A failure arriving after the organization is already
  * RESTRICTED must not walk it back to PAST_DUE, which would hand back write access. And a
  * paid charge after cancellation credits access while preserving the cancellation intent.
- * Only a checkout started by the organization can restore automatic renewal.
+ * Only a checkout started by the organization can restore automatic renewal. And a charge that
+ * lands while the current period is still running extends it rather than restarting it.
+ *
+ * What this cannot see is delivery order, which `isOutOfOrderCallback` decides separately: every
+ * rule here reads the subscription as it stands now and assumes the callback is the newest thing
+ * to have happened to it.
  */
 export function transitionForCallbackStatus(
   input: SubscriptionTransitionInput,
@@ -159,12 +172,17 @@ export function transitionForCallbackStatus(
   }
 
   if (outcome === 'paid') {
+    // Time already paid for is never forfeited because a charge landed before it ran out. The
+    // month is added to what is left rather than replacing it, which is what makes replacing a
+    // card - a fresh checkout against a subscription still inside its paid period - cost a month
+    // rather than a month plus whatever was left of the old one.
+    const periodStart =
+      current.currentPeriodEndsAt && current.currentPeriodEndsAt > now
+        ? current.currentPeriodEndsAt
+        : now;
+    const currentPeriodEndsAt = addMonths(periodStart, 1);
+
     if (!isNewSubscription && (current.cancelRequestedAt || current.status === 'CANCELED')) {
-      const periodStart =
-        current.currentPeriodEndsAt && current.currentPeriodEndsAt > now
-          ? current.currentPeriodEndsAt
-          : now;
-      const currentPeriodEndsAt = addMonths(periodStart, 1);
       return {
         status: 'ACTIVE',
         currentPeriodEndsAt,
@@ -176,7 +194,7 @@ export function transitionForCallbackStatus(
     return {
       status: 'ACTIVE',
       graceEndsAt: null,
-      currentPeriodEndsAt: addMonths(now, 1),
+      currentPeriodEndsAt,
       cancelRequestedAt: null,
     };
   }
@@ -215,6 +233,35 @@ export function transitionForCallbackStatus(
   }
 
   return null;
+}
+
+/**
+ * Whether a callback is describing something that has already been overtaken. LiqPay retries
+ * deliveries and does not promise they arrive in the order the events happened, and every rule in
+ * `transitionForCallbackStatus` reads the subscription as it stands now - so without this a
+ * failure delivered late walks a subscription that has since been paid for back into PAST_DUE,
+ * and a `success` redelivered after the same payment was reversed hands the access back.
+ *
+ * Two independent signals, because either can be missing. The event time orders callbacks against
+ * each other; a settled failure for this very payment stands on its own, even for a provider
+ * response that carries no timestamp at all.
+ */
+export function isOutOfOrderCallback(input: {
+  outcome: CallbackOutcome;
+  /** When the reported event happened, as LiqPay stamped it. Null when it sent no timestamp. */
+  eventAt: Date | null;
+  /** The newest event time already applied to this subscription. */
+  lastEventAt: Date | null;
+  /** A failure or reversal is already on record for the same payment. */
+  paymentAlreadyFailed: boolean;
+}): boolean {
+  if (input.outcome === 'paid' && input.paymentAlreadyFailed) {
+    return true;
+  }
+
+  // Equal stamps are left alone: LiqPay reports a charge and its subscription event at the same
+  // instant, and neither of them supersedes the other.
+  return Boolean(input.eventAt && input.lastEventAt && input.eventAt < input.lastEventAt);
 }
 
 export function canRequestCancellation(subscription: {

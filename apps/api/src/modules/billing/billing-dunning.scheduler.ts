@@ -120,6 +120,11 @@ export class BillingDunningScheduler {
    *
    * The organization is moved to PAST_DUE rather than straight to RESTRICTED: from here the
    * payment is unconfirmed, not known to have failed, and it still gets its full grace period.
+   *
+   * Unconfirmed is the operative word, and LiqPay is asked before it is treated as unpaid. A
+   * charge that went through and whose callback was lost is settled from the answer, which moves
+   * the paid period past the cutoff and leaves the guarded write below with nothing to change -
+   * the same path a callback arriving mid-pass already takes.
    */
   private async reconcileUnconfirmedRenewals(now: Date): Promise<number> {
     const cutoff = daysFromNow(now, -BILLING_RECONCILIATION_GRACE_DAYS);
@@ -128,15 +133,19 @@ export class BillingDunningScheduler {
     let reconciled = 0;
 
     for (const subscription of unconfirmed) {
+      if (subscription.liqpayOrderId) {
+        await this.billingService.reconcileOrderWithProvider(subscription.liqpayOrderId, now);
+      }
+
       const { count } = await this.subscriptionsRepository.markPastDueIfStillUnconfirmed({
         subscriptionId: subscription.id,
         cutoff,
         graceEndsAt,
       });
 
-      // The renewal arrived while this pass was running. There is nothing left to reconcile, and
-      // telling an organization that has just paid that its payment failed would be worse than
-      // saying nothing at all.
+      // The renewal arrived while this pass was running, or LiqPay has just confirmed it above.
+      // There is nothing left to reconcile, and telling an organization that has just paid that
+      // its payment failed would be worse than saying nothing at all.
       if (count === 0) {
         continue;
       }

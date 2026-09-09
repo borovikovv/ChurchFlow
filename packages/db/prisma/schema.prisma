@@ -1268,6 +1268,9 @@ model BillingCallback {
   /// express: one payment may be credited to an access period once, whatever else it reports.
   credited       Boolean   @default(false)
   issue          String?
+  /// When LiqPay says the reported event happened, as opposed to when it reached us. Null for
+  /// callbacks recorded before this was decoded, and for any LiqPay sends without a timestamp.
+  eventAt        DateTime? @map("event_at")
   processedAt    DateTime? @map("processed_at")
   createdAt      DateTime  @default(now()) @map("created_at")
 
@@ -1281,6 +1284,7 @@ model BillingCallback {
   @@unique([orderId, paymentId, status])
   @@index([organizationId])
   @@index([subscriptionId])
+  @@index([subscriptionId, eventAt])
   @@map("billing_callbacks")
 }
 

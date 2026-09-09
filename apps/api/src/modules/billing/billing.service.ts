@@ -32,6 +32,7 @@ import {
   cancellationTransition,
   canRequestCancellation,
   classifyCallbackStatus,
+  isOutOfOrderCallback,
   transitionForCallbackStatus,
   type CallbackOutcome,
   type CallbackRole,
@@ -44,6 +45,7 @@ const BILLING_CURRENCY = 'UAH';
 // change invalidates that reading rather than being overwritten, and the decision is made again.
 // More than a couple of collisions on one subscription is not contention, it is a bug.
 const CALLBACK_APPLY_ATTEMPTS = 3;
+const OUT_OF_ORDER_ISSUE = 'out-of-order-callback';
 const NOTIFICATION_PREFERENCE_KEY = 'organizationUpdatesEnabled' as const;
 
 type SubscriptionRecord = NonNullable<
@@ -183,15 +185,87 @@ export class BillingService {
       throw new BadRequestException('LiqPay callback is missing a payment id');
     }
 
-    const orderId = callback.orderId;
-    const paymentId = callbackPaymentId;
+    return this.applyCallbackWithRetries({
+      payload: { data },
+      callback,
+      orderId: callback.orderId,
+      paymentId: callbackPaymentId,
+      now,
+    });
+  }
 
-    // The unique index makes one callback delivered twice harmless. It says nothing about two
-    // different payments arriving at once, which is what this loop is for: the write refuses
-    // state that moved under it, and the decision is then made again on what the row now holds.
+  /**
+   * A renewal LiqPay never reported. Asking it directly is the only way to tell a payment that
+   * genuinely failed from a callback that was lost on the way, and the answer is applied through
+   * exactly the path a callback takes - so the credit index still makes a later delivery of the
+   * same payment a no-op rather than a second month.
+   *
+   * Only a paid answer is acted on. Anything else, an unreachable provider included, leaves the
+   * subscription exactly where the missing callback left it: a provider we cannot read must never
+   * be the reason an organization is put into arrears.
+   */
+  async reconcileOrderWithProvider(orderId: string, now: Date = new Date()): Promise<boolean> {
+    const status = await this.liqPayService.queryOrderStatus(orderId);
+    if (!status || classifyCallbackStatus(status.status) !== 'paid') {
+      return false;
+    }
+
+    // Without a payment id there is nothing to be idempotent on, and a nightly job that credits
+    // the same charge again every night is worse than one that credits nothing at all.
+    if (!status.paymentId) {
+      this.logger.warn({ event: 'LiqPay reported a paid order with no payment id', orderId });
+
+      return false;
+    }
+
+    try {
+      await this.applyCallbackWithRetries({
+        payload: { source: 'liqpay-status', status: status.status },
+        callback: {
+          action: 'status',
+          status: status.status,
+          orderId,
+          paymentId: status.paymentId,
+          amountMinor: status.amountMinor,
+          currency: status.currency,
+          cardMask: status.cardMask,
+          cardBrand: status.cardBrand,
+          eventAt: status.eventAt,
+        },
+        orderId,
+        paymentId: status.paymentId,
+        now,
+      });
+
+      return true;
+    } catch (error: unknown) {
+      // Same reasoning as stopOrder: this runs over a batch, and one subscription that cannot be
+      // settled must not take the rest of the nightly pass down with it.
+      this.logger.warn({
+        event: 'Reconciling an order against LiqPay failed',
+        orderId,
+        message: error instanceof Error ? error.message : 'unknown error',
+      });
+
+      return false;
+    }
+  }
+
+  /**
+   * The unique index makes one callback delivered twice harmless. It says nothing about two
+   * different payments arriving at once, which is what this loop is for: the write refuses state
+   * that moved under it, and the decision is then made again on what the row now holds.
+   */
+  private async applyCallbackWithRetries(input: {
+    payload: Prisma.InputJsonObject;
+    callback: LiqPayCallback;
+    orderId: string;
+    paymentId: string;
+    now: Date;
+  }): Promise<{ ok: true }> {
     for (let attempt = 1; attempt <= CALLBACK_APPLY_ATTEMPTS; attempt += 1) {
       try {
-        return await this.applyCallbackOnce({ data, callback, orderId, paymentId, now });
+        return await this.applyCallbackOnce(input);
       } catch (error: unknown) {
         if (
           !(error instanceof StaleSubscriptionStateError) ||
@@ -202,7 +276,7 @@ export class BillingService {
 
         this.logger.warn({
           event: 'LiqPay callback raced another change and is being reapplied',
-          orderId,
+          orderId: input.orderId,
           attempt,
         });
       }
@@ -213,13 +287,13 @@ export class BillingService {
   }
 
   private async applyCallbackOnce(input: {
-    data: string;
+    payload: Prisma.InputJsonObject;
     callback: LiqPayCallback;
     orderId: string;
     paymentId: string;
     now: Date;
   }): Promise<{ ok: true }> {
-    const { data, callback, orderId, paymentId, now } = input;
+    const { payload, callback, orderId, paymentId, now } = input;
 
     const match = await this.subscriptionsRepository.findByOrderId(orderId);
     if (!match) {
@@ -245,15 +319,31 @@ export class BillingService {
       outcome,
       this.liqPayService,
     );
-    const issue = review?.issue ?? null;
     const blocked = review?.blocks ?? false;
+
+    // Everything above judges the callback against the subscription as it stands now, which is
+    // only sound while callbacks arrive in the order their events happened. LiqPay does not
+    // promise that, so a callback overtaken by one already applied is recorded and acted on by
+    // nothing: it is history, not news.
+    const history = await this.subscriptionsRepository.findPaymentHistory({
+      subscriptionId: subscription.id,
+      orderId,
+      paymentId,
+    });
+    const outOfOrder = isOutOfOrderCallback({
+      outcome,
+      eventAt: callback.eventAt,
+      lastEventAt: history.lastEventAt,
+      paymentAlreadyFailed: history.paymentAlreadyFailed,
+    });
+    const issue = review?.issue ?? (outOfOrder ? OUT_OF_ORDER_ISSUE : null);
 
     // A retired order decides nothing about the subscription whatever it reports: it was
     // abandoned, or it has already been replaced by the order that is live now. Letting one
     // through is how a tab left open on a cancelled subscription revives it, and how last
     // month's order takes the live one's place when its own renewal lands late.
     const transition =
-      blocked || role === 'retired-checkout'
+      blocked || outOfOrder || role === 'retired-checkout'
         ? null
         : transitionForCallbackStatus({
             current: subscription,
@@ -290,7 +380,8 @@ export class BillingService {
       expectedUpdatedAt: subscription.updatedAt,
       credited: outcome === 'paid' && transition !== null,
       issue,
-      payload: { data } satisfies Prisma.InputJsonObject,
+      eventAt: callback.eventAt,
+      payload,
       update: transition
         ? this.buildCallbackUpdate({
             checkoutOrder,
@@ -321,6 +412,16 @@ export class BillingService {
 
     if (duplicate) {
       return { ok: true as const };
+    }
+
+    if (outOfOrder) {
+      this.logger.warn({
+        event: 'LiqPay callback was overtaken by one already applied and changed nothing',
+        orderId,
+        paymentId,
+        status: callback.status,
+        organizationId: subscription.organizationId,
+      });
     }
 
     if (review) {

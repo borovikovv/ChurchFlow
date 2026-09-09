@@ -8,6 +8,7 @@ const { LiqPayService } = require('../dist/modules/billing/liqpay.service');
 const { BillingService } = require('../dist/modules/billing/billing.service');
 const {
   callbackRole,
+  isOutOfOrderCallback,
   transitionForCallbackStatus,
 } = require('../dist/modules/billing/subscription-transitions');
 const {
@@ -240,6 +241,10 @@ function billingService({
   unsubscribeOk = true,
   // How many times the write refuses the state it was handed before it is allowed through.
   staleAttempts = 0,
+  // What the callback log already holds: the newest event applied to this subscription, and
+  // whether the payment being reported is already recorded as failed.
+  lastEventAt = null,
+  paymentAlreadyFailed = false,
 } = {}) {
   const applied = [];
   const notified = [];
@@ -283,6 +288,7 @@ function billingService({
 
       return { duplicate };
     },
+    findPaymentHistory: async () => ({ lastEventAt, paymentAlreadyFailed }),
     resolveUnsubscribeRequest: async (orderId) => {
       cleared.push(orderId);
       return { count: 1 };
@@ -1254,4 +1260,225 @@ test('unsubscribe confirmations without a charge id are still recorded for queue
   assert.equal(applied[0].status, 'unsubscribed');
   assert.equal(applied[0].update, null);
   assert.equal(notified[0].titleKey, 'subscriptionCancellationConfirmed');
+});
+
+test('a charge landing inside the paid period extends it rather than starting it over', () => {
+  // Replacing a card is a fresh checkout against a subscription that is still paid up. Starting
+  // the month from `now` charged for a month and silently dropped what was left of the old one.
+  const next = transitionForCallbackStatus({
+    current: {
+      status: 'ACTIVE',
+      graceEndsAt: null,
+      currentPeriodEndsAt: new Date('2026-10-01T00:00:00.000Z'),
+      cancelRequestedAt: null,
+    },
+    callbackStatus: 'success',
+    now: new Date('2026-09-09T12:00:00.000Z'),
+    isNewSubscription: true,
+  });
+
+  assert.equal(next.currentPeriodEndsAt.toISOString(), '2026-11-01T00:00:00.000Z');
+  assert.equal(next.status, 'ACTIVE');
+  assert.equal(next.cancelRequestedAt, null);
+});
+
+test('a renewal after the period ran out still starts its month from the payment', () => {
+  const next = transitionForCallbackStatus({
+    current: {
+      status: 'ACTIVE',
+      graceEndsAt: null,
+      currentPeriodEndsAt: new Date('2026-08-25T00:00:00.000Z'),
+      cancelRequestedAt: null,
+    },
+    callbackStatus: 'success',
+    now: NOW,
+    isNewSubscription: false,
+  });
+
+  assert.equal(next.currentPeriodEndsAt.toISOString(), '2026-10-01T12:00:00.000Z');
+});
+
+test('a callback is out of order when its event predates one already applied', () => {
+  const earlier = new Date('2026-09-01T10:00:00.000Z');
+  const later = new Date('2026-09-01T11:00:00.000Z');
+
+  assert.equal(
+    isOutOfOrderCallback({
+      outcome: 'failed',
+      eventAt: earlier,
+      lastEventAt: later,
+      paymentAlreadyFailed: false,
+    }),
+    true,
+  );
+  // Equal stamps are two reports of the same moment, and neither supersedes the other.
+  assert.equal(
+    isOutOfOrderCallback({
+      outcome: 'failed',
+      eventAt: later,
+      lastEventAt: later,
+      paymentAlreadyFailed: false,
+    }),
+    false,
+  );
+  // Nothing to compare against: the first callback of a subscription, or one LiqPay sent with no
+  // timestamp at all, has to be acted on.
+  assert.equal(
+    isOutOfOrderCallback({
+      outcome: 'failed',
+      eventAt: null,
+      lastEventAt: later,
+      paymentAlreadyFailed: false,
+    }),
+    false,
+  );
+});
+
+test('a success for a payment already recorded as failed is out of order without any timestamp', () => {
+  assert.equal(
+    isOutOfOrderCallback({
+      outcome: 'paid',
+      eventAt: null,
+      lastEventAt: null,
+      paymentAlreadyFailed: true,
+    }),
+    true,
+  );
+  // A failure repeated after a failure is not out of order - it is the same news twice, and the
+  // state machine already refuses to extend a grace period over it.
+  assert.equal(
+    isOutOfOrderCallback({
+      outcome: 'failed',
+      eventAt: null,
+      lastEventAt: null,
+      paymentAlreadyFailed: true,
+    }),
+    false,
+  );
+});
+
+test('a failure delivered late does not take back a renewal already credited', async () => {
+  // The scenario the callback log now protects against: LiqPay retries an old failed charge after
+  // a newer one succeeded, and PAST_DUE would be applied on top of a subscription that has paid.
+  const { service, applied, notified } = billingService({
+    subscription: ACTIVE_SUBSCRIPTION,
+    lastEventAt: new Date('2026-09-01T11:00:00.000Z'),
+  });
+  const { data, signature } = signedCallback({
+    status: 'failure',
+    order_id: 'order-1',
+    payment_id: 7,
+    end_date: Date.parse('2026-09-01T10:00:00.000Z'),
+  });
+
+  assert.deepEqual(await service.handleCallback(data, signature), { ok: true });
+  // Recorded, because the log is the audit trail - but with nothing to write to the subscription.
+  assert.equal(applied.length, 1);
+  assert.equal(applied[0].update, null);
+  assert.equal(applied[0].nextStatus, null);
+  assert.equal(applied[0].issue, 'out-of-order-callback');
+  assert.equal(applied[0].eventAt.toISOString(), '2026-09-01T10:00:00.000Z');
+  assert.deepEqual(notified, []);
+});
+
+test('a success redelivered after the same payment was reversed credits nothing', async () => {
+  const { service, applied } = billingService({
+    subscription: ACTIVE_SUBSCRIPTION,
+    paymentAlreadyFailed: true,
+  });
+  const { data, signature } = signedCallback({
+    status: 'success',
+    order_id: 'order-1',
+    payment_id: 7,
+  });
+
+  assert.deepEqual(await service.handleCallback(data, signature), { ok: true });
+  assert.equal(applied[0].update, null);
+  assert.equal(applied[0].credited, false);
+  assert.equal(applied[0].issue, 'out-of-order-callback');
+});
+
+test('a callback carrying its event time records it for the next one to be judged against', async () => {
+  const { service, applied } = billingService({ subscription: ACTIVE_SUBSCRIPTION });
+  const { data, signature } = signedCallback({
+    status: 'success',
+    order_id: 'order-1',
+    payment_id: 8,
+    create_date: Date.parse('2026-09-01T09:00:00.000Z'),
+  });
+
+  await service.handleCallback(data, signature);
+
+  assert.equal(applied[0].eventAt.toISOString(), '2026-09-01T09:00:00.000Z');
+  assert.equal(applied[0].credited, true);
+});
+
+test('LiqPay status answers are read back into the same shape a callback carries', async () => {
+  const service = liqPay();
+  const body = JSON.stringify({
+    status: 'success',
+    payment_id: 99,
+    amount: 190,
+    currency: 'UAH',
+    sender_card_mask2: '424242******4242',
+    end_date: Date.parse('2026-09-01T10:00:00.000Z'),
+  });
+
+  const status = await withFetch(liqPayResponse(body), () => service.queryOrderStatus('order-1'));
+
+  assert.equal(status.status, 'success');
+  assert.equal(status.paymentId, '99');
+  assert.equal(status.amountMinor, 19000);
+  assert.equal(status.cardMask, '424242******4242');
+  assert.equal(status.eventAt.toISOString(), '2026-09-01T10:00:00.000Z');
+});
+
+test('a status LiqPay will not answer is null, never a payment we treat as failed', async () => {
+  const service = liqPay();
+
+  assert.equal(
+    await withFetch(liqPayResponse('', { ok: false, status: 502 }), () =>
+      service.queryOrderStatus('order-1'),
+    ),
+    null,
+  );
+  assert.equal(
+    await withFetch(liqPayResponse('not json'), () => service.queryOrderStatus('order-1')),
+    null,
+  );
+});
+
+test('an order LiqPay reports as paid is credited through the ordinary callback path', async () => {
+  // A renewal whose callback never arrived. Nothing else can tell that apart from a payment that
+  // failed, and the difference is an organization that has paid being told it has not.
+  const { service, applied } = billingService({
+    subscription: { ...ACTIVE_SUBSCRIPTION, currentPeriodEndsAt: new Date('2026-08-25T00:00:00Z') },
+  });
+  service.liqPayService.queryOrderStatus = async () => ({
+    status: 'success',
+    paymentId: '99',
+    amountMinor: 19000,
+    currency: 'UAH',
+    cardMask: null,
+    cardBrand: null,
+    eventAt: new Date('2026-08-30T00:00:00.000Z'),
+  });
+
+  assert.equal(await service.reconcileOrderWithProvider('order-1', NOW), true);
+  assert.equal(applied[0].paymentId, '99');
+  assert.equal(applied[0].credited, true);
+  assert.equal(applied[0].nextStatus, 'ACTIVE');
+  // The payload says where this came from, so a row settled from a poll is never mistaken for a
+  // callback LiqPay actually delivered.
+  assert.equal(applied[0].payload.source, 'liqpay-status');
+});
+
+test('an order LiqPay does not report as paid leaves the subscription untouched', async () => {
+  for (const answer of [null, { status: 'failure', paymentId: '99' }, { status: 'success' }]) {
+    const { service, applied } = billingService({ subscription: ACTIVE_SUBSCRIPTION });
+    service.liqPayService.queryOrderStatus = async () => answer;
+
+    assert.equal(await service.reconcileOrderWithProvider('order-1', NOW), false);
+    assert.deepEqual(applied, []);
+  }
 });

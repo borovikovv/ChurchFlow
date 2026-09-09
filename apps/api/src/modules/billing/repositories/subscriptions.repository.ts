@@ -3,6 +3,7 @@ import { Prisma, type SubscriptionStatus } from '@churchflow/db';
 import type { SubscriptionEntitlementState } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { queueUnsubscribe, resolveUnsubscribe } from '../billing-unsubscribe-queue';
+import { FAILED_CALLBACK_STATUSES } from '../subscription-transitions';
 
 // Who hears about billing: the same people who are allowed to pay.
 const ADMIN_MEMBERS_SELECT = {
@@ -202,6 +203,8 @@ export class SubscriptionsRepository {
     expectedUpdatedAt: Date;
     credited: boolean;
     issue: string | null;
+    /** When LiqPay says this happened, kept so later callbacks can be ordered against it. */
+    eventAt: Date | null;
     payload: Prisma.InputJsonObject;
     update: Prisma.SubscriptionUpdateManyMutationInput | null;
     checkout: CheckoutResolution | null;
@@ -225,6 +228,7 @@ export class SubscriptionsRepository {
             processedAt: resolvedAt,
             credited: input.credited,
             issue: input.issue,
+            eventAt: input.eventAt,
           },
         });
 
@@ -330,6 +334,35 @@ export class SubscriptionsRepository {
 
       throw error;
     }
+  }
+
+  /**
+   * The two things a callback has to be judged against besides the subscription row: how recent
+   * the newest event we have already applied is, and whether this very payment is already on
+   * record as failed. Both come from the callback log, which until now was written and never read
+   * for anything but duplicate detection.
+   */
+  async findPaymentHistory(input: {
+    subscriptionId: string;
+    orderId: string;
+    paymentId: string;
+  }): Promise<{ lastEventAt: Date | null; paymentAlreadyFailed: boolean }> {
+    const [latest, failed] = await Promise.all([
+      this.prisma.billingCallback.aggregate({
+        where: { subscriptionId: input.subscriptionId, eventAt: { not: null } },
+        _max: { eventAt: true },
+      }),
+      this.prisma.billingCallback.findFirst({
+        where: {
+          orderId: input.orderId,
+          paymentId: input.paymentId,
+          status: { in: [...FAILED_CALLBACK_STATUSES] },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    return { lastEventAt: latest._max.eventAt, paymentAlreadyFailed: failed !== null };
   }
 
   private async hasCallback(input: {
@@ -458,6 +491,8 @@ export class SubscriptionsRepository {
       select: {
         id: true,
         organizationId: true,
+        // The order to ask LiqPay about before concluding the renewal never happened.
+        liqpayOrderId: true,
         organization: { select: ADMIN_MEMBERS_SELECT },
       },
     });

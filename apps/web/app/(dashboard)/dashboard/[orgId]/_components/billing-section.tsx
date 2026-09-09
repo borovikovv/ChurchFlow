@@ -184,6 +184,15 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
       ) : null}
 
       {/*
+        Replacing a card is a fresh checkout, so the button below takes a month's payment there
+        and then. Saying so is the difference between a charge the organization chose and one it
+        discovers on its statement.
+      */}
+      {hasSubscription && !current.isExempt ? (
+        <p className="m-0 text-[var(--muted)]">{t('billing.replaceCardNotice')}</p>
+      ) : null}
+
+      {/*
         Cancelling is offered on `canCancel` rather than on the access status: a restricted
         organization, or one given complimentary access on top of a subscription it was already
         paying for, can still have LiqPay charging its card. Subscribing stays tied to the status,

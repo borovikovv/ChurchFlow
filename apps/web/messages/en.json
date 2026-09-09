@@ -884,6 +884,7 @@
       "noCard": "No card bound",
       "subscribe": "Subscribe",
       "replaceCard": "Replace card",
+      "replaceCardNotice": "Replacing the card charges a month now. Time left from the current payment is added on top of it, not lost.",
       "cancel": "Cancel subscription",
       "canceled": "Cancellation requested. Your access deadline is shown below.",
       "restrictedTitle": "This organization is read-only",

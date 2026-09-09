@@ -13,6 +13,7 @@ import { OrganizationLogo } from './organization-logo';
 interface OrganizationHomeManagerProps {
   organization: HomeOrganization;
   organizationRole: OrganizationRole | null;
+  canManageBilling: boolean;
   auditLogs: AuditLogListItem[];
   auditNextCursor: string | null;
   subscription: SubscriptionSummary | null;
@@ -22,6 +23,7 @@ interface OrganizationHomeManagerProps {
 export function OrganizationHomeManager({
   organization,
   organizationRole,
+  canManageBilling,
   auditLogs,
   auditNextCursor,
   subscription,
@@ -72,7 +74,7 @@ export function OrganizationHomeManager({
         </dl>
       </div>
 
-      {canManage ? (
+      {canManageBilling ? (
         <BillingSection
           loadError={subscriptionError}
           organizationId={currentOrganization.id}

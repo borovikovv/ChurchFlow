@@ -76,12 +76,15 @@ function scheduler({
   // between the batch being read and this write reaching it.
   restrictedCount = 1,
   pastDueCount = 1,
+  // Orders LiqPay confirms as paid when the job asks about a renewal it never heard about.
+  confirmedOrders = [],
 } = {}) {
   const restricted = [];
   const pastDue = [];
   const notified = [];
   const stopped = [];
   const reopened = [];
+  const asked = [];
 
   const repository = {
     listRestrictionDue: async () => due,
@@ -110,6 +113,10 @@ function scheduler({
       stopped.push({ orderId });
       return orderId !== 'stubborn-order';
     },
+    reconcileOrderWithProvider: async (orderId) => {
+      asked.push(orderId);
+      return confirmedOrders.includes(orderId);
+    },
   };
 
   const lock = {
@@ -125,6 +132,7 @@ function scheduler({
     notified,
     stopped,
     reopened,
+    asked,
   };
 }
 
@@ -590,4 +598,67 @@ test('an order LiqPay is no longer charging is not left for a hopeless retry', a
 
   // Nothing is charging, so retrying it nightly forever would achieve nothing.
   assert.deepEqual(resolved, ['old-order']);
+});
+
+test('a renewal with no callback is put to LiqPay before it is treated as unpaid', async () => {
+  // Nothing here can tell a payment that failed from a callback that was lost, and the difference
+  // is an organization that has paid being pushed into arrears and eventually into read-only.
+  const { instance, asked, pastDue } = scheduler({
+    unconfirmed: [
+      {
+        id: 'subscription',
+        organizationId: 'organization',
+        liqpayOrderId: 'order-1',
+        organization: { members: [] },
+      },
+    ],
+  });
+
+  await instance.run(NOW);
+
+  assert.deepEqual(asked, ['order-1']);
+  // The guarded write still runs: it is what settles whether the confirmation moved the period
+  // past the cutoff, and it already reports zero when the renewal turned up mid-pass.
+  assert.equal(pastDue.length, 1);
+});
+
+test('a subscription with no order to ask about is reconciled the way it always was', async () => {
+  const { instance, asked, pastDue, notified } = scheduler({
+    unconfirmed: [
+      {
+        id: 'subscription',
+        organizationId: 'organization',
+        liqpayOrderId: null,
+        organization: { members: [] },
+      },
+    ],
+  });
+
+  await instance.run(NOW);
+
+  assert.deepEqual(asked, []);
+  assert.equal(pastDue.length, 1);
+  assert.equal(notified[0].titleKey, 'subscriptionPaymentFailed');
+});
+
+test('an organization LiqPay confirms as paid is never told its payment failed', async () => {
+  // The confirmation moved the paid period past the cutoff, so the guarded write changes nothing -
+  // the same path a callback arriving mid-pass has always taken.
+  const { instance, notified } = scheduler({
+    unconfirmed: [
+      {
+        id: 'subscription',
+        organizationId: 'organization',
+        liqpayOrderId: 'order-1',
+        organization: { members: [] },
+      },
+    ],
+    confirmedOrders: ['order-1'],
+    pastDueCount: 0,
+  });
+
+  const result = await instance.run(NOW);
+
+  assert.equal(result.reconciledCount, 0);
+  assert.deepEqual(notified, []);
 });

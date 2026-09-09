@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import type { OrganizationRole, OrganizationStatus, PlatformRole, Prisma } from '@churchflow/db';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { queueUnsubscribe } from '../../billing/billing-unsubscribe-queue';
-import { canRequestCancellation } from '../../billing/subscription-transitions';
+import {
+  cancellationTransition,
+  canRequestCancellation,
+} from '../../billing/subscription-transitions';
 import type { createOrganizationSchema, UpdateOrganizationInput } from '@churchflow/shared';
 import type { z } from 'zod';
 
@@ -322,7 +325,24 @@ export class OrganizationsRepository {
     });
   }
 
-  async changeStatus(id: string, action: 'ARCHIVE' | 'SUSPEND' | 'RESTORE' | 'DELETE') {
+  /**
+   * Every action but RESTORE takes the organization out of `ACTIVE`, and that is exactly what
+   * the access guard requires - for platform admins too. So from the moment the status changes
+   * there is nobody left who can reach the billing routes, while the card keeps paying for a
+   * service nobody can reach either. Stopping the order is therefore part of the status change
+   * rather than a step that follows it, and any checkout still open is closed so a page left
+   * behind cannot start a subscription for an organization that is gone.
+   *
+   * RESTORE deliberately does not undo any of this. A cancelled LiqPay order cannot be revived
+   * on the organization's behalf; the owner subscribes again.
+   */
+  async changeStatus(
+    id: string,
+    action: 'ARCHIVE' | 'SUSPEND' | 'RESTORE' | 'DELETE',
+  ): Promise<{
+    organization: Prisma.OrganizationGetPayload<Record<string, never>>;
+    stoppedOrderId: string | null;
+  }> {
     const now = new Date();
     const dataByAction: Record<typeof action, Prisma.OrganizationUpdateInput> = {
       ARCHIVE: { status: 'ARCHIVED', archivedAt: now },
@@ -331,9 +351,49 @@ export class OrganizationsRepository {
       DELETE: { status: 'DELETED', deletedAt: now },
     };
 
-    return this.prisma.organization.update({
-      where: { id },
-      data: dataByAction[action],
+    return this.prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.update({
+        where: { id },
+        data: dataByAction[action],
+      });
+
+      if (action === 'RESTORE') {
+        return { organization, stoppedOrderId: null };
+      }
+
+      const subscription = await tx.subscription.findUnique({ where: { organizationId: id } });
+      if (!subscription) {
+        return { organization, stoppedOrderId: null };
+      }
+
+      // Same reasoning as a complimentary grant: an order already stopped or already queued has
+      // been through this, and reporting it a second time would only mislead.
+      const stoppedOrderId = canRequestCancellation(subscription)
+        ? subscription.liqpayOrderId
+        : null;
+
+      if (stoppedOrderId) {
+        await queueUnsubscribe(tx, {
+          organizationId: id,
+          subscriptionId: subscription.id,
+          orderId: stoppedOrderId,
+        });
+
+        // Queueing on its own leaves the subscription ACTIVE, and a renewal callback still in
+        // flight would then extend it by another month. Recording the cancellation is what stops
+        // that, and it keeps access that has already been paid for rather than cutting it short.
+        await tx.subscription.update({
+          where: { id: subscription.id },
+          data: cancellationTransition(subscription, now),
+        });
+      }
+
+      await tx.billingCheckoutOrder.updateMany({
+        where: { subscriptionId: subscription.id, status: 'PROPOSED' },
+        data: { status: 'ABANDONED', resolvedAt: now },
+      });
+
+      return { organization, stoppedOrderId };
     });
   }
 
