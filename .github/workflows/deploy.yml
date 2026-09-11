@@ -374,6 +374,24 @@ jobs:
             require_url LIQPAY_CALLBACK_URL
           fi
 
+          if [ -n "${LIQPAY_PUBLIC_KEY:-}" ] || [ -n "${LIQPAY_PRIVATE_KEY:-}" ]; then
+            require_url LIQPAY_CALLBACK_URL
+          fi
+
+          for key in LIQPAY_PUBLIC_KEY LIQPAY_PRIVATE_KEY; do
+            value="${!key-}"
+            if [ -n "$value" ]; then
+              case "$value" in
+                sandbox_*) expected_mode=sandbox ;;
+                *) expected_mode=live ;;
+              esac
+              if [ "${LIQPAY_MODE:-live}" != "$expected_mode" ]; then
+                echo "::error::$key is a $expected_mode key, but LIQPAY_MODE is '${LIQPAY_MODE:-live}' (unset defaults to live)."
+                invalid=1
+              fi
+            fi
+          done
+
           if [ -n "${LIQPAY_RESULT_URL:-}" ]; then
             require_url LIQPAY_RESULT_URL
           fi
