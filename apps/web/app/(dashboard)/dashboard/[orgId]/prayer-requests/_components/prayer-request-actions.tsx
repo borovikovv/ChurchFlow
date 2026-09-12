@@ -11,6 +11,7 @@ import {
   TableRowAction,
   TableRowActions,
   tableRowActionClassNameFor,
+  useTableRowActions,
 } from '@/components/ui/table-row-actions';
 import { PrayerRequestArchiveDialog } from './prayer-request-archive-dialog';
 import { PrayerRequestFormDialog } from './prayer-request-form-dialog';
@@ -39,22 +40,12 @@ export function PrayerRequestActions({
 
   return (
     <TableRowActions label={t('actions')}>
-      {request.canEdit ? (
-        <PrayerRequestFormDialog
-          initialRequest={request}
-          title={t('editTitle')}
-          triggerClassName="flex min-h-[38px] w-full cursor-pointer items-center justify-start rounded-md border-0 bg-transparent px-2.5 py-2 text-left font-medium text-[var(--foreground)] shadow-none hover:bg-[var(--surface-subtle)]"
-          triggerLabel={t('edit')}
-          submitLabel={t('save')}
-          onSubmit={(updates, closeDialog) => {
-            onUpdate(request.id, updates);
-            closeDialog();
-          }}
-        />
-      ) : null}
-      {request.canArchive ? (
-        <PrayerRequestArchiveDialog disabled={disabled} request={request} onArchive={onArchive} />
-      ) : null}
+      <PrayerRequestDialogActions
+        disabled={disabled}
+        request={request}
+        onArchive={onArchive}
+        onUpdate={onUpdate}
+      />
       {request.canRestore ? (
         <TableRowAction disabled={disabled} onSelect={() => onRestore(request.id)}>
           {t('restore')}
@@ -81,5 +72,47 @@ export function PrayerRequestActions({
         </form>
       ) : null}
     </TableRowActions>
+  );
+}
+
+function PrayerRequestDialogActions({
+  disabled,
+  request,
+  onArchive,
+  onUpdate,
+}: {
+  disabled: boolean;
+  request: PrayerRequestItem;
+  onArchive: (requestId: string, request: ArchivePrayerRequestInput) => void;
+  onUpdate: (requestId: string, request: UpdatePrayerRequestInput) => void;
+}) {
+  const t = useTranslations('prayerRequests');
+  const { closeMenu } = useTableRowActions();
+
+  return (
+    <>
+      {request.canEdit ? (
+        <PrayerRequestFormDialog
+          initialRequest={request}
+          title={t('editTitle')}
+          triggerClassName={tableRowActionClassNameFor()}
+          triggerLabel={t('edit')}
+          submitLabel={t('save')}
+          onClose={closeMenu}
+          onSubmit={(updates, closeDialog) => {
+            onUpdate(request.id, updates);
+            closeDialog();
+          }}
+        />
+      ) : null}
+      {request.canArchive ? (
+        <PrayerRequestArchiveDialog
+          disabled={disabled}
+          request={request}
+          onArchive={onArchive}
+          onClose={closeMenu}
+        />
+      ) : null}
+    </>
   );
 }
