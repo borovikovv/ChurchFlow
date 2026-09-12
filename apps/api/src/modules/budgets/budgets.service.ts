@@ -58,7 +58,7 @@ export class BudgetsService {
   async list(organizationId: string, year: number, actorUserId: string): Promise<BudgetPayload> {
     const actor = await this.budgetsRepository.findManagingMembership(organizationId, actorUserId);
     if (!actor) {
-      throw new ForbiddenException('Only organization owners and admins can view budgets');
+      throw new ForbiddenException('Only organization owners can view budgets');
     }
 
     const { categories, months } = await this.budgetsRepository.listYear(organizationId, year);
@@ -85,7 +85,7 @@ export class BudgetsService {
     const yearTotals = sumBudgetTotals(monthItems.map((month) => month.totals));
 
     return {
-      actorRole: actor.role as 'OWNER' | 'ADMIN',
+      actorRole: 'OWNER',
       canManage: true,
       year,
       baseCurrency: actor.organization.baseCurrency,
@@ -400,7 +400,7 @@ export class BudgetsService {
   private toHttpError(error: unknown) {
     if (!(error instanceof Error)) return error;
     if (error.message === 'ACTOR_CANNOT_MANAGE_BUDGET') {
-      return new ForbiddenException('Only organization owners and admins can manage budgets');
+      return new ForbiddenException('Only organization owners can manage budgets');
     }
     if (error.message === 'BUDGET_CATEGORY_NOT_FOUND') {
       return new NotFoundException('Budget category was not found');

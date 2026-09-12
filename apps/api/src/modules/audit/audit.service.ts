@@ -35,7 +35,9 @@ export class AuditService {
       ...(canReadBudgetHistory ? {} : { excludedEntityTypes: [BUDGET_AUDIT_ENTITY_TYPE] }),
     });
     const items = logs.slice(0, query.limit);
-    const next = logs.length > query.limit ? logs[query.limit] : null;
+    // The repository skips the cursor row itself, so the cursor is the last row kept, not the first
+    // row dropped.
+    const next = logs.length > query.limit ? items[items.length - 1] : null;
 
     return {
       items: items.map((log) => ({

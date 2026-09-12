@@ -54,7 +54,7 @@ export default async function OrganizationDashboardPage({
       : Promise.resolve(null),
   ]);
   const logoUrl = logoUrlResult?.ok ? logoUrlResult.data.url : null;
-  const auditPage = auditResult?.ok ? auditResult.data : { items: [], nextCursor: null };
+  const auditPage = auditResult?.ok ? auditResult.data : null;
 
   return (
     <OrganizationHomeManager
@@ -69,8 +69,8 @@ export default async function OrganizationDashboardPage({
       }}
       organizationRole={organizationRole}
       canManageBilling={canManageBilling}
-      auditLogs={auditPage.items}
-      auditNextCursor={auditPage.nextCursor}
+      auditLogs={auditPage?.items}
+      auditNextCursor={auditPage?.nextCursor ?? null}
       subscription={billingResult?.ok ? billingResult.data : null}
       subscriptionError={billingResult && !billingResult.ok ? billingResult.error.message : null}
     />

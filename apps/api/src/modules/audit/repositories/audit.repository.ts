@@ -35,7 +35,7 @@ export class AuditRepository {
         organizationId: input.organizationId,
         ...(input.entityType ? { entityType: input.entityType } : {}),
         ...(input.excludedEntityTypes?.length
-          ? { entityType: { notIn: input.excludedEntityTypes } }
+          ? { AND: [{ entityType: { notIn: input.excludedEntityTypes } }] }
           : {}),
       },
       take: input.limit + 1,

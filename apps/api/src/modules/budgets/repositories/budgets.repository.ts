@@ -41,12 +41,12 @@ export class BudgetsRepository {
       where: {
         organizationId,
         userId: actorUserId,
-        role: { in: ['OWNER', 'ADMIN'] },
+        role: 'OWNER',
         status: 'ACTIVE',
         removedAt: null,
         organization: { status: 'ACTIVE', deletedAt: null },
       },
-      select: { id: true, role: true, organization: { select: { baseCurrency: true } } },
+      select: { id: true, organization: { select: { baseCurrency: true } } },
     });
   }
 

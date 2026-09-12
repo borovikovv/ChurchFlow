@@ -1,22 +1,24 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { Reflector } = require('@nestjs/core');
+const { ORG_PERMISSIONS } = require('@churchflow/shared');
 const { OrganizationAccessGuard } = require('../dist/common/guards/organization-access.guard');
 const { BudgetsController } = require('../dist/modules/budgets/budgets.controller');
 const { WebsitesController } = require('../dist/modules/websites/websites.controller');
 const { PagesController } = require('../dist/modules/pages/pages.controller');
 const { MembershipsController } = require('../dist/modules/memberships/memberships.controller');
 const { MediaController } = require('../dist/modules/media/media.controller');
+const { GroupsController } = require('../dist/modules/groups/groups.controller');
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
-function guard({ role, platformRole = 'USER' }) {
+function guard({ role, permissions = [], platformRole = 'USER' }) {
   const prisma = {
     user: {
       findUnique: async () => ({
         platformRole,
         deletedAt: null,
-        memberships: role ? [{ role, permissions: [] }] : [],
+        memberships: role ? [{ role, permissions }] : [],
       }),
     },
     organization: {
@@ -82,6 +84,40 @@ test('a plain member is refused as well', async () => {
   // could call them directly while only the navigation hid them.
   await assert.rejects(
     () => guard({ role: 'MEMBER' }).canActivate(context(BudgetsController, 'list')),
+    (error) => {
+      assert.equal(error.getStatus(), 403);
+      return true;
+    },
+  );
+});
+
+test('a granular grant cannot widen an owner-only route', async () => {
+  // Owner-only is checked before the permission bypass, so the website permission a member once
+  // needed here no longer opens the door.
+  await assert.rejects(
+    () =>
+      guard({ role: 'MEMBER', permissions: [ORG_PERMISSIONS.websiteManage] }).canActivate(
+        context(PagesController, 'createPage'),
+      ),
+    (error) => {
+      assert.equal(error.getStatus(), 403);
+      return true;
+    },
+  );
+});
+
+test('routes without the owner marker keep their permission semantics', async () => {
+  const create = context(GroupsController, 'create');
+
+  assert.equal(await guard({ role: 'ADMIN' }).canActivate(create), true);
+  assert.equal(
+    await guard({ role: 'MEMBER', permissions: [ORG_PERMISSIONS.membersManage] }).canActivate(
+      create,
+    ),
+    true,
+  );
+  await assert.rejects(
+    () => guard({ role: 'MEMBER' }).canActivate(create),
     (error) => {
       assert.equal(error.getStatus(), 403);
       return true;
