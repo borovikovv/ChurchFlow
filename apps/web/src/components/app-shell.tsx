@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { dashboardNavigationItems, type AppNavItem } from '@/components/app-navigation';
 import { PlusIcon } from '@/components/icons/action-icons';
@@ -13,6 +13,7 @@ import { MobileTabBar } from '@/components/mobile-tab-bar';
 import { SidebarNavLink } from '@/components/sidebar-nav-link';
 import { UserMenu } from '@/components/user-menu';
 import { NotificationBell } from '@/features/notifications/components/notification-bell';
+import { NotificationDetailModal } from '@/features/notifications/components/notification-detail-modal';
 import { PasskeyPromptDialog } from '@/features/passkeys/components/passkey-prompt-dialog';
 import { navItemsInGroup } from '@/lib/nav-groups';
 import { APP_ROUTES } from '@/routes';
@@ -153,6 +154,11 @@ export function AppShell({
         <div className={dashboardOrgId ? 'app-main with-tab-bar' : 'app-main'}>{children}</div>
       </div>
       {dashboardOrgId ? <MobileTabBar items={navItems} /> : null}
+      {dashboardOrgId ? (
+        <Suspense fallback={null}>
+          <NotificationDetailModal organizationId={dashboardOrgId} />
+        </Suspense>
+      ) : null}
       <PasskeyPromptDialog />
     </div>
   );

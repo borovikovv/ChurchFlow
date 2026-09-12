@@ -90,20 +90,20 @@ test('routes without the owner marker keep their previous access', async () => {
 
   const permissionOnly = createGuard({
     role: 'ADMIN',
-    metadata: { [PERMISSION_KEY]: ORG_PERMISSIONS.billingManage },
+    metadata: { [PERMISSION_KEY]: ORG_PERMISSIONS.membersManage },
   });
   assert.equal(await permissionOnly.canActivate(executionContext()), true);
 
   const granted = createGuard({
     role: 'MEMBER',
-    permissions: [ORG_PERMISSIONS.billingManage],
-    metadata: { [PERMISSION_KEY]: ORG_PERMISSIONS.billingManage },
+    permissions: [ORG_PERMISSIONS.membersManage],
+    metadata: { [PERMISSION_KEY]: ORG_PERMISSIONS.membersManage },
   });
   assert.equal(await granted.canActivate(executionContext()), true);
 
   const ungranted = createGuard({
     role: 'MEMBER',
-    metadata: { [PERMISSION_KEY]: ORG_PERMISSIONS.billingManage },
+    metadata: { [PERMISSION_KEY]: ORG_PERMISSIONS.membersManage },
   });
   await assert.rejects(ungranted.canActivate(executionContext()), {
     message: 'Organization permission is required',

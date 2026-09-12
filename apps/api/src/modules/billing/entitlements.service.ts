@@ -30,9 +30,10 @@ export class EntitlementsService {
 
   /**
    * The kill switch. Off in development and test so local work, and every request an
-   * environment without LiqPay keys makes, is never restricted.
+   * environment without LiqPay keys makes, is never restricted. Public because it governs the
+   * whole of billing, not only this service: with it off nothing may be restricted at all.
    */
-  private isEnforcementEnabled(): boolean {
+  isEnforcementEnabled(): boolean {
     return this.configService.getOrThrow<boolean>('BILLING_ENFORCEMENT_ENABLED');
   }
 

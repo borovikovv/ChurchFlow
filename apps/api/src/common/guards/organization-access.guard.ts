@@ -20,6 +20,11 @@ const ORGANIZATION_OWNER_KEY = 'organizationOwner';
 export const RequireOrganizationPermission = (permission: OrganizationPermission) =>
   SetMetadata(ORGANIZATION_PERMISSION_KEY, permission);
 
+/**
+ * Narrower than any permission: an owner-only route is closed to ADMIN as well, so it cannot be
+ * satisfied by the permission bypass below. Used where a decision belongs to the church itself -
+ * its public site and its money - rather than to whoever helps run it.
+ */
 export const RequireOrganizationOwner = () => SetMetadata(ORGANIZATION_OWNER_KEY, true);
 
 @Injectable()

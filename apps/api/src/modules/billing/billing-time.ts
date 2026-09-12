@@ -1,9 +1,14 @@
 export const BILLING_TIME_ZONE = 'Europe/Kyiv';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 
 export function daysFromNow(now: Date, days: number): Date {
   return new Date(now.getTime() + days * DAY_MS);
+}
+
+export function minutesAgo(now: Date, minutes: number): Date {
+  return new Date(now.getTime() - minutes * MINUTE_MS);
 }
 
 /**

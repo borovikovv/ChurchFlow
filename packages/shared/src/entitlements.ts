@@ -57,11 +57,27 @@ export const BILLING_TRANSITION_WINDOW_DAYS = 7;
 export const BILLING_GRACE_PERIOD_DAYS = 7;
 
 /**
+ * How long an offered checkout is reused instead of a fresh order being minted. Two clicks
+ * seconds apart are one intent, and every extra order is another LiqPay page that can still be
+ * paid; the window is short enough that a genuinely later attempt is priced anew.
+ */
+export const BILLING_CHECKOUT_REUSE_MINUTES = 30;
+
+/**
  * How long a paid period may be over before silence is treated as a failed charge. LiqPay may
  * settle a day late, so this is not zero; leaving it unbounded would mean a single undelivered
  * callback grants an organization free access forever.
  */
 export const BILLING_RECONCILIATION_GRACE_DAYS = 2;
+
+/**
+ * How far past its deadline a rollout window may be found before it is treated as one that
+ * expired while nothing was enforcing it, and is reopened instead of consumed. The dunning job
+ * runs nightly, so a window under enforcement is never more than a day stale; a longer gap means
+ * billing was switched off or the API was not running, and the organizations concerned were
+ * never warned that their window was running out.
+ */
+export const BILLING_ROLLOUT_WINDOW_STALE_DAYS = 2;
 
 /** The price is charged in UAH, at the equivalent of this many US dollars per month. */
 export const SUBSCRIPTION_USD_REFERENCE_AMOUNT = 4.5;
@@ -84,6 +100,7 @@ export interface SubscriptionEntitlementState {
   isExempt: boolean;
   restrictAfter: Date | null;
   graceEndsAt: Date | null;
+  cancelRequestedAt: Date | null;
 }
 
 export interface EntitlementInput {
@@ -135,6 +152,10 @@ export function resolveEntitlements(input: EntitlementInput): readonly Entitleme
 
   if (subscription.isExempt) {
     return ALL_ENTITLEMENTS;
+  }
+
+  if (subscription.cancelRequestedAt) {
+    return isBeforeDeadline(now, subscription.graceEndsAt) ? ALL_ENTITLEMENTS : READ_ENTITLEMENTS;
   }
 
   return RULES_BY_STATUS[subscription.status](subscription, now);

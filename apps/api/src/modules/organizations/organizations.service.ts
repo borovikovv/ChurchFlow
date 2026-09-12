@@ -8,14 +8,42 @@ import { Prisma, type OrganizationStatus } from '@churchflow/db';
 import type { z } from 'zod';
 import {
   createOrganizationSchema,
+  ENTITLEMENTS,
   type AdminOrganizationWorkspaceStatus,
   type AdminOrganizationWorkspaceView,
   type UpdateOrganizationInput,
 } from '@churchflow/shared';
 import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import { EntitlementsService } from '../billing/entitlements.service';
 import { OrganizationRequestsRepository } from '../organization-requests/repositories/organization-requests.repository';
 import { OrganizationsRepository } from './repositories/organizations.repository';
+
+type BillingExemptionAuditRow = Awaited<
+  ReturnType<OrganizationsRepository['findBillingExemptionHistory']>
+>[number];
+
+export interface BillingExemptionEvent {
+  id: string;
+  action: 'granted' | 'revoked';
+  at: string;
+  actorName: string | null;
+  reason: string | null;
+}
+
+function toBillingExemptionEvent(row: BillingExemptionAuditRow): BillingExemptionEvent {
+  const metadata = row.metadata as { reason?: unknown };
+
+  return {
+    id: row.id,
+    action: row.action === 'GRANT_BILLING_EXEMPTION' ? 'granted' : 'revoked',
+    at: row.createdAt.toISOString(),
+    // Not exemptGrantedBy: that field is null the moment the exemption is revoked, which is
+    // exactly when someone needs to know who granted it.
+    actorName: row.actor?.displayName ?? row.actor?.email ?? null,
+    reason: typeof metadata.reason === 'string' ? metadata.reason : null,
+  };
+}
 
 type WorkspaceOrganizationRow = {
   id: string;
@@ -57,6 +85,7 @@ export class OrganizationsService {
     private readonly organizationRequestsRepository: OrganizationRequestsRepository,
     private readonly auditService: AuditService,
     private readonly entitlementsService: EntitlementsService,
+    private readonly billingService: BillingService,
   ) {}
 
   async create(input: z.infer<typeof createOrganizationSchema>, ownerUserId: string) {
@@ -145,7 +174,11 @@ export class OrganizationsService {
       throw new NotFoundException('Organization was not found');
     }
 
-    return organization;
+    // The subscription row holds the current state only. Everything about a complimentary access
+    // that has since been revoked - who granted it, when, why - is in the audit log.
+    const history = await this.organizationsRepository.findBillingExemptionHistory(id);
+
+    return { ...organization, billingExemptionHistory: history.map(toBillingExemptionEvent) };
   }
 
   /**
@@ -162,11 +195,27 @@ export class OrganizationsService {
 
   private async setBillingExemption(id: string, actorUserId: string, reason: string | null) {
     try {
-      return await this.organizationsRepository.setBillingExemption({
-        organizationId: id,
-        actorUserId,
-        reason,
-      });
+      const { subscription, stoppedOrderId } =
+        await this.organizationsRepository.setBillingExemption({
+          organizationId: id,
+          actorUserId,
+          reason,
+        });
+
+      // The grant has already queued the order, so this only asks LiqPay now rather than waiting
+      // for the nightly job. A refusal leaves the queued request open to be retried.
+      if (stoppedOrderId) {
+        await this.billingService.stopOrder(stoppedOrderId);
+        await this.billingService.notifyOrganizationAdmins({
+          organizationId: id,
+          type: 'SUBSCRIPTION_CANCELED',
+          titleKey: 'subscriptionCanceled',
+          bodyMessage: { key: 'subscriptionCanceledComplimentary' },
+          dedupeKey: `canceled-complimentary:${stoppedOrderId}`,
+        });
+      }
+
+      return subscription;
     } catch (error: unknown) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new NotFoundException('Organization was not found');
@@ -208,11 +257,21 @@ export class OrganizationsService {
       );
     }
 
+    await this.entitlementsService.assert(id, ENTITLEMENTS.websiteWrite);
+
     try {
-      return await this.organizationsRepository.update(id, input, actorUserId);
+      return await this.organizationsRepository.update(
+        id,
+        input,
+        actorUserId,
+        actorMembership.role,
+      );
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'ORGANIZATION_NOT_FOUND') {
         throw new NotFoundException('Organization was not found');
+      }
+      if (error instanceof Error && error.message === 'SLUG_OWNER_ONLY') {
+        throw new ForbiddenException('Only organization owners can change the public address');
       }
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('Organization slug is already in use');
@@ -283,7 +342,7 @@ export class OrganizationsService {
     actorUserId: string,
     action: 'ARCHIVE' | 'SUSPEND' | 'RESTORE' | 'DELETE',
   ) {
-    const organization = await this.organizationsRepository
+    const { organization, stoppedOrderId } = await this.organizationsRepository
       .changeStatus(id, action)
       .catch((error: unknown) => {
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -307,8 +366,19 @@ export class OrganizationsService {
       action,
       entityType: 'Organization',
       entityId: organization.id,
-      metadata: { status: organization.status },
+      // The stopped order is what tells whoever restores the organization that its subscription
+      // is gone rather than dormant, and has to be taken out again.
+      metadata: {
+        status: organization.status,
+        ...(stoppedOrderId ? { stoppedOrderId } : {}),
+      },
     });
+
+    // The order is queued either way, so this only spares the organization the nights between
+    // now and the retry job. A refusal leaves the queued request open for it.
+    if (stoppedOrderId) {
+      await this.billingService.stopOrder(stoppedOrderId);
+    }
 
     return organization;
   }

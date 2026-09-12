@@ -149,13 +149,46 @@ Required variables for `prod` use the production domains and ports:
 Optional variables for LiqPay billing. Leave them blank to keep billing unconfigured: the checkout
 endpoint then answers `503` and nothing else changes.
 
+- `LIQPAY_MODE=sandbox` on stage; `live` in production (the default). Both keys must match this mode.
 - `LIQPAY_CALLBACK_URL=https://api-stage.mychurchflow.org/v1/billing/liqpay/callback` — LiqPay calls
   this from its own servers, so it must be publicly reachable. Its signature is the authentication.
 - `LIQPAY_RESULT_URL=https://stage.mychurchflow.org/dashboard` — where the payer's browser lands
   after checkout.
 - `BILLING_ENFORCEMENT_ENABLED=false` — set to `true` only once the LiqPay keys are in place. It
   makes every organization without an active subscription read-only, and the API refuses to boot in
-  production with enforcement on and no keys.
+  production with enforcement on and no keys. While it is off the nightly billing job restricts
+  nobody and sends no subscription notices, and the rollout window every organization gets at
+  migration time is handed back rather than spent, so turning enforcement on later still gives each
+  church its full seven days. The job keeps asking LiqPay to stop orders it has not yet stopped,
+  because those charge a card whether or not we are enforcing anything.
+
+Canceling a paid subscription stops automatic renewals immediately (with durable retries until
+LiqPay confirms), but preserves full access through `currentPeriodEndsAt` plus seven days.
+Canceling during an existing payment-failure grace period preserves that deadline. Access becomes
+read-only exactly at the deadline; the nightly job then records `CANCELED`. Existing canceled
+subscriptions are not reactivated by the `cancel_requested_at` migration. Apply the migration
+before deploying the updated API and web applications. Stage must explicitly set `LIQPAY_MODE=sandbox`.
+
+A validated late payment on the canceled subscription's own order credits another month of access
+without restarting renewal. Each payment is credited once, even if LiqPay sends several paid
+statuses. Payments with a mismatched or missing amount/currency, unexpected sandbox events, and
+payments on retired orders are not credited automatically. Their callback rows retain an `issue`
+code, and organization administrators receive a review notification. Operators must review these
+rows and arrange access or a refund; automatic refunds are not implemented:
+
+```sql
+SELECT organization_id, order_id, payment_id, issue, created_at
+FROM billing_callbacks
+WHERE issue IS NOT NULL
+ORDER BY created_at DESC;
+```
+
+Apply the payment-validation migration with the API stopped, then start the updated API. This
+prevents old application code from recording payments during the credit backfill.
+
+The payment-validation migration marks historical paid callbacks as already credited, preventing
+old deliveries from adding another month after deployment. It also adds a unique constraint for
+payment credit and a deadline index for the nightly cancellation scan.
 
 Optional variables with defaults, used by the nightly notification retention job:
 

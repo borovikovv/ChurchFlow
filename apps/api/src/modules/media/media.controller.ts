@@ -2,7 +2,10 @@ import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/comm
 import type { AuthenticatedRequest } from '../../common/guards/session-auth.guard';
 import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import { ENTITLEMENTS } from '@churchflow/shared';
-import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
+import {
+  OrganizationAccessGuard,
+  RequireOrganizationOwner,
+} from '../../common/guards/organization-access.guard';
 import {
   RequireEntitlement,
   SubscriptionEntitlementGuard,
@@ -48,7 +51,10 @@ export class MediaController {
     );
   }
 
+  // Owner-only like the sections these back: an admin uploading here could only produce assets
+  // they are no longer allowed to attach to anything.
   @Post('website-sections/background-upload')
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.filesUpload)
   createWebsiteSectionBackgroundUpload(
     @Param('organizationId') organizationId: string,
@@ -63,6 +69,7 @@ export class MediaController {
   }
 
   @Post('website-sections/background-confirm')
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.filesUpload)
   confirmWebsiteSectionBackground(
     @Param('organizationId') organizationId: string,

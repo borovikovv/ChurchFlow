@@ -1,8 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import type { OrganizationStatus, PlatformRole, Prisma } from '@churchflow/db';
+import type { OrganizationRole, OrganizationStatus, PlatformRole, Prisma } from '@churchflow/db';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { queueUnsubscribe } from '../../billing/billing-unsubscribe-queue';
+import {
+  cancellationTransition,
+  canRequestCancellation,
+} from '../../billing/subscription-transitions';
 import type { createOrganizationSchema, UpdateOrganizationInput } from '@churchflow/shared';
 import type { z } from 'zod';
+
+const BILLING_EXEMPTION_HISTORY_LIMIT = 20;
 
 @Injectable()
 export class OrganizationsRepository {
@@ -36,6 +43,7 @@ export class OrganizationsRepository {
                 isExempt: true,
                 restrictAfter: true,
                 graceEndsAt: true,
+                cancelRequestedAt: true,
               },
             },
             _count: {
@@ -213,16 +221,47 @@ export class OrganizationsRepository {
   }
 
   /**
+   * The history of complimentary access. Revoking clears the grant off the subscription row, so
+   * who granted it, when and why survives only here - and the audit log is not readable from the
+   * admin interface at all.
+   */
+  findBillingExemptionHistory(organizationId: string) {
+    return this.prisma.auditLog.findMany({
+      where: {
+        organizationId,
+        action: { in: ['GRANT_BILLING_EXEMPTION', 'REVOKE_BILLING_EXEMPTION'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: BILLING_EXEMPTION_HISTORY_LIMIT,
+      select: {
+        id: true,
+        action: true,
+        createdAt: true,
+        metadata: true,
+        actor: { select: { displayName: true, email: true } },
+      },
+    });
+  }
+
+  /**
    * Complimentary access is an override applied when entitlements are resolved; it deliberately
    * does not touch `status`. Revoking therefore drops the organization straight back to whatever
    * its subscription actually was - PENDING, PAST_DUE or RESTRICTED - with no way to leave it
    * looking ACTIVE by accident.
+   *
+   * What it does replace is the payment. An organization told it pays nothing must not keep
+   * being charged, so a live LiqPay order is queued to be stopped and any checkout still open is
+   * closed - both inside the transaction that records the grant, so neither can happen without
+   * the other. The order that was stopped is reported back for the caller to act on.
    */
   async setBillingExemption(input: {
     organizationId: string;
     actorUserId: string;
     reason: string | null;
-  }) {
+  }): Promise<{
+    subscription: Prisma.SubscriptionGetPayload<Record<string, never>>;
+    stoppedOrderId: string | null;
+  }> {
     const granting = input.reason !== null;
 
     return this.prisma.$transaction(async (tx) => {
@@ -243,6 +282,28 @@ export class OrganizationsRepository {
             },
       });
 
+      // A cancelled subscription has already been through this: its order is either stopped or
+      // queued, and claiming to have stopped it a second time would only mislead.
+      const stoppedOrderId =
+        granting && canRequestCancellation(subscription) ? subscription.liqpayOrderId : null;
+
+      if (granting) {
+        if (stoppedOrderId) {
+          await queueUnsubscribe(tx, {
+            organizationId: input.organizationId,
+            subscriptionId: subscription.id,
+            orderId: stoppedOrderId,
+          });
+        }
+
+        // A checkout left open is a page that can still be paid for. The organization pays
+        // nothing from now on, so nothing payable may be left standing behind it.
+        await tx.billingCheckoutOrder.updateMany({
+          where: { subscriptionId: subscription.id, status: 'PROPOSED' },
+          data: { status: 'ABANDONED', resolvedAt: new Date() },
+        });
+      }
+
       await tx.auditLog.create({
         data: {
           organizationId: input.organizationId,
@@ -251,16 +312,37 @@ export class OrganizationsRepository {
           entityType: 'Subscription',
           entityId: subscription.id,
           metadata: granting
-            ? { reason: input.reason, subscriptionStatus: subscription.status }
+            ? {
+                reason: input.reason,
+                subscriptionStatus: subscription.status,
+                ...(stoppedOrderId ? { stoppedOrderId } : {}),
+              }
             : { subscriptionStatus: subscription.status },
         },
       });
 
-      return subscription;
+      return { subscription, stoppedOrderId };
     });
   }
 
-  async changeStatus(id: string, action: 'ARCHIVE' | 'SUSPEND' | 'RESTORE' | 'DELETE') {
+  /**
+   * Every action but RESTORE takes the organization out of `ACTIVE`, and that is exactly what
+   * the access guard requires - for platform admins too. So from the moment the status changes
+   * there is nobody left who can reach the billing routes, while the card keeps paying for a
+   * service nobody can reach either. Stopping the order is therefore part of the status change
+   * rather than a step that follows it, and any checkout still open is closed so a page left
+   * behind cannot start a subscription for an organization that is gone.
+   *
+   * RESTORE deliberately does not undo any of this. A cancelled LiqPay order cannot be revived
+   * on the organization's behalf; the owner subscribes again.
+   */
+  async changeStatus(
+    id: string,
+    action: 'ARCHIVE' | 'SUSPEND' | 'RESTORE' | 'DELETE',
+  ): Promise<{
+    organization: Prisma.OrganizationGetPayload<Record<string, never>>;
+    stoppedOrderId: string | null;
+  }> {
     const now = new Date();
     const dataByAction: Record<typeof action, Prisma.OrganizationUpdateInput> = {
       ARCHIVE: { status: 'ARCHIVED', archivedAt: now },
@@ -269,9 +351,49 @@ export class OrganizationsRepository {
       DELETE: { status: 'DELETED', deletedAt: now },
     };
 
-    return this.prisma.organization.update({
-      where: { id },
-      data: dataByAction[action],
+    return this.prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.update({
+        where: { id },
+        data: dataByAction[action],
+      });
+
+      if (action === 'RESTORE') {
+        return { organization, stoppedOrderId: null };
+      }
+
+      const subscription = await tx.subscription.findUnique({ where: { organizationId: id } });
+      if (!subscription) {
+        return { organization, stoppedOrderId: null };
+      }
+
+      // Same reasoning as a complimentary grant: an order already stopped or already queued has
+      // been through this, and reporting it a second time would only mislead.
+      const stoppedOrderId = canRequestCancellation(subscription)
+        ? subscription.liqpayOrderId
+        : null;
+
+      if (stoppedOrderId) {
+        await queueUnsubscribe(tx, {
+          organizationId: id,
+          subscriptionId: subscription.id,
+          orderId: stoppedOrderId,
+        });
+
+        // Queueing on its own leaves the subscription ACTIVE, and a renewal callback still in
+        // flight would then extend it by another month. Recording the cancellation is what stops
+        // that, and it keeps access that has already been paid for rather than cutting it short.
+        await tx.subscription.update({
+          where: { id: subscription.id },
+          data: cancellationTransition(subscription, now),
+        });
+      }
+
+      await tx.billingCheckoutOrder.updateMany({
+        where: { subscriptionId: subscription.id, status: 'PROPOSED' },
+        data: { status: 'ABANDONED', resolvedAt: now },
+      });
+
+      return { organization, stoppedOrderId };
     });
   }
 
@@ -295,11 +417,16 @@ export class OrganizationsRepository {
           deletedAt: null,
         },
       },
-      select: { id: true },
+      select: { id: true, role: true },
     });
   }
 
-  async update(id: string, input: UpdateOrganizationInput, actorUserId: string) {
+  async update(
+    id: string,
+    input: UpdateOrganizationInput,
+    actorUserId: string,
+    actorRole: OrganizationRole,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const current = await tx.organization.findFirst({
         where: { id, status: 'ACTIVE', deletedAt: null },
@@ -319,6 +446,13 @@ export class OrganizationsRepository {
         next['name'] = input.name;
       }
       if (input.slug !== undefined && input.slug !== current.slug) {
+        // The slug is the public site address: changing it moves the church's website to a new
+        // URL and 404s every link already handed out. Comparing against the current value first
+        // matters because the edit form always submits the slug, changed or not.
+        if (actorRole !== 'OWNER') {
+          throw new Error('SLUG_OWNER_ONLY');
+        }
+
         data.slug = input.slug;
         changedFields.push('slug');
         previous['slug'] = current.slug;
@@ -344,27 +478,9 @@ export class OrganizationsRepository {
         include: { website: true },
       });
 
-      await tx.websitePage.updateMany({
-        where: {
-          organizationId: id,
-          slug: 'home',
-          title: current.name,
-        },
-        data: { title: organization.name },
-      });
-
-      await tx.organizationWebsite.upsert({
-        where: { organizationId: id },
-        create: {
-          organizationId: id,
-          title: organization.name,
-          description: organization.description,
-        },
-        update: {
-          title: organization.name,
-          description: organization.description,
-        },
-      });
+      // Nothing about the website is written here. The site title, its description and the home
+      // page title belong to the website settings screen; rewriting them from a profile rename
+      // let an editor change published content they were never editing.
 
       await tx.auditLog.create({
         data: {

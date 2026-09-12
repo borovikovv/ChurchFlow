@@ -37,6 +37,8 @@ import {
   UpdateBudgetOpeningBalanceDto,
 } from './dto/budget.dto';
 
+// The budget is owner-only, reads included: until now any active member could call these routes
+// directly, and only the navigation hid them.
 @Controller('organizations/:organizationId/budget')
 @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
 @RequireOrganizationOwner()

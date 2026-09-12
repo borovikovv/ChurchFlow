@@ -38,7 +38,11 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const user = await getCurrentUser();
   const access = user ? await getOrganizationAccessState(user) : null;
-  const ownerOrganizationIds = ownerOrganizationIdsFromAccess(access?.organizations);
+  // The budget and the website are owner-only, so admins do not get those links either.
+  const ownerOrganizationIds = organizationIdsFromAccess(
+    access?.organizations,
+    isOrganizationOwnerRole,
+  );
   const locale = await resolveLocale(user);
   const messages = getMessages(locale);
 
@@ -84,12 +88,11 @@ async function resolveLocale(user: CurrentUser | null): Promise<AppLocale> {
   return resolveAppLocaleFromAcceptLanguage(requestHeaders.get('accept-language') ?? undefined);
 }
 
-function ownerOrganizationIdsFromAccess(
+function organizationIdsFromAccess(
   organizations: OrganizationAccessRecord[] | undefined,
+  hasRole: (role: OrganizationAccessRecord['role']) => boolean,
 ): string[] {
   return (
-    organizations
-      ?.filter((organization) => isOrganizationOwnerRole(organization.role))
-      .map((organization) => organization.id) ?? []
+    organizations?.filter((organization) => hasRole(organization.role)).map(({ id }) => id) ?? []
   );
 }

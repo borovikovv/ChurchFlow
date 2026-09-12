@@ -9,7 +9,11 @@ const {
   OrganizationsRepository,
 } = require('../dist/modules/organizations/repositories/organizations.repository.js');
 const { OrganizationsService } = require('../dist/modules/organizations/organizations.service.js');
-const { OrganizationAccessGuard } = require('../dist/common/guards/organization-access.guard.js');
+const {
+  OrganizationAccessGuard,
+  RequireOrganizationPermission,
+} = require('../dist/common/guards/organization-access.guard.js');
+const { Reflector } = require('@nestjs/core');
 
 function uniqueConflict(target = ['provider', 'provider_account_id']) {
   return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
@@ -430,20 +434,26 @@ test('duplicate direct organization slug is exposed as conflict', async () => {
   );
 });
 
-function permissionReflector(permission) {
-  return {
-    getAllAndOverride: (key) => (key === 'organizationPermission' ? permission : undefined),
-  };
-}
-
-function organizationAccessContext() {
+function organizationAccessContext(target = class Controller {}) {
   return {
     switchToHttp: () => ({
       getRequest: () => ({ auth: { userId: 'user-1' }, params: { organizationId: 'org-1' } }),
     }),
-    getHandler: () => null,
-    getClass: () => null,
+    getHandler: () => function handler() {},
+    getClass: () => target,
   };
+}
+
+/**
+ * A real controller carrying a real decorator, read through a real Reflector. The guard asks the
+ * reflector about more than one key, so a fake that answers every question the same way would
+ * make a permission requirement look like an owner-only route as well.
+ */
+function controllerRequiring(permission) {
+  const target = class Controller {};
+  RequireOrganizationPermission(permission)(target);
+
+  return target;
 }
 
 test('restricted requester has no tenant access without active membership', async () => {
@@ -487,10 +497,13 @@ test('a member is authorized with a single query that also scopes the organizati
         },
       },
     },
-    permissionReflector('members.manage'),
+    new Reflector(),
   );
 
-  assert.equal(await guard.canActivate(organizationAccessContext()), true);
+  assert.equal(
+    await guard.canActivate(organizationAccessContext(controllerRequiring('members.manage'))),
+    true,
+  );
   assert.equal(calls.length, 1);
   const membershipFilter = calls[0].select.memberships.where;
   assert.equal(membershipFilter.organizationId, 'org-1');
@@ -510,11 +523,11 @@ test('a member without the required permission is refused', async () => {
         }),
       },
     },
-    permissionReflector('members.manage'),
+    new Reflector(),
   );
 
   await assert.rejects(
-    guard.canActivate(organizationAccessContext()),
+    guard.canActivate(organizationAccessContext(controllerRequiring('members.manage'))),
     /Organization permission is required/,
   );
 });

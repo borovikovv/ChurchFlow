@@ -18,11 +18,22 @@ interface OrganizationDetail {
   deletedAt: string | null;
   subscription: {
     status: string;
+    cancelRequestedAt: string | null;
+    graceEndsAt: string | null;
     isExempt: boolean;
     exemptReason: string | null;
     exemptGrantedAt: string | null;
     exemptGrantedBy: { id: string; displayName: string | null; email: string | null } | null;
   } | null;
+  billingExemptionHistory: BillingExemptionEvent[];
+}
+
+interface BillingExemptionEvent {
+  id: string;
+  action: 'granted' | 'revoked';
+  at: string;
+  actorName: string | null;
+  reason: string | null;
 }
 
 export default async function AdminOrganizationPage({
@@ -42,6 +53,8 @@ export default async function AdminOrganizationPage({
   }
 
   const organization = result.data;
+  const exemptionHistory = organization.billingExemptionHistory;
+  const exemptionDateFormatter = createExemptionDateFormatter(user?.locale ?? 'en');
 
   return (
     <main className="page-content stack">
@@ -77,12 +90,19 @@ export default async function AdminOrganizationPage({
             {organization.subscription ? (
               <div className="stack">
                 <div className="actions">
+                  {/*
+                    A cancelled renewal keeps its status until the paid period and grace run out,
+                    which is over a month of an organization reading as plainly "Active" here.
+                  */}
                   <StatusBadge
                     label={
-                      messages.organizationDetail.subscriptionStatuses[
-                        organization.subscription
-                          .status as keyof typeof messages.organizationDetail.subscriptionStatuses
-                      ] ?? organization.subscription.status
+                      organization.subscription.cancelRequestedAt &&
+                      organization.subscription.status !== 'CANCELED'
+                        ? messages.organizationDetail.renewalCanceled
+                        : (messages.organizationDetail.subscriptionStatuses[
+                            organization.subscription
+                              .status as keyof typeof messages.organizationDetail.subscriptionStatuses
+                          ] ?? organization.subscription.status)
                     }
                     status={organization.subscription.status}
                   />
@@ -93,6 +113,25 @@ export default async function AdminOrganizationPage({
                     />
                   ) : null}
                 </div>
+                {organization.subscription.cancelRequestedAt ? (
+                  <p className="m-0 text-[var(--muted)]">
+                    {organization.subscription.graceEndsAt &&
+                    organization.subscription.status !== 'CANCELED'
+                      ? formatAdminMessage(messages.organizationDetail.cancellationDetail, {
+                          requestedAt: exemptionDateFormatter.format(
+                            new Date(organization.subscription.cancelRequestedAt),
+                          ),
+                          accessUntil: exemptionDateFormatter.format(
+                            new Date(organization.subscription.graceEndsAt),
+                          ),
+                        })
+                      : formatAdminMessage(messages.organizationDetail.cancellationDetailNoAccess, {
+                          requestedAt: exemptionDateFormatter.format(
+                            new Date(organization.subscription.cancelRequestedAt),
+                          ),
+                        })}
+                  </p>
+                ) : null}
                 {organization.subscription.isExempt ? (
                   <p className="m-0 text-[var(--muted)]">
                     {formatAdminMessage(messages.organizationDetail.complimentaryDetail, {
@@ -111,6 +150,34 @@ export default async function AdminOrganizationPage({
               messages.organizationDetail.noSubscription
             )}
           </dd>
+          {exemptionHistory.length > 0 ? (
+            <>
+              <dt>{messages.organizationDetail.exemptionHistory}</dt>
+              <dd>
+                <ul className="stack list-none p-0">
+                  {exemptionHistory.map((event) => (
+                    <li className="m-0 text-[var(--muted)]" key={event.id}>
+                      {formatAdminMessage(
+                        event.action === 'granted'
+                          ? messages.organizationDetail.exemptionGranted
+                          : messages.organizationDetail.exemptionRevoked,
+                        {
+                          actor: event.actorName ?? messages.organizationDetail.unknownAdmin,
+                          date: exemptionDateFormatter.format(new Date(event.at)),
+                        },
+                      )}
+                      {event.reason
+                        ? ` ${formatAdminMessage(
+                            messages.organizationDetail.exemptionHistoryReason,
+                            { reason: event.reason },
+                          )}`
+                        : null}
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </>
+          ) : null}
         </dl>
         <OrganizationExemptionForm
           isExempt={organization.subscription?.isExempt ?? false}
@@ -125,6 +192,18 @@ export default async function AdminOrganizationPage({
       </div>
     </main>
   );
+}
+
+function createExemptionDateFormatter(locale: string) {
+  return new Intl.DateTimeFormat(locale === 'uk' ? 'uk-UA' : 'en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  });
 }
 
 function formatAdminMessage(template: string, values: Record<string, string>): string {

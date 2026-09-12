@@ -49,6 +49,21 @@ export class MediaRepository {
     });
   }
 
+  /** Website content is owner-only, so the assets that feed it are uploaded by owners only too. */
+  findOwnedOrganization(organizationId: string, actorUserId: string) {
+    return this.prisma.organizationMember.findFirst({
+      where: {
+        organizationId,
+        userId: actorUserId,
+        role: 'OWNER',
+        status: 'ACTIVE',
+        removedAt: null,
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { id: true },
+    });
+  }
+
   createPendingAsset(data: {
     organizationId: string;
     bucket: string;
@@ -208,38 +223,18 @@ export class MediaRepository {
 
   async attachOrganizationLogo(organizationId: string, assetId: string, actorUserId: string) {
     return this.prisma.$transaction(async (tx) => {
+      // The logo is organization branding, shown in the dashboard as much as on the public site,
+      // so an admin may replace it. This write therefore touches the logo and nothing else: it
+      // must not create a website record or seed its title and description, which are owner-only
+      // content. Every organization is created with a website row, so an update is enough.
       const currentWebsite = await tx.organizationWebsite.findUnique({
         where: { organizationId },
-        select: {
-          logoAssetId: true,
-          organization: {
-            select: {
-              name: true,
-              description: true,
-            },
-          },
-        },
+        select: { logoAssetId: true },
       });
-      const organization =
-        currentWebsite?.organization ??
-        (await tx.organization.findUniqueOrThrow({
-          where: { id: organizationId },
-          select: {
-            name: true,
-            description: true,
-          },
-        }));
-      await tx.organizationWebsite.upsert({
+
+      await tx.organizationWebsite.update({
         where: { organizationId },
-        create: {
-          organizationId,
-          title: organization.name,
-          description: organization.description,
-          logoAssetId: assetId,
-        },
-        update: {
-          logoAssetId: assetId,
-        },
+        data: { logoAssetId: assetId },
       });
 
       if (currentWebsite?.logoAssetId && currentWebsite.logoAssetId !== assetId) {

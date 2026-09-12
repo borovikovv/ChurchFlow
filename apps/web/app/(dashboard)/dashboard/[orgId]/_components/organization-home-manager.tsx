@@ -13,6 +13,7 @@ import { OrganizationLogo } from './organization-logo';
 interface OrganizationHomeManagerProps {
   organization: HomeOrganization;
   organizationRole: OrganizationRole | null;
+  canManageBilling: boolean;
   auditLogs: AuditLogListItem[];
   auditNextCursor: string | null;
   subscription: SubscriptionSummary | null;
@@ -22,6 +23,7 @@ interface OrganizationHomeManagerProps {
 export function OrganizationHomeManager({
   organization,
   organizationRole,
+  canManageBilling,
   auditLogs,
   auditNextCursor,
   subscription,
@@ -32,7 +34,7 @@ export function OrganizationHomeManager({
   const canManage = organizationRole === 'OWNER' || organizationRole === 'ADMIN';
 
   return (
-    <div className="stack gap-5">
+    <div className="stack gap-10">
       <div className="stack">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
@@ -44,6 +46,7 @@ export function OrganizationHomeManager({
           </div>
           {canManage ? (
             <EditOrganizationDialog
+              canEditSlug={organizationRole === 'OWNER'}
               organization={currentOrganization}
               onUpdated={setCurrentOrganization}
             />
@@ -71,7 +74,7 @@ export function OrganizationHomeManager({
         </dl>
       </div>
 
-      {canManage ? (
+      {canManageBilling ? (
         <BillingSection
           loadError={subscriptionError}
           organizationId={currentOrganization.id}

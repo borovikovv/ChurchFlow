@@ -79,6 +79,7 @@ export const apiEnvSchema = z
     S3_BUCKET: z.string().min(1),
     S3_ACCESS_KEY_ID: z.string().min(1),
     S3_SECRET_ACCESS_KEY: z.string().min(1),
+    LIQPAY_MODE: z.enum(['live', 'sandbox']).default('live'),
     LIQPAY_PUBLIC_KEY: optionalNonEmptyString,
     LIQPAY_PRIVATE_KEY: optionalNonEmptyString,
     LIQPAY_CALLBACK_URL: z.preprocess(
@@ -92,6 +93,17 @@ export const apiEnvSchema = z
     BILLING_ENFORCEMENT_ENABLED: optionalBooleanFlag(false),
   })
   .superRefine((env, context) => {
+    for (const key of ['LIQPAY_PUBLIC_KEY', 'LIQPAY_PRIVATE_KEY'] as const) {
+      const value = env[key];
+      if (value && value.startsWith('sandbox_') !== (env.LIQPAY_MODE === 'sandbox')) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} must match LIQPAY_MODE`,
+        });
+      }
+    }
+
     if (env.NODE_ENV === 'production') {
       for (const key of [
         'TELEGRAM_CLIENT_ID',
@@ -108,15 +120,24 @@ export const apiEnvSchema = z
       }
     }
 
+    // A checkout is signed and payable the moment the keys exist, whatever enforcement is set
+    // to. Without a callback address LiqPay has nowhere to report the payment, so the card is
+    // charged and the subscription never activates. Being able to take money is what makes the
+    // address required here, not being willing to enforce it.
+    if ((env.LIQPAY_PUBLIC_KEY || env.LIQPAY_PRIVATE_KEY) && !env.LIQPAY_CALLBACK_URL) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['LIQPAY_CALLBACK_URL'],
+        message: 'LIQPAY_CALLBACK_URL is required when LiqPay keys are configured',
+      });
+    }
+
     // Enforcement without a payment provider configured would leave every organization
     // restricted and unable to pay its way out. Dev and test may still enable it without
     // LiqPay keys, because that is exactly how the entitlement guard gets exercised locally.
+    // The callback address is covered above, for keys with or without enforcement.
     if (env.NODE_ENV === 'production' && env.BILLING_ENFORCEMENT_ENABLED) {
-      for (const key of [
-        'LIQPAY_PUBLIC_KEY',
-        'LIQPAY_PRIVATE_KEY',
-        'LIQPAY_CALLBACK_URL',
-      ] as const) {
+      for (const key of ['LIQPAY_PUBLIC_KEY', 'LIQPAY_PRIVATE_KEY'] as const) {
         if (!env[key]) {
           context.addIssue({
             code: z.ZodIssueCode.custom,

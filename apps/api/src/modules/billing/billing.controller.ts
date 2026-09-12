@@ -9,14 +9,13 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { ORG_PERMISSIONS } from '@churchflow/shared';
 import {
   SessionAuthGuard,
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
-  RequireOrganizationPermission,
+  RequireOrganizationOwner,
 } from '../../common/guards/organization-access.guard';
 import { BillingService } from './billing.service';
 import { LiqPayCallbackDto } from './dto/liqpay-callback.dto';
@@ -26,9 +25,10 @@ import { LiqPayCallbackDto } from './dto/liqpay-callback.dto';
  * thing a restricted organization must still be able to do; gating it behind an entitlement
  * would leave an unpaid church with no way to pay.
  *
- * `billing.manage` is required rather than plain membership. OWNER and ADMIN bypass permission
- * checks in OrganizationAccessGuard, so this reads as "owners, admins, or a member explicitly
- * given billing access" without a second rule to keep in step.
+ * Owner only. Paying for the organization and cancelling that payment is the one thing an
+ * administrator does not inherit: the money is the owner's. Platform admins keep access to every
+ * organization's billing, because OrganizationAccessGuard clears them before it reaches this
+ * check at all.
  */
 @Controller()
 export class BillingController {
@@ -36,14 +36,14 @@ export class BillingController {
 
   @Get('organizations/:organizationId/billing')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.billingManage)
+  @RequireOrganizationOwner()
   async getSummary(@Param('organizationId') organizationId: string) {
     return this.billingService.getSummary(organizationId);
   }
 
   @Post('organizations/:organizationId/billing/checkout')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.billingManage)
+  @RequireOrganizationOwner()
   async startCheckout(
     @Param('organizationId') organizationId: string,
     @Req() request: AuthenticatedRequest,
@@ -53,7 +53,7 @@ export class BillingController {
 
   @Post('organizations/:organizationId/billing/cancel')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.billingManage)
+  @RequireOrganizationOwner()
   async cancel(
     @Param('organizationId') organizationId: string,
     @Req() request: AuthenticatedRequest,

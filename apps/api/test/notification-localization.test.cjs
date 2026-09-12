@@ -13,6 +13,19 @@ const { EmailService } = require('../dist/modules/email/email.service');
 const { InvitationsService } = require('../dist/modules/invitations/invitations.service');
 
 const BODY_SAMPLES = [
+  { key: 'subscriptionCancellationConfirmed' },
+  {
+    key: 'subscriptionCancellationRequested',
+    deadline: '2026-10-01T12:00:00Z',
+    timeZone: 'Europe/Kyiv',
+  },
+  {
+    key: 'subscriptionCancellationUpdated',
+    deadline: '2026-10-01T12:00:00Z',
+    timeZone: 'Europe/Kyiv',
+  },
+  { key: 'subscriptionCancellationEnded' },
+  { key: 'subscriptionPaymentReview' },
   {
     key: 'eventStartsAt',
     eventTitle: 'Sunday service',
@@ -49,6 +62,7 @@ const BODY_SAMPLES = [
     timeZone: 'Europe/Kyiv',
   },
   { key: 'subscriptionRestricted' },
+  { key: 'subscriptionCanceledComplimentary' },
   {
     key: 'subscriptionRenewed',
     nextChargeAt: '2026-10-01T12:00:00.000Z',

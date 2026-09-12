@@ -5,7 +5,7 @@ import { ENTITLEMENTS } from '@churchflow/shared';
 import { requireServerSession } from '@/auth/session';
 import {
   getOrganizationAccessState,
-  isOrganizationAdminRole,
+  isOrganizationOwnerRole,
   organizationHasEntitlement,
 } from '@/features/organizations/server/access';
 import { RestrictedBanner } from './_components/restricted-banner';
@@ -42,7 +42,7 @@ export default async function DashboardLayout({
       <main>
         {isRestricted && organization ? (
           <RestrictedBanner
-            canManageBilling={isOrganizationAdminRole(organization.role)}
+            canManageBilling={isOrganizationOwnerRole(organization.role)}
             organizationId={orgId}
             status={organization.subscriptionStatus}
           />

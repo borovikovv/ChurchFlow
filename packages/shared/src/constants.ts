@@ -13,7 +13,6 @@ export const ORG_PERMISSIONS = {
   membersManage: 'members.manage',
   websiteManage: 'website.manage',
   mediaManage: 'media.manage',
-  billingManage: 'billing.manage',
 } as const;
 
 export const BUDGET_AUDIT_ENTITY_TYPE = 'Budget';
@@ -88,6 +87,7 @@ export const NOTIFICATION_TYPES = [
   'SUBSCRIPTION_PAYMENT_FAILED',
   'SUBSCRIPTION_RESTRICTED',
   'SUBSCRIPTION_RENEWED',
+  'SUBSCRIPTION_CANCELED',
 ] as const;
 
 export const AUDIT_ENTITY_TYPES = [

@@ -100,7 +100,11 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
   const nextChargeAt = formatDate(current.currentPeriodEndsAt);
   const graceEndsAt = formatDate(current.graceEndsAt);
   const restrictAfter = formatDate(current.restrictAfter);
-  const hasSubscription = current.status === 'ACTIVE' || current.status === 'PAST_DUE';
+  const hasSubscription =
+    !current.cancelRequestedAt && (current.status === 'ACTIVE' || current.status === 'PAST_DUE');
+  // A cancelled subscription has no access left to describe. Both date rows read as present tense,
+  // so keeping them would promise access "until" a date that has already gone by.
+  const accessEnded = current.status === 'CANCELED';
 
   return (
     <section className="grid gap-4">
@@ -112,7 +116,14 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
       <dl className="details">
         <dt>{t('billing.status')}</dt>
         <dd>
-          <StatusBadge label={t(`billing.statuses.${current.status}`)} status={current.status} />
+          <StatusBadge
+            label={
+              current.cancelRequestedAt && current.status !== 'CANCELED'
+                ? t('billing.renewalCanceled')
+                : t(`billing.statuses.${current.status}`)
+            }
+            status={current.status}
+          />
         </dd>
 
         {current.isExempt ? (
@@ -129,16 +140,18 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
           </>
         ) : null}
 
-        {nextChargeAt ? (
+        {nextChargeAt && !accessEnded ? (
           <>
-            <dt>{t('billing.nextCharge')}</dt>
+            <dt>{t(current.cancelRequestedAt ? 'billing.paidUntil' : 'billing.nextCharge')}</dt>
             <dd>{nextChargeAt}</dd>
           </>
         ) : null}
 
-        {graceEndsAt && current.status === 'PAST_DUE' ? (
+        {graceEndsAt &&
+        !accessEnded &&
+        (current.status === 'PAST_DUE' || current.cancelRequestedAt) ? (
           <>
-            <dt>{t('billing.graceEnds')}</dt>
+            <dt>{t(current.cancelRequestedAt ? 'billing.accessUntil' : 'billing.graceEnds')}</dt>
             <dd>{graceEndsAt}</dd>
           </>
         ) : null}
@@ -158,14 +171,41 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
         </dd>
       </dl>
 
+      {current.previousCancellationPending ? (
+        <p className="m-0 text-[var(--muted)]">{t('billing.previousCancellationPending')}</p>
+      ) : null}
+
+      {current.cancellationPending ? (
+        <p className="m-0 text-[var(--muted)]">{t('billing.cancellationPending')}</p>
+      ) : null}
+
       {current.isExempt ? (
         <p className="m-0 text-[var(--muted)]">{t('billing.complimentaryNotice')}</p>
-      ) : (
+      ) : null}
+
+      {/*
+        Replacing a card is a fresh checkout, so the button below takes a month's payment there
+        and then. Saying so is the difference between a charge the organization chose and one it
+        discovers on its statement.
+      */}
+      {hasSubscription && !current.isExempt ? (
+        <p className="m-0 text-[var(--muted)]">{t('billing.replaceCardNotice')}</p>
+      ) : null}
+
+      {/*
+        Cancelling is offered on `canCancel` rather than on the access status: a restricted
+        organization, or one given complimentary access on top of a subscription it was already
+        paying for, can still have LiqPay charging its card. Subscribing stays tied to the status,
+        because an exempt organization has nothing to buy.
+      */}
+      {current.isExempt && !current.canCancel ? null : (
         <div className="actions">
-          <Button disabled={pending} onClick={handleCheckout} type="button">
-            {hasSubscription ? t('billing.replaceCard') : t('billing.subscribe')}
-          </Button>
-          {hasSubscription ? (
+          {current.isExempt ? null : (
+            <Button disabled={pending} onClick={handleCheckout} type="button">
+              {hasSubscription ? t('billing.replaceCard') : t('billing.subscribe')}
+            </Button>
+          )}
+          {current.canCancel ? (
             <Button disabled={pending} onClick={handleCancel} type="button" variant="danger">
               {t('billing.cancel')}
             </Button>
