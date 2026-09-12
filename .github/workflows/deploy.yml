@@ -305,6 +305,12 @@ jobs:
           S3_BUCKET: ${{ vars.S3_BUCKET }}
           S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          LIQPAY_PUBLIC_KEY: ${{ secrets.LIQPAY_PUBLIC_KEY }}
+          LIQPAY_PRIVATE_KEY: ${{ secrets.LIQPAY_PRIVATE_KEY }}
+          LIQPAY_MODE: ${{ vars.LIQPAY_MODE }}
+          LIQPAY_CALLBACK_URL: ${{ vars.LIQPAY_CALLBACK_URL }}
+          LIQPAY_RESULT_URL: ${{ vars.LIQPAY_RESULT_URL }}
+          BILLING_ENFORCEMENT_ENABLED: ${{ vars.BILLING_ENFORCEMENT_ENABLED }}
           NEXT_PUBLIC_WEB_URL: ${{ vars.NEXT_PUBLIC_WEB_URL }}
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
           API_INTERNAL_URL: ${{ vars.API_INTERNAL_URL }}
@@ -360,6 +366,36 @@ jobs:
           require_url NEXT_PUBLIC_API_URL
           require_url API_INTERNAL_URL
 
+          # The API refuses to boot on the same rule, so catching it here fails the deploy before
+          # the container crashloops on the server.
+          if [ "${BILLING_ENFORCEMENT_ENABLED:-}" = "true" ]; then
+            require_value LIQPAY_PUBLIC_KEY
+            require_value LIQPAY_PRIVATE_KEY
+            require_url LIQPAY_CALLBACK_URL
+          fi
+
+          if [ -n "${LIQPAY_PUBLIC_KEY:-}" ] || [ -n "${LIQPAY_PRIVATE_KEY:-}" ]; then
+            require_url LIQPAY_CALLBACK_URL
+          fi
+
+          for key in LIQPAY_PUBLIC_KEY LIQPAY_PRIVATE_KEY; do
+            value="${!key-}"
+            if [ -n "$value" ]; then
+              case "$value" in
+                sandbox_*) expected_mode=sandbox ;;
+                *) expected_mode=live ;;
+              esac
+              if [ "${LIQPAY_MODE:-live}" != "$expected_mode" ]; then
+                echo "::error::$key is a $expected_mode key, but LIQPAY_MODE is '${LIQPAY_MODE:-live}' (unset defaults to live)."
+                invalid=1
+              fi
+            fi
+          done
+
+          if [ -n "${LIQPAY_RESULT_URL:-}" ]; then
+            require_url LIQPAY_RESULT_URL
+          fi
+
           case "$EMAIL_PROVIDER" in
             resend)
               require_value RESEND_API_KEY
@@ -411,6 +447,12 @@ jobs:
           S3_BUCKET: ${{ vars.S3_BUCKET }}
           S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          LIQPAY_PUBLIC_KEY: ${{ secrets.LIQPAY_PUBLIC_KEY }}
+          LIQPAY_PRIVATE_KEY: ${{ secrets.LIQPAY_PRIVATE_KEY }}
+          LIQPAY_MODE: ${{ vars.LIQPAY_MODE }}
+          LIQPAY_CALLBACK_URL: ${{ vars.LIQPAY_CALLBACK_URL }}
+          LIQPAY_RESULT_URL: ${{ vars.LIQPAY_RESULT_URL }}
+          BILLING_ENFORCEMENT_ENABLED: ${{ vars.BILLING_ENFORCEMENT_ENABLED }}
           NEXT_PUBLIC_WEB_URL: ${{ vars.NEXT_PUBLIC_WEB_URL }}
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
           API_INTERNAL_URL: ${{ vars.API_INTERNAL_URL }}
@@ -471,7 +513,9 @@ jobs:
 
           for key in \
             COOKIE_DOMAIN TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME TELEGRAM_WEBHOOK_SECRET TELEGRAM_WEBHOOK_URL \
-            RESEND_API_KEY SMTP_HOST SMTP_PORT; do
+            RESEND_API_KEY SMTP_HOST SMTP_PORT \
+            LIQPAY_PUBLIC_KEY LIQPAY_PRIVATE_KEY LIQPAY_MODE LIQPAY_CALLBACK_URL LIQPAY_RESULT_URL \
+            BILLING_ENFORCEMENT_ENABLED; do
             append_optional_env "$api_env_file" "$key"
           done
 

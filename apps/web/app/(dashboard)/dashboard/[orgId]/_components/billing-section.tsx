@@ -1,0 +1,217 @@
+'use client';
+
+import { useLocale, useTranslations } from 'next-intl';
+import { useState, useTransition } from 'react';
+import { toast } from 'react-toastify';
+import type { BillingCheckout, SubscriptionSummary } from '@churchflow/shared';
+import { Button } from '@/components/ui/button';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { cancelSubscriptionAction, startBillingCheckoutAction } from '../actions';
+
+interface BillingSectionProps {
+  organizationId: string;
+  subscription: SubscriptionSummary | null;
+  loadError: string | null;
+}
+
+/**
+ * LiqPay's hosted checkout only accepts a form POST of the signed `data` and `signature`, so the
+ * browser is handed off with a form it submits itself. Nothing about the card passes through
+ * this component, or through us at all.
+ */
+function submitToLiqPay(checkout: BillingCheckout): void {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = checkout.checkoutUrl;
+  form.acceptCharset = 'utf-8';
+
+  for (const [name, value] of Object.entries({
+    data: checkout.data,
+    signature: checkout.signature,
+  })) {
+    const field = document.createElement('input');
+    field.type = 'hidden';
+    field.name = name;
+    field.value = value;
+    form.append(field);
+  }
+
+  document.body.append(form);
+  form.submit();
+}
+
+export function BillingSection({ organizationId, subscription, loadError }: BillingSectionProps) {
+  const t = useTranslations('home');
+  const locale = useLocale();
+  const [pending, startTransition] = useTransition();
+  const [current, setCurrent] = useState(subscription);
+
+  const formatDate = (value: string | null): string | null =>
+    value ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value)) : null;
+
+  const formatAmount = (): string | null => {
+    if (current?.amountMinor == null || !current.currency) return null;
+
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: current.currency,
+    }).format(current.amountMinor / 100);
+  };
+
+  const handleCheckout = () => {
+    startTransition(async () => {
+      const result = await startBillingCheckoutAction({ organizationId });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+
+      submitToLiqPay(result.checkout);
+    });
+  };
+
+  const handleCancel = () => {
+    startTransition(async () => {
+      const result = await cancelSubscriptionAction({ organizationId });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+
+      setCurrent(result.subscription);
+      toast.success(t('billing.canceled'));
+    });
+  };
+
+  if (loadError) {
+    return (
+      <section className="grid gap-4">
+        <h2 className="m-0 text-xl">{t('billing.title')}</h2>
+        <p className="form-error m-0">{loadError}</p>
+      </section>
+    );
+  }
+
+  if (!current) {
+    return null;
+  }
+
+  const amount = formatAmount();
+  const nextChargeAt = formatDate(current.currentPeriodEndsAt);
+  const graceEndsAt = formatDate(current.graceEndsAt);
+  const restrictAfter = formatDate(current.restrictAfter);
+  const hasSubscription =
+    !current.cancelRequestedAt && (current.status === 'ACTIVE' || current.status === 'PAST_DUE');
+  // A cancelled subscription has no access left to describe. Both date rows read as present tense,
+  // so keeping them would promise access "until" a date that has already gone by.
+  const accessEnded = current.status === 'CANCELED';
+
+  return (
+    <section className="grid gap-4">
+      <div className="grid gap-1">
+        <h2 className="m-0 text-xl">{t('billing.title')}</h2>
+        <p className="m-0 text-[var(--muted)]">{t('billing.description')}</p>
+      </div>
+
+      <dl className="details">
+        <dt>{t('billing.status')}</dt>
+        <dd>
+          <StatusBadge
+            label={
+              current.cancelRequestedAt && current.status !== 'CANCELED'
+                ? t('billing.renewalCanceled')
+                : t(`billing.statuses.${current.status}`)
+            }
+            status={current.status}
+          />
+        </dd>
+
+        {current.isExempt ? (
+          <>
+            <dt>{t('billing.complimentary')}</dt>
+            <dd>{current.exemptReason ?? t('billing.complimentaryGranted')}</dd>
+          </>
+        ) : null}
+
+        {amount ? (
+          <>
+            <dt>{t('billing.amount')}</dt>
+            <dd>{t('billing.perMonth', { amount })}</dd>
+          </>
+        ) : null}
+
+        {nextChargeAt && !accessEnded ? (
+          <>
+            <dt>{t(current.cancelRequestedAt ? 'billing.paidUntil' : 'billing.nextCharge')}</dt>
+            <dd>{nextChargeAt}</dd>
+          </>
+        ) : null}
+
+        {graceEndsAt &&
+        !accessEnded &&
+        (current.status === 'PAST_DUE' || current.cancelRequestedAt) ? (
+          <>
+            <dt>{t(current.cancelRequestedAt ? 'billing.accessUntil' : 'billing.graceEnds')}</dt>
+            <dd>{graceEndsAt}</dd>
+          </>
+        ) : null}
+
+        {restrictAfter && current.status === 'PENDING' ? (
+          <>
+            <dt>{t('billing.windowEnds')}</dt>
+            <dd>{restrictAfter}</dd>
+          </>
+        ) : null}
+
+        <dt>{t('billing.card')}</dt>
+        <dd>
+          {current.card?.mask
+            ? [current.card.brand, current.card.mask].filter(Boolean).join(' ')
+            : t('billing.noCard')}
+        </dd>
+      </dl>
+
+      {current.previousCancellationPending ? (
+        <p className="m-0 text-[var(--muted)]">{t('billing.previousCancellationPending')}</p>
+      ) : null}
+
+      {current.cancellationPending ? (
+        <p className="m-0 text-[var(--muted)]">{t('billing.cancellationPending')}</p>
+      ) : null}
+
+      {current.isExempt ? (
+        <p className="m-0 text-[var(--muted)]">{t('billing.complimentaryNotice')}</p>
+      ) : null}
+
+      {/*
+        Replacing a card is a fresh checkout, so the button below takes a month's payment there
+        and then. Saying so is the difference between a charge the organization chose and one it
+        discovers on its statement.
+      */}
+      {hasSubscription && !current.isExempt ? (
+        <p className="m-0 text-[var(--muted)]">{t('billing.replaceCardNotice')}</p>
+      ) : null}
+
+      {/*
+        Cancelling is offered on `canCancel` rather than on the access status: a restricted
+        organization, or one given complimentary access on top of a subscription it was already
+        paying for, can still have LiqPay charging its card. Subscribing stays tied to the status,
+        because an exempt organization has nothing to buy.
+      */}
+      {current.isExempt && !current.canCancel ? null : (
+        <div className="actions">
+          {current.isExempt ? null : (
+            <Button disabled={pending} onClick={handleCheckout} type="button">
+              {hasSubscription ? t('billing.replaceCard') : t('billing.subscribe')}
+            </Button>
+          )}
+          {current.canCancel ? (
+            <Button disabled={pending} onClick={handleCancel} type="button" variant="danger">
+              {t('billing.cancel')}
+            </Button>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}

@@ -1,15 +1,22 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { ORG_PERMISSIONS } from '@churchflow/shared';
+import { ENTITLEMENTS, ORG_PERMISSIONS } from '@churchflow/shared';
 import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
+  RequireOrganizationOwner,
   RequireOrganizationPermission,
 } from '../../common/guards/organization-access.guard';
+import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
 import { WebsitesService } from './websites.service';
 import { PublishWebsiteDto } from './dto/publish-website.dto';
 import { UpdateWebsiteSettingsDto } from './dto/update-website-settings.dto';
 
+// Owner-only, apart from the public route below, which carries no guard at all.
 @Controller()
+@RequireOrganizationOwner()
 export class WebsitesController {
   constructor(private readonly websitesService: WebsitesService) {}
 
@@ -19,15 +26,16 @@ export class WebsitesController {
   }
 
   @Get('organizations/:organizationId/website')
-  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
   async dashboardWebsite(@Param('organizationId') organizationId: string) {
     return this.websitesService.findByOrganizationId(organizationId);
   }
 
   @Patch('organizations/:organizationId/website')
-  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async updateSettings(
     @Param('organizationId') organizationId: string,
     @Body() body: UpdateWebsiteSettingsDto,
@@ -36,8 +44,9 @@ export class WebsitesController {
   }
 
   @Post('organizations/:organizationId/website/publish')
-  @UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
   @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async setPublished(
     @Param('organizationId') organizationId: string,
     @Body() body: PublishWebsiteDto,

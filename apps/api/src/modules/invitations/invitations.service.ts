@@ -15,10 +15,11 @@ import {
   type InvitationTargetProvider,
   type OrganizationRole,
 } from '@churchflow/db';
-import type { CreateOrganizationInvitationInput } from '@churchflow/shared';
+import { ENTITLEMENTS, type CreateOrganizationInvitationInput } from '@churchflow/shared';
 import { AuditService } from '../audit/audit.service';
 import { UserLocaleService } from '../../common/locale/user-locale.service';
 import { EmailService } from '../email/email.service';
+import { EntitlementsService, RESTRICTED_OUTSIDER_MESSAGE } from '../billing/entitlements.service';
 import { InvitationsRepository } from './repositories/invitations.repository';
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -53,6 +54,7 @@ export class InvitationsService {
     private readonly emailService: EmailService,
     private readonly auditService: AuditService,
     private readonly userLocaleService: UserLocaleService,
+    private readonly entitlementsService: EntitlementsService,
   ) {}
 
   createRawInvitationToken(): { rawToken: string; tokenHash: string } {
@@ -234,6 +236,13 @@ export class InvitationsService {
   }
 
   private async acceptInvitation(invitation: InvitationForAcceptance, actorUserId: string) {
+    // Accepting an invitation creates a member, so it is a members.write action. Neither
+    // accept route carries an :organizationId, so the entitlement guard cannot see them;
+    // the organization is only known once the invitation is loaded.
+    await this.entitlementsService.assert(invitation.organizationId, ENTITLEMENTS.membersWrite, {
+      message: RESTRICTED_OUTSIDER_MESSAGE,
+    });
+
     if (
       invitation.acceptedAt !== null ||
       invitation.revokedAt !== null ||

@@ -4,21 +4,21 @@ import { useEffect, useRef } from 'react';
 import type { Route } from 'next';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ToastContainer, toast } from 'react-toastify';
+import { useTopLayer } from '@/hooks/use-top-layer';
 
 export function ToastProvider() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const lastError = useRef<string | null>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
   const error = searchParams.get('error');
 
-  useEffect(() => {
-    if (!error || error === lastError.current) {
-      return;
-    }
+  useTopLayer(layerRef);
 
-    lastError.current = error;
-    toast.error(error);
+  useEffect(() => {
+    if (!error) return;
+
+    toast.error(error, { toastId: `url-error:${error}` });
 
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.delete('error');
@@ -27,13 +27,19 @@ export function ToastProvider() {
   }, [error, pathname, router, searchParams]);
 
   return (
-    <ToastContainer
-      position="top-right"
-      autoClose={5000}
-      closeOnClick
-      pauseOnFocusLoss
-      pauseOnHover
-      theme="light"
-    />
+    <div
+      ref={layerRef}
+      popover="manual"
+      className="pointer-events-none fixed inset-0 m-0 h-auto w-auto max-h-none max-w-none overflow-visible border-0 bg-transparent p-0 [&>*]:pointer-events-auto"
+    >
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        closeOnClick
+        pauseOnFocusLoss
+        pauseOnHover
+        theme="light"
+      />
+    </div>
   );
 }

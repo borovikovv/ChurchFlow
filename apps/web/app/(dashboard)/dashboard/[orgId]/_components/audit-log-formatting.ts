@@ -16,6 +16,7 @@ export const AUDIT_ACTION_KEYS = [
   'APPROVE_MEMBERSHIP_CLAIM',
   'ARCHIVE',
   'ARCHIVE_MEMBER',
+  'CANCEL_SUBSCRIPTION',
   'CHANGE_MEMBER_ROLE',
   'CONFIRM_CALENDAR_EVENT_IMAGE',
   'CONFIRM_WEBSITE_SECTION_BACKGROUND',
@@ -32,8 +33,11 @@ export const AUDIT_ACTION_KEYS = [
   'DELETE_CALENDAR_EVENT',
   'DELETE_MEMBER_RELATIONSHIP',
   'DELETE_PRAYER_REQUEST',
+  'GRANT_BILLING_EXEMPTION',
   'INVITE',
   'REMOVE_BUDGET_ROW',
+  'REVOKE_BILLING_EXEMPTION',
+  'START_SUBSCRIPTION',
   'UPDATE_BUDGET_CATEGORY',
   'UPDATE_BUDGET_ENTRY',
   'UPDATE_BUDGET_ENTRY_NOTE',
@@ -58,6 +62,7 @@ export const AUDIT_ACTION_KEYS = [
   'UPDATE_ORGANIZATION_PROFILE',
   'UPDATE_PRAYER_REQUEST',
   'ARCHIVE_PRAYER_REQUEST',
+  'UPDATE_SUBSCRIPTION',
 ] as const;
 
 const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
@@ -67,6 +72,7 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   APPROVE_MEMBERSHIP_CLAIM: 'Membership claim approved',
   ARCHIVE: 'Organization archived',
   ARCHIVE_MEMBER: 'Member archived',
+  CANCEL_SUBSCRIPTION: 'Subscription canceled',
   CHANGE_MEMBER_ROLE: 'Member role changed',
   CONFIRM_CALENDAR_EVENT_IMAGE: 'Calendar image updated',
   CONFIRM_WEBSITE_SECTION_BACKGROUND: 'Website background updated',
@@ -83,6 +89,7 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   DELETE_CALENDAR_EVENT: 'Calendar event deleted',
   DELETE_MEMBER_RELATIONSHIP: 'Relationship deleted',
   DELETE_PRAYER_REQUEST: 'Prayer request deleted',
+  GRANT_BILLING_EXEMPTION: 'Complimentary access granted',
   INVITE: 'Invitation sent',
   MEMBERSHIP_CLAIM_CONFLICT: 'Membership claim conflict recorded',
   PROMOTE_PLATFORM_ADMIN: 'Platform admin promoted',
@@ -97,6 +104,8 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   REVOKE: 'Invitation revoked',
   REVOKED: 'Membership claim revoked',
   REQUEST_MEMBERSHIP_CLAIM: 'Membership claim requested',
+  REVOKE_BILLING_EXEMPTION: 'Complimentary access revoked',
+  START_SUBSCRIPTION: 'Subscription started',
   SUSPEND: 'Organization suspended',
   UPDATE_BUDGET_CATEGORY: 'Budget category updated',
   UPDATE_BUDGET_ENTRY: 'Budget cell updated',
@@ -109,6 +118,7 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   UPDATE_ORGANIZATION_PROFILE: 'Organization details updated',
   UPDATE_PRAYER_REQUEST: 'Prayer request updated',
   ARCHIVE_PRAYER_REQUEST: 'Prayer request archived',
+  UPDATE_SUBSCRIPTION: 'Subscription updated',
 };
 
 export function createAuditDateFormatter(locale: string) {

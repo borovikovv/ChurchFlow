@@ -13,7 +13,6 @@ export const ORG_PERMISSIONS = {
   membersManage: 'members.manage',
   websiteManage: 'website.manage',
   mediaManage: 'media.manage',
-  billingManage: 'billing.manage',
 } as const;
 
 export const PUBLIC_SECTION_TYPES = ['hero', 'about', 'schedule', 'gallery', 'contact'] as const;
@@ -82,6 +81,11 @@ export const NOTIFICATION_TYPES = [
   'PRAYER_REQUEST_CREATED',
   'BIRTHDAY_DIGEST',
   'ORGANIZATION_ANNOUNCEMENT',
+  'SUBSCRIPTION_REQUIRED',
+  'SUBSCRIPTION_PAYMENT_FAILED',
+  'SUBSCRIPTION_RESTRICTED',
+  'SUBSCRIPTION_RENEWED',
+  'SUBSCRIPTION_CANCELED',
 ] as const;
 
 export const AUDIT_ENTITY_TYPES = [
@@ -97,6 +101,7 @@ export const AUDIT_ENTITY_TYPES = [
   'OrganizationMemberRelationship',
   'OrganizationRequest',
   'PrayerRequest',
+  'Subscription',
   'User',
 ] as const;
 

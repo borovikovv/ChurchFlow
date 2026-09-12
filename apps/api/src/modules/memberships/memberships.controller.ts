@@ -18,7 +18,12 @@ import {
   SessionAuthGuard,
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
+import { ENTITLEMENTS } from '@churchflow/shared';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
+import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
 import { MembershipsService } from './memberships.service';
 import { UpdateMembershipRoleDto } from './dto/update-membership-role.dto';
 import { CreateManualMemberDto } from './dto/create-manual-member.dto';
@@ -33,7 +38,7 @@ interface UploadedCsvFile {
 }
 
 @Controller('organizations/:organizationId/memberships')
-@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
 export class MembershipsController {
   constructor(private readonly membershipsService: MembershipsService) {}
 
@@ -59,6 +64,7 @@ export class MembershipsController {
   }
 
   @Post('manual')
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   async createManual(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateManualMemberDto,
@@ -72,6 +78,7 @@ export class MembershipsController {
   }
 
   @Post('import-csv')
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 1024 * 1024 } }))
   async importCsv(
     @Param('organizationId') organizationId: string,
@@ -94,6 +101,7 @@ export class MembershipsController {
   }
 
   @Patch(':membershipId/profile')
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   async updateProfile(
     @Param('organizationId') organizationId: string,
     @Param('membershipId') membershipId: string,
@@ -109,6 +117,7 @@ export class MembershipsController {
   }
 
   @Patch(':membershipId/role')
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   async updateRole(
     @Param('organizationId') organizationId: string,
     @Param('membershipId') membershipId: string,
@@ -137,6 +146,7 @@ export class MembershipsController {
   }
 
   @Post(':membershipId/relationships')
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   createRelationship(
     @Param('organizationId') organizationId: string,
     @Param('membershipId') membershipId: string,
@@ -152,6 +162,7 @@ export class MembershipsController {
   }
 
   @Delete('relationships/:relationshipId')
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   deleteRelationship(
     @Param('organizationId') organizationId: string,
     @Param('relationshipId') relationshipId: string,
@@ -165,6 +176,7 @@ export class MembershipsController {
   }
 
   @Post(':membershipId/remove')
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   async remove(
     @Param('organizationId') organizationId: string,
     @Param('membershipId') membershipId: string,
@@ -178,6 +190,7 @@ export class MembershipsController {
   }
 
   @Post(':membershipId/archive')
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   async archive(
     @Param('organizationId') organizationId: string,
     @Param('membershipId') membershipId: string,
@@ -191,6 +204,7 @@ export class MembershipsController {
   }
 
   @Post(':membershipId/restore')
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   async restore(
     @Param('organizationId') organizationId: string,
     @Param('membershipId') membershipId: string,

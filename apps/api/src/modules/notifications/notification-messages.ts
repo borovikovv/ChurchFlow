@@ -18,6 +18,17 @@ export const NOTIFICATION_TITLE_KEYS = [
   'serviceAssigned',
   'serviceReminder',
   'serviceStarts',
+  'subscriptionCanceled',
+  'subscriptionCancellationRequested',
+  'subscriptionCancellationUpdated',
+  'subscriptionCancellationEnded',
+  'subscriptionCancellationConfirmed',
+  'subscriptionPaymentReview',
+
+  'subscriptionPaymentFailed',
+  'subscriptionRenewed',
+  'subscriptionRequired',
+  'subscriptionRestricted',
   'taskAssigned',
   'taskDue',
   'taskReminder',
@@ -28,6 +39,12 @@ export type NotificationTitleKey = (typeof NOTIFICATION_TITLE_KEYS)[number];
 const eventTimeParamsShape = {
   eventTitle: z.string(),
   startsAt: z.string(),
+  timeZone: z.string(),
+};
+
+/** A cancellation deadline is nullable: there may be no paid access left to run out. */
+const deadlineParamsShape = {
+  deadline: z.string().nullable(),
   timeZone: z.string(),
 };
 
@@ -53,6 +70,20 @@ export const notificationBodyMessageSchema = z.discriminatedUnion('key', [
     birthdays: z.array(z.string()),
     anniversaries: z.array(z.string()),
   }),
+  z.object({ key: z.literal('subscriptionDeadline'), deadline: z.string(), timeZone: z.string() }),
+  z.object({ key: z.literal('subscriptionRestricted') }),
+  z.object({ key: z.literal('subscriptionCancellationRequested'), ...deadlineParamsShape }),
+  z.object({ key: z.literal('subscriptionCancellationUpdated'), ...deadlineParamsShape }),
+  z.object({ key: z.literal('subscriptionCancellationEnded') }),
+  z.object({ key: z.literal('subscriptionCancellationConfirmed') }),
+  z.object({ key: z.literal('subscriptionPaymentReview') }),
+
+  z.object({ key: z.literal('subscriptionCanceledComplimentary') }),
+  z.object({
+    key: z.literal('subscriptionRenewed'),
+    nextChargeAt: z.string(),
+    timeZone: z.string(),
+  }),
 ]);
 
 export type NotificationBodyMessage = z.infer<typeof notificationBodyMessageSchema>;
@@ -75,6 +106,16 @@ interface NotificationMessageCatalog {
     memberRemoved: (params: { memberName: string }) => string;
     membersImported: (params: { memberCount: number }) => string;
     prayerRequestCreated: (params: { authorName: string; requestTitle: string }) => string;
+    subscriptionCanceledComplimentary: () => string;
+    subscriptionCancellationRequested: (params: { deadline: string | null }) => string;
+    subscriptionCancellationUpdated: (params: { deadline: string | null }) => string;
+    subscriptionCancellationEnded: () => string;
+    subscriptionCancellationConfirmed: () => string;
+    subscriptionPaymentReview: () => string;
+
+    subscriptionDeadline: (params: { deadline: string }) => string;
+    subscriptionRenewed: (params: { nextChargeAt: string }) => string;
+    subscriptionRestricted: () => string;
   };
   platformAdmin: {
     organizationRequestBody: (params: {
@@ -105,11 +146,33 @@ const NOTIFICATION_MESSAGE_CATALOG = {
       serviceAssigned: 'You were assigned to a service',
       serviceReminder: 'Service reminder',
       serviceStarts: 'Service starts',
+      subscriptionCanceled: 'Subscription stopped',
+      subscriptionCancellationConfirmed: 'Automatic renewal stopped',
+      subscriptionCancellationRequested: 'Cancellation requested',
+      subscriptionCancellationUpdated: 'Subscription access updated',
+      subscriptionCancellationEnded: 'Subscription ended',
+      subscriptionPaymentReview: 'Payment requires review',
+
+      subscriptionPaymentFailed: 'Subscription payment failed',
+      subscriptionRenewed: 'Subscription renewed',
+      subscriptionRequired: 'A subscription is required',
+      subscriptionRestricted: 'Organization is now read-only',
       taskAssigned: 'You were assigned a task',
       taskDue: 'Task due',
       taskReminder: 'Task reminder',
     },
     bodies: {
+      subscriptionCancellationConfirmed: () =>
+        'The payment provider confirmed automatic renewal has stopped. Your access deadline has not changed.',
+      subscriptionCancellationRequested: (params) =>
+        `Automatic renewal cancellation was requested.${params.deadline ? ` Full access continues until ${params.deadline}, including the grace period.` : ' There is no remaining paid access.'}`,
+      subscriptionCancellationUpdated: (params) =>
+        `Automatic renewal remains canceled.${params.deadline ? ` Full access, including the grace period, is available until ${params.deadline}. Any additional payment received has been credited to this access period.` : ' There is no remaining paid access.'}`,
+      subscriptionCancellationEnded: () =>
+        'The paid access and grace period have ended. The subscription is canceled and the organization is now read-only.',
+      subscriptionPaymentReview: () =>
+        'A payment was received but could not be applied automatically. Please contact a platform administrator to review the payment and arrange access or a refund.',
+
       birthdayDigest: (params) =>
         [
           milestoneSection('Birthdays', params.birthdays),
@@ -128,6 +191,14 @@ const NOTIFICATION_MESSAGE_CATALOG = {
         `${String(params.memberCount)} members were imported to the organization.`,
       prayerRequestCreated: (params) =>
         `${params.authorName} asked for prayer: ${params.requestTitle}`,
+      subscriptionCanceledComplimentary: () =>
+        'A platform administrator granted this organization complimentary access, so the paid subscription was stopped and the card will not be charged again. Subscribing again is needed if the complimentary access is ever withdrawn.',
+      subscriptionDeadline: (params) =>
+        `Full access continues until ${params.deadline}. After that the organization becomes read-only: existing data stays readable, but nothing new can be created.`,
+      subscriptionRenewed: (params) =>
+        `The payment went through. The next charge is on ${params.nextChargeAt}.`,
+      subscriptionRestricted: () =>
+        'The organization is now read-only. Existing members, events, prayer requests, pages and files stay readable; creating and editing resumes as soon as a payment succeeds.',
     },
     platformAdmin: {
       organizationRequestBody: (params) =>
@@ -154,11 +225,33 @@ const NOTIFICATION_MESSAGE_CATALOG = {
       serviceAssigned: 'Вас призначено на служіння',
       serviceReminder: 'Нагадування про служіння',
       serviceStarts: 'Початок служіння',
+      subscriptionCanceled: 'Підписку зупинено',
+      subscriptionCancellationConfirmed: 'Автопродовження зупинено',
+      subscriptionCancellationRequested: 'Запит на скасування прийнято',
+      subscriptionCancellationUpdated: 'Доступ за підпискою оновлено',
+      subscriptionCancellationEnded: 'Дію підписки завершено',
+      subscriptionPaymentReview: 'Платіж потребує перевірки',
+
+      subscriptionPaymentFailed: 'Платіж за підпискою не пройшов',
+      subscriptionRenewed: 'Підписку продовжено',
+      subscriptionRequired: 'Потрібна підписка',
+      subscriptionRestricted: 'Організація перейшла в режим читання',
       taskAssigned: 'Вам призначено завдання',
       taskDue: 'Термін виконання завдання',
       taskReminder: 'Нагадування про завдання',
     },
     bodies: {
+      subscriptionCancellationConfirmed: () =>
+        'Платіжний сервіс підтвердив зупинку автопродовження. Кінцева дата доступу не змінилася.',
+      subscriptionCancellationRequested: (params) =>
+        `Отримано запит на скасування автопродовження.${params.deadline ? ` Повний доступ діє до ${params.deadline}, включно з пільговим періодом.` : ' Оплачений доступ відсутній.'}`,
+      subscriptionCancellationUpdated: (params) =>
+        `Автопродовження залишається скасованим.${params.deadline ? ` Повний доступ із пільговим періодом діє до ${params.deadline}. Якщо надійшов додатковий платіж, його зараховано до цього періоду доступу.` : ' Оплачений доступ відсутній.'}`,
+      subscriptionCancellationEnded: () =>
+        'Оплачений і пільговий періоди завершилися. Підписку скасовано, організація перейшла в режим читання.',
+      subscriptionPaymentReview: () =>
+        'Надійшов платіж, який не вдалося зарахувати автоматично. Зверніться до адміністратора платформи для перевірки та надання доступу або повернення коштів.',
+
       birthdayDigest: (params) =>
         [
           milestoneSection('Дні народження', params.birthdays),
@@ -177,6 +270,13 @@ const NOTIFICATION_MESSAGE_CATALOG = {
         `До організації імпортовано учасників: ${String(params.memberCount)}.`,
       prayerRequestCreated: (params) =>
         `${params.authorName} просить молитви: ${params.requestTitle}`,
+      subscriptionCanceledComplimentary: () =>
+        'Адміністратор платформи надав організації безкоштовний доступ, тому платну підписку зупинено й списань з картки більше не буде. Якщо безкоштовний доступ згодом відкличуть, підписку треба буде оформити наново.',
+      subscriptionDeadline: (params) =>
+        `Повний доступ діє до ${params.deadline}. Після цього організація перейде в режим читання: наявні дані лишаться доступними, але створювати нове буде не можна.`,
+      subscriptionRenewed: (params) => `Платіж пройшов. Наступне списання ${params.nextChargeAt}.`,
+      subscriptionRestricted: () =>
+        'Організація перейшла в режим читання. Наявні учасники, події, молитовні потреби, сторінки та файли лишаються доступними; створення й редагування відновляться одразу після успішного платежу.',
     },
     platformAdmin: {
       organizationRequestBody: (params) =>
@@ -242,6 +342,29 @@ export function renderNotificationBody(
         authorName: message.authorName ?? catalog.unknownMember,
         requestTitle: message.requestTitle,
       });
+    case 'subscriptionDeadline':
+      return catalog.bodies.subscriptionDeadline({
+        deadline: formatInZone(message.deadline, message.timeZone, catalog),
+      });
+    case 'subscriptionRenewed':
+      return catalog.bodies.subscriptionRenewed({
+        nextChargeAt: formatInZone(message.nextChargeAt, message.timeZone, catalog),
+      });
+    case 'subscriptionCancellationRequested':
+    case 'subscriptionCancellationUpdated':
+      return catalog.bodies[message.key]({
+        deadline: message.deadline
+          ? formatInZone(message.deadline, message.timeZone, catalog)
+          : null,
+      });
+    case 'subscriptionCancellationConfirmed':
+    case 'subscriptionCancellationEnded':
+    case 'subscriptionPaymentReview':
+      return catalog.bodies[message.key]();
+    case 'subscriptionRestricted':
+      return catalog.bodies.subscriptionRestricted();
+    case 'subscriptionCanceledComplimentary':
+      return catalog.bodies.subscriptionCanceledComplimentary();
   }
 }
 
@@ -257,6 +380,11 @@ export function renderPlatformAdminOrganizationRequestBody(
   locale: AppLocale,
 ): string {
   return NOTIFICATION_MESSAGE_CATALOG[locale].platformAdmin.organizationRequestBody(params);
+}
+
+/** Every billing date is read in the timezone the deadline was set in, not the reader's. */
+function formatInZone(iso: string, timeZone: string, catalog: NotificationMessageCatalog): string {
+  return formatDateTime(new Date(iso), { intlLocale: catalog.intlLocale, timeZone });
 }
 
 function eventDateTexts(

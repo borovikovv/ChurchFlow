@@ -667,9 +667,39 @@
       "allOrganizations": "All organizations",
       "myOrganizations": "My organizations",
       "status": "Status",
-      "allStatuses": "All statuses"
+      "allStatuses": "All statuses",
+      "adminPage": "Admin page"
     },
     "organizationDetail": {
+      "billing": "Billing",
+      "billingUpdated": "Billing access was updated.",
+      "complimentary": "Complimentary",
+      "complimentaryDetail": "Reason: {reason}. Granted by {grantedBy}.",
+      "renewalCanceled": "Auto-renewal canceled",
+      "cancellationDetail": "Auto-renewal canceled on {requestedAt}. Full access continues until {accessUntil}, including the grace period.",
+      "cancellationDetailNoAccess": "Auto-renewal canceled on {requestedAt}. No paid access remains.",
+      "exemptionHistory": "Complimentary access history",
+      "exemptionGranted": "Granted by {actor} on {date}",
+      "exemptionRevoked": "Revoked by {actor} on {date}",
+      "exemptionHistoryReason": "Reason: {reason}",
+      "unknownAdmin": "a platform administrator",
+      "noSubscription": "No subscription record",
+      "exemptionReason": "Reason for complimentary access",
+      "grantExemption": "Grant complimentary access",
+      "grantExemptionTitle": "Grant complimentary access",
+      "grantExemptionDescription": "{name} will keep full access without being charged, and will be skipped by the renewal job. Only a platform administrator can undo this.",
+      "grantExemptionConfirm": "Grant access",
+      "revokeExemption": "Revoke complimentary access",
+      "revokeExemptionTitle": "Revoke complimentary access",
+      "revokeExemptionDescription": "{name} returns to its real subscription state, which may mean it becomes read-only immediately.",
+      "revokeExemptionConfirm": "Revoke access",
+      "subscriptionStatuses": {
+        "PENDING": "Not subscribed",
+        "ACTIVE": "Active",
+        "PAST_DUE": "Payment failed",
+        "RESTRICTED": "Read-only",
+        "CANCELED": "Canceled"
+      },
       "description": "Manage lifecycle and inspect tenant details for {slug}.",
       "back": "Back to organizations",
       "slug": "Slug",
@@ -692,7 +722,8 @@
       "softDelete": "Soft delete",
       "softDeleteTitle": "Soft delete organization?",
       "softDeleteDescription": "Soft delete {name}. Tenant access will be blocked, but its data will remain stored.",
-      "softDeleteConfirm": "Soft delete organization"
+      "softDeleteConfirm": "Soft delete organization",
+      "unknownAction": "Unknown action."
     },
     "organizationRequestDetail": {
       "description": "Review requester identity and decide whether to create this tenant.",
@@ -725,7 +756,8 @@
       "contact": "Contact",
       "submitted": "Submitted",
       "emptyOrganizations": "No organizations match this filter.",
-      "emptyRequests": "No organization requests match this filter."
+      "emptyRequests": "No organization requests match this filter.",
+      "actionsFor": "Actions for {name}"
     },
     "statuses": {
       "ACTIVE": "Active",
@@ -885,6 +917,42 @@
     "noArchiveReason": "No archive note"
   },
   "home": {
+    "billing": {
+      "title": "Billing",
+      "description": "The subscription that keeps this organization editable.",
+      "status": "Subscription",
+      "statuses": {
+        "PENDING": "Not subscribed",
+        "ACTIVE": "Active",
+        "PAST_DUE": "Payment failed",
+        "RESTRICTED": "Read-only",
+        "CANCELED": "Canceled"
+      },
+      "complimentary": "Complimentary access",
+      "complimentaryGranted": "Granted by a platform administrator",
+      "complimentaryNotice": "This organization has complimentary access and is not charged. Only a platform administrator can change that.",
+      "amount": "Price",
+      "perMonth": "{amount} per month",
+      "nextCharge": "Next charge",
+      "graceEnds": "Read-only from",
+      "windowEnds": "Full access until",
+      "card": "Card",
+      "noCard": "No card bound",
+      "subscribe": "Subscribe",
+      "replaceCard": "Replace card",
+      "replaceCardNotice": "Replacing the card charges a month now. Time left from the current payment is added on top of it, not lost.",
+      "cancel": "Cancel subscription",
+      "canceled": "Cancellation requested. Your access deadline is shown below.",
+      "restrictedTitle": "This organization is read-only",
+      "restrictedBody": "Existing members, events, prayer requests, pages and files stay readable. Creating and editing resume as soon as a payment succeeds.",
+      "restrictedPastDue": "The last payment did not go through, so creating and editing are paused. Everything already here stays readable.",
+      "restrictedAction": "Go to billing",
+      "renewalCanceled": "Auto-renewal canceled",
+      "paidUntil": "Paid until",
+      "accessUntil": "Full access until (including grace period)",
+      "cancellationPending": "Payment provider confirmation is pending. We will retry stopping automatic charges.",
+      "previousCancellationPending": "Stopping automatic charges for an earlier subscription is still pending."
+    },
     "title": "Home",
     "description": "Organization overview and core details.",
     "name": "Name",
@@ -916,6 +984,11 @@
     "metadataRole": "Role: {role}",
     "metadataStatus": "Status: {status}",
     "auditActions": {
+      "CANCEL_SUBSCRIPTION": "Subscription canceled",
+      "GRANT_BILLING_EXEMPTION": "Complimentary access granted",
+      "REVOKE_BILLING_EXEMPTION": "Complimentary access revoked",
+      "START_SUBSCRIPTION": "Subscription started",
+      "UPDATE_SUBSCRIPTION": "Subscription updated",
       "ACCEPT": "Invitation accepted",
       "APPROVE": "Request approved",
       "APPROVE_MEMBERSHIP_CLAIM": "Membership claim approved",
@@ -979,6 +1052,7 @@
       "OrganizationMemberRelationship": "Member relationships",
       "OrganizationRequest": "Organization requests",
       "PrayerRequest": "Prayer requests",
+      "Subscription": "Subscription",
       "User": "Users"
     }
   },

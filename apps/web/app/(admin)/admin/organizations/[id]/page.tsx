@@ -1,13 +1,11 @@
-import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
-import type { Route } from 'next';
 import { apiFetch } from '@/api/client';
 import { getCurrentUser, requirePlatformAdmin } from '@/auth/session';
 import { ButtonLink } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
 import { getMessages } from '@/i18n/messages';
+import { OrganizationExemptionForm } from '@/components/admin/organization-exemption-form';
+import { OrganizationLifecycleActions } from '@/components/admin/organization-lifecycle-actions';
 
 interface OrganizationDetail {
   id: string;
@@ -18,40 +16,35 @@ interface OrganizationDetail {
   archivedAt: string | null;
   suspendedAt: string | null;
   deletedAt: string | null;
+  subscription: {
+    status: string;
+    cancelRequestedAt: string | null;
+    graceEndsAt: string | null;
+    isExempt: boolean;
+    exemptReason: string | null;
+    exemptGrantedAt: string | null;
+    exemptGrantedBy: { id: string; displayName: string | null; email: string | null } | null;
+  } | null;
+  billingExemptionHistory: BillingExemptionEvent[];
 }
 
-async function organizationAction(formData: FormData) {
-  'use server';
-  const messages = await currentAdminMessages();
-  const id = String(formData.get('id'));
-  const action = String(formData.get('action'));
-  const result = await apiFetch(`/admin/organizations/${id}/${action}`, { method: 'POST' });
-  revalidatePath(`/admin/organizations/${id}`);
-  const params = result.ok
-    ? new URLSearchParams({ message: messages.organizationDetail.statusUpdated })
-    : new URLSearchParams({ error: result.error.message });
-  redirect(`/admin/organizations/${id}?${params.toString()}` as Route);
-}
-
-async function currentAdminMessages() {
-  const user = await getCurrentUser();
-  return getMessages(user?.locale ?? 'en').adminPages;
+interface BillingExemptionEvent {
+  id: string;
+  action: 'granted' | 'revoked';
+  at: string;
+  actorName: string | null;
+  reason: string | null;
 }
 
 export default async function AdminOrganizationPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ message?: string; error?: string }>;
 }) {
   const { id } = await params;
-  const { message, error } = await searchParams;
   await requirePlatformAdmin(`/admin/organizations/${id}`);
   const user = await getCurrentUser();
-  const allMessages = getMessages(user?.locale ?? 'en');
-  const messages = allMessages.adminPages;
-  const commonMessages = allMessages.common;
+  const messages = getMessages(user?.locale ?? 'en').adminPages;
 
   const result = await apiFetch<OrganizationDetail>(`/admin/organizations/${id}`);
 
@@ -60,6 +53,8 @@ export default async function AdminOrganizationPage({
   }
 
   const organization = result.data;
+  const exemptionHistory = organization.billingExemptionHistory;
+  const exemptionDateFormatter = createExemptionDateFormatter(user?.locale ?? 'en');
 
   return (
     <main className="page-content stack">
@@ -75,8 +70,6 @@ export default async function AdminOrganizationPage({
         }
       />
       <div className="stack">
-        {message ? <p>{message}</p> : null}
-        {error ? <p className="form-error">{error}</p> : null}
         <dl className="details">
           <dt>{messages.organizationDetail.slug}</dt>
           <dd>{organization.slug}</dd>
@@ -92,72 +85,125 @@ export default async function AdminOrganizationPage({
           </dd>
           <dt>{messages.organizationDetail.descriptionLabel}</dt>
           <dd>{organization.description ?? messages.organizationDetail.noDescription}</dd>
+          <dt>{messages.organizationDetail.billing}</dt>
+          <dd>
+            {organization.subscription ? (
+              <div className="stack">
+                <div className="actions">
+                  {/*
+                    A cancelled renewal keeps its status until the paid period and grace run out,
+                    which is over a month of an organization reading as plainly "Active" here.
+                  */}
+                  <StatusBadge
+                    label={
+                      organization.subscription.cancelRequestedAt &&
+                      organization.subscription.status !== 'CANCELED'
+                        ? messages.organizationDetail.renewalCanceled
+                        : (messages.organizationDetail.subscriptionStatuses[
+                            organization.subscription
+                              .status as keyof typeof messages.organizationDetail.subscriptionStatuses
+                          ] ?? organization.subscription.status)
+                    }
+                    status={organization.subscription.status}
+                  />
+                  {organization.subscription.isExempt ? (
+                    <StatusBadge
+                      label={messages.organizationDetail.complimentary}
+                      status="ACTIVE"
+                    />
+                  ) : null}
+                </div>
+                {organization.subscription.cancelRequestedAt ? (
+                  <p className="m-0 text-[var(--muted)]">
+                    {organization.subscription.graceEndsAt &&
+                    organization.subscription.status !== 'CANCELED'
+                      ? formatAdminMessage(messages.organizationDetail.cancellationDetail, {
+                          requestedAt: exemptionDateFormatter.format(
+                            new Date(organization.subscription.cancelRequestedAt),
+                          ),
+                          accessUntil: exemptionDateFormatter.format(
+                            new Date(organization.subscription.graceEndsAt),
+                          ),
+                        })
+                      : formatAdminMessage(messages.organizationDetail.cancellationDetailNoAccess, {
+                          requestedAt: exemptionDateFormatter.format(
+                            new Date(organization.subscription.cancelRequestedAt),
+                          ),
+                        })}
+                  </p>
+                ) : null}
+                {organization.subscription.isExempt ? (
+                  <p className="m-0 text-[var(--muted)]">
+                    {formatAdminMessage(messages.organizationDetail.complimentaryDetail, {
+                      reason:
+                        organization.subscription.exemptReason ??
+                        messages.organizationDetail.noDescription,
+                      grantedBy:
+                        organization.subscription.exemptGrantedBy?.displayName ??
+                        organization.subscription.exemptGrantedBy?.email ??
+                        messages.organizationDetail.unknownAdmin,
+                    })}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              messages.organizationDetail.noSubscription
+            )}
+          </dd>
+          {exemptionHistory.length > 0 ? (
+            <>
+              <dt>{messages.organizationDetail.exemptionHistory}</dt>
+              <dd>
+                <ul className="stack list-none p-0">
+                  {exemptionHistory.map((event) => (
+                    <li className="m-0 text-[var(--muted)]" key={event.id}>
+                      {formatAdminMessage(
+                        event.action === 'granted'
+                          ? messages.organizationDetail.exemptionGranted
+                          : messages.organizationDetail.exemptionRevoked,
+                        {
+                          actor: event.actorName ?? messages.organizationDetail.unknownAdmin,
+                          date: exemptionDateFormatter.format(new Date(event.at)),
+                        },
+                      )}
+                      {event.reason
+                        ? ` ${formatAdminMessage(
+                            messages.organizationDetail.exemptionHistoryReason,
+                            { reason: event.reason },
+                          )}`
+                        : null}
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </>
+          ) : null}
         </dl>
-        <form className="actions" action={organizationAction}>
-          <input type="hidden" name="id" value={organization.id} />
-          {organization.status !== 'ACTIVE' ? (
-            <ConfirmSubmitButton
-              cancelLabel={commonMessages.cancel}
-              confirmLabel={messages.organizationDetail.restoreConfirm}
-              description={formatAdminMessage(messages.organizationDetail.restoreDescription, {
-                name: organization.name,
-              })}
-              name="action"
-              pendingLabel={commonMessages.saving}
-              title={messages.organizationDetail.restoreTitle}
-              triggerLabel={messages.organizationDetail.restore}
-              value="restore"
-              variant="primary"
-            />
-          ) : null}
-          {organization.status !== 'SUSPENDED' && organization.status !== 'DELETED' ? (
-            <ConfirmSubmitButton
-              cancelLabel={commonMessages.cancel}
-              confirmLabel={messages.organizationDetail.suspendConfirm}
-              description={formatAdminMessage(messages.organizationDetail.suspendDescription, {
-                name: organization.name,
-              })}
-              name="action"
-              pendingLabel={commonMessages.saving}
-              title={messages.organizationDetail.suspendTitle}
-              triggerLabel={messages.organizationDetail.suspend}
-              value="suspend"
-            />
-          ) : null}
-          {organization.status !== 'ARCHIVED' && organization.status !== 'DELETED' ? (
-            <ConfirmSubmitButton
-              cancelLabel={commonMessages.cancel}
-              confirmLabel={messages.organizationDetail.archiveConfirm}
-              description={formatAdminMessage(messages.organizationDetail.archiveDescription, {
-                name: organization.name,
-              })}
-              name="action"
-              pendingLabel={commonMessages.saving}
-              title={messages.organizationDetail.archiveTitle}
-              triggerLabel={messages.organizationDetail.archive}
-              value="archive"
-            />
-          ) : null}
-          {organization.status !== 'DELETED' ? (
-            <ConfirmSubmitButton
-              cancelLabel={commonMessages.cancel}
-              confirmLabel={messages.organizationDetail.softDeleteConfirm}
-              confirmVariant="danger"
-              description={formatAdminMessage(messages.organizationDetail.softDeleteDescription, {
-                name: organization.name,
-              })}
-              name="action"
-              pendingLabel={commonMessages.saving}
-              title={messages.organizationDetail.softDeleteTitle}
-              triggerLabel={messages.organizationDetail.softDelete}
-              value="delete-soft"
-              variant="danger"
-            />
-          ) : null}
-        </form>
+        <OrganizationExemptionForm
+          isExempt={organization.subscription?.isExempt ?? false}
+          organizationId={organization.id}
+          organizationName={organization.name}
+        />
+        <OrganizationLifecycleActions
+          organizationId={organization.id}
+          organizationName={organization.name}
+          status={organization.status}
+        />
       </div>
     </main>
   );
+}
+
+function createExemptionDateFormatter(locale: string) {
+  return new Intl.DateTimeFormat(locale === 'uk' ? 'uk-UA' : 'en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  });
 }
 
 function formatAdminMessage(template: string, values: Record<string, string>): string {

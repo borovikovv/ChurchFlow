@@ -1,7 +1,11 @@
 import { notFound } from 'next/navigation';
 import { apiFetch } from '@/api/client';
-import { getOrganizationAccessState } from '@/features/organizations/server/access';
-import type { AuditLogsPage } from '@churchflow/shared';
+import {
+  getOrganizationAccessState,
+  isOrganizationAdminRole,
+  isOrganizationOwnerRole,
+} from '@/features/organizations/server/access';
+import type { AuditLogsPage, SubscriptionSummary } from '@churchflow/shared';
 import { OrganizationHomeManager } from './_components/organization-home-manager';
 import type { OrganizationHomeApiResponse } from './types';
 
@@ -33,12 +37,20 @@ export default async function OrganizationDashboardPage({
   }
 
   const logoAssetId = organization.website?.logoAssetId ?? null;
-  const [logoUrlResult, auditResult] = await Promise.all([
+  const canManage = organizationRole !== null && isOrganizationAdminRole(organizationRole);
+  // Billing is narrower than the rest of what an administrator manages: the API answers these
+  // routes for the owner and for platform admins only, so anyone else shown the section would
+  // meet a 403 behind every button in it.
+  const canManageBilling = organizationRole !== null && isOrganizationOwnerRole(organizationRole);
+  const [logoUrlResult, auditResult, billingResult] = await Promise.all([
     logoAssetId
       ? apiFetch<{ url: string }>(`/organizations/${organization.id}/media/${logoAssetId}/read-url`)
       : Promise.resolve(null),
-    organizationRole === 'OWNER' || organizationRole === 'ADMIN'
+    canManage
       ? apiFetch<AuditLogsPage>(`/organizations/${organization.id}/audit-logs?limit=10`)
+      : Promise.resolve(null),
+    canManageBilling
+      ? apiFetch<SubscriptionSummary>(`/organizations/${organization.id}/billing`)
       : Promise.resolve(null),
   ]);
   const logoUrl = logoUrlResult?.ok ? logoUrlResult.data.url : null;
@@ -56,8 +68,11 @@ export default async function OrganizationDashboardPage({
         logoUrl,
       }}
       organizationRole={organizationRole}
+      canManageBilling={canManageBilling}
       auditLogs={auditPage.items}
       auditNextCursor={auditPage.nextCursor}
+      subscription={billingResult?.ok ? billingResult.data : null}
+      subscriptionError={billingResult && !billingResult.ok ? billingResult.error.message : null}
     />
   );
 }

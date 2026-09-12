@@ -408,6 +408,13 @@ export class OrganizationRequestsRepository {
               description: request.message,
             },
           },
+          // Same reason as platform-admin creation: an organization without a subscription row
+          // resolves to no entitlements at all, so it is created inside this transaction.
+          subscription: {
+            create: {
+              status: 'PENDING',
+            },
+          },
         },
       });
 

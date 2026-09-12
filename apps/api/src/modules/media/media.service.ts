@@ -114,8 +114,8 @@ export class MediaService {
     input: CreateMemberPhotoUploadInput,
     actorUserId: string,
   ) {
-    if (!(await this.mediaRepository.findManageableOrganization(organizationId, actorUserId)))
-      throw new ForbiddenException('Only organization owners and admins can upload website images');
+    if (!(await this.mediaRepository.findOwnedOrganization(organizationId, actorUserId)))
+      throw new ForbiddenException('Only organization owners can upload website images');
     const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[
       input.mimeType
     ];
@@ -217,8 +217,8 @@ export class MediaService {
     assetId: string,
     actorUserId: string,
   ) {
-    if (!(await this.mediaRepository.findManageableOrganization(organizationId, actorUserId)))
-      throw new ForbiddenException('Only organization owners and admins can upload website images');
+    if (!(await this.mediaRepository.findOwnedOrganization(organizationId, actorUserId)))
+      throw new ForbiddenException('Only organization owners can upload website images');
     const asset = await this.mediaRepository.findAsset(assetId, organizationId);
     if (!asset || (asset.metadata as { purpose?: string }).purpose !== 'website-section-background')
       throw new NotFoundException('Pending website image asset was not found');

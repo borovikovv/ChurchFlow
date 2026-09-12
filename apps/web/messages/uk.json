@@ -667,9 +667,39 @@
       "allOrganizations": "Усі організації",
       "myOrganizations": "Мої організації",
       "status": "Статус",
-      "allStatuses": "Усі статуси"
+      "allStatuses": "Усі статуси",
+      "adminPage": "Сторінка адміністрування"
     },
     "organizationDetail": {
+      "billing": "Оплата",
+      "billingUpdated": "Доступ до оплати оновлено.",
+      "complimentary": "Безкоштовно",
+      "complimentaryDetail": "Причина: {reason}. Надав {grantedBy}.",
+      "renewalCanceled": "Автопродовження скасовано",
+      "cancellationDetail": "Автопродовження скасовано {requestedAt}. Повний доступ триває до {accessUntil}, включно з пільговим періодом.",
+      "cancellationDetailNoAccess": "Автопродовження скасовано {requestedAt}. Оплаченого доступу не залишилось.",
+      "exemptionHistory": "Історія безкоштовного доступу",
+      "exemptionGranted": "Надав {actor} — {date}",
+      "exemptionRevoked": "Відкликав {actor} — {date}",
+      "exemptionHistoryReason": "Причина: {reason}",
+      "unknownAdmin": "адміністратор платформи",
+      "noSubscription": "Запису про підписку немає",
+      "exemptionReason": "Причина безкоштовного доступу",
+      "grantExemption": "Надати безкоштовний доступ",
+      "grantExemptionTitle": "Надати безкоштовний доступ",
+      "grantExemptionDescription": "«{name}» збереже повний доступ без оплати, і завдання продовження її пропускатиме. Скасувати це може лише адміністратор платформи.",
+      "grantExemptionConfirm": "Надати доступ",
+      "revokeExemption": "Відкликати безкоштовний доступ",
+      "revokeExemptionTitle": "Відкликати безкоштовний доступ",
+      "revokeExemptionDescription": "«{name}» повернеться до свого справжнього стану підписки — можливо, одразу перейде в режим читання.",
+      "revokeExemptionConfirm": "Відкликати доступ",
+      "subscriptionStatuses": {
+        "PENDING": "Без підписки",
+        "ACTIVE": "Активна",
+        "PAST_DUE": "Платіж не пройшов",
+        "RESTRICTED": "Лише читання",
+        "CANCELED": "Скасована"
+      },
       "description": "Керуйте життєвим циклом і переглядайте деталі tenant для {slug}.",
       "back": "Назад до організацій",
       "slug": "Slug",
@@ -692,7 +722,8 @@
       "softDelete": "М'яко видалити",
       "softDeleteTitle": "М'яко видалити організацію?",
       "softDeleteDescription": "М'яко видалити {name}. Доступ до tenant буде заблоковано, але дані залишаться збереженими.",
-      "softDeleteConfirm": "М'яко видалити організацію"
+      "softDeleteConfirm": "М'яко видалити організацію",
+      "unknownAction": "Невідома дія."
     },
     "organizationRequestDetail": {
       "description": "Перевірте особу заявника та вирішіть, чи створювати цей tenant.",
@@ -725,7 +756,8 @@
       "contact": "Контакт",
       "submitted": "Надіслано",
       "emptyOrganizations": "Немає організацій для цього фільтра.",
-      "emptyRequests": "Немає заявок на організації для цього фільтра."
+      "emptyRequests": "Немає заявок на організації для цього фільтра.",
+      "actionsFor": "Дії для {name}"
     },
     "statuses": {
       "ACTIVE": "Активна",
@@ -885,6 +917,42 @@
     "noArchiveReason": "Без причини"
   },
   "home": {
+    "billing": {
+      "title": "Оплата",
+      "description": "Підписка, яка дозволяє редагувати цю організацію.",
+      "status": "Підписка",
+      "statuses": {
+        "PENDING": "Без підписки",
+        "ACTIVE": "Активна",
+        "PAST_DUE": "Платіж не пройшов",
+        "RESTRICTED": "Лише читання",
+        "CANCELED": "Скасована"
+      },
+      "complimentary": "Безкоштовний доступ",
+      "complimentaryGranted": "Надано адміністратором платформи",
+      "complimentaryNotice": "Ця організація має безкоштовний доступ, оплата не стягується. Змінити це може лише адміністратор платформи.",
+      "amount": "Вартість",
+      "perMonth": "{amount} на місяць",
+      "nextCharge": "Наступне списання",
+      "graceEnds": "Режим читання з",
+      "windowEnds": "Повний доступ до",
+      "card": "Картка",
+      "noCard": "Картку не прив’язано",
+      "subscribe": "Оформити підписку",
+      "replaceCard": "Змінити картку",
+      "replaceCardNotice": "Заміна картки — це списання за місяць одразу. Час, що лишився від поточної оплати, додається зверху, а не згорає.",
+      "cancel": "Скасувати підписку",
+      "canceled": "Запит на скасування прийнято. Кінцеву дату доступу вказано нижче.",
+      "restrictedTitle": "Організація в режимі читання",
+      "restrictedBody": "Наявні учасники, події, молитовні потреби, сторінки та файли лишаються доступними. Створення й редагування відновляться одразу після успішного платежу.",
+      "restrictedPastDue": "Останній платіж не пройшов, тому створення й редагування призупинені. Усе, що вже є, лишається доступним.",
+      "restrictedAction": "Перейти до оплати",
+      "renewalCanceled": "Автопродовження скасовано",
+      "paidUntil": "Оплачено до",
+      "accessUntil": "Повний доступ до (включно з пільговим періодом)",
+      "cancellationPending": "Очікуємо підтвердження платіжного сервісу. Повторні спроби зупинити автосписання виконуються автоматично.",
+      "previousCancellationPending": "Ще очікується підтвердження зупинки автосписань за попередньою підпискою."
+    },
     "title": "Головна",
     "description": "Огляд організації та основні деталі.",
     "name": "Назва",
@@ -916,6 +984,11 @@
     "metadataRole": "Роль: {role}",
     "metadataStatus": "Статус: {status}",
     "auditActions": {
+      "CANCEL_SUBSCRIPTION": "Підписку скасовано",
+      "GRANT_BILLING_EXEMPTION": "Надано безкоштовний доступ",
+      "REVOKE_BILLING_EXEMPTION": "Відкликано безкоштовний доступ",
+      "START_SUBSCRIPTION": "Підписку розпочато",
+      "UPDATE_SUBSCRIPTION": "Підписку оновлено",
       "ACCEPT": "Запрошення прийнято",
       "APPROVE": "Запит схвалено",
       "APPROVE_MEMBERSHIP_CLAIM": "Заявку на участь схвалено",
@@ -979,6 +1052,7 @@
       "OrganizationMemberRelationship": "Звʼязки учасників",
       "OrganizationRequest": "Запити організацій",
       "PrayerRequest": "Молитовні потреби",
+      "Subscription": "Підписка",
       "User": "Користувачі"
     }
   },

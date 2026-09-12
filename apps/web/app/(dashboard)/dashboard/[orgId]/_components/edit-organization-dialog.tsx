@@ -21,9 +21,12 @@ import { OrganizationLogoField } from './organization-logo';
 
 export function EditOrganizationDialog({
   organization,
+  canEditSlug,
   onUpdated,
 }: {
   organization: HomeOrganization;
+  /** The slug is the public site address, so only owners may move it. */
+  canEditSlug: boolean;
   onUpdated: (organization: HomeOrganization) => void;
 }) {
   const t = useTranslations('home');
@@ -75,7 +78,7 @@ export function EditOrganizationDialog({
 
     const result = await updateOrganizationAction({
       organizationId: organization.id,
-      organization: values,
+      organization: canEditSlug ? values : { ...values, slug: undefined },
     });
     if (!result.ok) {
       toast.error(result.error);
@@ -139,7 +142,9 @@ export function EditOrganizationDialog({
               }}
             />
             <FormInput label={t('name')} error={errors.name?.message} {...register('name')} />
-            <FormInput label={t('slug')} error={errors.slug?.message} {...register('slug')} />
+            {canEditSlug ? (
+              <FormInput label={t('slug')} error={errors.slug?.message} {...register('slug')} />
+            ) : null}
             <FormTextarea
               label={t('organizationDescription')}
               rows={5}

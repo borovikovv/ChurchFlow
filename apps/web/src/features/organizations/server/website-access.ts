@@ -1,11 +1,16 @@
 import { notFound } from 'next/navigation';
-import { getOrganizationAccessState, isOrganizationAdminRole } from './access';
+import { getOrganizationAccessState, isOrganizationOwnerRole } from './access';
 
-export async function requireWebsiteManageAccess(organizationId: string) {
+/**
+ * The website and the budget belong to the church itself, not to whoever helps run it, so both
+ * are owner-only. The API refuses these routes for anyone else; this only keeps an admin from
+ * landing on a page that would fail every request it makes.
+ */
+export async function requireOrganizationOwnerAccess(organizationId: string) {
   const access = await getOrganizationAccessState();
   const organization = access.organizations.find((item) => item.id === organizationId);
 
-  if (!organization || !isOrganizationAdminRole(organization.role)) {
+  if (!organization || !isOrganizationOwnerRole(organization.role)) {
     notFound();
   }
 
