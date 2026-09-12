@@ -6,6 +6,7 @@ import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button';
 import {
   TableRowActions,
   tableRowActionClassNameFor,
+  useTableRowActions,
 } from '@/components/ui/table-row-actions';
 import { GroupFormDialog } from './group-form-dialog';
 
@@ -23,18 +24,7 @@ export function GroupRowActions({
 
   return (
     <TableRowActions label={t('actions')}>
-      <GroupFormDialog
-        group={group}
-        title={t('editTitle')}
-        triggerClassName={tableRowActionClassNameFor({ destructive: false })}
-        triggerLabel={t('edit')}
-        triggerVariant="ghost"
-        submitLabel={commonT('save')}
-        onSubmit={(updates, closeDialog) => {
-          onUpdate(group.id, updates);
-          closeDialog();
-        }}
-      />
+      <EditGroupAction group={group} onUpdate={onUpdate} />
       <form
         className="contents"
         action={async () => {
@@ -54,5 +44,33 @@ export function GroupRowActions({
         />
       </form>
     </TableRowActions>
+  );
+}
+
+function EditGroupAction({
+  group,
+  onUpdate,
+}: {
+  group: OrganizationGroupListItem;
+  onUpdate: (groupId: string, group: CreateOrganizationGroupInput) => void;
+}) {
+  const t = useTranslations('groups');
+  const commonT = useTranslations('common');
+  const { closeMenu } = useTableRowActions();
+
+  return (
+    <GroupFormDialog
+      group={group}
+      title={t('editTitle')}
+      triggerClassName={tableRowActionClassNameFor({ destructive: false })}
+      triggerLabel={t('edit')}
+      triggerVariant="ghost"
+      submitLabel={commonT('save')}
+      onClose={closeMenu}
+      onSubmit={(updates, closeDialog) => {
+        onUpdate(group.id, updates);
+        closeDialog();
+      }}
+    />
   );
 }

@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import type { ArchivePrayerRequestInput, PrayerRequestItem } from '@churchflow/shared';
 import { archivePrayerRequestSchema } from '@churchflow/shared';
@@ -15,14 +15,16 @@ export function PrayerRequestArchiveDialog({
   disabled,
   request,
   onArchive,
+  onClose,
 }: {
   disabled: boolean;
   request: PrayerRequestItem;
   onArchive: (requestId: string, request: ArchivePrayerRequestInput) => void;
+  onClose?: () => void;
 }) {
   const t = useTranslations('prayerRequests');
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const formId = `archive-prayer-request-${request.id}`;
+  const formId = useId();
   const {
     register,
     handleSubmit,
@@ -58,6 +60,7 @@ export function PrayerRequestArchiveDialog({
       triggerLabel={t('archive')}
       triggerVariant="ghost"
       onOpen={resetForm}
+      {...(onClose ? { onClose } : {})}
       footer={
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={closeDialog}>
