@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { AUDIT_ENTITY_TYPES } from '@churchflow/shared';
+import { AUDIT_ENTITY_TYPES, BUDGET_AUDIT_ENTITY_TYPE } from '@churchflow/shared';
 import type { AuditLogListItem, AuditLogsPage } from '@churchflow/shared';
 import { toast } from 'react-toastify';
 import { Button } from '@/components/ui/button';
@@ -21,22 +21,34 @@ const ALL_ENTITY_TYPES = 'ALL';
 
 export function AuditLogsSection({
   organizationId,
+  canReadBudgetHistory,
   initialItems,
   initialNextCursor,
 }: {
   organizationId: string;
-  initialItems: AuditLogListItem[];
+  canReadBudgetHistory: boolean;
+  initialItems: AuditLogListItem[] | undefined;
   initialNextCursor: string | null;
 }) {
   const locale = useLocale();
   const t = useTranslations('home');
+  const errorsT = useTranslations('errors');
   const auditActionLabels = Object.fromEntries(
     AUDIT_ACTION_KEYS.map((action) => [action, t(`auditActions.${action}`)]),
   );
   const auditDateFormatter = createAuditDateFormatter(locale);
   const [entityType, setEntityType] = useState<string>(ALL_ENTITY_TYPES);
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching } = useInfiniteQuery({
-    queryKey: ['audit-logs', organizationId, entityType],
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetching,
+    isError,
+    isFetchNextPageError,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ['audit-logs', organizationId, canReadBudgetHistory, entityType],
     queryFn: async ({ pageParam }) => {
       const result = await loadAuditLogsAction({
         organizationId,
@@ -49,7 +61,7 @@ export function AuditLogsSection({
 
       return result.page;
     },
-    ...(entityType === ALL_ENTITY_TYPES
+    ...(entityType === ALL_ENTITY_TYPES && initialItems !== undefined
       ? {
           initialData: {
             pages: [{ items: initialItems, nextCursor: initialNextCursor }],
@@ -70,6 +82,12 @@ export function AuditLogsSection({
   }
 
   const items = data?.pages.flatMap((page) => page.items) ?? [];
+  // A failed next page is reported by the toast next to the button; the banner is for a feed that
+  // could not load at all.
+  const feedFailed = isError && !isFetchNextPageError;
+  const entityTypes = AUDIT_ENTITY_TYPES.filter(
+    (type) => canReadBudgetHistory || type !== BUDGET_AUDIT_ENTITY_TYPE,
+  );
 
   return (
     <section className="grid gap-4">
@@ -85,7 +103,7 @@ export function AuditLogsSection({
             onChange={(event) => setEntityType(event.currentTarget.value)}
           >
             <option value={ALL_ENTITY_TYPES}>{t('auditEntityTypes.ALL')}</option>
-            {AUDIT_ENTITY_TYPES.map((type) => (
+            {entityTypes.map((type) => (
               <option key={type} value={type}>
                 {t(`auditEntityTypes.${type}`)}
               </option>
@@ -93,6 +111,21 @@ export function AuditLogsSection({
           </FormSelect>
         </div>
       </div>
+      {feedFailed ? (
+        <div className="grid justify-items-start gap-2">
+          <p role="alert" className="m-0 text-[var(--danger)]">
+            {t('auditLogsLoadFailed')}
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+          >
+            {isFetching ? t('loading') : errorsT('retry')}
+          </Button>
+        </div>
+      ) : null}
       {items.length > 0 ? (
         <ol className="grid gap-0 md:grid-cols-2 md:gap-x-12">
           {items.map((log) => (
@@ -125,12 +158,12 @@ export function AuditLogsSection({
             </li>
           ))}
         </ol>
-      ) : (
+      ) : !feedFailed ? (
         <p className="m-0 text-[var(--muted)]">{isFetching ? t('loading') : t('noAuditLogs')}</p>
-      )}
+      ) : null}
       {hasNextPage ? (
         <div>
-          <Button type="button" onClick={loadMore} disabled={isFetchingNextPage}>
+          <Button type="button" onClick={loadMore} disabled={isFetching}>
             {isFetchingNextPage ? t('loading') : t('loadMore')}
           </Button>
         </div>

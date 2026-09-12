@@ -1,10 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { ENTITLEMENTS, ORG_PERMISSIONS } from '@churchflow/shared';
+import { ENTITLEMENTS } from '@churchflow/shared';
 import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
   RequireOrganizationOwner,
-  RequireOrganizationPermission,
 } from '../../common/guards/organization-access.guard';
 import {
   RequireEntitlement,
@@ -16,10 +15,7 @@ import { ReorderSectionsDto } from './dto/reorder-sections.dto';
 import { UpsertPageDto } from './dto/upsert-page.dto';
 import { UpsertSectionDto } from './dto/upsert-section.dto';
 
-// Website content is owner-only. `websiteManage` stays on each route so a member granted that
-// permission explicitly is still refused here rather than by an unrelated rule.
 @Controller()
-@RequireOrganizationOwner()
 export class PagesController {
   constructor(private readonly pagesService: PagesService) {}
 
@@ -35,14 +31,14 @@ export class PagesController {
 
   @Get('organizations/:organizationId/pages')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   async dashboardPages(@Param('organizationId') organizationId: string) {
     return this.pagesService.listDashboardPages(organizationId);
   }
 
   @Get('organizations/:organizationId/pages/:pageId')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   async dashboardPage(
     @Param('organizationId') organizationId: string,
     @Param('pageId') pageId: string,
@@ -52,7 +48,7 @@ export class PagesController {
 
   @Post('organizations/:organizationId/pages')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async createPage(@Param('organizationId') organizationId: string, @Body() body: UpsertPageDto) {
     return this.pagesService.createPage(organizationId, body);
@@ -60,7 +56,7 @@ export class PagesController {
 
   @Patch('organizations/:organizationId/pages/:pageId')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async updatePage(
     @Param('organizationId') organizationId: string,
@@ -72,7 +68,7 @@ export class PagesController {
 
   @Post('organizations/:organizationId/pages/:pageId/publish')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async setPagePublished(
     @Param('organizationId') organizationId: string,
@@ -84,7 +80,7 @@ export class PagesController {
 
   @Post('organizations/:organizationId/pages/:pageId/sections')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async createSection(
     @Param('organizationId') organizationId: string,
@@ -96,7 +92,7 @@ export class PagesController {
 
   @Patch('organizations/:organizationId/sections/:sectionId')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async updateSection(
     @Param('organizationId') organizationId: string,
@@ -108,7 +104,7 @@ export class PagesController {
 
   @Delete('organizations/:organizationId/sections/:sectionId')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async deleteSection(
     @Param('organizationId') organizationId: string,
@@ -119,7 +115,7 @@ export class PagesController {
 
   @Post('organizations/:organizationId/pages/:pageId/sections/reorder')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
-  @RequireOrganizationPermission(ORG_PERMISSIONS.websiteManage)
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
   async reorderSections(
     @Param('organizationId') organizationId: string,

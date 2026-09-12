@@ -19,7 +19,10 @@ import {
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
 import { ENTITLEMENTS } from '@churchflow/shared';
-import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
+import {
+  OrganizationAccessGuard,
+  RequireOrganizationOwner,
+} from '../../common/guards/organization-access.guard';
 import {
   RequireEntitlement,
   SubscriptionEntitlementGuard,
@@ -117,6 +120,7 @@ export class MembershipsController {
   }
 
   @Patch(':membershipId/role')
+  @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.membersWrite)
   async updateRole(
     @Param('organizationId') organizationId: string,

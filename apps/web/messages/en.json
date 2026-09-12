@@ -974,6 +974,7 @@
     "uploading": "Uploading...",
     "auditLogs": "Audit Logs",
     "auditLogsDescription": "View recent updates to this organization.",
+    "auditLogsLoadFailed": "Unable to load audit logs. Please try again.",
     "by": "by",
     "loadMore": "Load More",
     "loading": "Loading...",
