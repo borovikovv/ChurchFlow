@@ -98,7 +98,6 @@ export function RichTextEditor({
     selector: ({ editor: instance }) => toolbarStateOf(instance),
   });
 
-  // Tiptap owns its document; push external form resets into it without echoing an update back.
   useEffect(() => {
     if (!editor) return;
     const current = editor.getHTML();

@@ -16,7 +16,6 @@ function service({ locale = 'uk', services = [], events = [] } = {}) {
       { organizationId: ORGANIZATION.id, organizationName: ORGANIZATION.name, role: 'MEMBER' },
     ],
     listUpcomingServicesForOrganization: async () => services,
-    listUpcomingServicesForUser: async () => services,
     listUpcomingEventsForUser: async () => events,
   };
   const config = {
@@ -139,42 +138,35 @@ test('/next reports when nothing is scheduled', async () => {
   assert.equal(message.text, 'No upcoming services were found.');
 });
 
-test('menu buttons route to the same handlers as commands', async () => {
-  const bot = service({ locale: 'en', services: [serviceRecord()] });
-  const [fromCommand] = await sentMessages(bot, '/mysermons');
-  const [fromButton] = await sentMessages(bot, '🎤 My sermons');
+test('/myevents merges services and events for the user in date order with separators', async () => {
+  const bot = service({
+    locale: 'en',
+    events: [
+      serviceRecord({
+        id: 'event-2',
+        type: 'TASK',
+        title: 'Prepare slides',
+        taskCompleted: true,
+        description: 'Plain <legacy> text',
+        serviceDetails: null,
+        startsAt: new Date('2026-09-18T07:00:00.000Z'),
+      }),
+      serviceRecord(),
+    ],
+  });
+  const [fromCommand] = await sentMessages(bot, '/myevents');
+  const [fromButton] = await sentMessages(bot, '✝️ My events');
 
   assert.equal(fromCommand.text, fromButton.text);
-  assert.match(fromCommand.text, /^🎤 <b>My sermons<\/b>\nGrace Church\n\n<b>SEPTEMBER 2026<\/b>/);
-  assert.doesNotMatch(fromCommand.text, /Songs|Description/);
-});
-
-test('/myevents lists non-service events with type label and description', async () => {
-  const [message] = await sentMessages(
-    service({
-      locale: 'en',
-      events: [
-        serviceRecord({
-          type: 'TASK',
-          title: 'Prepare slides',
-          taskCompleted: true,
-          description: 'Plain <legacy> text',
-          serviceDetails: null,
-        }),
-      ],
-    }),
-    '/myevents',
-  );
-
   assert.equal(
-    message.text,
+    fromCommand.text,
     [
-      '🗓 <b>My events</b>',
+      '✝️ <b>My events</b>',
       'Grace Church',
       '',
       '<b>SEPTEMBER 2026</b>',
       '',
-      '<b>Sun, September 20 · 10:00</b>',
+      '<b>Fri, September 18 · 10:00</b>',
       '',
       '✅ Prepare slides',
       '',
@@ -182,18 +174,33 @@ test('/myevents lists non-service events with type label and description', async
       '',
       '<b>Description:</b>',
       'Plain  text',
+      '',
+      '──────────────',
+      '',
+      '<b>Sun, September 20 · 10:00</b>',
+      '',
+      'Sunday service',
+      '',
+      '<b>Bible passage:</b> John 3:16',
+      '',
+      '<b>Preacher:</b> Ivan',
+      '<b>Worship:</b> Guest band',
     ].join('\n'),
   );
+  assert.doesNotMatch(fromCommand.text, /Songs/);
 });
 
-test('/help lists the new actions and the menu carries all five buttons', async () => {
+test('/help lists the new actions and the menu carries all four buttons', async () => {
   const [message] = await sentMessages(service({ locale: 'en' }), '/help');
 
   assert.match(message.text, /⛪ Next service or \/next - Next service/);
-  assert.match(message.text, /🎤 My sermons or \/mysermons - My sermons/);
-  assert.match(message.text, /🗓 My events or \/myevents - My events/);
+  assert.doesNotMatch(message.text, /mysermons/);
+  assert.match(message.text, /✝️ My events or \/myevents - My events/);
   assert.deepEqual(
     message.reply_markup.keyboard.map((row) => row.map((button) => button.text)),
-    [['⛪ Next service', '📅 Service Schedule'], ['🎤 My sermons', '🗓 My events'], ['🙏 Prayers']],
+    [
+      ['⛪ Next service', '📅 Service Schedule'],
+      ['✝️ My events', '🙏 Prayers'],
+    ],
   );
 });

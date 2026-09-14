@@ -45,13 +45,7 @@ const EVENT_DESCRIPTION_LIMIT = 2500;
 const DESCRIPTION_BLOCK_LIMIT = 3500;
 const NEXT_SERVICE_LOOKAHEAD_MS = 180 * 24 * 60 * 60 * 1000;
 
-const ORGANIZATION_ACTIONS = [
-  'services',
-  'prayerRequests',
-  'nextService',
-  'mySermons',
-  'myEvents',
-] as const;
+const ORGANIZATION_ACTIONS = ['services', 'prayerRequests', 'nextService', 'myEvents'] as const;
 
 type OrganizationAction = (typeof ORGANIZATION_ACTIONS)[number];
 
@@ -59,7 +53,6 @@ const ORGANIZATION_ACTION_COMMANDS: Record<OrganizationAction, string> = {
   services: '/services',
   prayerRequests: '/prayers',
   nextService: '/next',
-  mySermons: '/mysermons',
   myEvents: '/myevents',
 };
 
@@ -67,7 +60,6 @@ const ORGANIZATION_ACTION_CALLBACK_PREFIXES: Record<OrganizationAction, string> 
   services: 'services_org:',
   prayerRequests: 'prayers_org:',
   nextService: 'next_service_org:',
-  mySermons: 'my_sermons_org:',
   myEvents: 'my_events_org:',
 };
 
@@ -166,7 +158,6 @@ interface TelegramLocaleConfig {
   intlLocale: string;
   menu: TelegramMenuMessages;
   myEvents: ListMessages;
-  mySermons: ListMessages;
   nextService: ListMessages;
   prayerRequests: PrayerRequestsMessages;
   serviceDateOrder: 'day-month' | 'month-day';
@@ -213,19 +204,14 @@ const TELEGRAM_LOCALE_CONFIG = {
     },
     intlLocale: 'en-US',
     menu: {
-      myEvents: '🗓 My events',
-      mySermons: '🎤 My sermons',
+      myEvents: '✝️ My events',
       nextService: '⛪ Next service',
       prayerRequests: '🙏 Prayers',
       services: '📅 Service Schedule',
     },
     myEvents: {
-      empty: 'You have no assigned events for this month and next month.',
+      empty: 'You have no services or events this month and next month.',
       heading: 'My events',
-    },
-    mySermons: {
-      empty: 'You are not taking part in any services this month or next month.',
-      heading: 'My sermons',
     },
     nextService: {
       empty: 'No upcoming services were found.',
@@ -277,19 +263,14 @@ const TELEGRAM_LOCALE_CONFIG = {
     },
     intlLocale: 'uk-UA',
     menu: {
-      myEvents: '🗓 Мої події',
-      mySermons: '🎤 Мої служіння',
+      myEvents: '✝️ Мої події',
       nextService: '⛪ Наступне служіння',
       prayerRequests: '🙏 Молитви',
       services: '📅 Графік служінь',
     },
     myEvents: {
-      empty: 'На цей і наступний місяць у вас немає призначених подій.',
+      empty: 'На цей і наступний місяць у вас немає служінь чи подій.',
       heading: 'Мої події',
-    },
-    mySermons: {
-      empty: 'На цей і наступний місяць ви не берете участі в служіннях.',
-      heading: 'Мої служіння',
     },
     nextService: {
       empty: 'Найближчих служінь не знайдено.',
@@ -565,9 +546,6 @@ export class TelegramBotService {
       case 'nextService':
         await this.sendNextService(chatId, userId, organizationId, locale);
         return;
-      case 'mySermons':
-        await this.sendMySermons(chatId, userId, organizationId, locale);
-        return;
       case 'myEvents':
         await this.sendMyEvents(chatId, userId, organizationId, locale);
         return;
@@ -659,31 +637,6 @@ export class TelegramBotService {
     }
   }
 
-  private async sendMySermons(
-    chatId: string,
-    userId: string,
-    organizationId: string,
-    locale: AppLocale,
-  ): Promise<void> {
-    const query = { ...serviceScheduleRange(new Date()), userId, organizationId };
-    const services = await this.telegramBotRepository.listUpcomingServicesForUser(query);
-    const occurrences = expandUpcomingEvents(services, query, this.logger);
-    if (occurrences.length === 0) {
-      await this.sendMessage(chatId, mySermonsMessages(locale).empty);
-      return;
-    }
-
-    const messages = formatMonthlyEventList({
-      events: occurrences,
-      locale,
-      heading: `🎤 <b>${escapeTelegramHtml(mySermonsMessages(locale).heading)}</b>`,
-      formatBlock: (service) => formatServiceBlock(service, locale),
-    });
-    for (const message of messages) {
-      await this.sendMessage(chatId, message, { parseMode: 'HTML' });
-    }
-  }
-
   private async sendMyEvents(
     chatId: string,
     userId: string,
@@ -701,8 +654,11 @@ export class TelegramBotService {
     const messages = formatMonthlyEventList({
       events: occurrences,
       locale,
-      heading: `🗓 <b>${escapeTelegramHtml(myEventsMessages(locale).heading)}</b>`,
-      formatBlock: (event) => formatEventBlock(event, locale),
+      heading: `✝️ <b>${escapeTelegramHtml(myEventsMessages(locale).heading)}</b>`,
+      formatBlock: (event) =>
+        event.type === 'SERVICE'
+          ? formatServiceBlock(event, locale)
+          : formatEventBlock(event, locale),
     });
     for (const message of messages) {
       await this.sendMessage(chatId, message, { parseMode: 'HTML' });
@@ -724,7 +680,6 @@ export class TelegramBotService {
         messages.helpHeading,
         `${menu.nextService} or ${ORGANIZATION_ACTION_COMMANDS.nextService} - ${nextServiceMessages(locale).heading}`,
         `${menu.services} or ${ORGANIZATION_ACTION_COMMANDS.services} - ${serviceScheduleMessages(locale).heading}`,
-        `${menu.mySermons} or ${ORGANIZATION_ACTION_COMMANDS.mySermons} - ${mySermonsMessages(locale).heading}`,
         `${menu.myEvents} or ${ORGANIZATION_ACTION_COMMANDS.myEvents} - ${myEventsMessages(locale).heading}`,
         `${menu.prayerRequests} or ${ORGANIZATION_ACTION_COMMANDS.prayerRequests} - ${prayerRequestsMessages(locale).heading}`,
         `/status - ${messages.statusCommandDescription}`,
@@ -979,8 +934,7 @@ function mainMenuReplyMarkup(locale: AppLocale): TelegramReplyKeyboardMarkup {
   return {
     keyboard: [
       [{ text: menu.nextService }, { text: menu.services }],
-      [{ text: menu.mySermons }, { text: menu.myEvents }],
-      [{ text: menu.prayerRequests }],
+      [{ text: menu.myEvents }, { text: menu.prayerRequests }],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -1278,10 +1232,6 @@ function prayerRequestsMessages(locale: AppLocale): PrayerRequestsMessages {
 
 function nextServiceMessages(locale: AppLocale): ListMessages {
   return telegramLocaleConfig(locale).nextService;
-}
-
-function mySermonsMessages(locale: AppLocale): ListMessages {
-  return telegramLocaleConfig(locale).mySermons;
 }
 
 function myEventsMessages(locale: AppLocale): ListMessages {

@@ -335,22 +335,14 @@ export class TelegramBotRepository {
     return this.listUpcomingEvents(input, { type: 'SERVICE' });
   }
 
-  listUpcomingServicesForUser(input: UpcomingEventsQuery): Promise<UpcomingEventRecord[]> {
+  listUpcomingEventsForUser(input: UpcomingEventsQuery): Promise<UpcomingEventRecord[]> {
     const membership = activeMembershipOfUser(input.userId);
 
     return this.listUpcomingEvents(input, {
-      type: 'SERVICE',
       OR: [
         { serviceDetails: { participants: { some: { membership } } } },
         { assignees: { some: { membership } } },
       ],
-    });
-  }
-
-  listUpcomingEventsForUser(input: UpcomingEventsQuery): Promise<UpcomingEventRecord[]> {
-    return this.listUpcomingEvents(input, {
-      type: { not: 'SERVICE' },
-      assignees: { some: { membership: activeMembershipOfUser(input.userId) } },
     });
   }
 
