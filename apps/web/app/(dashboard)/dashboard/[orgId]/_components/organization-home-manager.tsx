@@ -14,7 +14,7 @@ interface OrganizationHomeManagerProps {
   organization: HomeOrganization;
   organizationRole: OrganizationRole | null;
   canManageBilling: boolean;
-  auditLogs: AuditLogListItem[];
+  auditLogs: AuditLogListItem[] | undefined;
   auditNextCursor: string | null;
   subscription: SubscriptionSummary | null;
   subscriptionError: string | null;
@@ -85,6 +85,7 @@ export function OrganizationHomeManager({
       {canManage ? (
         <AuditLogsSection
           organizationId={currentOrganization.id}
+          canReadBudgetHistory={organizationRole === 'OWNER'}
           initialItems={auditLogs}
           initialNextCursor={auditNextCursor}
         />

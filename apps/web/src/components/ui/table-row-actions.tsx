@@ -52,7 +52,12 @@ export function TableRowActions({
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
 
   const closeMenu = useCallback(() => {
-    if (menuRef.current) menuRef.current.open = false;
+    const menu = menuRef.current;
+    if (menu) {
+      const restoreFocus = menu.contains(document.activeElement);
+      menu.open = false;
+      if (restoreFocus) menu.querySelector('summary')?.focus();
+    }
     setMenuOpen(false);
     setMenuPosition(null);
   }, []);

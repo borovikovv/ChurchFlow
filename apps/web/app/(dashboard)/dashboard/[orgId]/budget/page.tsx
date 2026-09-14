@@ -1,6 +1,6 @@
 import { apiFetch } from '@/api/client';
 import { getCurrentUser } from '@/auth/session';
-import { requireOrganizationOwnerAccess } from '@/features/organizations/server/website-access';
+import { requireOrganizationOwnerAccess } from '@/features/organizations/server/owner-access';
 import { getMessages } from '@/i18n/messages';
 import { PageHeader } from '@/components/ui/page-header';
 import type { BudgetPayload } from '@churchflow/shared';

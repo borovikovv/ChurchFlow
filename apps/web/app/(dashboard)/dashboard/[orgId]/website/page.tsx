@@ -2,7 +2,7 @@ import { apiFetch } from '@/api/client';
 import { getCurrentUser } from '@/auth/session';
 import { PageHeader } from '@/components/ui/page-header';
 import { serverEnv } from '@/env/server';
-import { requireOrganizationOwnerAccess } from '@/features/organizations/server/website-access';
+import { requireOrganizationOwnerAccess } from '@/features/organizations/server/owner-access';
 import { getMessages } from '@/i18n/messages';
 import { WebsiteManager } from './_components/website-manager';
 import type { DashboardPage, DashboardWebsite, WebsiteFeedback } from './types';

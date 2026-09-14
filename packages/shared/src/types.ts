@@ -411,7 +411,7 @@ export interface BudgetOpeningBalance {
 }
 
 export interface BudgetPayload {
-  actorRole: 'OWNER' | 'ADMIN';
+  actorRole: 'OWNER';
   canManage: true;
   year: number;
   baseCurrency: BudgetCurrency;
