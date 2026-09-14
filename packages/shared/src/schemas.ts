@@ -31,6 +31,7 @@ import {
   PRAYER_REQUEST_PAGE_SIZE_OPTIONS,
   PRAYER_REQUEST_TABS,
   PUBLIC_SECTION_TYPES,
+  RICH_TEXT_MAX_LENGTH,
 } from './constants.js';
 
 const DEFAULT_PHONE_REGION = 'UA';
@@ -453,7 +454,7 @@ const calendarServiceDetailsInputSchema = z
 const calendarEventInputSchema = z.object({
   type: calendarEventTypeSchema,
   title: z.string().trim().min(1).max(180),
-  description: nullableTrimmedString(3000),
+  description: nullableTrimmedString(RICH_TEXT_MAX_LENGTH),
   startsAt: dateTimeStringSchema,
   endsAt: dateTimeStringSchema.nullable().optional(),
   allDay: z.boolean().default(false),

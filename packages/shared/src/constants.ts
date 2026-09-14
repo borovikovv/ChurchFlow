@@ -69,6 +69,27 @@ export const CALENDAR_SERVICE_ROLE_LABELS_BY_LOCALE = {
   Record<(typeof CALENDAR_SERVICE_ROLES)[number], string>
 >;
 
+export const RICH_TEXT_ALLOWED_TAGS = [
+  'p',
+  'br',
+  'strong',
+  'em',
+  'u',
+  's',
+  'ul',
+  'ol',
+  'li',
+  'a',
+] as const;
+
+export const RICH_TEXT_ALLOWED_ATTRIBUTES = {
+  a: ['href'],
+} as const;
+
+export const RICH_TEXT_ALLOWED_URL_SCHEMES = ['http', 'https'] as const;
+
+export const RICH_TEXT_MAX_LENGTH = 10000;
+
 export const NOTIFICATION_TYPES = [
   'TASK_ASSIGNED',
   'TASK_UPDATED',
