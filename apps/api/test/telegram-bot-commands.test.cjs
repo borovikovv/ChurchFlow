@@ -204,3 +204,32 @@ test('/help lists the new actions and the menu carries all four buttons', async 
     ],
   );
 });
+
+test('every action refreshes the persistent menu on its last message only', async () => {
+  const paragraphs = Array.from(
+    { length: 12 },
+    (_, index) => `<p>${String(index + 1)} ${'слово '.repeat(120).trim()}</p>`,
+  );
+  const bot = service({
+    locale: 'en',
+    services: [serviceRecord({ description: paragraphs.join('') })],
+  });
+  const expectedKeyboard = [
+    ['⛪ Next service', '📅 Service Schedule'],
+    ['✝️ My events', '🙏 Prayers'],
+  ];
+  const keyboardOf = (message) =>
+    message.reply_markup?.keyboard.map((row) => row.map((button) => button.text));
+
+  const chunked = await sentMessages(bot, '/next');
+  assert.ok(chunked.length > 1);
+  assert.deepEqual(
+    chunked.slice(0, -1).map(keyboardOf),
+    chunked.slice(0, -1).map(() => undefined),
+  );
+  assert.deepEqual(keyboardOf(chunked[chunked.length - 1]), expectedKeyboard);
+
+  const [empty] = await sentMessages(service({ locale: 'en' }), '/myevents');
+  assert.equal(empty.text, 'You have no services or events this month and next month.');
+  assert.deepEqual(keyboardOf(empty), expectedKeyboard);
+});

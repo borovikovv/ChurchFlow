@@ -597,7 +597,12 @@ export class TelegramBotService {
     const services = await this.telegramBotRepository.listUpcomingServicesForOrganization(query);
     const occurrences = expandUpcomingEvents(services, query, this.logger);
     if (occurrences.length === 0) {
-      await this.sendMessage(chatId, serviceScheduleMessages(locale).emptySchedule);
+      await this.sendMenuMessages(
+        chatId,
+        [serviceScheduleMessages(locale).emptySchedule],
+        locale,
+        {},
+      );
       return;
     }
 
@@ -607,9 +612,7 @@ export class TelegramBotService {
       heading: `📅 <b>${escapeTelegramHtml(serviceScheduleMessages(locale).heading)}</b>`,
       formatBlock: (service) => formatServiceBlock(service, locale),
     });
-    for (const message of messages) {
-      await this.sendMessage(chatId, message, { parseMode: 'HTML' });
-    }
+    await this.sendMenuMessages(chatId, messages, locale, { parseMode: 'HTML' });
   }
 
   private async sendNextService(
@@ -628,13 +631,13 @@ export class TelegramBotService {
     const services = await this.telegramBotRepository.listUpcomingServicesForOrganization(query);
     const [nextService] = expandUpcomingEvents(services, query, this.logger);
     if (!nextService) {
-      await this.sendMessage(chatId, nextServiceMessages(locale).empty);
+      await this.sendMenuMessages(chatId, [nextServiceMessages(locale).empty], locale, {});
       return;
     }
 
-    for (const message of formatNextService(nextService, locale)) {
-      await this.sendMessage(chatId, message, { parseMode: 'HTML' });
-    }
+    await this.sendMenuMessages(chatId, formatNextService(nextService, locale), locale, {
+      parseMode: 'HTML',
+    });
   }
 
   private async sendMyEvents(
@@ -647,7 +650,7 @@ export class TelegramBotService {
     const events = await this.telegramBotRepository.listUpcomingEventsForUser(query);
     const occurrences = expandUpcomingEvents(events, query, this.logger);
     if (occurrences.length === 0) {
-      await this.sendMessage(chatId, myEventsMessages(locale).empty);
+      await this.sendMenuMessages(chatId, [myEventsMessages(locale).empty], locale, {});
       return;
     }
 
@@ -660,9 +663,7 @@ export class TelegramBotService {
           ? formatServiceBlock(event, locale)
           : formatEventBlock(event, locale),
     });
-    for (const message of messages) {
-      await this.sendMessage(chatId, message, { parseMode: 'HTML' });
-    }
+    await this.sendMenuMessages(chatId, messages, locale, { parseMode: 'HTML' });
   }
 
   private async sendHelp(chatId: string, telegramUserId: string) {
@@ -720,6 +721,21 @@ export class TelegramBotService {
     }
   }
 
+  private async sendMenuMessages(
+    chatId: string,
+    messages: string[],
+    locale: AppLocale,
+    options: Pick<TelegramSendMessageOptions, 'parseMode'>,
+  ): Promise<void> {
+    for (const [index, message] of messages.entries()) {
+      const isLast = index === messages.length - 1;
+      await this.sendMessage(chatId, message, {
+        ...options,
+        ...(isLast ? { replyMarkup: mainMenuReplyMarkup(locale) } : {}),
+      });
+    }
+  }
+
   private async sendPrayerRequests(
     chatId: string,
     userId: string,
@@ -731,13 +747,13 @@ export class TelegramBotService {
       organizationId,
     });
     if (requests.length === 0) {
-      await this.sendMessage(chatId, prayerRequestsMessages(locale).empty);
+      await this.sendMenuMessages(chatId, [prayerRequestsMessages(locale).empty], locale, {});
       return;
     }
 
-    for (const message of formatPrayerRequests(requests, locale)) {
-      await this.sendMessage(chatId, message, { parseMode: 'HTML' });
-    }
+    await this.sendMenuMessages(chatId, formatPrayerRequests(requests, locale), locale, {
+      parseMode: 'HTML',
+    });
   }
 
   private async answerCallbackQuery(callbackQueryId: string): Promise<void> {
