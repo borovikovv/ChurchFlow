@@ -22,6 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { FormDatePicker } from '@/components/forms/form-date-picker';
 import { FormInput } from '@/components/forms/form-input';
+import { FormRichTextEditor } from '@/components/forms/form-rich-text-editor';
 import { FormSelect } from '@/components/forms/form-select';
 import { FormTextarea } from '@/components/forms/form-textarea';
 import { CALENDAR_TYPE } from './calendar-constants';
@@ -203,12 +204,12 @@ export function EventModal({
           />
         </div>
         <div className="sm:col-span-2">
-          <FormTextarea
+          <FormRichTextEditor
+            control={control}
             disabled={readonly}
             error={errors.description?.message}
             label={t('description')}
-            rows={4}
-            {...register('description')}
+            name="description"
           />
         </div>
         <FormDatePicker

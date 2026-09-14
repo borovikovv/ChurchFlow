@@ -3,9 +3,10 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Route } from 'next';
 import { useLocale, useTranslations } from 'next-intl';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { CalendarServiceRole, type NotificationDetail } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
+import { RichTextContent } from '@/components/ui/rich-text-content';
 import { useNotificationDetail } from '../hooks/use-notification-detail';
 
 export function NotificationDetailModal({ organizationId }: { organizationId: string }) {
@@ -119,7 +120,10 @@ function CalendarEventNotificationDetail({
           <DetailRow label={t('ends')} value={formatDateTime(event.endsAt, locale)} />
         ) : null}
         {event.description ? (
-          <DetailRow label={t('description')} value={event.description} />
+          <DetailRow
+            label={t('description')}
+            value={<RichTextContent html={event.description} />}
+          />
         ) : null}
       </dl>
       {event.assignees.length > 0 ? (
@@ -140,7 +144,7 @@ function CalendarEventNotificationDetail({
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="grid gap-1 sm:grid-cols-[96px_minmax(0,1fr)]">
       <dt className="font-semibold text-[var(--foreground)]">{label}</dt>

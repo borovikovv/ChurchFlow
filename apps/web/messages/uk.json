@@ -1111,5 +1111,20 @@
     "title": "Passkey",
     "unnamed": "Passkey без назви",
     "unsupported": "Цей браузер не підтримує passkey."
+  },
+  "richTextEditor": {
+    "toolbar": "Форматування",
+    "linkPrompt": "Адреса посилання (http:// або https://)",
+    "invalidLink": "Дозволені лише посилання http:// та https://.",
+    "removeLink": "Прибрати посилання",
+    "actions": {
+      "bold": "Жирний",
+      "italic": "Курсив",
+      "underline": "Підкреслений",
+      "strike": "Закреслений",
+      "bulletList": "Маркований список",
+      "orderedList": "Нумерований список",
+      "link": "Додати посилання"
+    }
   }
 }

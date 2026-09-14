@@ -1111,5 +1111,20 @@
     "title": "Passkeys",
     "unnamed": "Unnamed passkey",
     "unsupported": "This browser cannot use passkeys."
+  },
+  "richTextEditor": {
+    "toolbar": "Formatting",
+    "linkPrompt": "Link URL (http:// or https://)",
+    "invalidLink": "Only http:// and https:// links are allowed.",
+    "removeLink": "Remove link",
+    "actions": {
+      "bold": "Bold",
+      "italic": "Italic",
+      "underline": "Underline",
+      "strike": "Strikethrough",
+      "bulletList": "Bulleted list",
+      "orderedList": "Numbered list",
+      "link": "Add link"
+    }
   }
 }

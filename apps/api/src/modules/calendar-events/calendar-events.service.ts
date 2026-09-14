@@ -28,6 +28,7 @@ import {
   zonedDateParts,
   zonedDateTimeToUtc,
 } from './recurrence/calendar-recurrence';
+import { sanitizeRichText } from './rich-text/sanitize-rich-text';
 import { validTimeZoneOrFallback } from '../../common/time/date-time';
 import { NotificationsService } from '../notifications/notifications.service';
 import type {
@@ -116,7 +117,11 @@ export class CalendarEventsService {
 
   async create(organizationId: string, input: CreateCalendarEventInput, actorUserId: string) {
     try {
-      const event = await this.calendarEventsRepository.create(organizationId, input, actorUserId);
+      const event = await this.calendarEventsRepository.create(
+        organizationId,
+        { ...input, description: sanitizeRichText(input.description) },
+        actorUserId,
+      );
       const notifiedMembershipIds = new Set<string>([
         ...(await this.tryCreateTaskAssignedNotifications(organizationId, event, actorUserId)),
         ...(await this.tryCreateServiceAssignedNotifications(organizationId, event, actorUserId)),
@@ -149,7 +154,9 @@ export class CalendarEventsService {
       const event = await this.calendarEventsRepository.update(
         organizationId,
         eventId,
-        input,
+        input.description === undefined
+          ? input
+          : { ...input, description: sanitizeRichText(input.description) },
         actorUserId,
       );
       const taskAssignedMembershipIds = await this.tryCreateTaskAssignedNotifications(

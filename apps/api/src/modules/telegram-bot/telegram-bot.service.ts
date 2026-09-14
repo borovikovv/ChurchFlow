@@ -5,6 +5,7 @@ import {
   CALENDAR_SERVICE_ROLE_LABELS_BY_LOCALE,
   DEFAULT_APP_LOCALE,
   type AppLocale,
+  type CalendarEventType,
   type CalendarServiceRole,
   type NotificationPreferences,
   type TelegramNotificationLink,
@@ -14,8 +15,16 @@ import {
   type ActivePrayerRequestRecord,
   type ActiveTelegramOrganizationRecord,
   type TelegramNotificationDelivery,
-  type UpcomingServiceRecord,
+  type UpcomingEventRecord,
+  type UpcomingEventsQuery,
 } from './repositories/telegram-bot.repository';
+import {
+  escapeTelegramHtml,
+  richTextToPlainText,
+  richTextToPlainTextBlocks,
+  richTextToTelegramHtml,
+  richTextToTelegramHtmlBlocks,
+} from './rich-text-telegram';
 import {
   CalendarRecurrenceError,
   expandCalendarEventOccurrences,
@@ -27,13 +36,40 @@ const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const TELEGRAM_API_BASE_URL = 'https://api.telegram.org';
 const LEGACY_SERVICES_MENU_BUTTON_TEXT = '📅 Графік служінь';
 const LEGACY_PRAYER_REQUESTS_MENU_BUTTON_TEXT = '🙏 Молитовні потреби';
-const SERVICES_ORGANIZATION_CALLBACK_PREFIX = 'services_org:';
-const PRAYER_REQUESTS_ORGANIZATION_CALLBACK_PREFIX = 'prayers_org:';
 const SERVICE_SCHEDULE_TIME_ZONE = 'Europe/Kyiv';
 const SERVICE_SCHEDULE_MESSAGE_LIMIT = 3900;
 const SERVICE_SEPARATOR = '──────────────';
 const PRAYER_REQUESTS_MESSAGE_LIMIT = 3900;
 const PRAYER_REQUEST_DESCRIPTION_LIMIT = 1800;
+const EVENT_DESCRIPTION_LIMIT = 2500;
+const DESCRIPTION_BLOCK_LIMIT = 3500;
+const NEXT_SERVICE_LOOKAHEAD_MS = 180 * 24 * 60 * 60 * 1000;
+
+const ORGANIZATION_ACTIONS = [
+  'services',
+  'prayerRequests',
+  'nextService',
+  'mySermons',
+  'myEvents',
+] as const;
+
+type OrganizationAction = (typeof ORGANIZATION_ACTIONS)[number];
+
+const ORGANIZATION_ACTION_COMMANDS: Record<OrganizationAction, string> = {
+  services: '/services',
+  prayerRequests: '/prayers',
+  nextService: '/next',
+  mySermons: '/mysermons',
+  myEvents: '/myevents',
+};
+
+const ORGANIZATION_ACTION_CALLBACK_PREFIXES: Record<OrganizationAction, string> = {
+  services: 'services_org:',
+  prayerRequests: 'prayers_org:',
+  nextService: 'next_service_org:',
+  mySermons: 'my_sermons_org:',
+  myEvents: 'my_events_org:',
+};
 
 interface TelegramUpdate {
   message?: TelegramMessage;
@@ -76,20 +112,24 @@ interface TelegramSendMessageOptions {
 }
 
 interface ServiceScheduleMessageBlock {
-  kind: 'month' | 'service';
+  kind: 'month' | 'service' | 'section';
   text: string;
 }
 
 interface ServiceScheduleMessages {
   biblePassageLabel: string;
+  descriptionLabel: string;
   emptySchedule: string;
+  heading: string;
+  songsLabel: string;
+}
+
+interface ListMessages {
+  empty: string;
   heading: string;
 }
 
-interface TelegramMenuMessages {
-  prayerRequests: string;
-  services: string;
-}
+type TelegramMenuMessages = Record<OrganizationAction, string>;
 
 interface TelegramCommonMessages {
   accountNotConnected: string;
@@ -118,12 +158,16 @@ interface PrayerRequestsMessages {
   heading: string;
 }
 
-type UpcomingServiceOccurrenceRecord = UpcomingServiceRecord;
+type UpcomingEventOccurrenceRecord = UpcomingEventRecord;
 
 interface TelegramLocaleConfig {
   common: TelegramCommonMessages;
+  eventTypes: Record<CalendarEventType, string>;
   intlLocale: string;
   menu: TelegramMenuMessages;
+  myEvents: ListMessages;
+  mySermons: ListMessages;
+  nextService: ListMessages;
   prayerRequests: PrayerRequestsMessages;
   serviceDateOrder: 'day-month' | 'month-day';
   serviceSchedule: ServiceScheduleMessages;
@@ -160,10 +204,32 @@ const TELEGRAM_LOCALE_CONFIG = {
       stopCommandDescription: 'disable Telegram notifications',
       unknownCommand: 'Unknown command. Use /help to see available actions.',
     },
+    eventTypes: {
+      ANNIVERSARY: 'Anniversary',
+      BIRTHDAY: 'Birthday',
+      EVENT: 'Event',
+      SERVICE: 'Service',
+      TASK: 'Task',
+    },
     intlLocale: 'en-US',
     menu: {
+      myEvents: '🗓 My events',
+      mySermons: '🎤 My sermons',
+      nextService: '⛪ Next service',
       prayerRequests: '🙏 Prayers',
       services: '📅 Service Schedule',
+    },
+    myEvents: {
+      empty: 'You have no assigned events for this month and next month.',
+      heading: 'My events',
+    },
+    mySermons: {
+      empty: 'You are not taking part in any services this month or next month.',
+      heading: 'My sermons',
+    },
+    nextService: {
+      empty: 'No upcoming services were found.',
+      heading: 'Next service',
     },
     prayerRequests: {
       authorLabel: 'Requested by',
@@ -173,8 +239,10 @@ const TELEGRAM_LOCALE_CONFIG = {
     serviceDateOrder: 'month-day',
     serviceSchedule: {
       biblePassageLabel: 'Bible passage',
+      descriptionLabel: 'Description',
       emptySchedule: 'No services were found for this month and next month.',
       heading: 'Service schedule',
+      songsLabel: 'Songs',
     },
   },
   uk: {
@@ -200,10 +268,32 @@ const TELEGRAM_LOCALE_CONFIG = {
       stopCommandDescription: 'вимкнути Telegram-сповіщення',
       unknownCommand: 'Невідома команда. Використайте /help, щоб побачити доступні дії.',
     },
+    eventTypes: {
+      ANNIVERSARY: 'Річниця',
+      BIRTHDAY: 'День народження',
+      EVENT: 'Подія',
+      SERVICE: 'Служіння',
+      TASK: 'Завдання',
+    },
     intlLocale: 'uk-UA',
     menu: {
+      myEvents: '🗓 Мої події',
+      mySermons: '🎤 Мої служіння',
+      nextService: '⛪ Наступне служіння',
       prayerRequests: '🙏 Молитви',
       services: '📅 Графік служінь',
+    },
+    myEvents: {
+      empty: 'На цей і наступний місяць у вас немає призначених подій.',
+      heading: 'Мої події',
+    },
+    mySermons: {
+      empty: 'На цей і наступний місяць ви не берете участі в служіннях.',
+      heading: 'Мої служіння',
+    },
+    nextService: {
+      empty: 'Найближчих служінь не знайдено.',
+      heading: 'Наступне служіння',
     },
     prayerRequests: {
       authorLabel: 'Просить',
@@ -213,8 +303,10 @@ const TELEGRAM_LOCALE_CONFIG = {
     serviceDateOrder: 'day-month',
     serviceSchedule: {
       biblePassageLabel: 'Уривок',
+      descriptionLabel: 'Опис',
       emptySchedule: 'На цей і наступний місяць служінь не знайдено.',
       heading: 'Графік служінь',
+      songsLabel: 'Пісні',
     },
   },
 } as const satisfies Record<AppLocale, TelegramLocaleConfig>;
@@ -306,18 +398,20 @@ export class TelegramBotService {
 
     if (!telegramUserId) return;
 
-    if (isServicesMenuButton(text)) {
-      await this.handleServices(chatId, telegramUserId);
-      return;
-    }
-
-    if (isPrayerRequestsMenuButton(text)) {
-      await this.handlePrayerRequests(chatId, telegramUserId);
+    const menuAction = organizationActionForMenuButton(text);
+    if (menuAction) {
+      await this.handleOrganizationAction(chatId, telegramUserId, menuAction);
       return;
     }
 
     const { command, payload } = parseCommand(text);
     if (!command) return;
+
+    const commandAction = organizationActionForCommand(command);
+    if (commandAction) {
+      await this.handleOrganizationAction(chatId, telegramUserId, commandAction);
+      return;
+    }
 
     switch (command) {
       case '/start':
@@ -328,12 +422,6 @@ export class TelegramBotService {
         return;
       case '/status':
         await this.handleStatus(chatId, telegramUserId);
-        return;
-      case '/services':
-        await this.handleServices(chatId, telegramUserId);
-        return;
-      case '/prayers':
-        await this.handlePrayerRequests(chatId, telegramUserId);
         return;
       case '/help':
         await this.sendHelp(chatId, telegramUserId);
@@ -415,51 +503,17 @@ export class TelegramBotService {
     });
   }
 
-  private async handleServices(chatId: string, telegramUserId: string) {
+  private async handleOrganizationAction(
+    chatId: string,
+    telegramUserId: string,
+    action: OrganizationAction,
+  ) {
     const binding = await this.telegramBotRepository.findBindingByTelegramIdentity(
       telegramUserId,
       chatId,
     );
     if (!binding) {
-      await this.sendMessage(
-        chatId,
-        telegramCommonMessages(DEFAULT_APP_LOCALE).connectBeforeServices,
-      );
-      return;
-    }
-    const appLocale = appLocaleOrFallback(binding.user.locale);
-
-    const organizations = await this.telegramBotRepository.listActiveOrganizationsForUser(
-      binding.userId,
-    );
-    if (organizations.length === 0) {
-      await this.sendMessage(chatId, telegramCommonMessages(appLocale).noActiveOrganizations);
-      return;
-    }
-
-    if (organizations.length > 1) {
-      await this.sendMessage(chatId, telegramCommonMessages(appLocale).chooseOrganization, {
-        replyMarkup: organizationSelectionMarkup(organizations),
-      });
-      return;
-    }
-
-    const [organization] = organizations;
-    if (!organization) return;
-
-    await this.sendServiceSchedule(chatId, binding.userId, organization.organizationId, appLocale);
-  }
-
-  private async handlePrayerRequests(chatId: string, telegramUserId: string) {
-    const binding = await this.telegramBotRepository.findBindingByTelegramIdentity(
-      telegramUserId,
-      chatId,
-    );
-    if (!binding) {
-      await this.sendMessage(
-        chatId,
-        telegramCommonMessages(DEFAULT_APP_LOCALE).connectBeforePrayerRequests,
-      );
+      await this.sendMessage(chatId, connectBeforeActionMessage(action, DEFAULT_APP_LOCALE));
       return;
     }
     const appLocale = appLocaleOrFallback(binding.user.locale);
@@ -476,7 +530,7 @@ export class TelegramBotService {
       await this.sendMessage(chatId, telegramCommonMessages(appLocale).chooseOrganization, {
         replyMarkup: organizationSelectionMarkup(
           organizations,
-          PRAYER_REQUESTS_ORGANIZATION_CALLBACK_PREFIX,
+          ORGANIZATION_ACTION_CALLBACK_PREFIXES[action],
         ),
       });
       return;
@@ -485,7 +539,39 @@ export class TelegramBotService {
     const [organization] = organizations;
     if (!organization) return;
 
-    await this.sendPrayerRequests(chatId, binding.userId, organization.organizationId, appLocale);
+    await this.sendOrganizationAction(
+      chatId,
+      binding.userId,
+      organization.organizationId,
+      appLocale,
+      action,
+    );
+  }
+
+  private async sendOrganizationAction(
+    chatId: string,
+    userId: string,
+    organizationId: string,
+    locale: AppLocale,
+    action: OrganizationAction,
+  ): Promise<void> {
+    switch (action) {
+      case 'services':
+        await this.sendServiceSchedule(chatId, userId, organizationId, locale);
+        return;
+      case 'prayerRequests':
+        await this.sendPrayerRequests(chatId, userId, organizationId, locale);
+        return;
+      case 'nextService':
+        await this.sendNextService(chatId, userId, organizationId, locale);
+        return;
+      case 'mySermons':
+        await this.sendMySermons(chatId, userId, organizationId, locale);
+        return;
+      case 'myEvents':
+        await this.sendMyEvents(chatId, userId, organizationId, locale);
+        return;
+    }
   }
 
   private async handleCallbackQuery(callbackQuery: TelegramCallbackQuery): Promise<void> {
@@ -496,20 +582,11 @@ export class TelegramBotService {
 
     try {
       if (!chatId || !telegramUserId) return;
-      if (
-        !data.startsWith(SERVICES_ORGANIZATION_CALLBACK_PREFIX) &&
-        !data.startsWith(PRAYER_REQUESTS_ORGANIZATION_CALLBACK_PREFIX)
-      ) {
-        return;
-      }
+      const action = organizationActionForCallback(data);
+      if (!action) return;
 
-      const isPrayerRequestCallback = data.startsWith(PRAYER_REQUESTS_ORGANIZATION_CALLBACK_PREFIX);
       const organizationId = data
-        .slice(
-          isPrayerRequestCallback
-            ? PRAYER_REQUESTS_ORGANIZATION_CALLBACK_PREFIX.length
-            : SERVICES_ORGANIZATION_CALLBACK_PREFIX.length,
-        )
+        .slice(ORGANIZATION_ACTION_CALLBACK_PREFIXES[action].length)
         .trim();
       if (!organizationId) return;
 
@@ -526,11 +603,7 @@ export class TelegramBotService {
       }
       const appLocale = appLocaleOrFallback(binding.user.locale);
 
-      if (isPrayerRequestCallback) {
-        await this.sendPrayerRequests(chatId, binding.userId, organizationId, appLocale);
-      } else {
-        await this.sendServiceSchedule(chatId, binding.userId, organizationId, appLocale);
-      }
+      await this.sendOrganizationAction(chatId, binding.userId, organizationId, appLocale, action);
     } finally {
       await this.answerCallbackQuery(callbackQueryId);
     }
@@ -540,23 +613,98 @@ export class TelegramBotService {
     chatId: string,
     userId: string,
     organizationId: string,
-    locale: string,
+    locale: AppLocale,
   ): Promise<void> {
-    const { rangeStart, rangeEnd } = serviceScheduleRange(new Date());
-    const services = await this.telegramBotRepository.listUpcomingServicesForOrganization({
-      userId,
-      organizationId,
-      rangeStart,
-      rangeEnd,
-    });
-    const serviceOccurrences = expandUpcomingServices(services, rangeStart, rangeEnd, this.logger);
-    const appLocale = appLocaleOrFallback(locale);
-    if (serviceOccurrences.length === 0) {
-      await this.sendMessage(chatId, serviceScheduleMessages(appLocale).emptySchedule);
+    const query = { ...serviceScheduleRange(new Date()), userId, organizationId };
+    const services = await this.telegramBotRepository.listUpcomingServicesForOrganization(query);
+    const occurrences = expandUpcomingEvents(services, query, this.logger);
+    if (occurrences.length === 0) {
+      await this.sendMessage(chatId, serviceScheduleMessages(locale).emptySchedule);
       return;
     }
 
-    for (const message of formatUpcomingServices(serviceOccurrences, appLocale)) {
+    const messages = formatMonthlyEventList({
+      events: occurrences,
+      locale,
+      heading: `📅 <b>${escapeTelegramHtml(serviceScheduleMessages(locale).heading)}</b>`,
+      formatBlock: (service) => formatServiceBlock(service, locale),
+    });
+    for (const message of messages) {
+      await this.sendMessage(chatId, message, { parseMode: 'HTML' });
+    }
+  }
+
+  private async sendNextService(
+    chatId: string,
+    userId: string,
+    organizationId: string,
+    locale: AppLocale,
+  ): Promise<void> {
+    const now = new Date();
+    const query = {
+      userId,
+      organizationId,
+      rangeStart: now,
+      rangeEnd: new Date(now.getTime() + NEXT_SERVICE_LOOKAHEAD_MS),
+    };
+    const services = await this.telegramBotRepository.listUpcomingServicesForOrganization(query);
+    const [nextService] = expandUpcomingEvents(services, query, this.logger);
+    if (!nextService) {
+      await this.sendMessage(chatId, nextServiceMessages(locale).empty);
+      return;
+    }
+
+    for (const message of formatNextService(nextService, locale)) {
+      await this.sendMessage(chatId, message, { parseMode: 'HTML' });
+    }
+  }
+
+  private async sendMySermons(
+    chatId: string,
+    userId: string,
+    organizationId: string,
+    locale: AppLocale,
+  ): Promise<void> {
+    const query = { ...serviceScheduleRange(new Date()), userId, organizationId };
+    const services = await this.telegramBotRepository.listUpcomingServicesForUser(query);
+    const occurrences = expandUpcomingEvents(services, query, this.logger);
+    if (occurrences.length === 0) {
+      await this.sendMessage(chatId, mySermonsMessages(locale).empty);
+      return;
+    }
+
+    const messages = formatMonthlyEventList({
+      events: occurrences,
+      locale,
+      heading: `🎤 <b>${escapeTelegramHtml(mySermonsMessages(locale).heading)}</b>`,
+      formatBlock: (service) => formatServiceBlock(service, locale),
+    });
+    for (const message of messages) {
+      await this.sendMessage(chatId, message, { parseMode: 'HTML' });
+    }
+  }
+
+  private async sendMyEvents(
+    chatId: string,
+    userId: string,
+    organizationId: string,
+    locale: AppLocale,
+  ): Promise<void> {
+    const query = { ...serviceScheduleRange(new Date()), userId, organizationId };
+    const events = await this.telegramBotRepository.listUpcomingEventsForUser(query);
+    const occurrences = expandUpcomingEvents(events, query, this.logger);
+    if (occurrences.length === 0) {
+      await this.sendMessage(chatId, myEventsMessages(locale).empty);
+      return;
+    }
+
+    const messages = formatMonthlyEventList({
+      events: occurrences,
+      locale,
+      heading: `🗓 <b>${escapeTelegramHtml(myEventsMessages(locale).heading)}</b>`,
+      formatBlock: (event) => formatEventBlock(event, locale),
+    });
+    for (const message of messages) {
       await this.sendMessage(chatId, message, { parseMode: 'HTML' });
     }
   }
@@ -574,8 +722,11 @@ export class TelegramBotService {
       chatId,
       [
         messages.helpHeading,
-        `${menu.services} or /services - ${serviceScheduleMessages(locale).heading}`,
-        `${menu.prayerRequests} or /prayers - ${prayerRequestsMessages(locale).heading}`,
+        `${menu.nextService} or ${ORGANIZATION_ACTION_COMMANDS.nextService} - ${nextServiceMessages(locale).heading}`,
+        `${menu.services} or ${ORGANIZATION_ACTION_COMMANDS.services} - ${serviceScheduleMessages(locale).heading}`,
+        `${menu.mySermons} or ${ORGANIZATION_ACTION_COMMANDS.mySermons} - ${mySermonsMessages(locale).heading}`,
+        `${menu.myEvents} or ${ORGANIZATION_ACTION_COMMANDS.myEvents} - ${myEventsMessages(locale).heading}`,
+        `${menu.prayerRequests} or ${ORGANIZATION_ACTION_COMMANDS.prayerRequests} - ${prayerRequestsMessages(locale).heading}`,
         `/status - ${messages.statusCommandDescription}`,
         `/stop - ${messages.stopCommandDescription}`,
         `/help - ${messages.helpCommandDescription}`,
@@ -722,31 +873,30 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function expandUpcomingServices(
-  services: UpcomingServiceRecord[],
-  rangeStart: Date,
-  rangeEnd: Date,
+function expandUpcomingEvents(
+  events: UpcomingEventRecord[],
+  range: Pick<UpcomingEventsQuery, 'rangeStart' | 'rangeEnd'>,
   logger: Pick<Logger, 'error'>,
-): UpcomingServiceOccurrenceRecord[] {
-  return services
-    .flatMap((service) => {
+): UpcomingEventOccurrenceRecord[] {
+  return events
+    .flatMap((event) => {
       try {
         return expandCalendarEventOccurrences({
-          event: service,
-          rangeStart,
-          rangeEnd,
+          event,
+          rangeStart: range.rangeStart,
+          rangeEnd: range.rangeEnd,
           timeZone: SERVICE_SCHEDULE_TIME_ZONE,
         }).map((occurrence) => ({
-          ...service,
+          ...event,
           startsAt: occurrence.startsAt,
           endsAt: occurrence.endsAt,
         }));
       } catch (error: unknown) {
         if (error instanceof CalendarRecurrenceError) {
           logger.error({
-            event: 'Telegram service schedule recurrence expansion failed',
-            organizationId: service.organizationId,
-            calendarEventId: service.id,
+            event: 'Telegram event list recurrence expansion failed',
+            organizationId: event.organizationId,
+            calendarEventId: event.id,
             code: error.code,
             context: error.context,
           });
@@ -762,18 +912,33 @@ function expandUpcomingServices(
     });
 }
 
-function formatUpcomingServices(
-  services: UpcomingServiceOccurrenceRecord[],
-  locale: AppLocale,
-): string[] {
-  const organizationName = escapeTelegramHtml(services[0]?.organization.name ?? 'ChurchFlow');
-  const header = [
-    `📅 <b>${escapeTelegramHtml(serviceScheduleMessages(locale).heading)}</b>`,
-    organizationName,
-  ].join('\n');
-  const blocks = serviceScheduleBlocks(services, locale);
+function formatMonthlyEventList(input: {
+  events: UpcomingEventOccurrenceRecord[];
+  locale: AppLocale;
+  heading: string;
+  formatBlock: (event: UpcomingEventOccurrenceRecord) => string;
+}): string[] {
+  const organizationName = escapeTelegramHtml(input.events[0]?.organization.name ?? 'ChurchFlow');
+  const header = [input.heading, organizationName].join('\n');
+  const blocks = monthlyEventBlocks(input.events, input.locale, input.formatBlock);
 
   return chunkTelegramHtmlBlocks(header, blocks, SERVICE_SCHEDULE_MESSAGE_LIMIT);
+}
+
+function formatNextService(service: UpcomingEventOccurrenceRecord, locale: AppLocale): string[] {
+  const header = [
+    `⛪ <b>${escapeTelegramHtml(nextServiceMessages(locale).heading)}</b>`,
+    escapeTelegramHtml(service.organization.name),
+  ].join('\n');
+  const sections = [
+    ...serviceSections(service, locale),
+    formatSongs(service, locale),
+    ...formatDescriptionBlocks(service, locale),
+  ]
+    .filter((section): section is string => Boolean(section))
+    .map((text): ServiceScheduleMessageBlock => ({ kind: 'section', text }));
+
+  return chunkTelegramHtmlBlocks(header, sections, SERVICE_SCHEDULE_MESSAGE_LIMIT);
 }
 
 function isTelegramUpdate(value: unknown): value is TelegramUpdate {
@@ -781,7 +946,7 @@ function isTelegramUpdate(value: unknown): value is TelegramUpdate {
 }
 
 function formatParticipants(
-  service: UpcomingServiceOccurrenceRecord,
+  service: UpcomingEventOccurrenceRecord,
   locale: AppLocale,
 ): string | null {
   const participants = service.serviceDetails?.participants ?? [];
@@ -812,7 +977,11 @@ function mainMenuReplyMarkup(locale: AppLocale): TelegramReplyKeyboardMarkup {
   const menu = telegramMenuMessages(locale);
 
   return {
-    keyboard: [[{ text: menu.services }, { text: menu.prayerRequests }]],
+    keyboard: [
+      [{ text: menu.nextService }, { text: menu.services }],
+      [{ text: menu.mySermons }, { text: menu.myEvents }],
+      [{ text: menu.prayerRequests }],
+    ],
     resize_keyboard: true,
     is_persistent: true,
   };
@@ -820,7 +989,7 @@ function mainMenuReplyMarkup(locale: AppLocale): TelegramReplyKeyboardMarkup {
 
 function organizationSelectionMarkup(
   organizations: ActiveTelegramOrganizationRecord[],
-  callbackPrefix = SERVICES_ORGANIZATION_CALLBACK_PREFIX,
+  callbackPrefix: string,
 ): TelegramInlineKeyboardMarkup {
   return {
     inline_keyboard: organizations.map((organization) => [
@@ -864,39 +1033,107 @@ function prayerRequestAuthorName(request: ActivePrayerRequestRecord): string {
   );
 }
 
-function serviceScheduleBlocks(
-  services: UpcomingServiceOccurrenceRecord[],
+function monthlyEventBlocks(
+  events: UpcomingEventOccurrenceRecord[],
   locale: AppLocale,
+  formatBlock: (event: UpcomingEventOccurrenceRecord) => string,
 ): ServiceScheduleMessageBlock[] {
   const blocks: ServiceScheduleMessageBlock[] = [];
   let currentMonthKey: string | null = null;
 
-  services.forEach((service) => {
-    const monthKey = formatServiceMonthKey(service.startsAt);
+  events.forEach((event) => {
+    const monthKey = formatServiceMonthKey(event.startsAt);
     if (monthKey !== currentMonthKey) {
-      blocks.push({ kind: 'month', text: formatMonthHeadingBlock(service.startsAt, locale) });
+      blocks.push({ kind: 'month', text: formatMonthHeadingBlock(event.startsAt, locale) });
       currentMonthKey = monthKey;
     }
 
-    blocks.push({ kind: 'service', text: formatServiceBlock(service, locale) });
+    blocks.push({ kind: 'service', text: formatBlock(event) });
   });
 
   return blocks;
 }
 
-function formatServiceBlock(service: UpcomingServiceOccurrenceRecord, locale: AppLocale): string {
+function serviceSections(service: UpcomingEventOccurrenceRecord, locale: AppLocale): string[] {
   return [
     `<b>${escapeTelegramHtml(formatServiceDateTime(service.startsAt, locale))}</b>`,
     escapeTelegramHtml(service.title),
     formatBiblePassage(service, locale),
     formatParticipants(service, locale),
+  ].filter((line): line is string => Boolean(line));
+}
+
+function formatServiceBlock(service: UpcomingEventOccurrenceRecord, locale: AppLocale): string {
+  return serviceSections(service, locale).join('\n\n');
+}
+
+function formatEventBlock(event: UpcomingEventOccurrenceRecord, locale: AppLocale): string {
+  const completedMarker = event.type === 'TASK' && event.taskCompleted ? '✅ ' : '';
+
+  return [
+    `<b>${escapeTelegramHtml(formatServiceDateTime(event.startsAt, locale))}</b>`,
+    `${completedMarker}${escapeTelegramHtml(event.title)}`,
+    `<i>${escapeTelegramHtml(telegramLocaleConfig(locale).eventTypes[event.type])}</i>`,
+    formatDescriptionSummary(event, locale),
   ]
     .filter((line): line is string => Boolean(line))
     .join('\n\n');
 }
 
+function formatSongs(service: UpcomingEventOccurrenceRecord, locale: AppLocale): string | null {
+  const songs = service.serviceDetails?.songs ?? [];
+  if (songs.length === 0) return null;
+
+  return [
+    `<b>${escapeTelegramHtml(serviceScheduleMessages(locale).songsLabel)}:</b>`,
+    ...songs.map((song, index) => `${String(index + 1)}. ${escapeTelegramHtml(song.title)}`),
+  ].join('\n');
+}
+
+function formatDescriptionSummary(
+  event: UpcomingEventOccurrenceRecord,
+  locale: AppLocale,
+): string | null {
+  const description = event.description?.trim();
+  if (!description) return null;
+
+  const telegramHtml = richTextToTelegramHtml(description);
+  const body =
+    telegramHtml.length <= EVENT_DESCRIPTION_LIMIT
+      ? telegramHtml
+      : escapeTelegramHtml(
+          truncateTelegramText(richTextToPlainText(description), EVENT_DESCRIPTION_LIMIT),
+        );
+  if (!body) return null;
+
+  return `${descriptionLabel(locale)}\n${body}`;
+}
+
+function formatDescriptionBlocks(
+  event: UpcomingEventOccurrenceRecord,
+  locale: AppLocale,
+): string[] {
+  const description = event.description?.trim();
+  if (!description) return [];
+
+  const plainBlocks = richTextToPlainTextBlocks(description);
+  const blocks = richTextToTelegramHtmlBlocks(description).map((block, index) =>
+    block.length <= DESCRIPTION_BLOCK_LIMIT
+      ? block
+      : escapeTelegramHtml(truncateTelegramText(plainBlocks[index] ?? '', DESCRIPTION_BLOCK_LIMIT)),
+  );
+  const [first, ...rest] = blocks;
+  if (!first) return [];
+
+  return [`${descriptionLabel(locale)}\n${first}`, ...rest];
+}
+
+function descriptionLabel(locale: AppLocale): string {
+  return `<b>${escapeTelegramHtml(serviceScheduleMessages(locale).descriptionLabel)}:</b>`;
+}
+
 function formatBiblePassage(
-  service: UpcomingServiceOccurrenceRecord,
+  service: UpcomingEventOccurrenceRecord,
   locale: AppLocale,
 ): string | null {
   const biblePassage = service.serviceDetails?.biblePassage?.trim();
@@ -1007,10 +1244,6 @@ function capitalizeLocale(value: string, locale: AppLocale): string {
   return `${value.slice(0, 1).toLocaleUpperCase(intlLocale(locale))}${value.slice(1)}`;
 }
 
-function escapeTelegramHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 function truncateTelegramText(value: string, limit: number): string {
   if (value.length <= limit) return value;
 
@@ -1043,21 +1276,56 @@ function prayerRequestsMessages(locale: AppLocale): PrayerRequestsMessages {
   return telegramLocaleConfig(locale).prayerRequests;
 }
 
+function nextServiceMessages(locale: AppLocale): ListMessages {
+  return telegramLocaleConfig(locale).nextService;
+}
+
+function mySermonsMessages(locale: AppLocale): ListMessages {
+  return telegramLocaleConfig(locale).mySermons;
+}
+
+function myEventsMessages(locale: AppLocale): ListMessages {
+  return telegramLocaleConfig(locale).myEvents;
+}
+
+function connectBeforeActionMessage(action: OrganizationAction, locale: AppLocale): string {
+  const messages = telegramCommonMessages(locale);
+  switch (action) {
+    case 'services':
+      return messages.connectBeforeServices;
+    case 'prayerRequests':
+      return messages.connectBeforePrayerRequests;
+    default:
+      return messages.connectBeforeAction;
+  }
+}
+
 function telegramLocaleConfig(locale: AppLocale): TelegramLocaleConfig {
   return TELEGRAM_LOCALE_CONFIG[locale];
 }
 
-function isServicesMenuButton(text: string): boolean {
+function organizationActionForMenuButton(text: string): OrganizationAction | null {
+  if (text === LEGACY_SERVICES_MENU_BUTTON_TEXT) return 'services';
+  if (text === LEGACY_PRAYER_REQUESTS_MENU_BUTTON_TEXT) return 'prayerRequests';
+
   return (
-    text === LEGACY_SERVICES_MENU_BUTTON_TEXT ||
-    Object.values(TELEGRAM_LOCALE_CONFIG).some((config) => text === config.menu.services)
+    ORGANIZATION_ACTIONS.find((action) =>
+      Object.values(TELEGRAM_LOCALE_CONFIG).some((config) => text === config.menu[action]),
+    ) ?? null
   );
 }
 
-function isPrayerRequestsMenuButton(text: string): boolean {
+function organizationActionForCommand(command: string): OrganizationAction | null {
   return (
-    text === LEGACY_PRAYER_REQUESTS_MENU_BUTTON_TEXT ||
-    Object.values(TELEGRAM_LOCALE_CONFIG).some((config) => text === config.menu.prayerRequests)
+    ORGANIZATION_ACTIONS.find((action) => ORGANIZATION_ACTION_COMMANDS[action] === command) ?? null
+  );
+}
+
+function organizationActionForCallback(data: string): OrganizationAction | null {
+  return (
+    ORGANIZATION_ACTIONS.find((action) =>
+      data.startsWith(ORGANIZATION_ACTION_CALLBACK_PREFIXES[action]),
+    ) ?? null
   );
 }
 

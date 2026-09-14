@@ -7,20 +7,25 @@ import {
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 
-const upcomingServiceInclude = {
+const upcomingEventInclude = {
   organization: { select: { id: true, name: true } },
   serviceDetails: {
     include: {
       participants: {
         orderBy: { createdAt: 'asc' as const },
       },
+      songs: {
+        orderBy: { order: 'asc' as const },
+      },
     },
   },
 } as const;
 
-export type UpcomingServiceRecord = Prisma.CalendarEventGetPayload<{
-  include: typeof upcomingServiceInclude;
+export type UpcomingEventRecord = Prisma.CalendarEventGetPayload<{
+  include: typeof upcomingEventInclude;
 }>;
+
+const ACTIVE_MEMBER_ROLES: OrganizationRole[] = ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'];
 
 const activePrayerRequestInclude = {
   organization: { select: { id: true, name: true } },
@@ -36,6 +41,13 @@ const activePrayerRequestInclude = {
 export type ActivePrayerRequestRecord = Prisma.PrayerRequestGetPayload<{
   include: typeof activePrayerRequestInclude;
 }>;
+
+export interface UpcomingEventsQuery {
+  userId: string;
+  organizationId: string;
+  rangeStart: Date;
+  rangeEnd: Date;
+}
 
 export interface ActiveTelegramOrganizationRecord {
   organizationId: string;
@@ -301,7 +313,7 @@ export class TelegramBotRepository {
         userId,
         status: 'ACTIVE',
         removedAt: null,
-        role: { in: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] },
+        role: { in: ACTIVE_MEMBER_ROLES },
         organization: { status: 'ACTIVE', deletedAt: null },
       },
       select: {
@@ -319,19 +331,40 @@ export class TelegramBotRepository {
     }));
   }
 
-  async listUpcomingServicesForOrganization(input: {
-    userId: string;
-    organizationId: string;
-    rangeStart: Date;
-    rangeEnd: Date;
-  }): Promise<UpcomingServiceRecord[]> {
+  listUpcomingServicesForOrganization(input: UpcomingEventsQuery): Promise<UpcomingEventRecord[]> {
+    return this.listUpcomingEvents(input, { type: 'SERVICE' });
+  }
+
+  listUpcomingServicesForUser(input: UpcomingEventsQuery): Promise<UpcomingEventRecord[]> {
+    const membership = activeMembershipOfUser(input.userId);
+
+    return this.listUpcomingEvents(input, {
+      type: 'SERVICE',
+      OR: [
+        { serviceDetails: { participants: { some: { membership } } } },
+        { assignees: { some: { membership } } },
+      ],
+    });
+  }
+
+  listUpcomingEventsForUser(input: UpcomingEventsQuery): Promise<UpcomingEventRecord[]> {
+    return this.listUpcomingEvents(input, {
+      type: { not: 'SERVICE' },
+      assignees: { some: { membership: activeMembershipOfUser(input.userId) } },
+    });
+  }
+
+  private async listUpcomingEvents(
+    input: UpcomingEventsQuery,
+    filter: Prisma.CalendarEventWhereInput,
+  ): Promise<UpcomingEventRecord[]> {
     const membership = await this.prisma.organizationMember.findFirst({
       where: {
         userId: input.userId,
         organizationId: input.organizationId,
         status: 'ACTIVE',
         removedAt: null,
-        role: { in: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] },
+        role: { in: ACTIVE_MEMBER_ROLES },
         organization: { status: 'ACTIVE', deletedAt: null },
       },
       select: { id: true },
@@ -340,37 +373,41 @@ export class TelegramBotRepository {
 
     return this.prisma.calendarEvent.findMany({
       where: {
-        organizationId: input.organizationId,
-        type: 'SERVICE',
-        OR: [
+        AND: [
           {
-            repeatPeriod: CALENDAR_EVENT_REPEAT_PERIOD.none,
-            startsAt: { lt: input.rangeEnd },
+            organizationId: input.organizationId,
             OR: [
-              { endsAt: null, startsAt: { gte: input.rangeStart } },
-              { endsAt: { gte: input.rangeStart } },
+              {
+                repeatPeriod: CALENDAR_EVENT_REPEAT_PERIOD.none,
+                startsAt: { lt: input.rangeEnd },
+                OR: [
+                  { endsAt: null, startsAt: { gte: input.rangeStart } },
+                  { endsAt: { gte: input.rangeStart } },
+                ],
+              },
+              {
+                repeatPeriod: { not: CALENDAR_EVENT_REPEAT_PERIOD.none },
+                startsAt: { lt: input.rangeEnd },
+              },
             ],
-          },
-          {
-            repeatPeriod: { not: CALENDAR_EVENT_REPEAT_PERIOD.none },
-            startsAt: { lt: input.rangeEnd },
-          },
-        ],
-        deletedAt: null,
-        organization: {
-          status: 'ACTIVE',
-          deletedAt: null,
-          members: {
-            some: {
-              userId: input.userId,
+            deletedAt: null,
+            organization: {
               status: 'ACTIVE',
-              removedAt: null,
-              role: { in: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] },
+              deletedAt: null,
+              members: {
+                some: {
+                  userId: input.userId,
+                  status: 'ACTIVE',
+                  removedAt: null,
+                  role: { in: ACTIVE_MEMBER_ROLES },
+                },
+              },
             },
           },
-        },
+          filter,
+        ],
       },
-      include: upcomingServiceInclude,
+      include: upcomingEventInclude,
       orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
     });
   }
@@ -385,7 +422,7 @@ export class TelegramBotRepository {
         organizationId: input.organizationId,
         status: 'ACTIVE',
         removedAt: null,
-        role: { in: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] },
+        role: { in: ACTIVE_MEMBER_ROLES },
         organization: { status: 'ACTIVE', deletedAt: null },
       },
       select: { id: true },
@@ -405,7 +442,7 @@ export class TelegramBotRepository {
               userId: input.userId,
               status: 'ACTIVE',
               removedAt: null,
-              role: { in: ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'] },
+              role: { in: ACTIVE_MEMBER_ROLES },
             },
           },
         },
@@ -414,4 +451,8 @@ export class TelegramBotRepository {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   }
+}
+
+function activeMembershipOfUser(userId: string): Prisma.OrganizationMemberWhereInput {
+  return { userId, status: 'ACTIVE', removedAt: null };
 }
