@@ -220,6 +220,13 @@ export class NotificationsService {
     return { createdCount: result.createdCount, ...sentCounts };
   }
 
+  async createSubscriptionNotifications(input: CreateNotificationsForMembershipsInput) {
+    const result = await this.notificationsRepository.createNotificationsForMemberships(input);
+    const sentCounts = await this.dispatchToEnabledServices(input, result, input.preferenceKey);
+
+    return { createdCount: result.createdCount, ...sentCounts };
+  }
+
   async purgeExpiredNotifications(input: {
     cutoffs: NotificationRetentionCutoffs;
     dryRun: boolean;

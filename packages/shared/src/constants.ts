@@ -13,8 +13,9 @@ export const ORG_PERMISSIONS = {
   membersManage: 'members.manage',
   websiteManage: 'website.manage',
   mediaManage: 'media.manage',
-  billingManage: 'billing.manage',
 } as const;
+
+export const BUDGET_AUDIT_ENTITY_TYPE = 'Budget';
 
 export const PUBLIC_SECTION_TYPES = ['hero', 'about', 'schedule', 'gallery', 'contact'] as const;
 
@@ -68,6 +69,27 @@ export const CALENDAR_SERVICE_ROLE_LABELS_BY_LOCALE = {
   Record<(typeof CALENDAR_SERVICE_ROLES)[number], string>
 >;
 
+export const RICH_TEXT_ALLOWED_TAGS = [
+  'p',
+  'br',
+  'strong',
+  'em',
+  'u',
+  's',
+  'ul',
+  'ol',
+  'li',
+  'a',
+] as const;
+
+export const RICH_TEXT_ALLOWED_ATTRIBUTES = {
+  a: ['href'],
+} as const;
+
+export const RICH_TEXT_ALLOWED_URL_SCHEMES = ['http', 'https'] as const;
+
+export const RICH_TEXT_MAX_LENGTH = 10000;
+
 export const NOTIFICATION_TYPES = [
   'TASK_ASSIGNED',
   'TASK_UPDATED',
@@ -82,6 +104,11 @@ export const NOTIFICATION_TYPES = [
   'PRAYER_REQUEST_CREATED',
   'BIRTHDAY_DIGEST',
   'ORGANIZATION_ANNOUNCEMENT',
+  'SUBSCRIPTION_REQUIRED',
+  'SUBSCRIPTION_PAYMENT_FAILED',
+  'SUBSCRIPTION_RESTRICTED',
+  'SUBSCRIPTION_RENEWED',
+  'SUBSCRIPTION_CANCELED',
 ] as const;
 
 export const AUDIT_ENTITY_TYPES = [
@@ -97,6 +124,7 @@ export const AUDIT_ENTITY_TYPES = [
   'OrganizationMemberRelationship',
   'OrganizationRequest',
   'PrayerRequest',
+  'Subscription',
   'User',
 ] as const;
 

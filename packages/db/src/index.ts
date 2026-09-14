@@ -24,6 +24,7 @@ export type {
   PlatformRole,
   SessionRevokeReason,
   SessionType,
+  SubscriptionStatus,
   WebAuthnChallengeType,
   WebsiteSectionType,
 } from '@prisma/client';

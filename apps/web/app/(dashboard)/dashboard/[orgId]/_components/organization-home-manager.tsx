@@ -2,25 +2,32 @@
 
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import type { AuditLogListItem } from '@churchflow/shared';
+import type { AuditLogListItem, SubscriptionSummary } from '@churchflow/shared';
 import { StatusBadge } from '@/components/ui/status-badge';
 import type { HomeOrganization, OrganizationRole } from '../types';
 import { AuditLogsSection } from './audit-logs-section';
+import { BillingSection } from './billing-section';
 import { EditOrganizationDialog } from './edit-organization-dialog';
 import { OrganizationLogo } from './organization-logo';
 
 interface OrganizationHomeManagerProps {
   organization: HomeOrganization;
   organizationRole: OrganizationRole | null;
-  auditLogs: AuditLogListItem[];
+  canManageBilling: boolean;
+  auditLogs: AuditLogListItem[] | undefined;
   auditNextCursor: string | null;
+  subscription: SubscriptionSummary | null;
+  subscriptionError: string | null;
 }
 
 export function OrganizationHomeManager({
   organization,
   organizationRole,
+  canManageBilling,
   auditLogs,
   auditNextCursor,
+  subscription,
+  subscriptionError,
 }: OrganizationHomeManagerProps) {
   const t = useTranslations('home');
   const [currentOrganization, setCurrentOrganization] = useState(organization);
@@ -39,6 +46,7 @@ export function OrganizationHomeManager({
           </div>
           {canManage ? (
             <EditOrganizationDialog
+              canEditSlug={organizationRole === 'OWNER'}
               organization={currentOrganization}
               onUpdated={setCurrentOrganization}
             />
@@ -66,9 +74,18 @@ export function OrganizationHomeManager({
         </dl>
       </div>
 
+      {canManageBilling ? (
+        <BillingSection
+          loadError={subscriptionError}
+          organizationId={currentOrganization.id}
+          subscription={subscription}
+        />
+      ) : null}
+
       {canManage ? (
         <AuditLogsSection
           organizationId={currentOrganization.id}
+          canReadBudgetHistory={organizationRole === 'OWNER'}
           initialItems={auditLogs}
           initialNextCursor={auditNextCursor}
         />

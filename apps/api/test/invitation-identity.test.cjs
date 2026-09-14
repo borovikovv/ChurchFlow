@@ -41,6 +41,7 @@ function createService({ invitation: pending, user }) {
     {},
     { record: async () => undefined },
     { forRecipient: async () => 'en', forUser: async () => 'en', forEmail: async () => 'en' },
+    { assert: async () => undefined },
   );
 
   return { service, accepted };

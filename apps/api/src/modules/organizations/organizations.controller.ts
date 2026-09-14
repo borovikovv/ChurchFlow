@@ -18,6 +18,7 @@ import {
 } from '../../common/guards/session-auth.guard';
 import { PlatformAdminGuard } from '../../common/guards/platform-admin.guard';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { GrantBillingExemptionDto } from './dto/grant-billing-exemption.dto';
 import { ListAdminOrganizationWorkspaceQueryDto } from './dto/list-admin-organization-workspace-query.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsService } from './organizations.service';
@@ -57,6 +58,26 @@ export class OrganizationsController {
   @UseGuards(SessionAuthGuard, PlatformAdminGuard)
   async getAdmin(@Param('id') id: string) {
     return this.organizationsService.getAdmin(id);
+  }
+
+  @Post('/admin/organizations/:id/billing-exemption')
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
+  async grantBillingExemption(
+    @Param('id') id: string,
+    @Body() body: GrantBillingExemptionDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.organizationsService.grantBillingExemption(
+      id,
+      this.getActorUserId(request),
+      body.reason,
+    );
+  }
+
+  @Delete('/admin/organizations/:id/billing-exemption')
+  @UseGuards(SessionAuthGuard, PlatformAdminGuard)
+  async revokeBillingExemption(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.organizationsService.revokeBillingExemption(id, this.getActorUserId(request));
   }
 
   @Post('/admin/organizations/:id/archive')

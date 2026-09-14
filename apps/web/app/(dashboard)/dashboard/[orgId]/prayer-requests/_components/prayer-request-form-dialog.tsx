@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import type { CreatePrayerRequestInput, PrayerRequestItem } from '@churchflow/shared';
 import { createPrayerRequestSchema } from '@churchflow/shared';
@@ -17,6 +17,7 @@ export function PrayerRequestFormDialog({
   title,
   triggerClassName,
   triggerLabel,
+  onClose,
   onSubmit,
 }: {
   initialRequest?: PrayerRequestItem;
@@ -24,11 +25,12 @@ export function PrayerRequestFormDialog({
   title: string;
   triggerClassName?: string;
   triggerLabel: string;
+  onClose?: () => void;
   onSubmit: (request: CreatePrayerRequestInput, closeDialog: () => void) => void;
 }) {
   const t = useTranslations('prayerRequests');
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const formId = `prayer-request-form-${initialRequest?.id ?? 'new'}`;
+  const formId = useId();
   const {
     register,
     handleSubmit,
@@ -63,6 +65,7 @@ export function PrayerRequestFormDialog({
       triggerLabel={triggerLabel}
       triggerVariant={initialRequest ? 'ghost' : 'primary'}
       onOpen={resetForm}
+      {...(onClose ? { onClose } : {})}
       {...(triggerClassName ? { triggerClassName } : {})}
       footer={
         <div className="flex justify-end gap-2">

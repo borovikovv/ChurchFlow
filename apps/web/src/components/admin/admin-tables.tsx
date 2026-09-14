@@ -2,11 +2,13 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Route } from 'next';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { CardList } from '@/components/ui/card-list';
 import { DataTable } from '@/components/ui/data-table';
 import { organizationHomeRoute } from '@/features/organizations/routes';
+import { OrganizationRowActions } from '@/components/admin/organization-row-actions';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { formatIsoDate } from '@/lib/format-date';
 
@@ -18,6 +20,7 @@ export interface OrganizationTableRow {
   createdAt: string;
   subtitle?: string;
   itemType?: 'organization' | 'request';
+  isExempt?: boolean;
   _count?: {
     members: number;
     invitations: number;
@@ -36,7 +39,13 @@ export interface OrganizationRequestTableRow {
   createdAt: string;
 }
 
-export function OrganizationsTable({ data }: { data: OrganizationTableRow[] }) {
+export function OrganizationsTable({
+  canManageBilling = false,
+  data,
+}: {
+  canManageBilling?: boolean;
+  data: OrganizationTableRow[];
+}) {
   const t = useTranslations('adminPages');
   const organizationColumns: Array<ColumnDef<OrganizationTableRow>> = [
     {
@@ -68,6 +77,19 @@ export function OrganizationsTable({ data }: { data: OrganizationTableRow[] }) {
       header: t('tables.created'),
       cell: ({ getValue }) => formatIsoDate(String(getValue())),
     },
+    ...(canManageBilling
+      ? [
+          {
+            id: 'actions',
+            header: '',
+            cell: ({ row }) => renderOrganizationActions(row.original),
+            meta: {
+              headerClassName: 'w-11',
+              cellClassName: 'w-11',
+            },
+          } satisfies ColumnDef<OrganizationTableRow>,
+        ]
+      : []),
   ];
 
   const organizationHref = (organization: OrganizationTableRow) =>
@@ -83,7 +105,11 @@ export function OrganizationsTable({ data }: { data: OrganizationTableRow[] }) {
           emptyMessage={t('tables.emptyOrganizations')}
           getCardKey={(organization) => organization.id}
           renderCard={(organization) => (
-            <OrganizationCard href={organizationHref(organization)} organization={organization} />
+            <OrganizationCard
+              actions={renderOrganizationActions(organization)}
+              href={organizationHref(organization)}
+              organization={organization}
+            />
           )}
         />
       </div>
@@ -97,12 +123,29 @@ export function OrganizationsTable({ data }: { data: OrganizationTableRow[] }) {
       </div>
     </>
   );
+
+  // Keyed on the exemption so a successful grant remounts the menu: the action state resets and
+  // the menu closes without a second round trip.
+  function renderOrganizationActions(organization: OrganizationTableRow): ReactNode {
+    if (!canManageBilling || organization.itemType === 'request') return null;
+
+    return (
+      <OrganizationRowActions
+        isExempt={organization.isExempt ?? false}
+        key={`${organization.id}:${organization.isExempt ?? false}`}
+        organizationId={organization.id}
+        organizationName={organization.name}
+      />
+    );
+  }
 }
 
 function OrganizationCard({
+  actions,
   href,
   organization,
 }: {
+  actions?: ReactNode;
   href: Route;
   organization: OrganizationTableRow;
 }) {
@@ -119,6 +162,7 @@ function OrganizationCard({
           <span>{organization.subtitle ?? organization.slug}</span>
         </div>
         <StatusBadge label={t(`statuses.${organization.status}`)} status={organization.status} />
+        {actions}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--muted)]">
         {organization.itemType === 'request' ? null : (

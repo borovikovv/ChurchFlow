@@ -1,5 +1,6 @@
 import { apiFetch } from '@/api/client';
 import { getCurrentUser } from '@/auth/session';
+import { requireOrganizationOwnerAccess } from '@/features/organizations/server/owner-access';
 import { getMessages } from '@/i18n/messages';
 import { PageHeader } from '@/components/ui/page-header';
 import type { BudgetPayload } from '@churchflow/shared';
@@ -28,6 +29,7 @@ export default async function BudgetPage({
   searchParams: Promise<{ year?: string }>;
 }) {
   const { orgId } = await params;
+  await requireOrganizationOwnerAccess(orgId);
   const user = await getCurrentUser();
   const messages = getMessages(user?.locale ?? 'en');
   const { year: rawYear } = await searchParams;

@@ -2,7 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { apiFetch } from '@/api/client';
-import type { AuditLogsPage, UpdateOrganizationInput } from '@churchflow/shared';
+import type {
+  AuditLogsPage,
+  BillingCheckout,
+  SubscriptionSummary,
+  UpdateOrganizationInput,
+} from '@churchflow/shared';
 import type { OrganizationHomeApiResponse } from './types';
 
 const jsonHeaders = { 'content-type': 'application/json' };
@@ -90,4 +95,27 @@ export async function confirmOrganizationLogoAction(input: {
   return readUrl.ok
     ? { ok: true as const, assetId: input.assetId, logoUrl: readUrl.data.url }
     : { ok: false as const, error: readUrl.error.message };
+}
+
+export async function startBillingCheckoutAction(input: { organizationId: string }) {
+  const result = await apiFetch<BillingCheckout>(
+    `/organizations/${input.organizationId}/billing/checkout`,
+    { method: 'POST' },
+  );
+
+  return result.ok
+    ? { ok: true as const, checkout: result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
+export async function cancelSubscriptionAction(input: { organizationId: string }) {
+  const result = await apiFetch<SubscriptionSummary>(
+    `/organizations/${input.organizationId}/billing/cancel`,
+    { method: 'POST' },
+  );
+  revalidatePath(`/dashboard/${input.organizationId}`);
+
+  return result.ok
+    ? { ok: true as const, subscription: result.data }
+    : { ok: false as const, error: result.error.message };
 }

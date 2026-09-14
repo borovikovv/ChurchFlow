@@ -14,7 +14,12 @@ import {
   SessionAuthGuard,
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
+import { ENTITLEMENTS } from '@churchflow/shared';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
+import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
 import {
   ArchivePrayerRequestDto,
   CreatePrayerRequestDto,
@@ -24,7 +29,7 @@ import {
 import { PrayerRequestsService } from './prayer-requests.service';
 
 @Controller('organizations/:organizationId/prayer-requests')
-@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
 export class PrayerRequestsController {
   constructor(private readonly prayerRequestsService: PrayerRequestsService) {}
 
@@ -42,6 +47,7 @@ export class PrayerRequestsController {
   }
 
   @Post()
+  @RequireEntitlement(ENTITLEMENTS.prayersWrite)
   create(
     @Param('organizationId') organizationId: string,
     @Body() body: CreatePrayerRequestDto,
@@ -51,6 +57,7 @@ export class PrayerRequestsController {
   }
 
   @Patch(':requestId')
+  @RequireEntitlement(ENTITLEMENTS.prayersWrite)
   update(
     @Param('organizationId') organizationId: string,
     @Param('requestId') requestId: string,
@@ -66,6 +73,7 @@ export class PrayerRequestsController {
   }
 
   @Post(':requestId/archive')
+  @RequireEntitlement(ENTITLEMENTS.prayersWrite)
   archive(
     @Param('organizationId') organizationId: string,
     @Param('requestId') requestId: string,
@@ -81,6 +89,7 @@ export class PrayerRequestsController {
   }
 
   @Post(':requestId/restore')
+  @RequireEntitlement(ENTITLEMENTS.prayersWrite)
   restore(
     @Param('organizationId') organizationId: string,
     @Param('requestId') requestId: string,
@@ -90,6 +99,7 @@ export class PrayerRequestsController {
   }
 
   @Delete(':requestId')
+  @RequireEntitlement(ENTITLEMENTS.prayersWrite)
   delete(
     @Param('organizationId') organizationId: string,
     @Param('requestId') requestId: string,

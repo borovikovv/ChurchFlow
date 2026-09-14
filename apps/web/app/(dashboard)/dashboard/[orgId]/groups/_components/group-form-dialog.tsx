@@ -26,6 +26,7 @@ export function GroupFormDialog({
   triggerClassName,
   triggerLabel,
   triggerVariant,
+  onClose,
   onSubmit,
 }: {
   group?: OrganizationGroupBadge & { description: string | null };
@@ -34,6 +35,7 @@ export function GroupFormDialog({
   triggerClassName?: string;
   triggerLabel: string;
   triggerVariant?: 'primary' | 'secondary' | 'ghost';
+  onClose?: () => void;
   onSubmit: (group: CreateOrganizationGroupInput, closeDialog: () => void) => void;
 }) {
   const t = useTranslations('groups');
@@ -70,6 +72,7 @@ export function GroupFormDialog({
       triggerLabel={triggerLabel}
       triggerVariant={triggerVariant ?? (group ? 'ghost' : 'primary')}
       onOpen={() => reset(defaultValues)}
+      {...(onClose ? { onClose } : {})}
       {...(triggerClassName ? { triggerClassName } : {})}
       footer={
         <div className="flex justify-end gap-2">
