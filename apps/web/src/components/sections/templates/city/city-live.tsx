@@ -5,6 +5,7 @@ import {
   cityMessages,
   coverStyle,
   formatNextService,
+  resolveWebsiteHref,
   type CityTheme,
 } from './city-shared';
 
@@ -31,7 +32,10 @@ export function CityLive({
     : readText(content, 'scheduledTitle', messages.nextStream);
   const primaryLabel = readText(content, 'primaryLabel', messages.watch);
   const secondaryLabel = readText(content, 'secondaryLabel');
-  const secondaryHref = readText(content, 'secondaryHref') || url || '';
+  const secondaryHref = resolveWebsiteHref(
+    readText(content, 'secondaryHref') || url || '',
+    website,
+  );
 
   return (
     <section className="px-5 py-14 lg:py-[104px]" id="live">

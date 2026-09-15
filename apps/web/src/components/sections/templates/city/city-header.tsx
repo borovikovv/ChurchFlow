@@ -1,12 +1,22 @@
 import type { PublicWebsiteSummary } from '../../types';
-import { cityMessages } from './city-shared';
+import { cityMessages, resolveWebsiteHref } from './city-shared';
 
-export function CityHeader({ website }: { website: PublicWebsiteSummary | undefined }) {
+export function CityHeader({
+  standalone = false,
+  website,
+}: {
+  standalone?: boolean;
+  website: PublicWebsiteSummary | undefined;
+}) {
   const navigation = website?.settings?.navigation ?? [];
   const messages = cityMessages(website);
 
   return (
-    <header className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-6 px-5 py-5 text-white lg:py-7">
+    <header
+      className={`flex w-full items-center justify-between gap-6 px-5 py-5 text-white lg:py-7 ${
+        standalone ? 'bg-[#0a0a0a]' : 'mx-auto max-w-[1240px]'
+      }`}
+    >
       <a
         className="flex items-center gap-3 text-[13px] font-extrabold uppercase tracking-[0.22em] text-white no-underline hover:no-underline sm:text-[15px]"
         href={website?.organization ? `/o/${website.organization.slug}` : '#'}
@@ -37,7 +47,7 @@ export function CityHeader({ website }: { website: PublicWebsiteSummary | undefi
             {navigation.map((link) => (
               <a
                 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-white no-underline hover:text-white/70 hover:no-underline"
-                href={link.href}
+                href={resolveWebsiteHref(link.href, website)}
                 key={`${link.label}:${link.href}`}
               >
                 {link.label}
@@ -70,7 +80,7 @@ export function CityHeader({ website }: { website: PublicWebsiteSummary | undefi
               {navigation.map((link) => (
                 <a
                   className="px-5 py-3 text-[13px] font-semibold uppercase tracking-[0.1em] text-white no-underline hover:bg-white/10 hover:no-underline"
-                  href={link.href}
+                  href={resolveWebsiteHref(link.href, website)}
                   key={`${link.label}:${link.href}`}
                 >
                   {link.label}

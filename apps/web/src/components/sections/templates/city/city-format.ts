@@ -97,3 +97,14 @@ export function formatNextService(
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
+
+export function resolveWebsiteHref(
+  href: string,
+  website: PublicWebsiteSummary | undefined,
+): string {
+  const slug = website?.organization?.slug;
+  if (!slug || !href.startsWith('/') || href.startsWith('//')) return href || '#';
+  if (href === `/o/${slug}` || href.startsWith(`/o/${slug}/`)) return href;
+
+  return `/o/${slug}${href === '/' ? '' : href}`;
+}

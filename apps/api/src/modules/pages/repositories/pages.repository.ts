@@ -61,6 +61,7 @@ export class PagesRepository {
         updatedAt: true,
         website: {
           select: {
+            settings: true,
             organization: {
               select: { slug: true },
             },

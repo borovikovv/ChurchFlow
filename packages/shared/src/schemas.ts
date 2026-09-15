@@ -1075,6 +1075,7 @@ const websiteSectionBaseContentSchema = z
     backgroundColor: websiteHexColorSchema.optional(),
     backgroundImageAssetId: uuidSchema.optional(),
     backgroundImageUrl: websiteHttpUrlSchema.optional(),
+    eyebrow: websiteTextSchema(120).optional(),
     title: websiteTextSchema(200).optional(),
     body: websiteTextSchema(4000).optional(),
     primaryLabel: websiteTextSchema(80).optional(),
@@ -1098,7 +1099,6 @@ const websiteContactContentSchema = websiteSectionBaseContentSchema.extend({
 
 export const websiteSectionContentSchemas = {
   hero: websiteSectionBaseContentSchema.extend({
-    eyebrow: websiteTextSchema(120).optional(),
     headline: websiteTextSchema(200).optional(),
     subheading: websiteTextSchema(600).optional(),
   }),

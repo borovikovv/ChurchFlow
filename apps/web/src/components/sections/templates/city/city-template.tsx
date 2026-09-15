@@ -2,6 +2,7 @@ import { montserrat } from '../../fonts';
 import type { PublicSection, PublicWebsiteSummary } from '../../types';
 import { CityFooter } from './city-footer';
 import { CityGiving } from './city-giving';
+import { CityHeader } from './city-header';
 import { CityHero } from './city-hero';
 import { CityLive } from './city-live';
 import { CityLocation } from './city-location';
@@ -19,13 +20,7 @@ export function CityTemplate({
 
   return (
     <div className={`${montserrat.className} min-h-screen bg-white text-[#0a0a0a] antialiased`}>
-      {!hasHero ? (
-        <CityHero
-          content={{ headline: website?.title ?? '', subheading: website?.description ?? '' }}
-          theme={theme}
-          website={website}
-        />
-      ) : null}
+      {!hasHero ? <CityHeader standalone website={website} /> : null}
       {sections.map((section) => {
         const props = { content: section.content, theme, website };
 
@@ -37,7 +32,7 @@ export function CityTemplate({
           case 'schedule':
             return <CityLocation key={section.id} {...props} />;
           case 'giving':
-            return <CityGiving content={section.content} key={section.id} theme={theme} />;
+            return <CityGiving key={section.id} {...props} />;
           case 'footer':
             return <CityFooter content={section.content} key={section.id} website={website} />;
           default:

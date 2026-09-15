@@ -1,6 +1,6 @@
 import type { WebsiteLink } from '@churchflow/shared';
 import { readText, type PublicWebsiteSummary } from '../../types';
-import { cityMessages, formatServiceTime } from './city-shared';
+import { cityMessages, formatServiceTime, resolveWebsiteHref } from './city-shared';
 
 const SOCIAL_LINKS = [
   { key: 'instagram', label: 'Instagram', icon: '/icons/socials/insta.svg' },
@@ -116,7 +116,7 @@ export function CityFooter({
               {navigation.map((link) => (
                 <a
                   className="text-[14px] text-[#9a9a9a] no-underline hover:text-white hover:no-underline"
-                  href={link.href}
+                  href={resolveWebsiteHref(link.href, website)}
                   key={`${link.label}:${link.href}`}
                 >
                   {link.label}

@@ -1,4 +1,4 @@
-import { readText } from '../../types';
+import { readText, type PublicWebsiteSummary } from '../../types';
 import { CityButtons, CityEyebrow, CityHeading, coverStyle, type CityTheme } from './city-shared';
 
 interface GivingWay {
@@ -9,9 +9,11 @@ interface GivingWay {
 export function CityGiving({
   content,
   theme,
+  website,
 }: {
   content: Record<string, unknown>;
   theme: CityTheme;
+  website: PublicWebsiteSummary | undefined;
 }) {
   const title = readText(content, 'title');
   const body = readText(content, 'body');
@@ -36,7 +38,7 @@ export function CityGiving({
               {body}
             </p>
           ) : null}
-          <CityButtons content={content} onDark theme={theme} />
+          <CityButtons content={content} onDark theme={theme} website={website} />
         </div>
         {ways.length > 0 ? (
           <dl className="m-0 grid border-t border-white/25 sm:grid-cols-3">

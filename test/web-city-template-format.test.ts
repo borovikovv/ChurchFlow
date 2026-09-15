@@ -5,6 +5,7 @@ import {
   cityTheme,
   formatNextService,
   formatServiceTime,
+  resolveWebsiteHref,
 } from '../apps/web/src/components/sections/templates/city/city-format.ts';
 
 const website = (settings: Record<string, unknown>, theme: Record<string, unknown> = {}) => ({
@@ -55,4 +56,18 @@ test('the next service is formatted in the website time zone and locale', () => 
   );
   assert.match(formatted, /^Неділя, 20 вересня/);
   assert.match(formatted, /10:00$/);
+});
+
+test('internal links are resolved under the organization path, external ones untouched', () => {
+  const site = website({}, {});
+  const resolved = (href: string) =>
+    resolveWebsiteHref(href, { ...site, organization: { name: 'Grace', slug: 'grace' } });
+
+  assert.equal(resolved('/about'), '/o/grace/about');
+  assert.equal(resolved('/'), '/o/grace');
+  assert.equal(resolved('/o/grace/give'), '/o/grace/give');
+  assert.equal(resolved('#live'), '#live');
+  assert.equal(resolved('https://youtube.com/c'), 'https://youtube.com/c');
+  assert.equal(resolved(''), '#');
+  assert.equal(resolveWebsiteHref('/about', site), '/about');
 });

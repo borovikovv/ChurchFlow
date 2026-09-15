@@ -51,6 +51,17 @@ test('the next service is the closest upcoming slot in the week, wrapping past S
   assert.equal(thursday.nextService.startsAt, kyiv('2026-09-27T10:00:00').toISOString());
 });
 
+test('the next service crosses a daylight-saving change on the correct wall-clock time', () => {
+  // Kyiv leaves DST on 2026-10-25 at 04:00: Sunday 10:00 local is 08:00 UTC, not 07:00.
+  const state = computeLiveState(settings(), kyiv('2026-10-24T12:00:00'));
+  assert.equal(state.nextService.startsAt, '2026-10-25T08:00:00.000Z');
+});
+
+test('a service that is still running counts as the current one, not next week', () => {
+  const state = computeLiveState(settings(), kyiv('2026-09-20T10:30:00'));
+  assert.equal(state.nextService.startsAt, kyiv('2026-09-20T10:00:00').toISOString());
+});
+
 test('no service times means nothing is live and there is no next service', () => {
   const state = computeLiveState(settings({ serviceTimes: [] }), kyiv('2026-09-20T10:30:00'));
   assert.equal(state.isLive, false);

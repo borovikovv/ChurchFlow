@@ -1,12 +1,13 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { readText } from '../../types';
-import type { CityTheme } from './city-format';
+import { readText, type PublicWebsiteSummary } from '../../types';
+import { resolveWebsiteHref, type CityTheme } from './city-format';
 
 export {
   cityMessages,
   cityTheme,
   formatNextService,
   formatServiceTime,
+  resolveWebsiteHref,
   type CityMessages,
   type CityTheme,
 } from './city-format';
@@ -43,10 +44,12 @@ export function CityButtons({
   content,
   theme,
   onDark,
+  website,
 }: {
   content: Record<string, unknown>;
   theme: CityTheme;
   onDark: boolean;
+  website: PublicWebsiteSummary | undefined;
 }) {
   const primaryLabel = readText(content, 'primaryLabel');
   const secondaryLabel = readText(content, 'secondaryLabel');
@@ -59,13 +62,17 @@ export function CityButtons({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
       {primaryLabel ? (
-        <CityButton href={readText(content, 'primaryHref')} style={accentStyle} tone="accent">
+        <CityButton
+          href={resolveWebsiteHref(readText(content, 'primaryHref'), website)}
+          style={accentStyle}
+          tone="accent"
+        >
           {primaryLabel}
         </CityButton>
       ) : null}
       {secondaryLabel ? (
         <CityButton
-          href={readText(content, 'secondaryHref')}
+          href={resolveWebsiteHref(readText(content, 'secondaryHref'), website)}
           tone={onDark ? 'outline-light' : 'outline-dark'}
         >
           {secondaryLabel}

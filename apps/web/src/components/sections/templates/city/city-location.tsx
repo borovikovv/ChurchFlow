@@ -5,6 +5,7 @@ import {
   CityHeading,
   cityMessages,
   formatServiceTime,
+  resolveWebsiteHref,
   type CityTheme,
 } from './city-shared';
 
@@ -100,7 +101,10 @@ export function CityLocation({
                   </CityButton>
                 ) : null}
                 {secondaryLabel ? (
-                  <CityButton href={readText(content, 'secondaryHref')} tone="outline-dark">
+                  <CityButton
+                    href={resolveWebsiteHref(readText(content, 'secondaryHref'), website)}
+                    tone="outline-dark"
+                  >
                     {secondaryLabel}
                   </CityButton>
                 ) : null}

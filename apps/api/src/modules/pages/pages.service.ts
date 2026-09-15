@@ -6,7 +6,11 @@ import type {
   WebsiteSection,
 } from '@churchflow/shared';
 import { MediaService } from '../media/media.service';
-import { toPublicSection, toPublicWebsite } from '../websites/public-website';
+import {
+  normalizeWebsiteSettings,
+  toPublicSection,
+  toPublicWebsite,
+} from '../websites/public-website';
 import { isPrismaKnownRequestError, PagesRepository } from './repositories/pages.repository';
 
 @Injectable()
@@ -49,7 +53,11 @@ export class PagesService {
     const pages = await this.pagesRepository.listPublicPagesForSitemap();
 
     return pages
-      .filter((page) => !readSeo(page.seo).noindex)
+      .filter(
+        (page) =>
+          !readSeo(page.seo).noindex &&
+          !normalizeWebsiteSettings(page.website.settings).seo.noindex,
+      )
       .map((page) => ({
         orgSlug: page.website.organization.slug,
         pageSlug: page.slug,

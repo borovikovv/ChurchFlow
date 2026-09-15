@@ -46,7 +46,7 @@ export function CityHero({
             {subheading}
           </p>
         ) : null}
-        <CityButtons content={content} onDark theme={theme} />
+        <CityButtons content={content} onDark theme={theme} website={website} />
         {nextService && !readText(content, 'eyebrow') ? (
           <span className="sr-only">
             {messages.nextService}: {formatNextService(nextService, website)}
