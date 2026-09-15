@@ -32,6 +32,7 @@ import {
   PRAYER_REQUEST_TABS,
   PUBLIC_SECTION_TYPES,
   RICH_TEXT_MAX_LENGTH,
+  DEFAULT_APP_LOCALE,
   DEFAULT_WEBSITE_TEMPLATE,
   WEBSITE_LIVE_MODES,
   WEBSITE_TEMPLATES,
@@ -1015,8 +1016,10 @@ export const websiteThemeSchema = z
 export const websiteSettingsSchema = z
   .object({
     template: z.enum(WEBSITE_TEMPLATES).default(DEFAULT_WEBSITE_TEMPLATE),
-    // Service times are local church times; this is the zone they are read in.
+    // Service times are local church times; this is the zone they are read in, and the
+    // locale is what the public site formats them (and its UI strings) in.
     timeZone: websiteTimeZoneSchema.default('UTC'),
+    locale: z.enum(APP_LOCALES).default(DEFAULT_APP_LOCALE),
     navigation: z.array(websiteLinkSchema).max(10).default([]),
     serviceTimes: z.array(websiteServiceTimeSchema).max(10).default([]),
     location: websiteLocationSettingsSchema.default({}),

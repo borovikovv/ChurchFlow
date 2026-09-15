@@ -21,6 +21,7 @@ interface StoredWebsite {
 export interface PublicWebsiteSettings {
   template: WebsiteSettings['template'];
   timeZone: string;
+  locale: WebsiteSettings['locale'];
   navigation: WebsiteSettings['navigation'];
   serviceTimes: WebsiteSettings['serviceTimes'];
   location: WebsiteSettings['location'];
@@ -71,6 +72,7 @@ export function toPublicWebsite(website: StoredWebsite, now = new Date()): Publi
     settings: {
       template: settings.template,
       timeZone: settings.timeZone,
+      locale: settings.locale,
       navigation: settings.navigation,
       serviceTimes: settings.serviceTimes,
       location: settings.location,
