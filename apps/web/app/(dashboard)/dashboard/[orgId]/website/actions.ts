@@ -7,16 +7,16 @@ import type {
   PublishWebsiteInput,
   PublishWebsitePageInput,
   ReorderWebsiteSectionsInput,
-  UpdateWebsiteSettingsInput,
-  UpsertWebsitePageInput,
-  UpsertWebsiteSectionInput,
+  UpdateWebsiteSettingsPayload,
+  UpsertWebsitePagePayload,
+  UpsertWebsiteSectionPayload,
 } from '@churchflow/shared';
 
 const jsonHeaders = { 'content-type': 'application/json' };
 
 export async function updateWebsiteSettingsAction(input: {
   organizationId: string;
-  settings: UpdateWebsiteSettingsInput;
+  settings: UpdateWebsiteSettingsPayload;
 }) {
   const result = await apiFetch<DashboardWebsite>(
     `/organizations/${input.organizationId}/website`,
@@ -54,7 +54,7 @@ export async function publishWebsiteAction(input: {
 
 export async function createWebsitePageAction(input: {
   organizationId: string;
-  page: UpsertWebsitePageInput;
+  page: UpsertWebsitePagePayload;
 }) {
   const result = await apiFetch<DashboardPage>(`/organizations/${input.organizationId}/pages`, {
     method: 'POST',
@@ -71,7 +71,7 @@ export async function createWebsitePageAction(input: {
 export async function updateWebsitePageAction(input: {
   organizationId: string;
   pageId: string;
-  page: UpsertWebsitePageInput;
+  page: UpsertWebsitePagePayload;
 }) {
   const result = await apiFetch<DashboardPage>(
     `/organizations/${input.organizationId}/pages/${input.pageId}`,
@@ -111,7 +111,7 @@ export async function publishWebsitePageAction(input: {
 export async function createWebsiteSectionAction(input: {
   organizationId: string;
   pageId: string;
-  section: UpsertWebsiteSectionInput;
+  section: UpsertWebsiteSectionPayload;
 }) {
   const result = await apiFetch<DashboardSection>(
     `/organizations/${input.organizationId}/pages/${input.pageId}/sections`,
@@ -131,7 +131,7 @@ export async function createWebsiteSectionAction(input: {
 export async function updateWebsiteSectionAction(input: {
   organizationId: string;
   sectionId: string;
-  section: UpsertWebsiteSectionInput;
+  section: UpsertWebsiteSectionPayload;
 }) {
   const result = await apiFetch<DashboardSection>(
     `/organizations/${input.organizationId}/sections/${input.sectionId}`,

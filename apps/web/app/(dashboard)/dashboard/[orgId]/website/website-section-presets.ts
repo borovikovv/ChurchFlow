@@ -51,8 +51,11 @@ export const SECTION_FONT_PRESETS = [
 const SECTION_TYPE_PRESET_FALLBACKS = {
   about: 'hero',
   contact: 'contact',
+  footer: 'footer',
   gallery: 'hero',
+  giving: 'hero',
   hero: 'hero',
+  live: 'hero',
   schedule: 'hero',
 } as const satisfies Record<WebsiteSection['type'], SectionPresetValue>;
 

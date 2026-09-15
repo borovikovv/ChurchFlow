@@ -125,6 +125,9 @@ enum WebsiteSectionType {
   schedule
   gallery
   contact
+  live
+  giving
+  footer
 }
 
 enum AuditAction {
@@ -774,6 +777,7 @@ model WebsiteSection {
   pageId         String             @map("page_id") @db.Uuid
   type           WebsiteSectionType
   order          Int                @default(0)
+  hidden         Boolean            @default(false)
   content        Json               @default("{}")
   createdAt      DateTime           @default(now()) @map("created_at")
   updatedAt      DateTime           @updatedAt @map("updated_at")

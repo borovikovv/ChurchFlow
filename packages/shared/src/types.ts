@@ -34,6 +34,16 @@ import type {
   publishWebsiteSchema,
   publishWebsitePageSchema,
   reorderWebsiteSectionsSchema,
+  setWebsiteSectionHiddenSchema,
+  applyWebsiteTemplateSchema,
+  websiteThemeSchema,
+  websiteSettingsSchema,
+  websiteSeoSchema,
+  websiteLinkSchema,
+  websiteServiceTimeSchema,
+  websiteLiveSettingsSchema,
+  websiteLocationSettingsSchema,
+  websiteSocialLinksSchema,
   updateCurrentUserProfileSchema,
   createOrganizationMemberRelationshipSchema,
   createMemberPhotoUploadSchema,
@@ -104,9 +114,23 @@ export type WebsiteSection = z.infer<typeof websiteSectionSchema>;
 export type UpdateWebsiteSettingsInput = z.infer<typeof updateWebsiteSettingsSchema>;
 export type UpsertWebsitePageInput = z.infer<typeof upsertWebsitePageSchema>;
 export type UpsertWebsiteSectionInput = z.infer<typeof upsertWebsiteSectionSchema>;
+// What a client sends before defaults are applied; the `*Input` types above are the parsed shape.
+export type UpdateWebsiteSettingsPayload = z.input<typeof updateWebsiteSettingsSchema>;
+export type UpsertWebsitePagePayload = z.input<typeof upsertWebsitePageSchema>;
+export type UpsertWebsiteSectionPayload = z.input<typeof upsertWebsiteSectionSchema>;
 export type PublishWebsiteInput = z.infer<typeof publishWebsiteSchema>;
 export type PublishWebsitePageInput = z.infer<typeof publishWebsitePageSchema>;
 export type ReorderWebsiteSectionsInput = z.infer<typeof reorderWebsiteSectionsSchema>;
+export type SetWebsiteSectionHiddenInput = z.infer<typeof setWebsiteSectionHiddenSchema>;
+export type ApplyWebsiteTemplateInput = z.infer<typeof applyWebsiteTemplateSchema>;
+export type WebsiteTheme = z.infer<typeof websiteThemeSchema>;
+export type WebsiteSettings = z.infer<typeof websiteSettingsSchema>;
+export type WebsiteSeo = z.infer<typeof websiteSeoSchema>;
+export type WebsiteLink = z.infer<typeof websiteLinkSchema>;
+export type WebsiteServiceTime = z.infer<typeof websiteServiceTimeSchema>;
+export type WebsiteLiveSettings = z.infer<typeof websiteLiveSettingsSchema>;
+export type WebsiteLocationSettings = z.infer<typeof websiteLocationSettingsSchema>;
+export type WebsiteSocialLinks = z.infer<typeof websiteSocialLinksSchema>;
 export type CreateOrganizationRequestInput = z.infer<typeof createOrganizationRequestSchema>;
 export type ApproveOrganizationRequestInput = z.infer<typeof approveOrganizationRequestSchema>;
 export type RejectOrganizationRequestInput = z.infer<typeof rejectOrganizationRequestSchema>;

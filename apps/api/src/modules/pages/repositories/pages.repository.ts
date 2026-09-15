@@ -97,7 +97,7 @@ export class PagesRepository {
         slug: input.slug,
         title: input.title,
         status: input.status,
-        seo: input.seo as Prisma.InputJsonObject,
+        seo: input.seo,
         publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
       },
       include: {
@@ -116,7 +116,7 @@ export class PagesRepository {
         slug: input.slug,
         title: input.title,
         status: input.status,
-        seo: input.seo as Prisma.InputJsonObject,
+        seo: input.seo,
         publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
       },
       include: {

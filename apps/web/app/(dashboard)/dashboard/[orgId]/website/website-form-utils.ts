@@ -1,10 +1,16 @@
-import type { WebsitePage } from '@churchflow/shared';
+import {
+  DEFAULT_WEBSITE_TEMPLATE,
+  WEBSITE_TEMPLATES,
+  type UpdateWebsiteSettingsPayload,
+  type WebsitePage,
+  type WebsiteTemplateId,
+} from '@churchflow/shared';
 import type { JsonRecord } from './types';
 import { sectionPreset } from './website-section-presets';
 
 export const PAGE_STATUSES: Array<WebsitePage['status']> = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
 
-export function websiteSettingsInput(formData: FormData) {
+export function websiteSettingsInput(formData: FormData): UpdateWebsiteSettingsPayload {
   return {
     title: String(formData.get('title') ?? ''),
     description: optionalString(formData.get('description')),
@@ -13,9 +19,13 @@ export function websiteSettingsInput(formData: FormData) {
       background: optionalString(formData.get('background')) ?? '#ffffff',
     },
     settings: {
-      template: optionalString(formData.get('template')) ?? 'default',
+      template: websiteTemplateId(optionalString(formData.get('template'))),
     },
   };
+}
+
+function websiteTemplateId(value: string | undefined): WebsiteTemplateId {
+  return WEBSITE_TEMPLATES.find((template) => template === value) ?? DEFAULT_WEBSITE_TEMPLATE;
 }
 
 export function pageInput(formData: FormData) {
