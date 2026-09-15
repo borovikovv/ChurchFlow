@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { apiFetch } from '@/api/client';
 import type { DashboardPage, DashboardSection, DashboardWebsite } from './types';
 import type {
+  ApplyWebsiteTemplateInput,
   PublishWebsiteInput,
   PublishWebsitePageInput,
   ReorderWebsiteSectionsInput,
@@ -49,6 +50,26 @@ export async function publishWebsiteAction(input: {
 
   return result.ok
     ? { ok: true as const, website: result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
+export async function applyWebsiteTemplateAction(input: {
+  organizationId: string;
+  template: ApplyWebsiteTemplateInput;
+}) {
+  const result = await apiFetch<{
+    website: DashboardWebsite;
+    page: DashboardPage | null;
+    addedSections: number;
+  }>(`/organizations/${input.organizationId}/website/template`, {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify(input.template),
+  });
+  revalidateWebsite(input.organizationId);
+
+  return result.ok
+    ? { ok: true as const, ...result.data }
     : { ok: false as const, error: result.error.message };
 }
 
@@ -140,6 +161,41 @@ export async function updateWebsiteSectionAction(input: {
       headers: jsonHeaders,
       body: JSON.stringify(input.section),
     },
+  );
+  revalidateWebsite(input.organizationId);
+
+  return result.ok
+    ? { ok: true as const, section: result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
+export async function setWebsiteSectionHiddenAction(input: {
+  organizationId: string;
+  sectionId: string;
+  hidden: boolean;
+}) {
+  const result = await apiFetch<DashboardSection>(
+    `/organizations/${input.organizationId}/sections/${input.sectionId}/hidden`,
+    {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify({ hidden: input.hidden }),
+    },
+  );
+  revalidateWebsite(input.organizationId);
+
+  return result.ok
+    ? { ok: true as const, section: result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
+export async function duplicateWebsiteSectionAction(input: {
+  organizationId: string;
+  sectionId: string;
+}) {
+  const result = await apiFetch<DashboardSection>(
+    `/organizations/${input.organizationId}/sections/${input.sectionId}/duplicate`,
+    { method: 'POST' },
   );
   revalidateWebsite(input.organizationId);
 

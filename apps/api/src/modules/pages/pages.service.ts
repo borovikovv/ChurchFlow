@@ -3,6 +3,7 @@ import type {
   ReorderWebsiteSectionsInput,
   UpsertWebsitePageInput,
   UpsertWebsiteSectionInput,
+  WebsiteSection,
 } from '@churchflow/shared';
 import { MediaService } from '../media/media.service';
 import { toPublicSection, toPublicWebsite } from '../websites/public-website';
@@ -15,8 +16,6 @@ export class PagesService {
     private readonly mediaService: MediaService,
   ) {}
 
-  // Everything the public renderer receives goes through the projections: sections are cut
-  // down to their renderable keys, website settings to the public subset with the live state.
   async findPublicPage(orgSlug: string, pageSlug: string) {
     const page = await this.pagesRepository.findPublicPage(orgSlug, pageSlug);
 
@@ -24,23 +23,22 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    const enriched = await this.enrichSectionBackgrounds(page);
-    const website = toPublicWebsite(page.website);
-    website.settings.seo.ogImageUrl = await this.readUrlOrNull(
-      website.settings.seo.ogImageAssetId,
-      page.organizationId,
-    );
-    const seo = readSeo(page.seo);
+    return this.toPublicPage(page);
+  }
 
-    return {
-      title: page.title,
-      seo: {
-        ...seo,
-        ogImageUrl: await this.readUrlOrNull(seo.ogImageAssetId, page.organizationId),
-      },
-      sections: enriched.sections.map(toPublicSection),
-      website,
-    };
+  // The editor preview is the public projection of a draft: same shaping, same hidden-section
+  // filter, so what an administrator sees is exactly what publishing would show.
+  async findPreviewPage(organizationId: string, pageId: string) {
+    const page = await this.pagesRepository.findDashboardPage(organizationId, pageId);
+
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    return this.toPublicPage({
+      ...page,
+      sections: page.sections.filter((section) => !section.hidden),
+    });
   }
 
   async listDashboardPages(organizationId: string) {
@@ -145,6 +143,34 @@ export class PagesService {
     } catch (error) {
       throw this.toHttpError(error);
     }
+  }
+
+  // Everything the public renderer receives goes through the projections: sections are cut
+  // down to their renderable keys, website settings to the public subset with the live state.
+  private async toPublicPage(page: {
+    organizationId: string;
+    title: string;
+    seo: unknown;
+    sections: Array<{ id: string; type: WebsiteSection['type']; order: number; content: unknown }>;
+    website: Parameters<typeof toPublicWebsite>[0];
+  }) {
+    const enriched = await this.enrichSectionBackgrounds(page);
+    const website = toPublicWebsite(page.website);
+    website.settings.seo.ogImageUrl = await this.readUrlOrNull(
+      website.settings.seo.ogImageAssetId,
+      page.organizationId,
+    );
+    const seo = readSeo(page.seo);
+
+    return {
+      title: page.title,
+      seo: {
+        ...seo,
+        ogImageUrl: await this.readUrlOrNull(seo.ogImageAssetId, page.organizationId),
+      },
+      sections: enriched.sections.map(toPublicSection),
+      website,
+    };
   }
 
   private async readUrlOrNull(assetId: string | null, organizationId: string) {

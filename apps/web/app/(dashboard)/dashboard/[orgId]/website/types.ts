@@ -1,4 +1,9 @@
-import type { WebsitePage, WebsiteSection } from '@churchflow/shared';
+import type {
+  WebsitePage,
+  WebsiteSection,
+  WebsiteSettings,
+  WebsiteTheme,
+} from '@churchflow/shared';
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -7,8 +12,8 @@ export interface DashboardWebsite {
   title: string;
   description: string | null;
   publishedAt: string | null;
-  theme: JsonRecord;
-  settings: JsonRecord;
+  theme: WebsiteTheme;
+  settings: WebsiteSettings;
   organization: {
     name: string;
     slug: string;
@@ -29,6 +34,7 @@ export interface DashboardSection {
   id: string;
   type: WebsiteSection['type'];
   order: number;
+  hidden: boolean;
   content: JsonRecord;
 }
 

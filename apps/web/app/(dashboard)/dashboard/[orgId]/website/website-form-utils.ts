@@ -1,14 +1,22 @@
 import {
-  DEFAULT_WEBSITE_TEMPLATE,
-  WEBSITE_TEMPLATES,
+  APP_LOCALES,
+  DEFAULT_APP_LOCALE,
+  PUBLIC_SECTION_TYPES,
+  WEBSITE_LIVE_MODES,
+  type AppLocale,
   type UpdateWebsiteSettingsPayload,
+  type UpsertWebsitePagePayload,
+  type UpsertWebsiteSectionPayload,
+  type WebsiteLink,
   type WebsitePage,
-  type WebsiteTemplateId,
+  type WebsiteServiceTime,
 } from '@churchflow/shared';
 import type { JsonRecord } from './types';
-import { sectionPreset } from './website-section-presets';
+import type { SectionType } from './website-section-presets';
 
 export const PAGE_STATUSES: Array<WebsitePage['status']> = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+
+const WEEKDAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 export function websiteSettingsInput(formData: FormData): UpdateWebsiteSettingsPayload {
   return {
@@ -19,37 +27,81 @@ export function websiteSettingsInput(formData: FormData): UpdateWebsiteSettingsP
       background: optionalString(formData.get('background')) ?? '#ffffff',
     },
     settings: {
-      template: websiteTemplateId(optionalString(formData.get('template'))),
+      locale: appLocale(optionalString(formData.get('locale'))),
+      timeZone: optionalString(formData.get('timeZone')) ?? 'UTC',
+      navigation: parseLinks(optionalString(formData.get('navigation'))),
+      serviceTimes: parseServiceTimes(optionalString(formData.get('serviceTimes'))),
+      location: {
+        address: optionalString(formData.get('address')),
+        addressNote: optionalString(formData.get('addressNote')),
+        directionsUrl: optionalString(formData.get('directionsUrl')),
+      },
+      live: {
+        url: optionalString(formData.get('liveUrl')),
+        mode: liveMode(optionalString(formData.get('liveMode'))),
+        isLive: formData.get('isLive') === 'true',
+        leadMinutes: Number(formData.get('leadMinutes') ?? 5) || 0,
+      },
+      socials: {
+        facebook: optionalString(formData.get('facebook')),
+        instagram: optionalString(formData.get('instagram')),
+        youtube: optionalString(formData.get('youtube')),
+        telegram: optionalString(formData.get('telegram')),
+      },
+      seo: {
+        title: optionalString(formData.get('seoTitle')),
+        description: optionalString(formData.get('seoDescription')),
+        noindex: formData.get('noindex') === 'true',
+      },
     },
   };
 }
 
-function websiteTemplateId(value: string | undefined): WebsiteTemplateId {
-  return WEBSITE_TEMPLATES.find((template) => template === value) ?? DEFAULT_WEBSITE_TEMPLATE;
-}
-
-export function pageInput(formData: FormData) {
-  const seo: JsonRecord = {};
-  const seoTitle = optionalString(formData.get('seoTitle'));
-  const seoDescription = optionalString(formData.get('seoDescription'));
-  if (seoTitle) seo['title'] = seoTitle;
-  if (seoDescription) seo['description'] = seoDescription;
-
+export function pageInput(formData: FormData): UpsertWebsitePagePayload {
   return {
     slug: String(formData.get('slug') ?? ''),
     title: String(formData.get('title') ?? ''),
     status: String(formData.get('status') ?? 'DRAFT') as WebsitePage['status'],
-    seo,
+    seo: {
+      title: optionalString(formData.get('seoTitle')),
+      description: optionalString(formData.get('seoDescription')),
+      noindex: formData.get('noindex') === 'true',
+    },
   };
 }
 
-export function sectionInput(formData: FormData) {
-  const preset = sectionPreset(String(formData.get('preset') ?? 'hero'));
+// Field names match content keys, except the hero, whose title/body inputs are stored as
+// headline/subheading so the public renderers keep reading the keys they always did.
+const SECTION_TEXT_KEYS = [
+  'eyebrow',
+  'address',
+  'email',
+  'phone',
+  'primaryLabel',
+  'primaryHref',
+  'secondaryLabel',
+  'secondaryHref',
+  'copyright',
+  'socialMetaHref',
+  'socialInstagramHref',
+  'socialTiktokHref',
+  'socialXHref',
+  'backgroundColor',
+  'fontPreset',
+  'liveLabel',
+  'liveTitle',
+  'scheduledTitle',
+  'scheduledBody',
+] as const;
+
+export function sectionInput(formData: FormData): UpsertWebsiteSectionPayload {
+  const type = sectionType(String(formData.get('type') ?? 'hero'));
+  const variant = optionalString(formData.get('variant')) ?? type;
   const title = optionalString(formData.get('title'));
   const body = optionalString(formData.get('body'));
-  const content: JsonRecord = { variant: preset.variant };
+  const content: JsonRecord = { variant };
 
-  if (preset.type === 'hero') {
+  if (type === 'hero') {
     if (title) content['headline'] = title;
     if (body) content['subheading'] = body;
   } else {
@@ -57,23 +109,7 @@ export function sectionInput(formData: FormData) {
     if (body) content['body'] = body;
   }
 
-  for (const key of ['address', 'email', 'phone']) {
-    const value = optionalString(formData.get(key));
-    if (value) content[key] = value;
-  }
-  for (const key of [
-    'primaryLabel',
-    'primaryHref',
-    'secondaryLabel',
-    'secondaryHref',
-    'copyright',
-    'socialMetaHref',
-    'socialInstagramHref',
-    'socialTiktokHref',
-    'socialXHref',
-    'backgroundColor',
-    'fontPreset',
-  ]) {
+  for (const key of SECTION_TEXT_KEYS) {
     const value = optionalString(formData.get(key));
     if (value) content[key] = value;
   }
@@ -86,13 +122,18 @@ export function sectionInput(formData: FormData) {
   }
 
   const items = parseItems(optionalString(formData.get('items')));
-  if (items.length > 0) {
-    content['items'] = items;
-  }
+  if (items.length > 0) content['items'] = items;
+
+  const ways = parseWays(optionalString(formData.get('ways')));
+  if (ways.length > 0) content['ways'] = ways;
+
+  const links = parseLinks(optionalString(formData.get('links')));
+  if (links.length > 0) content['links'] = links;
 
   return {
-    type: preset.type,
+    type,
     order: Number(formData.get('order') ?? 0),
+    hidden: formData.get('hidden') === 'true',
     content,
   };
 }
@@ -112,6 +153,112 @@ export function formatItems(value: unknown): string {
     .join('\n');
 }
 
+// Line formats mirror the items textarea: one entry per line, parts separated by " | ".
+export function formatLinks(value: unknown): string {
+  if (!Array.isArray(value)) return '';
+
+  return value
+    .flatMap((link) => {
+      if (typeof link !== 'object' || link === null) return [];
+      const record = link as JsonRecord;
+      return typeof record['label'] === 'string' && typeof record['href'] === 'string'
+        ? [`${record['label']} | ${record['href']}`]
+        : [];
+    })
+    .join('\n');
+}
+
+export function formatWays(value: unknown): string {
+  if (!Array.isArray(value)) return '';
+
+  return value
+    .flatMap((way) => {
+      if (typeof way !== 'object' || way === null) return [];
+      const record = way as JsonRecord;
+      return typeof record['label'] === 'string' && typeof record['value'] === 'string'
+        ? [`${record['label']} | ${record['value']}`]
+        : [];
+    })
+    .join('\n');
+}
+
+export function formatServiceTimes(value: unknown): string {
+  if (!Array.isArray(value)) return '';
+
+  return value
+    .flatMap((service) => {
+      if (typeof service !== 'object' || service === null) return [];
+      const record = service as JsonRecord;
+      if (typeof record['weekday'] !== 'number' || typeof record['time'] !== 'string') return [];
+      const weekday = WEEKDAY_NAMES[record['weekday']] ?? String(record['weekday']);
+      const duration =
+        typeof record['durationMinutes'] === 'number' ? record['durationMinutes'] : 90;
+      const label = typeof record['label'] === 'string' ? record['label'] : '';
+
+      return [
+        [`${weekday} ${record['time']}`, String(duration), label]
+          .join(' | ')
+          .replace(/(?:\s\|\s)*$/u, ''),
+      ];
+    })
+    .join('\n');
+}
+
+export function parseLinks(value: string | undefined): WebsiteLink[] {
+  if (!value) return [];
+
+  return value
+    .split(/\r?\n/u)
+    .map((line) => {
+      const [label = '', href = ''] = line.split('|').map((part) => part.trim());
+      return { label, href };
+    })
+    .filter((link) => link.label && link.href);
+}
+
+export function parseWays(value: string | undefined): Array<{ label: string; value: string }> {
+  if (!value) return [];
+
+  return value
+    .split(/\r?\n/u)
+    .map((line) => {
+      const [label = '', text = ''] = line.split('|').map((part) => part.trim());
+      return { label, value: text };
+    })
+    .filter((way) => way.label && way.value);
+}
+
+// "sun 10:00 | 90 | Sunday service" — weekday as a name or 0–6, then HH:mm, optional
+// duration in minutes and label.
+export function parseServiceTimes(value: string | undefined): WebsiteServiceTime[] {
+  if (!value) return [];
+
+  return value.split(/\r?\n/u).flatMap((line) => {
+    const [slot = '', duration = '', label = ''] = line.split('|').map((part) => part.trim());
+    const [weekdayText = '', time = ''] = slot.split(/\s+/u);
+    const weekday = parseWeekday(weekdayText);
+    if (weekday === null || !/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(time)) return [];
+
+    return [
+      {
+        weekday,
+        time,
+        durationMinutes: Number(duration) || 90,
+        ...(label ? { label } : {}),
+      },
+    ];
+  });
+}
+
+function parseWeekday(value: string): number | null {
+  const lower = value.toLowerCase();
+  const index = WEEKDAY_NAMES.findIndex((name) => lower.startsWith(name));
+  if (index >= 0) return index;
+
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric >= 0 && numeric <= 6 ? numeric : null;
+}
+
 export function optionalString(value: FormDataEntryValue | null): string | undefined {
   const text = typeof value === 'string' ? value.trim() : '';
 
@@ -122,6 +269,18 @@ export function readString(record: JsonRecord, key: string, fallback = ''): stri
   const value = record[key];
 
   return typeof value === 'string' ? value : fallback;
+}
+
+function sectionType(value: string): SectionType {
+  return PUBLIC_SECTION_TYPES.find((type) => type === value) ?? 'hero';
+}
+
+function appLocale(value: string | undefined): AppLocale {
+  return APP_LOCALES.find((locale) => locale === value) ?? DEFAULT_APP_LOCALE;
+}
+
+function liveMode(value: string | undefined) {
+  return WEBSITE_LIVE_MODES.find((mode) => mode === value) ?? 'schedule';
 }
 
 function parseItems(value: string | undefined) {

@@ -47,6 +47,16 @@ export class PagesController {
     return this.pagesService.findDashboardPage(organizationId, pageId);
   }
 
+  @Get('organizations/:organizationId/pages/:pageId/preview')
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireOrganizationOwner()
+  async previewPage(
+    @Param('organizationId') organizationId: string,
+    @Param('pageId') pageId: string,
+  ) {
+    return this.pagesService.findPreviewPage(organizationId, pageId);
+  }
+
   @Post('organizations/:organizationId/pages')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
   @RequireOrganizationOwner()
