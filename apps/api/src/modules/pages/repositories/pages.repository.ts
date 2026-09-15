@@ -183,7 +183,6 @@ export class PagesRepository {
     });
   }
 
-  // The copy lands right after the original; everything below shifts down one slot.
   async duplicateSection(organizationId: string, sectionId: string) {
     return this.prisma.$transaction(async (tx) => {
       const source = await tx.websiteSection.findFirst({

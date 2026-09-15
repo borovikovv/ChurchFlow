@@ -7,8 +7,6 @@ import { CityLive } from './city-live';
 import { CityLocation } from './city-location';
 import { cityTheme } from './city-shared';
 
-// "City": full-bleed photography, one accent colour, uppercase Montserrat. Section types the
-// template does not know stay stored on the page but are not drawn.
 export function CityTemplate({
   sections,
   website,

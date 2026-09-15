@@ -1,8 +1,6 @@
 import type { PublicWebsiteSummary } from '../../types';
 import { cityMessages } from './city-shared';
 
-// Transparent, laid over the hero photo. Navigation comes from the website settings, so
-// every page shares the same menu; on small screens it folds into a native disclosure.
 export function CityHeader({ website }: { website: PublicWebsiteSummary | undefined }) {
   const navigation = website?.settings?.navigation ?? [];
   const messages = cityMessages(website);

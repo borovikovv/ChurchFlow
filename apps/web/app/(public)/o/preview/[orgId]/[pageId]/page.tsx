@@ -10,8 +10,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-// Draft preview for the website editor: owner-only, rendered by the same public renderer and
-// the same projection the published site uses, so it shows exactly what publishing would.
 export default async function WebsitePreviewPage({
   params,
 }: {

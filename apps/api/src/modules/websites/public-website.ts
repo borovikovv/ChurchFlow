@@ -46,8 +46,6 @@ export interface PublicWebsite {
   organization: { name: string; slug: string };
 }
 
-// Stored JSON predates the typed schemas, so every read normalizes it: missing keys get their
-// defaults and anything the schema does not know is dropped from what leaves the API.
 export function normalizeWebsiteSettings(settings: unknown): WebsiteSettings {
   const result = websiteSettingsSchema.safeParse(settings ?? {});
 

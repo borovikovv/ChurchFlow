@@ -118,8 +118,6 @@ export function CityHeading({
   return <h2 className={`${shared} text-[32px] sm:text-[48px]`}>{children}</h2>;
 }
 
-// A photo background with a dark wash so white text stays readable; without a photo the
-// section is plain ink so it never renders as an empty frame.
 export function coverStyle(content: Record<string, unknown>): CSSProperties {
   const imageUrl = readText(content, 'backgroundImageUrl');
 

@@ -123,7 +123,6 @@ export async function setPagePublished(formData: FormData) {
   }));
 }
 
-// A section added from the library starts with the template's sample content for its kind.
 export async function createSection(formData: FormData) {
   const messages = await currentWebsiteMessages();
   const organizationId = readOrganizationId(formData);

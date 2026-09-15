@@ -7,7 +7,6 @@ import type { DashboardSection } from '../types';
 import { formatItems, formatLinks, formatWays, readString } from '../website-form-utils';
 import { SECTION_FONT_PRESETS, type SectionFieldGroup } from '../website-section-presets';
 
-// One form fragment per field group; the inspector composes them from the section's definition.
 export function SectionFields({
   fields,
   section,

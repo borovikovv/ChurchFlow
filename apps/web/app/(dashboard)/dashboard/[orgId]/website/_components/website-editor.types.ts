@@ -2,8 +2,6 @@ import type { WebsiteFormResult } from '../form-actions';
 
 export type WebsiteFormAction = (formData: FormData) => Promise<WebsiteFormResult>;
 
-// Submits a server action, folds its mutation into the editor and reports success so callers
-// can close dialogs; `pendingKey` names the control that is busy while it runs.
 export type SubmitWebsiteForm = (
   action: WebsiteFormAction,
   formData: FormData,

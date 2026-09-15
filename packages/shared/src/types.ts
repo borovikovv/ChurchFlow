@@ -114,7 +114,6 @@ export type WebsiteSection = z.infer<typeof websiteSectionSchema>;
 export type UpdateWebsiteSettingsInput = z.infer<typeof updateWebsiteSettingsSchema>;
 export type UpsertWebsitePageInput = z.infer<typeof upsertWebsitePageSchema>;
 export type UpsertWebsiteSectionInput = z.infer<typeof upsertWebsiteSectionSchema>;
-// What a client sends before defaults are applied; the `*Input` types above are the parsed shape.
 export type UpdateWebsiteSettingsPayload = z.input<typeof updateWebsiteSettingsSchema>;
 export type UpsertWebsitePagePayload = z.input<typeof upsertWebsitePageSchema>;
 export type UpsertWebsiteSectionPayload = z.input<typeof upsertWebsiteSectionSchema>;

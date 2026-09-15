@@ -4,8 +4,6 @@ import { DefaultTemplate } from './templates/default/default-template';
 
 export type { PublicSection, PublicWebsiteSettings, PublicWebsiteSummary } from './types';
 
-// The template id on the website decides which renderer draws its sections. Websites created
-// before templates existed have no id and keep rendering exactly as they did.
 export function SectionRenderer({
   sections,
   website,

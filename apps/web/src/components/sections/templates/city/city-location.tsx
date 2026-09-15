@@ -8,8 +8,6 @@ import {
   type CityTheme,
 } from './city-shared';
 
-// "How to find us": address and service times from the website settings, a photo of the
-// building when one is set. Hidden entirely when the settings hold neither.
 export function CityLocation({
   content,
   theme,

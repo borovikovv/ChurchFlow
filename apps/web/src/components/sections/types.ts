@@ -17,7 +17,6 @@ export interface PublicNextService {
   startsAt: string;
 }
 
-// Mirrors the API's public website projection: only what a public renderer may see.
 export interface PublicWebsiteSettings {
   template: WebsiteTemplateId;
   timeZone: string;

@@ -7,7 +7,6 @@ const CITY_WHITE = '#ffffff';
 export interface CityTheme {
   accent: string;
   onAccent: string;
-  // The accent as it may be used on white: a near-white accent falls back to ink.
   accentInk: string;
   onAccentInk: string;
 }
@@ -64,7 +63,6 @@ export function cityMessages(website: PublicWebsiteSummary | undefined): CityMes
 
 const WEEKDAY_ANCHOR = new Date('2026-09-13T00:00:00Z'); // a Sunday
 
-// Service times are weekday + HH:mm; format them like a date on the matching weekday.
 export function formatServiceTime(
   service: { weekday: number; time: string },
   locale: AppLocale,

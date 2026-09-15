@@ -64,9 +64,6 @@ export class WebsitesRepository {
     });
   }
 
-  // Switching templates never rewrites what an administrator already wrote: existing sections
-  // keep their content, and only section kinds the page lacks are added — hidden, so nothing
-  // new shows up on the public site until someone fills it in.
   async applyTemplate(input: {
     organizationId: string;
     actorUserId: string;

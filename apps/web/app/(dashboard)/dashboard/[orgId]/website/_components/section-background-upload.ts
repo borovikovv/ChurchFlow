@@ -12,8 +12,6 @@ export interface WebsiteUploadMessages {
   chooseBackgroundImage: string;
 }
 
-// Runs before the section form action: the chosen file goes straight to storage and only the
-// resulting asset id and read URL travel with the rest of the form.
 export async function uploadSectionBackgroundImage(
   formData: FormData,
   messages: WebsiteUploadMessages,

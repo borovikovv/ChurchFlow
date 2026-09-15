@@ -16,8 +16,6 @@ import { SectionFields } from './section-fields';
 import { sectionEditorKey } from './website-editor-state';
 import type { SubmitWebsiteForm } from './website-editor.types';
 
-// Edits one section. The form is keyed by the section's content so a saved or duplicated
-// section re-mounts with fresh defaults instead of stale uncontrolled inputs.
 export function SectionInspector({
   organizationId,
   pendingKey,

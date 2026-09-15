@@ -31,8 +31,6 @@ export interface SectionVariantDefinition {
   templates: readonly WebsiteTemplateId[];
 }
 
-// Every section kind the editor can add, per template. Older sections whose variant is not
-// listed fall back to the first variant of their type so they stay editable.
 export const SECTION_VARIANTS: readonly SectionVariantDefinition[] = [
   {
     type: 'hero',
@@ -131,7 +129,6 @@ export function isSectionType(value: string): value is SectionType {
   return (PUBLIC_SECTION_TYPES as readonly string[]).includes(value);
 }
 
-// Whether the current template will draw the section at all; other kinds stay stored.
 export function isRenderableByTemplate(type: SectionType, template: WebsiteTemplateId): boolean {
   return WEBSITE_TEMPLATE_DEFINITIONS[template].sectionTypes.includes(type);
 }

@@ -12,8 +12,6 @@ import type { DashboardWebsite } from '../types';
 import { formatLinks, formatServiceTimes } from '../website-form-utils';
 import type { SubmitWebsiteForm } from './website-editor.types';
 
-// Branding, navigation, service times, live stream, socials and SEO — everything that is not a
-// section lives here and is shared by every page of the site.
 export function WebsiteSettingsDialog({
   organizationId,
   pending,

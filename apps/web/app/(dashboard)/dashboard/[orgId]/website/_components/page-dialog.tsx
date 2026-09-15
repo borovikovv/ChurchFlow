@@ -11,7 +11,6 @@ import type { DashboardPage } from '../types';
 import { PAGE_STATUSES, readString } from '../website-form-utils';
 import type { SubmitWebsiteForm } from './website-editor.types';
 
-// One dialog for both creating and editing a page: slug, title, status and page-level SEO.
 export function PageDialog({
   organizationId,
   page,

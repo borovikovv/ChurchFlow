@@ -91,7 +91,6 @@ export class WebsitesService {
     try {
       return (await this.mediaService.getReadUrl(assetId, organizationId)).url;
     } catch {
-      // A missing social image must not take the whole website down with it.
       return null;
     }
   }

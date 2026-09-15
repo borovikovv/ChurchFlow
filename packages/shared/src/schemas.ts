@@ -900,8 +900,6 @@ export const organizationWebsiteSchema = z.object({
   publishedAt: z.coerce.date().nullable(),
 });
 
-// Public websites render whatever links administrators type in, so every href that reaches
-// the database goes through this check: same-site paths, anchors, contact schemes and http(s).
 export function isSafeWebsiteUrl(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
@@ -953,7 +951,6 @@ export const websiteLinkSchema = z.object({
 });
 
 export const websiteServiceTimeSchema = z.object({
-  // 0 = Sunday … 6 = Saturday, matching Date#getDay().
   weekday: z.number().int().min(0).max(6),
   time: websiteTimeSchema,
   durationMinutes: z.number().int().min(15).max(360).default(90),
@@ -963,7 +960,6 @@ export const websiteServiceTimeSchema = z.object({
 export const websiteLiveSettingsSchema = z.object({
   url: websiteHttpUrlSchema.optional(),
   mode: z.enum(WEBSITE_LIVE_MODES).default('schedule'),
-  // Only consulted in manual mode; schedule mode derives the on-air state from serviceTimes.
   isLive: z.boolean().default(false),
   leadMinutes: z.number().int().min(0).max(60).default(5),
 });
@@ -1011,13 +1007,9 @@ export const websiteThemeSchema = z
   })
   .passthrough();
 
-// Websites created before the typed settings existed only carry `template`; every other key
-// defaults so old rows parse unchanged and the editor can fill the rest in later.
 export const websiteSettingsSchema = z
   .object({
     template: z.enum(WEBSITE_TEMPLATES).default(DEFAULT_WEBSITE_TEMPLATE),
-    // Service times are local church times; this is the zone they are read in, and the
-    // locale is what the public site formats them (and its UI strings) in.
     timeZone: websiteTimeZoneSchema.default('UTC'),
     locale: z.enum(APP_LOCALES).default(DEFAULT_APP_LOCALE),
     navigation: z.array(websiteLinkSchema).max(10).default([]),
@@ -1029,8 +1021,6 @@ export const websiteSettingsSchema = z
   })
   .passthrough();
 
-// Settings updates are patches: a key that is absent stays as stored, so a form that only
-// knows about `template` cannot wipe navigation or service times saved by the editor.
 export const updateWebsiteSettingsSchema = z.object({
   title: z.string().min(1).max(160),
   description: z.string().max(500).optional(),
@@ -1078,9 +1068,6 @@ const websiteGivingWaySchema = z.object({
   value: websiteTextSchema(300).min(1),
 });
 
-// Keys every renderer understands regardless of type. Unknown keys pass through so content
-// written by older editor versions survives, but `websiteSectionUrlKeysAreSafe` below still
-// refuses any stray href/url that is not safe.
 const websiteSectionBaseContentSchema = z
   .object({
     variant: websiteTextSchema(40).optional(),
@@ -1159,8 +1146,6 @@ export function websiteSectionContentSchema(
   return websiteSectionContentSchemas[type];
 }
 
-// Keys a public renderer may receive for a section type. Anything else stored on the section
-// stays private; the asset id is swapped for a signed URL before the section leaves the API.
 export function publicWebsiteSectionKeys(type: (typeof PUBLIC_SECTION_TYPES)[number]): string[] {
   return Object.keys(websiteSectionContentSchemas[type].shape).filter(
     (key) => key !== 'backgroundImageAssetId',

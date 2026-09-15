@@ -8,8 +8,6 @@ import {
   type CityTheme,
 } from './city-shared';
 
-// Live block: on air it shows the red badge and a join button; otherwise the next stream.
-// Without a stream url and without a next service there is nothing to show, so it hides.
 export function CityLive({
   content,
   theme,

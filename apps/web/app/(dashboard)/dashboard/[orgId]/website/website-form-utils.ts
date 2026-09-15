@@ -70,8 +70,6 @@ export function pageInput(formData: FormData): UpsertWebsitePagePayload {
   };
 }
 
-// Field names match content keys, except the hero, whose title/body inputs are stored as
-// headline/subheading so the public renderers keep reading the keys they always did.
 const SECTION_TEXT_KEYS = [
   'eyebrow',
   'address',
@@ -153,7 +151,6 @@ export function formatItems(value: unknown): string {
     .join('\n');
 }
 
-// Line formats mirror the items textarea: one entry per line, parts separated by " | ".
 export function formatLinks(value: unknown): string {
   if (!Array.isArray(value)) return '';
 
@@ -228,8 +225,6 @@ export function parseWays(value: string | undefined): Array<{ label: string; val
     .filter((way) => way.label && way.value);
 }
 
-// "sun 10:00 | 90 | Sunday service" — weekday as a name or 0–6, then HH:mm, optional
-// duration in minutes and label.
 export function parseServiceTimes(value: string | undefined): WebsiteServiceTime[] {
   if (!value) return [];
 

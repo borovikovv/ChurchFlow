@@ -11,8 +11,6 @@ const DEVICES = [
 
 type DeviceId = (typeof DEVICES)[number]['id'];
 
-// The preview is the real public renderer fed with the draft through an owner-only route, so
-// it is reloaded (via `version`) after every saved change rather than re-rendered locally.
 export function WebsitePreview({
   organizationId,
   pageId,

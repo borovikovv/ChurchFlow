@@ -6,8 +6,6 @@ export interface WebsiteEditorState {
   pages: DashboardPage[];
 }
 
-// Every server action reports what changed; the editor folds it into local state instead of
-// refetching, so the section list and the preview update as soon as the request returns.
 export function applyWebsiteMutation(
   state: WebsiteEditorState,
   mutation: WebsiteMutation,
@@ -58,7 +56,6 @@ export function applyWebsiteMutation(
   }
 }
 
-// A duplicate lands at `order + 1` and the API shifted the rest; mirror that locally.
 function insertSection(sections: DashboardSection[], next: DashboardSection): DashboardSection[] {
   const shifted = sections.map((section) =>
     section.order >= next.order ? { ...section, order: section.order + 1 } : section,

@@ -12,7 +12,6 @@ export interface WebsiteTemplateSectionDefinition {
 export interface WebsiteTemplateDefinition {
   id: WebsiteTemplateId;
   theme: { accent: string; background: string };
-  // Section types this template can render; anything else on a page stays stored but hidden.
   sectionTypes: readonly WebsiteSectionType[];
   home: readonly WebsiteTemplateSectionDefinition[];
 }

@@ -40,8 +40,6 @@ export function websiteToFallbackPage(website: PublicWebsiteResponse): PublicPag
   };
 }
 
-// Page metadata falls back to the website-wide SEO settings, and a page or a whole website
-// marked noindex is never offered to crawlers.
 export function publicPageMetadata({
   page,
   orgSlug,

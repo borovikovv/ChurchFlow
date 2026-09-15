@@ -3,7 +3,6 @@ const test = require('node:test');
 const { websiteSettingsSchema } = require('@churchflow/shared');
 const { computeLiveState } = require('../dist/modules/websites/live-state.js');
 
-// Sunday 10:00 and Wednesday 19:00 in Kyiv; 2026-09-20 is a Sunday.
 function settings(overrides = {}) {
   return websiteSettingsSchema.parse({
     timeZone: 'Europe/Kyiv',
@@ -26,7 +25,6 @@ test('schedule mode is live from lead time before the service until it ends', ()
 });
 
 test('schedule mode reads local time in the website time zone, not UTC', () => {
-  // 07:30 UTC is 10:30 in Kyiv — inside the Sunday service.
   assert.equal(computeLiveState(settings(), new Date('2026-09-20T07:30:00Z')).isLive, true);
   assert.equal(
     computeLiveState(settings({ timeZone: 'UTC' }), new Date('2026-09-20T07:30:00Z')).isLive,

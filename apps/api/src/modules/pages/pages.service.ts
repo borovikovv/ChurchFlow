@@ -26,8 +26,6 @@ export class PagesService {
     return this.toPublicPage(page);
   }
 
-  // The editor preview is the public projection of a draft: same shaping, same hidden-section
-  // filter, so what an administrator sees is exactly what publishing would show.
   async findPreviewPage(organizationId: string, pageId: string) {
     const page = await this.pagesRepository.findDashboardPage(organizationId, pageId);
 
@@ -145,8 +143,6 @@ export class PagesService {
     }
   }
 
-  // Everything the public renderer receives goes through the projections: sections are cut
-  // down to their renderable keys, website settings to the public subset with the live state.
   private async toPublicPage(page: {
     organizationId: string;
     title: string;
@@ -178,7 +174,6 @@ export class PagesService {
     try {
       return (await this.mediaService.getReadUrl(assetId, organizationId)).url;
     } catch {
-      // A missing social image must not take the whole page down with it.
       return null;
     }
   }

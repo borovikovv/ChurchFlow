@@ -7,8 +7,6 @@ export interface WebsiteLiveState {
   nextService: { weekday: number; time: string; label: string | null; startsAt: string } | null;
 }
 
-// Service times are stored as local weekday + HH:mm; both they and `now` are projected onto
-// "minutes since Sunday 00:00" in the website's time zone so the comparison ignores dates.
 export function computeLiveState(settings: WebsiteSettings, now = new Date()): WebsiteLiveState {
   const nowMinutes = weekMinutesInTimeZone(now, settings.timeZone);
   const nextService = nextServiceTime(settings.serviceTimes, nowMinutes, now);
