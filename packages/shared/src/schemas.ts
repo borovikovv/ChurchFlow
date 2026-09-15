@@ -980,6 +980,22 @@ export const websiteSocialLinksSchema = z.object({
   telegram: websiteHttpUrlSchema.optional(),
 });
 
+export function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const websiteTimeZoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .refine(isValidTimeZone, { message: 'Unknown time zone' });
+
 export const websiteSeoSchema = z.object({
   title: websiteTextSchema(160).optional(),
   description: websiteTextSchema(300).optional(),
@@ -999,6 +1015,8 @@ export const websiteThemeSchema = z
 export const websiteSettingsSchema = z
   .object({
     template: z.enum(WEBSITE_TEMPLATES).default(DEFAULT_WEBSITE_TEMPLATE),
+    // Service times are local church times; this is the zone they are read in.
+    timeZone: websiteTimeZoneSchema.default('UTC'),
     navigation: z.array(websiteLinkSchema).max(10).default([]),
     serviceTimes: z.array(websiteServiceTimeSchema).max(10).default([]),
     location: websiteLocationSettingsSchema.default({}),
@@ -1008,11 +1026,13 @@ export const websiteSettingsSchema = z
   })
   .passthrough();
 
+// Settings updates are patches: a key that is absent stays as stored, so a form that only
+// knows about `template` cannot wipe navigation or service times saved by the editor.
 export const updateWebsiteSettingsSchema = z.object({
   title: z.string().min(1).max(160),
   description: z.string().max(500).optional(),
-  theme: websiteThemeSchema.default({}),
-  settings: websiteSettingsSchema.default({}),
+  theme: websiteThemeSchema.partial().default({}),
+  settings: websiteSettingsSchema.partial().default({}),
 });
 
 export const websiteTemplateIdSchema = z.enum(WEBSITE_TEMPLATES);
@@ -1134,6 +1154,14 @@ export function websiteSectionContentSchema(
   type: (typeof PUBLIC_SECTION_TYPES)[number],
 ): z.ZodType<Record<string, unknown>> {
   return websiteSectionContentSchemas[type];
+}
+
+// Keys a public renderer may receive for a section type. Anything else stored on the section
+// stays private; the asset id is swapped for a signed URL before the section leaves the API.
+export function publicWebsiteSectionKeys(type: (typeof PUBLIC_SECTION_TYPES)[number]): string[] {
+  return Object.keys(websiteSectionContentSchemas[type].shape).filter(
+    (key) => key !== 'backgroundImageAssetId',
+  );
 }
 
 export const websiteSectionSchema = z.object({

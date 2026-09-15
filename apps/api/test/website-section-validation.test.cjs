@@ -7,6 +7,7 @@ const {
   upsertWebsitePageSchema,
   upsertWebsiteSectionSchema,
   websiteSectionContentSchema,
+  websiteSettingsSchema,
 } = require('@churchflow/shared');
 
 function issuePaths(result) {
@@ -81,20 +82,29 @@ test('content that does not match its section type is rejected with a content pa
   assert.ok(issuePaths(result).includes('content.ways.0.value'));
 });
 
-test('website settings written before the typed schema still parse, with defaults filled in', () => {
+test('stored settings written before the typed schema normalize with defaults filled in', () => {
+  const settings = websiteSettingsSchema.parse({ template: 'default' });
+
+  assert.equal(settings.template, 'default');
+  assert.equal(settings.timeZone, 'UTC');
+  assert.deepEqual(settings.navigation, []);
+  assert.deepEqual(settings.serviceTimes, []);
+  assert.equal(settings.live.mode, 'schedule');
+  assert.equal(settings.live.isLive, false);
+  assert.equal(settings.seo.noindex, false);
+});
+
+test('a settings update is a patch: absent keys stay undefined, present ones are validated', () => {
   const result = updateWebsiteSettingsSchema.safeParse({
     title: 'Grace Church',
-    theme: { accent: '#1f883d', background: '#ffffff' },
-    settings: { template: 'default' },
+    settings: { template: 'city', live: { url: 'https://youtube.com/live/x' } },
   });
 
   assert.equal(result.success, true);
-  assert.equal(result.data.settings.template, 'default');
-  assert.deepEqual(result.data.settings.navigation, []);
-  assert.deepEqual(result.data.settings.serviceTimes, []);
+  assert.equal(result.data.settings.template, 'city');
+  assert.equal(result.data.settings.navigation, undefined);
   assert.equal(result.data.settings.live.mode, 'schedule');
-  assert.equal(result.data.settings.live.isLive, false);
-  assert.equal(result.data.settings.seo.noindex, false);
+  assert.deepEqual(result.data.theme, {});
 });
 
 test('an unknown template id, a bad colour and an unsafe live url are rejected', () => {
