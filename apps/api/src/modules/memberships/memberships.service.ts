@@ -265,7 +265,7 @@ export class MembershipsService {
   ): Promise<ImportOrganizationMembersCsvResult> {
     const organizationGroups = await this.membershipsRepository.listGroups(organizationId);
     const parsed = parseMembersCsv(csv, organizationGroups);
-    if (parsed.totalRows === 0 && parsed.errors.length > 0) {
+    if (parsed.rows.length === 0 && parsed.errors.some((error) => error.row === 1)) {
       const firstError = parsed.errors[0];
       throw new BadRequestException({
         code: 'CSV_IMPORT_INVALID',

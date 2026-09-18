@@ -256,6 +256,8 @@
     "importFromCsv": "Імпортувати з CSV",
     "importedMembers": "Імпортовано учасників: {created}.",
     "importedMembersWithFailures": "Імпортовано учасників: {created}. {failed} рядків потребують виправлення.",
+    "importRowError": "Рядок {row}: {message}",
+    "importMoreErrors": "…та ще {count}",
     "importedRows": "Імпортовано {created} з {total} рядків.",
     "importing": "Імпорт...",
     "inviteAppUser": "Запросити користувача",
