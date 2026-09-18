@@ -3,8 +3,14 @@ import type {
   ReorderWebsiteSectionsInput,
   UpsertWebsitePageInput,
   UpsertWebsiteSectionInput,
+  WebsiteSection,
 } from '@churchflow/shared';
 import { MediaService } from '../media/media.service';
+import {
+  normalizeWebsiteSettings,
+  toPublicSection,
+  toPublicWebsite,
+} from '../websites/public-website';
 import { isPrismaKnownRequestError, PagesRepository } from './repositories/pages.repository';
 
 @Injectable()
@@ -21,7 +27,20 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.enrichSectionBackgrounds(page);
+    return this.toPublicPage(page);
+  }
+
+  async findPreviewPage(organizationId: string, pageId: string) {
+    const page = await this.pagesRepository.findDashboardPage(organizationId, pageId);
+
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    return this.toPublicPage({
+      ...page,
+      sections: page.sections.filter((section) => !section.hidden),
+    });
   }
 
   async listDashboardPages(organizationId: string) {
@@ -33,11 +52,17 @@ export class PagesService {
   async listPublicPagesForSitemap() {
     const pages = await this.pagesRepository.listPublicPagesForSitemap();
 
-    return pages.map((page) => ({
-      orgSlug: page.website.organization.slug,
-      pageSlug: page.slug,
-      updatedAt: page.updatedAt,
-    }));
+    return pages
+      .filter(
+        (page) =>
+          !readSeo(page.seo).noindex &&
+          !normalizeWebsiteSettings(page.website.settings).seo.noindex,
+      )
+      .map((page) => ({
+        orgSlug: page.website.organization.slug,
+        pageSlug: page.slug,
+        updatedAt: page.updatedAt,
+      }));
   }
 
   async findDashboardPage(organizationId: string, pageId: string) {
@@ -90,6 +115,22 @@ export class PagesService {
     }
   }
 
+  async setSectionHidden(organizationId: string, sectionId: string, hidden: boolean) {
+    try {
+      return await this.pagesRepository.setSectionHidden(organizationId, sectionId, hidden);
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+  }
+
+  async duplicateSection(organizationId: string, sectionId: string) {
+    try {
+      return await this.pagesRepository.duplicateSection(organizationId, sectionId);
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+  }
+
   async deleteSection(organizationId: string, sectionId: string) {
     try {
       return await this.pagesRepository.deleteSection(organizationId, sectionId);
@@ -107,6 +148,41 @@ export class PagesService {
       return await this.pagesRepository.reorderSections(organizationId, pageId, input.sectionIds);
     } catch (error) {
       throw this.toHttpError(error);
+    }
+  }
+
+  private async toPublicPage(page: {
+    organizationId: string;
+    title: string;
+    seo: unknown;
+    sections: Array<{ id: string; type: WebsiteSection['type']; order: number; content: unknown }>;
+    website: Parameters<typeof toPublicWebsite>[0];
+  }) {
+    const enriched = await this.enrichSectionBackgrounds(page);
+    const website = toPublicWebsite(page.website);
+    website.settings.seo.ogImageUrl = await this.readUrlOrNull(
+      website.settings.seo.ogImageAssetId,
+      page.organizationId,
+    );
+    const seo = readSeo(page.seo);
+
+    return {
+      title: page.title,
+      seo: {
+        ...seo,
+        ogImageUrl: await this.readUrlOrNull(seo.ogImageAssetId, page.organizationId),
+      },
+      sections: enriched.sections.map(toPublicSection),
+      website,
+    };
+  }
+
+  private async readUrlOrNull(assetId: string | null, organizationId: string) {
+    if (!assetId) return null;
+    try {
+      return (await this.mediaService.getReadUrl(assetId, organizationId)).url;
+    } catch {
+      return null;
     }
   }
 
@@ -169,6 +245,22 @@ export class PagesService {
       }),
     };
   }
+}
+
+function readSeo(seo: unknown): {
+  title: string | null;
+  description: string | null;
+  noindex: boolean;
+  ogImageAssetId: string | null;
+} {
+  const record = typeof seo === 'object' && seo !== null ? (seo as Record<string, unknown>) : {};
+
+  return {
+    title: readContentText(record, 'title') ?? null,
+    description: readContentText(record, 'description') ?? null,
+    noindex: record['noindex'] === true,
+    ogImageAssetId: readContentText(record, 'ogImageAssetId') ?? null,
+  };
 }
 
 function readContentText(content: unknown, key: string): string | undefined {

@@ -1,29 +1,40 @@
 import type { Metadata } from 'next';
 import { serverEnv } from '@/env/server';
-import type { PublicSection, PublicWebsiteSummary } from '@/components/sections/section-renderer';
+import type {
+  PublicSection,
+  PublicWebsiteSettings,
+  PublicWebsiteSummary,
+} from '@/components/sections/section-renderer';
 
-export interface PublicPageResponse {
-  title: string;
-  seo: Record<string, unknown>;
-  sections: PublicSection[];
-  website: PublicWebsiteSummary;
+export interface PublicPageSeo {
+  title: string | null;
+  description: string | null;
+  noindex: boolean;
+  ogImageUrl: string | null;
 }
 
 export interface PublicWebsiteResponse extends PublicWebsiteSummary {
   id: string;
   publishedAt: string | null;
   theme: Record<string, unknown>;
-  settings: Record<string, unknown>;
+  settings: PublicWebsiteSettings;
   organization: {
     name: string;
     slug: string;
   };
 }
 
+export interface PublicPageResponse {
+  title: string;
+  seo: PublicPageSeo;
+  sections: PublicSection[];
+  website: PublicWebsiteResponse;
+}
+
 export function websiteToFallbackPage(website: PublicWebsiteResponse): PublicPageResponse {
   return {
     title: website.title,
-    seo: {},
+    seo: { title: null, description: null, noindex: false, ogImageUrl: null },
     sections: [],
     website,
   };
@@ -45,11 +56,17 @@ export function publicPageMetadata({
     };
   }
 
-  const title = readSeoText(page.seo, 'title') ?? `${page.title} | ${page.website.title}`;
+  const websiteSeo = page.website.settings.seo;
+  const title = page.seo.title ?? websiteSeo.title ?? `${page.title} | ${page.website.title}`;
   const description =
-    readSeoText(page.seo, 'description') ?? page.website.description ?? page.website.title;
+    page.seo.description ??
+    websiteSeo.description ??
+    page.website.description ??
+    page.website.title;
   const pathname = pageSlug ? `/o/${orgSlug}/${pageSlug}` : `/o/${orgSlug}`;
   const url = new URL(pathname, serverEnv.NEXT_PUBLIC_WEB_URL).toString();
+  const image = page.seo.ogImageUrl ?? websiteSeo.ogImageUrl;
+  const index = !page.seo.noindex && !websiteSeo.noindex;
 
   return {
     title,
@@ -60,18 +77,16 @@ export function publicPageMetadata({
       description,
       url,
       type: 'website',
+      siteName: page.website.title,
+      locale: page.website.settings.locale,
+      ...(image ? { images: [{ url: image }] } : {}),
     },
     twitter: {
-      card: 'summary',
+      card: image ? 'summary_large_image' : 'summary',
       title,
       description,
+      ...(image ? { images: [image] } : {}),
     },
-    robots: { index: true, follow: true },
+    robots: { index, follow: index },
   };
-}
-
-function readSeoText(seo: Record<string, unknown>, key: string): string | undefined {
-  const value = seo[key];
-
-  return typeof value === 'string' && value.trim() ? value : undefined;
 }

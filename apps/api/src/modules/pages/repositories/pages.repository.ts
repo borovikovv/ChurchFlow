@@ -23,7 +23,7 @@ export class PagesRepository {
       include: {
         website: { include: { organization: true } },
         sections: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, hidden: false },
           orderBy: { order: 'asc' },
         },
       },
@@ -57,9 +57,11 @@ export class PagesRepository {
       },
       select: {
         slug: true,
+        seo: true,
         updatedAt: true,
         website: {
           select: {
+            settings: true,
             organization: {
               select: { slug: true },
             },
@@ -97,7 +99,7 @@ export class PagesRepository {
         slug: input.slug,
         title: input.title,
         status: input.status,
-        seo: input.seo as Prisma.InputJsonObject,
+        seo: input.seo,
         publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
       },
       include: {
@@ -116,7 +118,7 @@ export class PagesRepository {
         slug: input.slug,
         title: input.title,
         status: input.status,
-        seo: input.seo as Prisma.InputJsonObject,
+        seo: input.seo,
         publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
       },
       include: {
@@ -157,6 +159,7 @@ export class PagesRepository {
         pageId,
         type: input.type,
         order: input.order,
+        hidden: input.hidden,
         content: input.content as Prisma.InputJsonObject,
       },
     });
@@ -168,8 +171,46 @@ export class PagesRepository {
       data: {
         type: input.type,
         order: input.order,
+        hidden: input.hidden,
         content: input.content as Prisma.InputJsonObject,
       },
+    });
+  }
+
+  async setSectionHidden(organizationId: string, sectionId: string, hidden: boolean) {
+    return this.prisma.websiteSection.update({
+      where: { id: sectionId, organizationId, deletedAt: null },
+      data: { hidden },
+    });
+  }
+
+  async duplicateSection(organizationId: string, sectionId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const source = await tx.websiteSection.findFirst({
+        where: { id: sectionId, organizationId, deletedAt: null },
+      });
+      if (!source) throw new Error('SECTION_NOT_FOUND');
+
+      await tx.websiteSection.updateMany({
+        where: {
+          pageId: source.pageId,
+          organizationId,
+          deletedAt: null,
+          order: { gt: source.order },
+        },
+        data: { order: { increment: 1 } },
+      });
+
+      return tx.websiteSection.create({
+        data: {
+          organizationId,
+          pageId: source.pageId,
+          type: source.type,
+          order: source.order + 1,
+          hidden: source.hidden,
+          content: source.content as Prisma.InputJsonObject,
+        },
+      });
     });
   }
 

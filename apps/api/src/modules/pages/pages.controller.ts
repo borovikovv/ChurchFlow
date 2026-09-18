@@ -12,6 +12,7 @@ import {
 import { PagesService } from './pages.service';
 import { PublishPageDto } from './dto/publish-page.dto';
 import { ReorderSectionsDto } from './dto/reorder-sections.dto';
+import { SetSectionHiddenDto } from './dto/set-section-hidden.dto';
 import { UpsertPageDto } from './dto/upsert-page.dto';
 import { UpsertSectionDto } from './dto/upsert-section.dto';
 
@@ -44,6 +45,16 @@ export class PagesController {
     @Param('pageId') pageId: string,
   ) {
     return this.pagesService.findDashboardPage(organizationId, pageId);
+  }
+
+  @Get('organizations/:organizationId/pages/:pageId/preview')
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireOrganizationOwner()
+  async previewPage(
+    @Param('organizationId') organizationId: string,
+    @Param('pageId') pageId: string,
+  ) {
+    return this.pagesService.findPreviewPage(organizationId, pageId);
   }
 
   @Post('organizations/:organizationId/pages')
@@ -100,6 +111,29 @@ export class PagesController {
     @Body() body: UpsertSectionDto,
   ) {
     return this.pagesService.updateSection(organizationId, sectionId, body);
+  }
+
+  @Patch('organizations/:organizationId/sections/:sectionId/hidden')
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireOrganizationOwner()
+  @RequireEntitlement(ENTITLEMENTS.websiteWrite)
+  async setSectionHidden(
+    @Param('organizationId') organizationId: string,
+    @Param('sectionId') sectionId: string,
+    @Body() body: SetSectionHiddenDto,
+  ) {
+    return this.pagesService.setSectionHidden(organizationId, sectionId, body.hidden);
+  }
+
+  @Post('organizations/:organizationId/sections/:sectionId/duplicate')
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireOrganizationOwner()
+  @RequireEntitlement(ENTITLEMENTS.websiteWrite)
+  async duplicateSection(
+    @Param('organizationId') organizationId: string,
+    @Param('sectionId') sectionId: string,
+  ) {
+    return this.pagesService.duplicateSection(organizationId, sectionId);
   }
 
   @Delete('organizations/:organizationId/sections/:sectionId')

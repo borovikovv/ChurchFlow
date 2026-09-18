@@ -20,7 +20,21 @@ export const BUDGET_AUDIT_ENTITY_TYPE = 'Budget';
 export const PHOTO_UPLOAD_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const PHOTO_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 
-export const PUBLIC_SECTION_TYPES = ['hero', 'about', 'schedule', 'gallery', 'contact'] as const;
+export const PUBLIC_SECTION_TYPES = [
+  'hero',
+  'about',
+  'schedule',
+  'gallery',
+  'contact',
+  'live',
+  'giving',
+  'footer',
+] as const;
+
+export const WEBSITE_TEMPLATES = ['default', 'city'] as const;
+export const DEFAULT_WEBSITE_TEMPLATE = 'default';
+
+export const WEBSITE_LIVE_MODES = ['schedule', 'manual'] as const;
 
 export const CALENDAR_EVENT_TYPES = [
   'BIRTHDAY',

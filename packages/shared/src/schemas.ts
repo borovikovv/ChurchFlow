@@ -34,6 +34,10 @@ import {
   PRAYER_REQUEST_TABS,
   PUBLIC_SECTION_TYPES,
   RICH_TEXT_MAX_LENGTH,
+  DEFAULT_APP_LOCALE,
+  DEFAULT_WEBSITE_TEMPLATE,
+  WEBSITE_LIVE_MODES,
+  WEBSITE_TEMPLATES,
 } from './constants.js';
 
 const DEFAULT_PHONE_REGION = 'UA';
@@ -899,11 +903,140 @@ export const organizationWebsiteSchema = z.object({
   publishedAt: z.coerce.date().nullable(),
 });
 
+export function isSafeWebsiteUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith('#')) return true;
+  if (trimmed.startsWith('/')) return !trimmed.startsWith('//');
+  if (/^(?:mailto|tel):/iu.test(trimmed)) return true;
+
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+const websiteTextSchema = (max: number) => z.string().trim().max(max);
+const websiteHexColorSchema = z
+  .string()
+  .trim()
+  .regex(/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/iu);
+const websiteTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u);
+
+export const websiteUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2048)
+  .refine(isSafeWebsiteUrl, { message: 'Only http(s), mailto, tel or relative links are allowed' });
+
+export const websiteHttpUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2048)
+  .refine(isHttpUrl, { message: 'Only http(s) links are allowed' });
+
+export const websiteLinkSchema = z.object({
+  label: websiteTextSchema(80).min(1),
+  href: websiteUrlSchema,
+});
+
+export const websiteServiceTimeSchema = z.object({
+  weekday: z.number().int().min(0).max(6),
+  time: websiteTimeSchema,
+  durationMinutes: z.number().int().min(15).max(360).default(90),
+  label: websiteTextSchema(80).optional(),
+});
+
+export const websiteLiveSettingsSchema = z.object({
+  url: websiteHttpUrlSchema.optional(),
+  mode: z.enum(WEBSITE_LIVE_MODES).default('schedule'),
+  isLive: z.boolean().default(false),
+  leadMinutes: z.number().int().min(0).max(60).default(5),
+});
+
+export const websiteLocationSettingsSchema = z.object({
+  address: websiteTextSchema(300).optional(),
+  addressNote: websiteTextSchema(300).optional(),
+  directionsUrl: websiteHttpUrlSchema.optional(),
+});
+
+export const websiteSocialLinksSchema = z.object({
+  facebook: websiteHttpUrlSchema.optional(),
+  instagram: websiteHttpUrlSchema.optional(),
+  youtube: websiteHttpUrlSchema.optional(),
+  telegram: websiteHttpUrlSchema.optional(),
+});
+
+export function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const websiteTimeZoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .refine(isValidTimeZone, { message: 'Unknown time zone' });
+
+export const websiteSeoSchema = z.object({
+  title: websiteTextSchema(160).optional(),
+  description: websiteTextSchema(300).optional(),
+  ogImageAssetId: uuidSchema.optional(),
+  noindex: z.boolean().default(false),
+});
+
+export const websiteThemeSchema = z
+  .object({
+    accent: websiteHexColorSchema.default('#1f883d'),
+    background: websiteHexColorSchema.default('#ffffff'),
+  })
+  .passthrough();
+
+export const websiteSettingsSchema = z
+  .object({
+    template: z.enum(WEBSITE_TEMPLATES).default(DEFAULT_WEBSITE_TEMPLATE),
+    timeZone: websiteTimeZoneSchema.default('UTC'),
+    locale: z.enum(APP_LOCALES).default(DEFAULT_APP_LOCALE),
+    navigation: z.array(websiteLinkSchema).max(10).default([]),
+    serviceTimes: z.array(websiteServiceTimeSchema).max(10).default([]),
+    location: websiteLocationSettingsSchema.default({}),
+    live: websiteLiveSettingsSchema.default({}),
+    socials: websiteSocialLinksSchema.default({}),
+    seo: websiteSeoSchema.default({}),
+  })
+  .passthrough();
+
 export const updateWebsiteSettingsSchema = z.object({
   title: z.string().min(1).max(160),
   description: z.string().max(500).optional(),
-  theme: z.record(z.unknown()).default({}),
-  settings: z.record(z.unknown()).default({}),
+  theme: websiteThemeSchema.partial().default({}),
+  settings: websiteSettingsSchema.partial().default({}),
+});
+
+export const websiteTemplateIdSchema = z.enum(WEBSITE_TEMPLATES);
+
+export const applyWebsiteTemplateSchema = z.object({
+  templateId: websiteTemplateIdSchema,
+  addMissingSections: z.boolean().default(true),
+  resetTheme: z.boolean().default(false),
 });
 
 export const pageStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']);
@@ -921,10 +1054,106 @@ export const upsertWebsitePageSchema = z.object({
   slug: slugSchema,
   title: z.string().min(1).max(160),
   status: pageStatusSchema.default('DRAFT'),
-  seo: z.record(z.unknown()).default({}),
+  seo: websiteSeoSchema.default({}),
 });
 
 export const sectionTypeSchema = z.enum(PUBLIC_SECTION_TYPES);
+
+const websiteSectionItemSchema = z.object({
+  title: websiteTextSchema(160).optional(),
+  body: websiteTextSchema(600).optional(),
+  label: websiteTextSchema(80).optional(),
+  href: websiteUrlSchema.optional(),
+});
+
+const websiteGivingWaySchema = z.object({
+  label: websiteTextSchema(80).min(1),
+  value: websiteTextSchema(300).min(1),
+});
+
+const websiteSectionBaseContentSchema = z
+  .object({
+    variant: websiteTextSchema(40).optional(),
+    fontPreset: websiteTextSchema(40).optional(),
+    backgroundColor: websiteHexColorSchema.optional(),
+    backgroundImageAssetId: uuidSchema.optional(),
+    backgroundImageUrl: websiteHttpUrlSchema.optional(),
+    eyebrow: websiteTextSchema(120).optional(),
+    title: websiteTextSchema(200).optional(),
+    body: websiteTextSchema(4000).optional(),
+    primaryLabel: websiteTextSchema(80).optional(),
+    primaryHref: websiteUrlSchema.optional(),
+    secondaryLabel: websiteTextSchema(80).optional(),
+    secondaryHref: websiteUrlSchema.optional(),
+  })
+  .passthrough();
+
+const websiteContactContentSchema = websiteSectionBaseContentSchema.extend({
+  address: websiteTextSchema(300).optional(),
+  email: websiteTextSchema(160).optional(),
+  phone: websiteTextSchema(60).optional(),
+  copyright: websiteTextSchema(200).optional(),
+  socialMetaHref: websiteUrlSchema.optional(),
+  socialInstagramHref: websiteUrlSchema.optional(),
+  socialTiktokHref: websiteUrlSchema.optional(),
+  socialXHref: websiteUrlSchema.optional(),
+  items: z.array(websiteSectionItemSchema).max(24).optional(),
+});
+
+export const websiteSectionContentSchemas = {
+  hero: websiteSectionBaseContentSchema.extend({
+    headline: websiteTextSchema(200).optional(),
+    subheading: websiteTextSchema(600).optional(),
+  }),
+  about: websiteSectionBaseContentSchema.extend({
+    items: z.array(websiteSectionItemSchema).max(24).optional(),
+  }),
+  schedule: websiteSectionBaseContentSchema.extend({
+    items: z.array(websiteSectionItemSchema).max(24).optional(),
+  }),
+  gallery: websiteSectionBaseContentSchema.extend({
+    items: z.array(websiteSectionItemSchema).max(24).optional(),
+  }),
+  contact: websiteContactContentSchema,
+  live: websiteSectionBaseContentSchema.extend({
+    liveTitle: websiteTextSchema(200).optional(),
+    liveLabel: websiteTextSchema(80).optional(),
+    scheduledTitle: websiteTextSchema(200).optional(),
+    scheduledBody: websiteTextSchema(600).optional(),
+  }),
+  giving: websiteSectionBaseContentSchema.extend({
+    ways: z.array(websiteGivingWaySchema).max(6).optional(),
+  }),
+  footer: websiteContactContentSchema.extend({
+    links: z.array(websiteLinkSchema).max(12).optional(),
+  }),
+} satisfies Record<(typeof PUBLIC_SECTION_TYPES)[number], z.ZodTypeAny>;
+
+const websiteUrlKeyPattern = /(?:href|url|link)$/iu;
+
+function unsafeWebsiteUrlKeys(content: Record<string, unknown>): string[] {
+  return Object.entries(content)
+    .filter(
+      ([key, value]) =>
+        typeof value === 'string' &&
+        websiteUrlKeyPattern.test(key) &&
+        value.trim() !== '' &&
+        !isSafeWebsiteUrl(value),
+    )
+    .map(([key]) => key);
+}
+
+export function websiteSectionContentSchema(
+  type: (typeof PUBLIC_SECTION_TYPES)[number],
+): z.ZodType<Record<string, unknown>> {
+  return websiteSectionContentSchemas[type];
+}
+
+export function publicWebsiteSectionKeys(type: (typeof PUBLIC_SECTION_TYPES)[number]): string[] {
+  return Object.keys(websiteSectionContentSchemas[type].shape).filter(
+    (key) => key !== 'backgroundImageAssetId',
+  );
+}
 
 export const websiteSectionSchema = z.object({
   id: uuidSchema,
@@ -932,14 +1161,37 @@ export const websiteSectionSchema = z.object({
   pageId: uuidSchema,
   type: sectionTypeSchema,
   order: z.number().int().min(0),
+  hidden: z.boolean(),
   content: z.record(z.unknown()),
 });
 
-export const upsertWebsiteSectionSchema = z.object({
-  type: sectionTypeSchema,
-  order: z.number().int().min(0),
-  content: z.record(z.unknown()).default({}),
-});
+export const upsertWebsiteSectionSchema = z
+  .object({
+    type: sectionTypeSchema,
+    order: z.number().int().min(0),
+    hidden: z.boolean().default(false),
+    content: z.record(z.unknown()).default({}),
+  })
+  .superRefine((value, ctx) => {
+    const result = websiteSectionContentSchema(value.type).safeParse(value.content);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        ctx.addIssue({ ...issue, path: ['content', ...issue.path] });
+      }
+    }
+
+    for (const key of unsafeWebsiteUrlKeys(value.content)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Only http(s), mailto, tel or relative links are allowed',
+        path: ['content', key],
+      });
+    }
+  })
+  .transform((value) => ({
+    ...value,
+    content: websiteSectionContentSchema(value.type).parse(value.content),
+  }));
 
 export const publishWebsiteSchema = z.object({
   published: z.boolean(),
@@ -951,6 +1203,10 @@ export const publishWebsitePageSchema = z.object({
 
 export const reorderWebsiteSectionsSchema = z.object({
   sectionIds: z.array(uuidSchema).min(1),
+});
+
+export const setWebsiteSectionHiddenSchema = z.object({
+  hidden: z.boolean(),
 });
 
 export const mediaAssetSchema = z.object({

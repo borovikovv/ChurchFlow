@@ -9,5 +9,6 @@ export class UpsertSectionDto implements UpsertWebsiteSectionInput {
 
   type!: WebsiteSection['type'];
   order!: number;
+  hidden!: boolean;
   content!: Record<string, unknown>;
 }

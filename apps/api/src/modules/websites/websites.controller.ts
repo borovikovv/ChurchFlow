@@ -1,6 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ENTITLEMENTS } from '@churchflow/shared';
-import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
   RequireOrganizationOwner,
@@ -10,6 +13,7 @@ import {
   SubscriptionEntitlementGuard,
 } from '../../common/guards/subscription-entitlement.guard';
 import { WebsitesService } from './websites.service';
+import { ApplyWebsiteTemplateDto } from './dto/apply-website-template.dto';
 import { PublishWebsiteDto } from './dto/publish-website.dto';
 import { UpdateWebsiteSettingsDto } from './dto/update-website-settings.dto';
 
@@ -49,5 +53,26 @@ export class WebsitesController {
     @Body() body: PublishWebsiteDto,
   ) {
     return this.websitesService.setPublished(organizationId, body.published);
+  }
+
+  @Post('organizations/:organizationId/website/template')
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireOrganizationOwner()
+  @RequireEntitlement(ENTITLEMENTS.websiteWrite)
+  async applyTemplate(
+    @Param('organizationId') organizationId: string,
+    @Body() body: ApplyWebsiteTemplateDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.websitesService.applyTemplate(organizationId, this.actorUserId(request), body);
+  }
+
+  private actorUserId(request: AuthenticatedRequest): string {
+    const userId = request.auth?.userId;
+    if (!userId) {
+      throw new Error('Authenticated request missing auth payload');
+    }
+
+    return userId;
   }
 }
