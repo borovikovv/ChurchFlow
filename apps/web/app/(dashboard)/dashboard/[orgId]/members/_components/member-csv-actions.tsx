@@ -7,6 +7,9 @@ import { toast } from 'react-toastify';
 import { ActionMenuButton } from '@/components/ui/action-menu-button';
 import { importMembersCsvAction } from '../actions';
 
+const MAX_SHOWN_IMPORT_ERRORS = 3;
+const IMPORT_ERRORS_TOAST_AUTO_CLOSE_MS = 12_000;
+
 export function MemberCsvActions({
   triggerClassName,
   wrapperClassName,
@@ -44,11 +47,22 @@ export function MemberCsvActions({
       }
 
       if (importResult.result.failedCount > 0) {
+        const shownErrors = importResult.result.errors.slice(0, MAX_SHOWN_IMPORT_ERRORS);
+        const hiddenCount = importResult.result.errors.length - shownErrors.length;
         toast.warning(
-          t('importedMembersWithFailures', {
-            created: importResult.result.createdCount,
-            failed: importResult.result.failedCount,
-          }),
+          <div className="whitespace-pre-line">
+            {[
+              t('importedMembersWithFailures', {
+                created: importResult.result.createdCount,
+                failed: importResult.result.failedCount,
+              }),
+              ...shownErrors.map((error) =>
+                t('importRowError', { row: error.row, message: error.message }),
+              ),
+              ...(hiddenCount > 0 ? [t('importMoreErrors', { count: hiddenCount })] : []),
+            ].join('\n')}
+          </div>,
+          { autoClose: IMPORT_ERRORS_TOAST_AUTO_CLOSE_MS },
         );
       } else {
         toast.success(t('importedMembers', { created: importResult.result.createdCount }));

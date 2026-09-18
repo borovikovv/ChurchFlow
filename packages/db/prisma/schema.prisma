@@ -289,6 +289,7 @@ model User {
   email             String?      @unique @db.Citext
   displayName       String?
   avatarUrl         String?
+  avatarAssetId     String?      @unique @map("avatar_asset_id") @db.Uuid
   baptizedAt        DateTime?    @map("baptized_at") @db.Date
   baptismChurchName String?      @map("baptism_church_name")
   locale            String       @default("en") @db.VarChar(5)
@@ -324,6 +325,7 @@ model User {
   telegramNotificationBinding     TelegramNotificationBinding?
   telegramNotificationLinkTokens  TelegramNotificationLinkToken[]
   grantedBillingExemptions        Subscription[]
+  avatarAsset                     MediaAsset?                     @relation(fields: [avatarAssetId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -812,7 +814,7 @@ model WebsiteDomain {
 
 model MediaAsset {
   id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @map("organization_id") @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
   bucket         String
   objectKey      String    @map("object_key")
   filename       String
@@ -826,8 +828,9 @@ model MediaAsset {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization?              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberProfile  OrganizationMemberProfile?
+  userAvatar     User?
   calendarEvents CalendarEvent[]
   websiteLogos   OrganizationWebsite[]
 

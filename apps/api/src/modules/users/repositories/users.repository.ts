@@ -8,7 +8,10 @@ export class UsersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(userId: string) {
-    return this.prisma.user.findFirst({ where: { id: userId, deletedAt: null } });
+    return this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      include: { avatarAsset: { select: { bucket: true, objectKey: true } } },
+    });
   }
 
   async updateProfile(userId: string, input: UpdateCurrentUserProfileInput) {

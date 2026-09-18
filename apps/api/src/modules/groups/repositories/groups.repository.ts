@@ -7,6 +7,7 @@ import type {
   UpdateOrganizationGroupMemberInput,
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { userAvatarSelect } from '../../media/user-avatar-url';
 
 // The picker offers these memberships and the write path accepts exactly the same set.
 const ASSIGNABLE_MEMBERSHIP: Prisma.OrganizationMemberWhereInput = {
@@ -18,8 +19,13 @@ const groupMemberInclude = {
   membership: {
     select: {
       id: true,
-      profile: { select: { displayName: true } },
-      user: { select: { displayName: true, email: true, avatarUrl: true } },
+      profile: {
+        select: {
+          displayName: true,
+          profilePhotoAsset: { select: { bucket: true, objectKey: true } },
+        },
+      },
+      user: { select: { displayName: true, email: true, ...userAvatarSelect } },
     },
   },
 } as const;
@@ -93,10 +99,7 @@ export class GroupsRepository {
     });
   }
 
-  findById(
-    organizationId: string,
-    groupId: string,
-  ): Promise<OrganizationGroupDetailRecord | null> {
+  findById(organizationId: string, groupId: string): Promise<OrganizationGroupDetailRecord | null> {
     return this.prisma.organizationGroup.findFirst({
       where: { id: groupId, organizationId },
       include: groupDetailInclude,

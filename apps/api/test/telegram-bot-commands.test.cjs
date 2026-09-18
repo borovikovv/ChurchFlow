@@ -2,6 +2,9 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { TelegramBotService } = require('../dist/modules/telegram-bot/telegram-bot.service');
 
+// The bot filters events against the real clock, so the fixtures below only stay "upcoming" while
+// time is pinned before them.
+const NOW = new Date('2026-09-17T12:00:00.000Z');
 const SECRET = 'webhook-secret';
 const ORGANIZATION = { id: 'org-1', name: 'Grace Church' };
 
@@ -52,6 +55,14 @@ function serviceRecord(overrides = {}) {
     ...overrides,
   };
 }
+
+test.beforeEach(() => {
+  test.mock.timers.enable({ apis: ['Date'], now: NOW });
+});
+
+test.afterEach(() => {
+  test.mock.timers.reset();
+});
 
 async function sentMessages(bot, text) {
   const calls = [];

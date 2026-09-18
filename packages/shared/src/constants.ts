@@ -17,6 +17,9 @@ export const ORG_PERMISSIONS = {
 
 export const BUDGET_AUDIT_ENTITY_TYPE = 'Budget';
 
+export const PHOTO_UPLOAD_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const PHOTO_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+
 export const PUBLIC_SECTION_TYPES = [
   'hero',
   'about',

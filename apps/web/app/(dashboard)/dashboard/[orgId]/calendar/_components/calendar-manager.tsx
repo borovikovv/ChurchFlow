@@ -13,6 +13,7 @@ import { toast } from 'react-toastify';
 import type { CalendarEventItem, CalendarEventsPayload } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-is-mobile';
+import { uploadToSignedUrl } from '@/lib/upload-to-signed-url';
 import {
   CALENDAR_TYPE,
   EVENT_TYPES,
@@ -180,12 +181,7 @@ export function CalendarManager({
       toast.error(prepared.error);
       return null;
     }
-    const upload = await fetch(prepared.uploadUrl, {
-      method: 'PUT',
-      headers: { 'content-type': file.type },
-      body: file,
-    });
-    if (!upload.ok) {
+    if (!(await uploadToSignedUrl(prepared.uploadUrl, file))) {
       toast.error(t('imageUploadFailed'));
       return null;
     }

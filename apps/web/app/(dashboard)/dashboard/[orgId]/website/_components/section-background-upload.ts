@@ -1,3 +1,4 @@
+import { uploadToSignedUrl } from '@/lib/upload-to-signed-url';
 import {
   confirmWebsiteSectionBackgroundImageAction,
   prepareWebsiteSectionBackgroundImageAction,
@@ -43,13 +44,7 @@ export async function uploadSectionBackgroundImage(
     return { ok: false, error: prepared.error };
   }
 
-  const upload = await fetch(prepared.uploadUrl, {
-    method: 'PUT',
-    headers: { 'content-type': file.type },
-    body: file,
-  });
-
-  if (!upload.ok) {
+  if (!(await uploadToSignedUrl(prepared.uploadUrl, file))) {
     return { ok: false, error: messages.backgroundImageUploadFailed };
   }
 
