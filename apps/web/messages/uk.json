@@ -451,9 +451,7 @@
       "LEADER": "Лідер",
       "MEMBER": "Учасник"
     },
-    "searchCandidates": "Пошук учасників",
-    "searchCandidatesPlaceholder": "Почніть вводити ім'я",
-    "selectedCount": "Вибрано: {count}",
+    "selectMembers": "Оберіть учасників",
     "selectionLimit": "За раз можна додати не більше {max} учасників.",
     "subtitle": "Служіння, команди та малі групи церкви.",
     "title": "Групи"

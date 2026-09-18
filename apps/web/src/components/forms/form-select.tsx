@@ -50,6 +50,7 @@ type OptionElementProps = {
 
 export function createSelectStyles<IsMulti extends boolean = false>(
   size: SelectSize,
+  { wrapValues = false }: { wrapValues?: boolean } = {},
 ): StylesConfig<SelectOption, IsMulti> {
   const medium = size === 'medium';
   const controlHeight = medium ? 32 : 42;
@@ -59,7 +60,7 @@ export function createSelectStyles<IsMulti extends boolean = false>(
       ...base,
       alignItems: 'center',
       minHeight: controlHeight,
-      height: controlHeight,
+      height: wrapValues ? 'auto' : controlHeight,
       borderColor: state.isFocused ? 'var(--accent)' : 'var(--line)',
       borderRadius: 'var(--radius)',
       backgroundColor: state.isDisabled ? 'var(--surface-subtle)' : 'var(--surface)',
@@ -200,9 +201,9 @@ export function createSelectStyles<IsMulti extends boolean = false>(
     valueContainer: (base) => ({
       ...base,
       alignItems: 'center',
-      display: medium ? 'flex' : 'grid',
-      flexWrap: 'nowrap',
-      height: '100%',
+      display: medium || wrapValues ? 'flex' : 'grid',
+      flexWrap: wrapValues ? 'wrap' : 'nowrap',
+      height: wrapValues ? 'auto' : '100%',
       minHeight: 0,
       overflow: 'hidden',
       paddingBottom: 0,

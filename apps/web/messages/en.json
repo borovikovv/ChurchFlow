@@ -451,9 +451,7 @@
       "LEADER": "Leader",
       "MEMBER": "Member"
     },
-    "searchCandidates": "Search members",
-    "searchCandidatesPlaceholder": "Start typing a name",
-    "selectedCount": "{count} selected",
+    "selectMembers": "Select members",
     "selectionLimit": "You can add up to {max} members at once.",
     "subtitle": "Ministries, teams and small groups of the church.",
     "title": "Groups"

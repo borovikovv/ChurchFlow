@@ -7,8 +7,8 @@ import {
   ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD,
   ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH,
 } from '@churchflow/shared';
-import { FormCheckbox } from '@/components/forms/form-checkbox';
 import { FormInput } from '@/components/forms/form-input';
+import { FormMultiSelect } from '@/components/forms/form-multi-select';
 import { FormSelect } from '@/components/forms/form-select';
 import { Button } from '@/components/ui/button';
 import { FormDialog } from '@/components/ui/form-dialog';
@@ -25,37 +25,21 @@ export function GroupMemberFormDialog({
   const t = useTranslations('groups');
   const commonT = useTranslations('common');
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [query, setQuery] = useState('');
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [membershipIds, setMembershipIds] = useState<string[]>([]);
   const [role, setRole] = useState<GroupMemberInput['role']>('MEMBER');
   const [responsibility, setResponsibility] = useState('');
 
-  const normalizedQuery = query.trim().toLowerCase();
-  // Selected people stay visible while filtering so the batch can be reviewed before submit.
-  const visibleCandidates = candidates.filter(
-    (candidate) =>
-      selectedIds.has(candidate.id) ||
-      candidate.displayName.toLowerCase().includes(normalizedQuery),
-  );
-  const limitReached = selectedIds.size >= ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD;
+  const limitReached = membershipIds.length >= ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD;
+  const options = candidates.map((candidate) => ({
+    isDisabled: limitReached,
+    label: candidate.displayName,
+    value: candidate.id,
+  }));
 
   const reset = () => {
-    setQuery('');
-    setSelectedIds(new Set());
+    setMembershipIds([]);
     setRole('MEMBER');
     setResponsibility('');
-  };
-
-  const toggleCandidate = (id: string, checked: boolean) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (checked) {
-        next.add(id);
-      } else {
-        next.delete(id);
-      }
-      return next;
-    });
   };
 
   return (
@@ -72,13 +56,13 @@ export function GroupMemberFormDialog({
             {commonT('cancel')}
           </Button>
           <Button
-            disabled={selectedIds.size === 0}
+            disabled={membershipIds.length === 0}
             type="button"
             onClick={() => {
-              if (selectedIds.size === 0) return;
+              if (membershipIds.length === 0) return;
               const trimmedResponsibility = responsibility.trim() || null;
               onSubmit(
-                Array.from(selectedIds, (membershipId) => ({
+                membershipIds.map((membershipId) => ({
                   membershipId,
                   role,
                   responsibility: trimmedResponsibility,
@@ -87,49 +71,28 @@ export function GroupMemberFormDialog({
               );
             }}
           >
-            {selectedIds.size > 0
-              ? t('addSelectedMembers', { count: selectedIds.size })
+            {membershipIds.length > 0
+              ? t('addSelectedMembers', { count: membershipIds.length })
               : t('addMember')}
           </Button>
         </div>
       }
     >
       <div className="stack">
-        <FormInput
-          label={t('searchCandidates')}
-          placeholder={t('searchCandidatesPlaceholder')}
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
+        <FormMultiSelect
+          allowMobileKeyboard
+          label={t('members')}
+          noOptionsMessage={t('noCandidatesFound')}
+          options={options}
+          placeholder={t('selectMembers')}
+          value={membershipIds}
+          onChange={setMembershipIds}
         />
-        <fieldset className="grid gap-2 rounded-md border border-[var(--line)] p-3">
-          <legend className="px-1 font-semibold">{t('members')}</legend>
-          {visibleCandidates.length === 0 ? (
-            <p className="m-0 text-sm text-[var(--muted)]">{t('noCandidatesFound')}</p>
-          ) : (
-            <div className="grid max-h-64 gap-2 overflow-y-auto">
-              {visibleCandidates.map((candidate) => {
-                const checked = selectedIds.has(candidate.id);
-                return (
-                  <FormCheckbox
-                    key={candidate.id}
-                    checked={checked}
-                    disabled={!checked && limitReached}
-                    label={candidate.displayName}
-                    value={candidate.id}
-                    onChange={(event) => toggleCandidate(candidate.id, event.target.checked)}
-                  />
-                );
-              })}
-            </div>
-          )}
+        {limitReached ? (
           <p className="m-0 text-sm text-[var(--muted)]" aria-live="polite">
-            {t('selectedCount', { count: selectedIds.size })}
-            {limitReached
-              ? ` ${t('selectionLimit', { max: ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD })}`
-              : null}
+            {t('selectionLimit', { max: ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD })}
           </p>
-        </fieldset>
+        ) : null}
         <FormSelect
           label={t('roleLabel')}
           value={role}
