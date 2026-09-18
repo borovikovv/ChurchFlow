@@ -176,6 +176,7 @@ test('replacing the logo writes the logo and nothing else', async () => {
 test('a website section background is refused to anyone but the owner', async () => {
   const service = new MediaService(
     { findOwnedOrganization: async () => null },
+    { has: async () => true },
     { getOrThrow: () => 'test' },
   );
 

@@ -12,7 +12,7 @@ import {
   tableRowActionClassNameFor,
 } from '@/components/ui/table-row-actions';
 import { GiveMemberAccessDialog } from './give-member-access-dialog';
-import { MemberPhotoField, validateMemberPhoto } from './member-photo-upload';
+import { MemberPhotoField } from './member-photo-upload';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   updateOrganizationMemberProfileSchema,
@@ -25,6 +25,8 @@ import { FormInput } from '@/components/forms/form-input';
 import { FormSelect } from '@/components/forms/form-select';
 import { FormTextarea } from '@/components/forms/form-textarea';
 import { FormCheckbox } from '@/components/forms/form-checkbox';
+import { uploadToSignedUrl } from '@/lib/upload-to-signed-url';
+import { validatePhotoFile } from '@/lib/validate-photo-file';
 import { memberProfileFormValues } from './member-profile-form-values';
 import {
   type ChangeRoleDialogProps,
@@ -104,7 +106,7 @@ export function EditMemberDialog({
     : false;
 
   const submit = handleSubmit(async (values) => {
-    const currentPhotoError = validateMemberPhoto(photo, {
+    const currentPhotoError = validatePhotoFile(photo, {
       invalidType: t('chooseImageFile'),
       tooLarge: t('photoTooLarge'),
     });
@@ -125,12 +127,8 @@ export function EditMemberDialog({
         if (!prepared.ok || !prepared.assetId || !prepared.uploadUrl) {
           throw new Error(prepared.error ?? t('unableToPreparePhotoUpload'));
         }
-        const upload = await fetch(prepared.uploadUrl, {
-          method: 'PUT',
-          headers: { 'content-type': photo.type },
-          body: photo,
-        });
-        if (!upload.ok) throw new Error(t('photoUploadFailed'));
+        if (!(await uploadToSignedUrl(prepared.uploadUrl, photo)))
+          throw new Error(t('photoUploadFailed'));
         const confirmed = await confirmPhoto({
           organizationId,
           membershipId: member.id,

@@ -102,14 +102,27 @@
     "website": "Сайт"
   },
   "profile": {
+    "addPhoto": "Додати фото",
     "baptismChurch": "Церква хрещення",
     "baptismDate": "Дата хрещення",
+    "changePhoto": "Змінити фото",
+    "chooseImageFile": "Оберіть зображення JPEG, PNG або WebP.",
     "description": "Ваша ідентичність і доступ до платформи в ChurchFlow.",
     "editDescription": "Оновіть поля, які можна змінити для вашого акаунта.",
     "emailNotVerified": "Цю адресу ще не підтверджено, тож увійти з нею не можна.",
     "emailVerified": "Підтверджено. Ви можете входити з цією адресою.",
     "notifications": "Сповіщення",
+    "photo": "Фото",
+    "photoDescription": "Показується поруч із вашим іменем у ChurchFlow. Ваше членство в цій організації отримає його як фото учасника, якщо там ще немає фото.",
+    "photoRemoveFailed": "Не вдалося видалити фото.",
+    "photoRemoved": "Фото видалено.",
+    "photoRequirement": "JPEG, PNG або WebP. Максимум 5 МБ.",
+    "photoTooLarge": "Фото не має перевищувати 5 МБ.",
+    "photoUpdated": "Фото оновлено.",
+    "photoUploadFailed": "Не вдалося завантажити фото.",
+    "photoUploading": "Завантажуємо...",
     "platformRole": "Роль на платформі",
+    "removePhoto": "Видалити фото",
     "saveProfile": "Зберегти профіль",
     "settings": "Налаштування профілю",
     "title": "Профіль",
@@ -118,6 +131,13 @@
     "verificationSending": "Надсилаємо...",
     "verificationSent": "Ми надіслали лист із підтвердженням на цю адресу.",
     "verifyEmail": "Підтвердити адресу"
+  },
+  "imageCrop": {
+    "apply": "Застосувати",
+    "applying": "Готуємо...",
+    "failed": "Не вдалося обрізати фото.",
+    "title": "Обрізати фото",
+    "zoom": "Масштаб"
   },
   "notifications": {
     "pageDescription": "Ваша ідентичність і налаштування сповіщень у ChurchFlow.",

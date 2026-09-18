@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FormSelect } from '@/components/forms/form-select';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { uploadToSignedUrl } from '@/lib/upload-to-signed-url';
 import {
   confirmWebsiteSectionBackgroundImageAction,
   prepareWebsiteSectionBackgroundImageAction,
@@ -1087,13 +1088,7 @@ async function uploadSectionBackgroundImage(
     return { ok: false, error: prepared.error };
   }
 
-  const upload = await fetch(prepared.uploadUrl, {
-    method: 'PUT',
-    headers: { 'content-type': file.type },
-    body: file,
-  });
-
-  if (!upload.ok) {
+  if (!(await uploadToSignedUrl(prepared.uploadUrl, file))) {
     return { ok: false, error: messages.backgroundImageUploadFailed };
   }
 

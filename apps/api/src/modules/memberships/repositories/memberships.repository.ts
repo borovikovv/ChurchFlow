@@ -8,6 +8,7 @@ import type {
   UpdateOrganizationMemberProfileInput,
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { userAvatarSelect } from '../../media/user-avatar-url';
 import {
   milestoneActorLocale,
   syncMemberMilestoneEvents,
@@ -159,7 +160,7 @@ export class MembershipsRepository {
             id: true,
             email: true,
             displayName: true,
-            avatarUrl: true,
+            ...userAvatarSelect,
             baptizedAt: true,
             baptismChurchName: true,
             platformRole: true,
