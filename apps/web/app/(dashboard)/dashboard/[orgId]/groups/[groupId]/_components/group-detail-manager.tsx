@@ -51,11 +51,11 @@ export function GroupDetailManager({
     setGroup(result.group);
   };
 
-  const addMember = async (member: AddOrganizationGroupMembersInput['members'][number]) => {
+  const addMembers = async (members: AddOrganizationGroupMembersInput['members']) => {
     const result = await addGroupMembersAction({
       organizationId,
       groupId: group.id,
-      members: [member],
+      members,
     });
     if (!result.ok) {
       setError(result.error);
@@ -131,8 +131,8 @@ export function GroupDetailManager({
         {canManage ? (
           <GroupMemberFormDialog
             candidates={candidates}
-            onSubmit={(member, closeDialog) => {
-              void addMember(member);
+            onSubmit={(members, closeDialog) => {
+              void addMembers(members);
               closeDialog();
             }}
           />
