@@ -3,8 +3,12 @@
 import { useTranslations } from 'next-intl';
 import { useRef, useState } from 'react';
 import type { AddOrganizationGroupMembersInput } from '@churchflow/shared';
-import { ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH } from '@churchflow/shared';
+import {
+  ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD,
+  ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH,
+} from '@churchflow/shared';
 import { FormInput } from '@/components/forms/form-input';
+import { FormMultiSelect } from '@/components/forms/form-multi-select';
 import { FormSelect } from '@/components/forms/form-select';
 import { Button } from '@/components/ui/button';
 import { FormDialog } from '@/components/ui/form-dialog';
@@ -16,17 +20,24 @@ export function GroupMemberFormDialog({
   onSubmit,
 }: {
   candidates: Array<{ id: string; displayName: string }>;
-  onSubmit: (member: GroupMemberInput, closeDialog: () => void) => void;
+  onSubmit: (members: GroupMemberInput[], closeDialog: () => void) => void;
 }) {
   const t = useTranslations('groups');
   const commonT = useTranslations('common');
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [membershipId, setMembershipId] = useState('');
+  const [membershipIds, setMembershipIds] = useState<string[]>([]);
   const [role, setRole] = useState<GroupMemberInput['role']>('MEMBER');
   const [responsibility, setResponsibility] = useState('');
 
+  const limitReached = membershipIds.length >= ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD;
+  const options = candidates.map((candidate) => ({
+    isDisabled: limitReached,
+    label: candidate.displayName,
+    value: candidate.id,
+  }));
+
   const reset = () => {
-    setMembershipId('');
+    setMembershipIds([]);
     setRole('MEMBER');
     setResponsibility('');
   };
@@ -45,38 +56,43 @@ export function GroupMemberFormDialog({
             {commonT('cancel')}
           </Button>
           <Button
-            disabled={!membershipId}
+            disabled={membershipIds.length === 0}
             type="button"
             onClick={() => {
-              if (!membershipId) return;
+              if (membershipIds.length === 0) return;
+              const trimmedResponsibility = responsibility.trim() || null;
               onSubmit(
-                {
+                membershipIds.map((membershipId) => ({
                   membershipId,
                   role,
-                  responsibility: responsibility.trim() || null,
-                },
+                  responsibility: trimmedResponsibility,
+                })),
                 () => dialogRef.current?.close(),
               );
             }}
           >
-            {t('addMember')}
+            {membershipIds.length > 0
+              ? t('addSelectedMembers', { count: membershipIds.length })
+              : t('addMember')}
           </Button>
         </div>
       }
     >
       <div className="stack">
-        <FormSelect
-          label={t('member')}
-          value={membershipId}
-          onChange={(event) => setMembershipId(event.target.value)}
-        >
-          <option value="">{t('selectMember')}</option>
-          {candidates.map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>
-              {candidate.displayName}
-            </option>
-          ))}
-        </FormSelect>
+        <FormMultiSelect
+          allowMobileKeyboard
+          label={t('members')}
+          noOptionsMessage={t('noCandidatesFound')}
+          options={options}
+          placeholder={t('selectMembers')}
+          value={membershipIds}
+          onChange={setMembershipIds}
+        />
+        {limitReached ? (
+          <p className="m-0 text-sm text-[var(--muted)]" aria-live="polite">
+            {t('selectionLimit', { max: ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD })}
+          </p>
+        ) : null}
         <FormSelect
           label={t('roleLabel')}
           value={role}

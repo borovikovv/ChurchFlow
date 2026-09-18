@@ -386,7 +386,8 @@
   "groups": {
     "actions": "Дії з групою",
     "addMember": "Додати учасника",
-    "addMemberTitle": "Додати учасника до групи",
+    "addMemberTitle": "Додати учасників до групи",
+    "addSelectedMembers": "Додати {count, plural, one {# учасника} few {# учасників} many {# учасників} other {# учасника}}",
     "allGroups": "Усі групи",
     "backToGroups": "Назад до груп",
     "cancel": "Скасувати",
@@ -437,6 +438,7 @@
     "nameLabel": "Назва",
     "namePlaceholder": "Команда прославлення",
     "noLeaders": "Лідерів немає",
+    "noCandidatesFound": "За вашим запитом нікого не знайдено.",
     "noMembers": "У цій групі ще немає учасників.",
     "noResponsibility": "Відповідальність не вказана",
     "organizationGroups": "Групи церкви",
@@ -449,7 +451,8 @@
       "LEADER": "Лідер",
       "MEMBER": "Учасник"
     },
-    "selectMember": "Оберіть учасника",
+    "selectMembers": "Оберіть учасників",
+    "selectionLimit": "За раз можна додати не більше {max} учасників.",
     "subtitle": "Служіння, команди та малі групи церкви.",
     "title": "Групи"
   },

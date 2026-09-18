@@ -386,7 +386,8 @@
   "groups": {
     "actions": "Group actions",
     "addMember": "Add member",
-    "addMemberTitle": "Add a member to the group",
+    "addMemberTitle": "Add members to the group",
+    "addSelectedMembers": "Add {count, plural, =1 {# member} other {# members}}",
     "allGroups": "All groups",
     "backToGroups": "Back to groups",
     "cancel": "Cancel",
@@ -437,6 +438,7 @@
     "nameLabel": "Name",
     "namePlaceholder": "Worship team",
     "noLeaders": "No leaders",
+    "noCandidatesFound": "No members match your search.",
     "noMembers": "This group has no members yet.",
     "noResponsibility": "No responsibility set",
     "organizationGroups": "Church groups",
@@ -449,7 +451,8 @@
       "LEADER": "Leader",
       "MEMBER": "Member"
     },
-    "selectMember": "Select a member",
+    "selectMembers": "Select members",
+    "selectionLimit": "You can add up to {max} members at once.",
     "subtitle": "Ministries, teams and small groups of the church.",
     "title": "Groups"
   },
