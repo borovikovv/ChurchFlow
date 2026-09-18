@@ -6,6 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InvitationsRepository } from '../invitations/repositories/invitations.repository';
+import { MediaService } from '../media/media.service';
+import { userAvatarUrl } from '../media/user-avatar-url';
 import { NotificationsService } from '../notifications/notifications.service';
 import type {
   NotificationBodyMessage,
@@ -31,6 +33,7 @@ export class MembershipsService {
     private readonly membershipsRepository: MembershipsRepository,
     private readonly invitationsRepository: InvitationsRepository,
     private readonly notificationsService: NotificationsService,
+    private readonly mediaService: MediaService,
   ) {}
 
   async listForOrganization(
@@ -68,6 +71,9 @@ export class MembershipsService {
 
     const canManageProfiles =
       actorMembership?.role === 'OWNER' || actorMembership?.role === 'ADMIN';
+    const readUrl = await this.mediaService.readUrlLookup(
+      members.map((member) => member.user?.avatarAsset),
+    );
 
     return {
       actorRole: actorMembership?.role ?? null,
@@ -125,7 +131,7 @@ export class MembershipsService {
                 notes: canViewProfile ? member.profile.notes : null,
                 biography: canViewProfile ? member.profile.biography : null,
                 familyNotes: canViewProfile ? member.profile.familyNotes : null,
-                photoUrl: member.user?.avatarUrl ?? null,
+                photoUrl: userAvatarUrl(member.user, readUrl),
               }
             : {
                 displayName: member.user?.displayName ?? member.user?.email ?? 'Member',
@@ -138,7 +144,7 @@ export class MembershipsService {
                 biography: null,
                 familyNotes: null,
                 profilePhotoAssetId: null,
-                photoUrl: member.user?.avatarUrl ?? null,
+                photoUrl: userAvatarUrl(member.user, readUrl),
               },
           user: member.user
             ? {

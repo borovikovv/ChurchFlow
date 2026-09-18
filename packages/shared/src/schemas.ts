@@ -22,6 +22,8 @@ import {
   ORGANIZATION_GROUP_MEMBER_ROLES,
   ORGANIZATION_GROUP_NAME_MAX_LENGTH,
   ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH,
+  PHOTO_UPLOAD_MAX_BYTES,
+  PHOTO_UPLOAD_MIME_TYPES,
   MEMBER_ACCESS_METHODS,
   MEMBER_TABS,
   MEMBER_PAGE_SIZE_OPTIONS,
@@ -590,15 +592,16 @@ export const createOrganizationMemberRelationshipSchema = z.object({
 
 export const createMemberPhotoUploadSchema = z.object({
   filename: z.string().trim().min(1).max(255),
-  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
-  byteSize: z
-    .number()
-    .int()
-    .positive()
-    .max(5 * 1024 * 1024),
+  mimeType: z.enum(PHOTO_UPLOAD_MIME_TYPES),
+  byteSize: z.number().int().positive().max(PHOTO_UPLOAD_MAX_BYTES),
 });
 
 export const confirmMemberPhotoUploadSchema = z.object({ assetId: uuidSchema });
+
+export const confirmUserAvatarUploadSchema = z.object({
+  assetId: uuidSchema,
+  organizationId: uuidSchema.optional(),
+});
 
 export const organizationGroupBadgeSchema = z.object({
   id: uuidSchema,
@@ -952,7 +955,7 @@ export const reorderWebsiteSectionsSchema = z.object({
 
 export const mediaAssetSchema = z.object({
   id: uuidSchema,
-  organizationId: uuidSchema,
+  organizationId: uuidSchema.nullable(),
   filename: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(120),
   byteSize: z.bigint().nonnegative(),

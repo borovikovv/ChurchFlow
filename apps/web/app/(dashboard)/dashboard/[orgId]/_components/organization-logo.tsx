@@ -2,8 +2,8 @@
 
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
-import { validateMemberPhoto } from '@/components/members/member-photo-upload';
 import { displayNameInitials } from '@/lib/initials';
+import { validatePhotoFile } from '@/lib/validate-photo-file';
 
 export function OrganizationLogo({
   name,
@@ -73,10 +73,10 @@ export function OrganizationLogoField({
         type="file"
         accept="image/jpeg,image/png,image/webp"
         aria-invalid={Boolean(error)}
-        onBlur={() => onChange(file, validateMemberPhoto(file))}
+        onBlur={() => onChange(file, validatePhotoFile(file))}
         onChange={(event) => {
           const selected = event.currentTarget.files?.[0] ?? null;
-          onChange(selected, validateMemberPhoto(selected));
+          onChange(selected, validatePhotoFile(selected));
         }}
       />
       <div className="grid gap-1">

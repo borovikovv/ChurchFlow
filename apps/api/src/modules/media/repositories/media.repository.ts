@@ -140,6 +140,118 @@ export class MediaRepository {
     });
   }
 
+  createPendingUserAvatarAsset(data: {
+    userId: string;
+    bucket: string;
+    objectKey: string;
+    filename: string;
+    mimeType: string;
+    byteSize: number;
+  }) {
+    const { userId, ...asset } = data;
+    return this.prisma.mediaAsset.create({
+      data: {
+        ...asset,
+        byteSize: BigInt(data.byteSize),
+        metadata: { status: 'pending', purpose: 'user-avatar', userId },
+      },
+    });
+  }
+
+  findUserAsset(assetId: string) {
+    return this.prisma.mediaAsset.findFirst({
+      where: { id: assetId, organizationId: null, deletedAt: null },
+    });
+  }
+
+  async attachUserAvatar(userId: string, assetId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { avatarAssetId: true },
+      });
+      await tx.user.update({ where: { id: userId }, data: { avatarAssetId: assetId } });
+      await tx.mediaAsset.update({
+        where: { id: assetId },
+        data: { metadata: { status: 'confirmed', purpose: 'user-avatar', userId } },
+      });
+      if (user.avatarAssetId && user.avatarAssetId !== assetId)
+        await tx.mediaAsset.update({
+          where: { id: user.avatarAssetId },
+          data: { deletedAt: new Date() },
+        });
+      return { assetId };
+    });
+  }
+
+  async clearUserAvatar(userId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { avatarAssetId: true },
+      });
+      await tx.user.update({
+        where: { id: userId },
+        data: { avatarAssetId: null, avatarUrl: null },
+      });
+      if (user.avatarAssetId)
+        await tx.mediaAsset.update({
+          where: { id: user.avatarAssetId },
+          data: { deletedAt: new Date() },
+        });
+    });
+  }
+
+  findMembershipWithoutPhoto(organizationId: string, userId: string) {
+    return this.prisma.organizationMember.findFirst({
+      where: {
+        organizationId,
+        userId,
+        status: 'ACTIVE',
+        removedAt: null,
+        organization: { status: 'ACTIVE', deletedAt: null },
+        profile: { is: { profilePhotoAssetId: null } },
+      },
+      select: { id: true },
+    });
+  }
+
+  async attachCopiedMemberPhoto(data: {
+    organizationId: string;
+    membershipId: string;
+    bucket: string;
+    objectKey: string;
+    filename: string;
+    mimeType: string;
+    byteSize: bigint;
+    sourceAssetId: string;
+    actorUserId: string;
+  }) {
+    const { membershipId, sourceAssetId, actorUserId, ...asset } = data;
+    return this.prisma.$transaction(async (tx) => {
+      const created = await tx.mediaAsset.create({
+        data: { ...asset, metadata: { status: 'confirmed', membershipId } },
+        select: { id: true },
+      });
+      const profile = await tx.organizationMemberProfile.update({
+        where: { membershipId },
+        data: { profilePhotoAssetId: created.id },
+        select: { id: true },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: data.organizationId,
+          actorUserId,
+          action: 'UPDATE_MEMBER_PHOTO',
+          entityType: 'OrganizationMember',
+          entityId: membershipId,
+          metadata: { assetId: created.id, copiedFromUserAvatarAssetId: sourceAssetId },
+        },
+      });
+      return { assetId: created.id, profileId: profile.id };
+    });
+  }
+
   async confirmCalendarEventImage(organizationId: string, assetId: string, actorUserId: string) {
     const asset = await this.prisma.mediaAsset.update({
       where: { id: assetId },

@@ -7,12 +7,13 @@ import type {
 } from '@churchflow/shared';
 import { CALENDAR_EVENT_REPEAT_PERIOD, CALENDAR_EVENT_TYPE } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { userAvatarSelect } from '../../media/user-avatar-url';
 
 const calendarEventInclude = {
   linkedMembership: {
     include: {
       profile: true,
-      user: { select: { displayName: true, email: true, avatarUrl: true } },
+      user: { select: { displayName: true, email: true, ...userAvatarSelect } },
     },
   },
   imageAsset: { select: { id: true } },
@@ -21,7 +22,7 @@ const calendarEventInclude = {
       membership: {
         include: {
           profile: true,
-          user: { select: { displayName: true, email: true, avatarUrl: true } },
+          user: { select: { displayName: true, email: true, ...userAvatarSelect } },
         },
       },
     },
@@ -34,7 +35,7 @@ const calendarEventInclude = {
           membership: {
             include: {
               profile: true,
-              user: { select: { displayName: true, email: true, avatarUrl: true } },
+              user: { select: { displayName: true, email: true, ...userAvatarSelect } },
             },
           },
         },
@@ -78,7 +79,7 @@ export class CalendarEventsRepository {
         groups: {
           include: { group: { select: { id: true, name: true, icon: true, color: true } } },
         },
-        user: { select: { displayName: true, email: true, avatarUrl: true } },
+        user: { select: { displayName: true, email: true, ...userAvatarSelect } },
       },
       orderBy: { createdAt: 'asc' },
     });
