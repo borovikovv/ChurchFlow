@@ -28,7 +28,8 @@ export function parseMembersCsv(
   const groupIdsByName = new Map(
     organizationGroups.map((group) => [group.name.trim().toLowerCase(), group.id]),
   );
-  const records = parseCsvRecords(csv.replace(/^\uFEFF/, ''));
+  const content = csv.replace(/^\uFEFF/, '');
+  const records = parseCsvRecords(content, detectCsvDelimiter(content));
   if (records.length === 0) {
     return {
       rows: [],
@@ -153,7 +154,24 @@ function resolveGroupIds(
   return { ids, unknownNames };
 }
 
-function parseCsvRecords(csv: string): string[][] {
+type CsvDelimiter = ',' | ';';
+
+function detectCsvDelimiter(csv: string): CsvDelimiter {
+  const headerLine = csv.split(/\r?\n/, 1)[0] ?? '';
+  let commas = 0;
+  let semicolons = 0;
+  let quoted = false;
+
+  for (const char of headerLine) {
+    if (char === '"') quoted = !quoted;
+    else if (!quoted && char === ',') commas += 1;
+    else if (!quoted && char === ';') semicolons += 1;
+  }
+
+  return semicolons > commas ? ';' : ',';
+}
+
+function parseCsvRecords(csv: string, delimiter: CsvDelimiter): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let value = '';
@@ -174,7 +192,7 @@ function parseCsvRecords(csv: string): string[][] {
       continue;
     }
 
-    if (char === ',' && !quoted) {
+    if (char === delimiter && !quoted) {
       row.push(value);
       value = '';
       continue;

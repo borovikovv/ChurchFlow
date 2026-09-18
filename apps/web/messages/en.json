@@ -256,6 +256,8 @@
     "importFromCsv": "Import from CSV",
     "importedMembers": "Imported {created} members.",
     "importedMembersWithFailures": "Imported {created} members. {failed} rows need fixes.",
+    "importRowError": "Row {row}: {message}",
+    "importMoreErrors": "…and {count} more",
     "importedRows": "Imported {created} of {total} rows.",
     "importing": "Importing...",
     "inviteAppUser": "Invite app user",
