@@ -20,6 +20,7 @@ import {
   ORGANIZATION_GROUP_DESCRIPTION_MAX_LENGTH,
   ORGANIZATION_GROUP_ICONS,
   ORGANIZATION_GROUP_MEMBER_ROLES,
+  ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD,
   ORGANIZATION_GROUP_NAME_MAX_LENGTH,
   ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH,
   PHOTO_UPLOAD_MAX_BYTES,
@@ -635,7 +636,10 @@ const organizationGroupMemberInputSchema = z.object({
 });
 
 export const addOrganizationGroupMembersSchema = z.object({
-  members: z.array(organizationGroupMemberInputSchema).min(1).max(200),
+  members: z
+    .array(organizationGroupMemberInputSchema)
+    .min(1)
+    .max(ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD),
 });
 
 export const updateOrganizationGroupMemberSchema = z
