@@ -1,0 +1,2 @@
+export const removeAvatarButtonClassName =
+  'absolute -right-1 -top-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full border border-[var(--surface)] bg-[var(--danger)] text-white opacity-0 shadow-[var(--shadow)] transition-opacity hover:bg-[var(--danger-strong)] focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-50 group-hover:opacity-100 [@media(hover:none)]:opacity-100';

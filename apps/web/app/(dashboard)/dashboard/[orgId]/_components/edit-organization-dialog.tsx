@@ -9,8 +9,9 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import { FormInput } from '@/components/forms/form-input';
 import { FormTextarea } from '@/components/forms/form-textarea';
-import { validateMemberPhoto } from '@/components/members/member-photo-upload';
 import { Button } from '@/components/ui/button';
+import { validatePhotoFile } from '@/lib/validate-photo-file';
+import { uploadToSignedUrl } from '@/lib/upload-to-signed-url';
 import {
   confirmOrganizationLogoAction,
   prepareOrganizationLogoAction,
@@ -52,7 +53,7 @@ export function EditOrganizationDialog({
   });
 
   const submit = handleSubmit(async (values) => {
-    const currentLogoError = validateMemberPhoto(logo);
+    const currentLogoError = validatePhotoFile(logo);
     setLogoError(currentLogoError);
     if (currentLogoError) return;
 
@@ -185,12 +186,8 @@ async function uploadLogo(
     throw new Error(prepared.error ?? messages.unableToPrepareLogoUpload);
   }
 
-  const upload = await fetch(prepared.uploadUrl, {
-    method: 'PUT',
-    headers: { 'content-type': logo.type },
-    body: logo,
-  });
-  if (!upload.ok) throw new Error(messages.logoUploadFailed);
+  if (!(await uploadToSignedUrl(prepared.uploadUrl, logo)))
+    throw new Error(messages.logoUploadFailed);
 
   const confirmed = await confirmOrganizationLogoAction({
     organizationId,

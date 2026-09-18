@@ -61,6 +61,7 @@ function createService(event, calls, notifiedMembershipIds) {
         };
       },
     },
+    { readUrlLookup: async () => () => null },
   );
 }
 

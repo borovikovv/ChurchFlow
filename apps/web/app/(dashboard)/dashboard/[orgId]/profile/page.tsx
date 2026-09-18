@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser, requireServerSession } from '@/auth/session';
 import { EmailVerificationNotice } from '@/features/profile/components/email-verification-notice';
+import { ProfileAvatar } from '@/features/profile/components/profile-avatar';
 import { ProfileForm } from '@/features/profile/components/profile-form';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs } from '@/components/ui/tabs';
@@ -31,6 +32,11 @@ export default async function OrganizationProfilePage({
       <div className="stack max-w-xl">
         {error ? <p className="form-error">{error}</p> : null}
         <EmailVerificationNotice email={user.email} emailVerified={user.emailVerified} />
+        <ProfileAvatar
+          displayName={user.displayName}
+          avatarUrl={user.avatarUrl}
+          organizationId={orgId}
+        />
         <ProfileForm
           displayName={user.displayName}
           email={user.email}

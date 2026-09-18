@@ -3,29 +3,8 @@
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
-
-const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const maxPhotoBytes = 5 * 1024 * 1024;
-
-interface MemberPhotoValidationMessages {
-  invalidType: string;
-  tooLarge: string;
-}
-
-const defaultValidationMessages: MemberPhotoValidationMessages = {
-  invalidType: 'Choose a JPEG, PNG, or WebP image.',
-  tooLarge: 'The photo must not exceed 5 MB.',
-};
-
-export function validateMemberPhoto(
-  file: File | null,
-  messages: MemberPhotoValidationMessages = defaultValidationMessages,
-): string | null {
-  if (!file) return null;
-  if (!allowedMimeTypes.has(file.type)) return messages.invalidType;
-  if (file.size > maxPhotoBytes) return messages.tooLarge;
-  return null;
-}
+import { ImageCropDialog } from '@/components/ui/image-crop-dialog';
+import { validatePhotoFile } from '@/lib/validate-photo-file';
 
 export function MemberPhotoField({
   currentUrl,
@@ -45,6 +24,7 @@ export function MemberPhotoField({
   };
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [fileToCrop, setFileToCrop] = useState<File | null>(null);
 
   useEffect(() => {
     if (!file) {
@@ -75,16 +55,32 @@ export function MemberPhotoField({
         type="file"
         accept="image/jpeg,image/png,image/webp"
         aria-invalid={Boolean(error)}
-        onBlur={() => onChange(file, validateMemberPhoto(file, validationMessages))}
+        onBlur={() => onChange(file, validatePhotoFile(file, validationMessages))}
         onChange={(event) => {
           const selected = event.currentTarget.files?.[0] ?? null;
-          onChange(selected, validateMemberPhoto(selected, validationMessages));
+          const validationError = validatePhotoFile(selected, validationMessages);
+          if (validationError || !selected) {
+            onChange(selected, validationError);
+            return;
+          }
+          setFileToCrop(selected);
         }}
       />
       <div className="grid gap-1">
         <small>{t('photoRequirement')}</small>
         {error ? <p className="form-error m-0 text-xs">{error}</p> : null}
       </div>
+      <ImageCropDialog
+        file={fileToCrop}
+        onCropped={(cropped) => {
+          setFileToCrop(null);
+          onChange(cropped, null);
+        }}
+        onCancel={() => {
+          setFileToCrop(null);
+          if (inputRef.current) inputRef.current.value = '';
+        }}
+      />
     </div>
   );
 }

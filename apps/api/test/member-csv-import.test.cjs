@@ -23,6 +23,24 @@ test('member CSV import parses quoted values and groups', () => {
   assert.deepEqual(result.rows[0].groups, [ORGANIZATION_GROUPS[0].id, ORGANIZATION_GROUPS[1].id]);
 });
 
+test('member CSV import accepts semicolon-delimited files with quoted group lists', () => {
+  const csv = [
+    'displayName;email;phone;role;groups;memberSince;birthday;anniversary;notes;biography;familyNotes',
+    'Сергій Березовський;;380934056965;MEMBER;;;;;;;',
+    'Тетяна мала;;;VIEWER;"Worship;Teachers";;;;;;',
+  ].join('\n');
+
+  const result = parseMembersCsv(csv, ORGANIZATION_GROUPS);
+
+  assert.equal(result.totalRows, 2);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.rows[0].displayName, 'Сергій Березовський');
+  assert.equal(result.rows[0].email, null);
+  assert.equal(result.rows[0].phone, '380934056965');
+  assert.equal(result.rows[1].role, 'VIEWER');
+  assert.deepEqual(result.rows[1].groups, [ORGANIZATION_GROUPS[0].id, ORGANIZATION_GROUPS[1].id]);
+});
+
 test('member CSV import rejects a row naming a group the organization does not have', () => {
   const csv = ['displayName,groups', 'Jane Doe,Worship;Ushers'].join('\n');
 

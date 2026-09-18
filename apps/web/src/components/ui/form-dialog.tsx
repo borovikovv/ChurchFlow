@@ -35,6 +35,7 @@ export function FormDialog({
   const t = useTranslations('common');
   const internalDialogRef = useRef<HTMLDialogElement>(null);
   const dialogRef = externalDialogRef ?? internalDialogRef;
+  const pressStartedOnBackdropRef = useRef(false);
   const titleId = useId();
 
   return (
@@ -57,8 +58,12 @@ export function FormDialog({
         aria-labelledby={titleId}
         className={formDialogClassName({ fullScreenOnMobile, size })}
         onClose={onClose}
+        onPointerDown={(event) => {
+          pressStartedOnBackdropRef.current = event.target === event.currentTarget;
+        }}
         onClick={(event) => {
-          if (event.target === event.currentTarget) event.currentTarget.close();
+          if (event.target === event.currentTarget && pressStartedOnBackdropRef.current)
+            event.currentTarget.close();
         }}
         ref={dialogRef}
       >

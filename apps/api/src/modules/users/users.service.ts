@@ -1,14 +1,24 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@churchflow/db';
+import { MediaService } from '../media/media.service';
 import { UsersRepository } from './repositories/users.repository';
 import type { UpdateCurrentUserProfileInput } from '@churchflow/shared';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly usersRepository: UsersRepository) {}
+  constructor(
+    private readonly usersRepository: UsersRepository,
+    private readonly mediaService: MediaService,
+  ) {}
 
   async findProfile(userId: string) {
-    return this.usersRepository.findById(userId);
+    const user = await this.usersRepository.findById(userId);
+    if (!user) return null;
+    const { avatarAsset, ...profile } = user;
+    return {
+      ...profile,
+      avatarUrl: avatarAsset ? await this.mediaService.signReadUrl(avatarAsset) : user.avatarUrl,
+    };
   }
 
   async updateProfile(userId: string, input: UpdateCurrentUserProfileInput) {

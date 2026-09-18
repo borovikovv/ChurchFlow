@@ -1,27 +1,37 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import {
+  CopyObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   GetObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { CreateMemberPhotoUploadInput } from '@churchflow/shared';
+import { ENTITLEMENTS } from '@churchflow/shared';
+import type {
+  ConfirmUserAvatarUploadInput,
+  CreateMemberPhotoUploadInput,
+} from '@churchflow/shared';
+import { EntitlementsService } from '../billing/entitlements.service';
 import { MediaRepository } from './repositories/media.repository';
+import type { ReadUrlLookup, StoredObject } from './user-avatar-url';
 
 @Injectable()
 export class MediaService {
+  private readonly logger = new Logger(MediaService.name);
   private readonly s3: S3Client;
   private readonly bucket: string;
   constructor(
     private readonly mediaRepository: MediaRepository,
+    private readonly entitlementsService: EntitlementsService,
     config: ConfigService,
   ) {
     this.bucket = config.getOrThrow('S3_BUCKET');
@@ -254,12 +264,128 @@ export class MediaService {
     const asset = await this.mediaRepository.findAsset(assetId, organizationId);
     if (!asset) throw new NotFoundException('Media asset was not found');
     return {
-      url: await getSignedUrl(
-        this.s3,
-        new GetObjectCommand({ Bucket: asset.bucket, Key: asset.objectKey }),
-        { expiresIn: 300 },
-      ),
+      url: await this.signReadUrl(asset),
       expiresIn: 300,
     };
+  }
+
+  async createUserAvatarUpload(userId: string, input: CreateMemberPhotoUploadInput) {
+    const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[
+      input.mimeType
+    ];
+    const objectKey = `users/${userId}/avatar/${randomUUID()}.${extension}`;
+    const asset = await this.mediaRepository.createPendingUserAvatarAsset({
+      userId,
+      bucket: this.bucket,
+      objectKey,
+      ...input,
+    });
+    const uploadUrl = await getSignedUrl(
+      this.s3,
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: objectKey,
+        ContentType: input.mimeType,
+        ContentLength: input.byteSize,
+      }),
+      { expiresIn: 300 },
+    );
+    return { assetId: asset.id, uploadUrl, expiresIn: 300 };
+  }
+
+  async confirmUserAvatar(userId: string, input: ConfirmUserAvatarUploadInput) {
+    const asset = await this.mediaRepository.findUserAsset(input.assetId);
+    const metadata = (asset?.metadata ?? {}) as { purpose?: string; userId?: string };
+    if (!asset || metadata.purpose !== 'user-avatar' || metadata.userId !== userId)
+      throw new NotFoundException('Pending avatar asset was not found');
+    const head = await this.s3.send(
+      new HeadObjectCommand({ Bucket: asset.bucket, Key: asset.objectKey }),
+    );
+    if (head.ContentType !== asset.mimeType || head.ContentLength !== Number(asset.byteSize))
+      throw new UnprocessableEntityException('Uploaded object does not match the declared avatar');
+    await this.mediaRepository.attachUserAvatar(userId, asset.id);
+
+    let copiedToMembershipId: string | null = null;
+    if (input.organizationId) {
+      try {
+        copiedToMembershipId = await this.copyAvatarToMemberPhoto(
+          input.organizationId,
+          userId,
+          asset,
+        );
+      } catch (error: unknown) {
+        this.logger.error(
+          `Avatar ${asset.id} could not be copied to the membership in organization ${input.organizationId}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
+
+    return { assetId: asset.id, avatarUrl: await this.signReadUrl(asset), copiedToMembershipId };
+  }
+
+  async removeUserAvatar(userId: string) {
+    await this.mediaRepository.clearUserAvatar(userId);
+    return { ok: true };
+  }
+
+  async readUrlLookup(objects: Iterable<StoredObject | null | undefined>): Promise<ReadUrlLookup> {
+    const distinct = new Map<string, StoredObject>();
+    for (const object of objects) {
+      if (object) distinct.set(`${object.bucket}/${object.objectKey}`, object);
+    }
+    const signed = new Map(
+      await Promise.all(
+        [...distinct].map(async ([key, object]) => [key, await this.signReadUrl(object)] as const),
+      ),
+    );
+    return (object) =>
+      object ? (signed.get(`${object.bucket}/${object.objectKey}`) ?? null) : null;
+  }
+
+  signReadUrl(asset: StoredObject): Promise<string> {
+    return getSignedUrl(
+      this.s3,
+      new GetObjectCommand({ Bucket: asset.bucket, Key: asset.objectKey }),
+      { expiresIn: 300 },
+    );
+  }
+
+  private async copyAvatarToMemberPhoto(
+    organizationId: string,
+    userId: string,
+    asset: { id: string; objectKey: string; filename: string; mimeType: string; byteSize: bigint },
+  ): Promise<string | null> {
+    const membership = await this.mediaRepository.findMembershipWithoutPhoto(
+      organizationId,
+      userId,
+    );
+    if (!membership) return null;
+    if (!(await this.entitlementsService.has(organizationId, ENTITLEMENTS.filesUpload)))
+      return null;
+
+    const extension = asset.objectKey.slice(asset.objectKey.lastIndexOf('.') + 1);
+    const objectKey = `organizations/${organizationId}/members/${membership.id}/${randomUUID()}.${extension}`;
+    await this.s3.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        CopySource: encodeURI(`${this.bucket}/${asset.objectKey}`),
+        Key: objectKey,
+        ContentType: asset.mimeType,
+        MetadataDirective: 'REPLACE',
+      }),
+    );
+    await this.mediaRepository.attachCopiedMemberPhoto({
+      organizationId,
+      membershipId: membership.id,
+      bucket: this.bucket,
+      objectKey,
+      filename: asset.filename,
+      mimeType: asset.mimeType,
+      byteSize: asset.byteSize,
+      sourceAssetId: asset.id,
+      actorUserId: userId,
+    });
+    return membership.id;
   }
 }
