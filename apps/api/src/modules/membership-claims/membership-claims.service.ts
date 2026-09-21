@@ -13,6 +13,7 @@ import { ENTITLEMENTS } from '@churchflow/shared';
 import { UserLocaleService } from '../../common/locale/user-locale.service';
 import { EmailService } from '../email/email.service';
 import { EntitlementsService, RESTRICTED_OUTSIDER_MESSAGE } from '../billing/entitlements.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { MembershipClaimsRepository } from './repositories/membership-claims.repository';
 
 const CLAIM_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -26,6 +27,7 @@ export class MembershipClaimsService {
     private readonly emailService: EmailService,
     private readonly userLocaleService: UserLocaleService,
     private readonly entitlementsService: EntitlementsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async validate(rawToken: string) {
@@ -126,7 +128,14 @@ export class MembershipClaimsService {
     try {
       const result = await this.repository.request(this.hash(rawToken), actorUserId);
       if (result.expired) throw new GoneException('Membership claim has expired');
-      return result;
+      const { organizationId, memberName, ...response } = result;
+      await this.tryNotifyAdminsAboutRequestedClaim({
+        organizationId,
+        claimId: response.id,
+        memberName,
+        actorUserId,
+      });
+      return response;
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'CLAIM_NOT_FOUND') {
         throw new NotFoundException('Membership claim was not found');
@@ -223,6 +232,39 @@ export class MembershipClaimsService {
 
   private hash(rawToken: string): string {
     return createHash('sha256').update(rawToken).digest('hex');
+  }
+
+  private async tryNotifyAdminsAboutRequestedClaim(input: {
+    organizationId: string;
+    claimId: string;
+    memberName: string | null;
+    actorUserId: string;
+  }): Promise<void> {
+    try {
+      const recipientMembershipIds = await this.repository.listAdminMembershipIds(
+        input.organizationId,
+        input.actorUserId,
+      );
+      await this.notificationsService.createAdminMembershipChangeNotifications({
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        recipientMembershipIds,
+        type: 'MEMBERSHIP_CLAIM_REQUESTED',
+        preferenceKey: 'organizationUpdatesEnabled',
+        titleKey: 'membershipClaimRequested',
+        bodyMessage: { key: 'membershipClaimRequested', memberName: input.memberName },
+        url: `/dashboard/${input.organizationId}/members`,
+        entityType: 'MembershipClaim',
+        entityId: input.claimId,
+        dedupeKey: `membership-claim-requested:${input.claimId}`,
+        adminOnly: true,
+      });
+    } catch (error: unknown) {
+      this.logger.error(
+        'Membership claim request notification failed after the claim was committed',
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
   }
 
   private async trySendEmail(send: () => Promise<void>): Promise<boolean> {

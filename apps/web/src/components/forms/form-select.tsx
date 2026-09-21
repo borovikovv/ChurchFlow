@@ -48,6 +48,12 @@ type OptionElementProps = {
   value?: string | number | readonly string[];
 };
 
+// Same breakpoint as the anti-zoom rule in globals.css. That rule cannot reach react-select's
+// inputs (the search input carries an inline `font: inherit`, the non-searchable dummy input an
+// unlayered emotion class), so the 16px floor is restated on the elements they inherit from.
+const MOBILE_VIEWPORT_MEDIA_QUERY = '@media (max-width: 767.98px)';
+const MOBILE_INPUT_FONT_SIZE = 16;
+
 export function createSelectStyles<IsMulti extends boolean = false>(
   size: SelectSize,
   { wrapValues = false }: { wrapValues?: boolean } = {},
@@ -114,6 +120,9 @@ export function createSelectStyles<IsMulti extends boolean = false>(
         background: 'transparent',
         boxShadow: 'none',
         lineHeight: medium ? '20px' : 'inherit',
+      },
+      [MOBILE_VIEWPORT_MEDIA_QUERY]: {
+        fontSize: MOBILE_INPUT_FONT_SIZE,
       },
     }),
     menu: (base) => ({
@@ -210,6 +219,11 @@ export function createSelectStyles<IsMulti extends boolean = false>(
       paddingLeft: medium ? 8 : 12,
       paddingRight: medium ? 8 : 12,
       paddingTop: 0,
+      [MOBILE_VIEWPORT_MEDIA_QUERY]: {
+        '& > input': {
+          fontSize: MOBILE_INPUT_FONT_SIZE,
+        },
+      },
     }),
   };
 }
