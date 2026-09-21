@@ -68,7 +68,6 @@ export function CalendarPreviewModal({
               {monthCells.map((day, index) => {
                 const isLastColumn = index % 7 === 6;
                 const isLastRow = index >= monthCells.length - 7;
-                const isWeekend = index % 7 >= 5;
                 const cellBorders = `${isLastColumn ? '' : 'border-r '}${isLastRow ? '' : 'border-b '}border-[#e5e7eb]`;
 
                 if (!day) {
@@ -89,7 +88,7 @@ export function CalendarPreviewModal({
                 return (
                   <div
                     key={key}
-                    className={`min-h-[126px] min-w-0 overflow-hidden p-1 ${cellBorders} ${isWeekend ? 'bg-[#fcfcfd]' : 'bg-white'}`}
+                    className={`min-h-[126px] min-w-0 overflow-hidden bg-white p-1 ${cellBorders}`}
                   >
                     <div className="mb-0.5 text-2xl font-serif leading-none text-[#57606a]">
                       {day.getDate()}
