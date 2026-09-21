@@ -380,6 +380,7 @@
     "updating": "Updating...",
     "uploading": "Uploading...",
     "viewMember": "View member",
+    "viewRelatedMember": "View {name}",
     "viewer": "Viewer",
     "yourRole": "Your role: {role}"
   },
