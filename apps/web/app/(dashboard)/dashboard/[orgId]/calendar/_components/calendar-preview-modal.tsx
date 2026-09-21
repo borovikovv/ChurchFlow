@@ -8,7 +8,6 @@ import { eventImageUrl, formatMonthLabel, toDateInputValue } from './calendar-da
 
 const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 const BRAND_LOGO_SRC = '/icons/church-flow.svg';
-const BRAND_NAME = 'ChurchFlow';
 
 export function CalendarPreviewModal({
   events,
@@ -52,26 +51,31 @@ export function CalendarPreviewModal({
           <div ref={printableRef} className="w-[1040px] bg-white p-4 text-[#111827]">
             <div className="mb-4 grid grid-cols-[180px_minmax(0,1fr)_180px] items-center gap-4">
               <MiniMonth locale={locale} monthDate={previousMonth} />
-              <h2 className="text-center font-serif text-6xl font-normal uppercase leading-none tracking-normal">
+              <h2 className="text-center font-serif text-6xl font-normal uppercase leading-none tracking-wide text-[#1f2328]">
                 {formatMonthLabel(monthDate.toISOString(), locale)}
               </h2>
               <MiniMonth locale={locale} monthDate={nextMonth} />
             </div>
-            <div className="grid grid-cols-7 border-l border-t border-[#d0d7de]">
-              {WEEKDAY_KEYS.map((day) => (
+            <div className="grid grid-cols-7 overflow-hidden rounded-lg border border-[#d0d7de]">
+              {WEEKDAY_KEYS.map((day, index) => (
                 <div
                   key={day}
-                  className="border-b border-r border-[#1f2328] p-1.5 text-center text-xs font-semibold"
+                  className={`border-b border-[#d0d7de] bg-[#f6f8fa] p-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-[#57606a] ${index === WEEKDAY_KEYS.length - 1 ? '' : 'border-r'}`}
                 >
                   {t(`weekdaysShort.${day}`)}
                 </div>
               ))}
               {monthCells.map((day, index) => {
+                const isLastColumn = index % 7 === 6;
+                const isLastRow = index >= monthCells.length - 7;
+                const isWeekend = index % 7 >= 5;
+                const cellBorders = `${isLastColumn ? '' : 'border-r '}${isLastRow ? '' : 'border-b '}border-[#e5e7eb]`;
+
                 if (!day) {
                   return (
                     <div
                       aria-hidden="true"
-                      className="min-h-[126px] border-b border-r border-[#1f2328]"
+                      className={`min-h-[126px] bg-[#f9fafb] ${cellBorders}`}
                       key={`empty-${index}`}
                     />
                   );
@@ -85,9 +89,11 @@ export function CalendarPreviewModal({
                 return (
                   <div
                     key={key}
-                    className="min-h-[126px] min-w-0 overflow-hidden border-b border-r border-[#1f2328] p-1"
+                    className={`min-h-[126px] min-w-0 overflow-hidden p-1 ${cellBorders} ${isWeekend ? 'bg-[#fcfcfd]' : 'bg-white'}`}
                   >
-                    <div className="mb-0.5 text-2xl font-serif leading-none">{day.getDate()}</div>
+                    <div className="mb-0.5 text-2xl font-serif leading-none text-[#57606a]">
+                      {day.getDate()}
+                    </div>
                     <div className="grid text-center">
                       {dayEvents.slice(0, 4).map((event) => (
                         <div
@@ -98,7 +104,7 @@ export function CalendarPreviewModal({
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               alt=""
-                              className="h-10 w-10 min-w-10 -mt-1 rounded-sm object-cover"
+                              className="h-10 w-10 min-w-10 -mt-1 rounded-md object-cover ring-1 ring-[#e5e7eb]"
                               crossOrigin="anonymous"
                               onError={(errorEvent) => {
                                 errorEvent.currentTarget.style.display = 'none';
@@ -106,7 +112,7 @@ export function CalendarPreviewModal({
                               src={eventImageUrl(event) ?? undefined}
                             />
                           ) : null}
-                          <span className="line-clamp-2 min-w-0 wrap-anywhere text-left">
+                          <span className="line-clamp-3 min-w-0 wrap-anywhere text-left">
                             {event.title}
                           </span>
                         </div>
@@ -116,10 +122,9 @@ export function CalendarPreviewModal({
                 );
               })}
             </div>
-            <div className="mt-2 flex items-center justify-end gap-1.5 text-[#57606a] opacity-35">
+            <div className="mt-2 flex justify-end opacity-35">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img alt="" className="h-6 w-9" src={BRAND_LOGO_SRC} />
-              <span className="text-xs font-semibold">{BRAND_NAME}</span>
             </div>
           </div>
         </div>
@@ -141,13 +146,13 @@ function MiniMonth({ locale, monthDate }: { locale: string; monthDate: Date }) {
   const cells = monthGridCells(monthDate);
 
   return (
-    <div className="text-center font-serif text-[10px] leading-tight text-[#111827]">
-      <div className="mb-1 text-sm font-semibold">
+    <div className="text-center font-serif text-[10px] leading-tight text-[#57606a]">
+      <div className="mb-1 text-sm font-semibold text-[#1f2328]">
         {formatMonthLabel(monthDate.toISOString(), locale)}
       </div>
       <div className="grid grid-cols-7 gap-x-1">
         {WEEKDAY_KEYS.map((day) => (
-          <span className="font-semibold" key={day}>
+          <span className="font-semibold text-[#1f2328]" key={day}>
             {t(`weekdaysShort.${day}`).slice(0, 1)}
           </span>
         ))}
