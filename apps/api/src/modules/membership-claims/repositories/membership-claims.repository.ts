@@ -172,7 +172,7 @@ export class MembershipClaimsRepository {
     return this.prisma.$transaction(async (tx) => {
       const claim = await tx.membershipClaim.findUnique({
         where: { tokenHash },
-        include: { membership: { include: { organization: true } } },
+        include: { membership: { include: { organization: true, profile: true } } },
       });
       if (!claim) throw new Error('CLAIM_NOT_FOUND');
       if (claim.status !== 'PENDING') throw new Error('CLAIM_NOT_PENDING');
@@ -228,8 +228,31 @@ export class MembershipClaimsRepository {
         },
       });
 
-      return { expired: false as const, id: claim.id, status: 'REQUESTED' as const };
+      return {
+        expired: false as const,
+        id: claim.id,
+        status: 'REQUESTED' as const,
+        organizationId: claim.membership.organizationId,
+        memberName: claim.membership.profile?.displayName ?? null,
+      };
     });
+  }
+
+  async listAdminMembershipIds(organizationId: string, excludedUserId: string) {
+    const admins = await this.prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        role: { in: ['OWNER', 'ADMIN'] },
+        status: 'ACTIVE',
+        removedAt: null,
+        userId: { not: null },
+        AND: [{ userId: { not: excludedUserId } }],
+        organization: { status: 'ACTIVE', deletedAt: null },
+      },
+      select: { id: true },
+    });
+
+    return admins.map((admin) => admin.id);
   }
 
   async approve(organizationId: string, claimId: string, actorUserId: string) {

@@ -169,7 +169,7 @@
     "prayerRequests": "Prayer requests",
     "prayerRequestsDescription": "Notify members when a new prayer request is submitted.",
     "organizationUpdates": "Organization updates",
-    "organizationUpdatesDescription": "Notify owners and admins about member changes, linked calendar events, and organization requests.",
+    "organizationUpdatesDescription": "Notify owners and admins about member changes, access requests, linked calendar events, and organization requests.",
     "saving": "Saving...",
     "saved": "Notification preferences updated.",
     "saveFailed": "Could not update notification preferences.",
