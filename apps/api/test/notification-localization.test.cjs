@@ -54,6 +54,7 @@ const BODY_SAMPLES = [
   { key: 'memberAdded', memberName: 'Maria' },
   { key: 'memberRemoved', memberName: 'Maria' },
   { key: 'membersImported', memberCount: 12 },
+  { key: 'membershipClaimRequested', memberName: 'Maria' },
   { key: 'prayerRequestCreated', authorName: 'Maria', requestTitle: 'Healing' },
   { key: 'birthdayDigest', birthdays: ['Maria'], anniversaries: ['Ivan'] },
   {
