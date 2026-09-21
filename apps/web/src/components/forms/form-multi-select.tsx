@@ -54,7 +54,10 @@ export function FormMultiSelect({
           isSearchable={isSearchable}
           closeMenuOnSelect={false}
           maxMenuHeight={maxMenuHeight}
-          menuPosition="fixed"
+          // In the full-screen mobile dialog a fixed menu detaches from the control while the
+          // dialog body scrolls and is not repositioned when the keyboard shrinks the viewport,
+          // so the menu is rendered in flow there and scrolls with the form.
+          menuPosition={isMobile ? 'absolute' : 'fixed'}
           menuShouldScrollIntoView={false}
           noOptionsMessage={() => noOptionsMessage}
           options={options}
