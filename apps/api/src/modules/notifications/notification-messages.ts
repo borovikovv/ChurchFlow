@@ -14,6 +14,7 @@ export const NOTIFICATION_TITLE_KEYS = [
   'memberAdded',
   'memberRemoved',
   'membersImported',
+  'membershipClaimRequested',
   'prayerRequestCreated',
   'serviceAssigned',
   'serviceReminder',
@@ -60,6 +61,7 @@ export const notificationBodyMessageSchema = z.discriminatedUnion('key', [
   z.object({ key: z.literal('memberAdded'), memberName: z.string().nullable() }),
   z.object({ key: z.literal('memberRemoved'), memberName: z.string().nullable() }),
   z.object({ key: z.literal('membersImported'), memberCount: z.number().int() }),
+  z.object({ key: z.literal('membershipClaimRequested'), memberName: z.string().nullable() }),
   z.object({
     key: z.literal('prayerRequestCreated'),
     authorName: z.string().nullable(),
@@ -105,6 +107,7 @@ interface NotificationMessageCatalog {
     memberAdded: (params: { memberName: string }) => string;
     memberRemoved: (params: { memberName: string }) => string;
     membersImported: (params: { memberCount: number }) => string;
+    membershipClaimRequested: (params: { memberName: string }) => string;
     prayerRequestCreated: (params: { authorName: string; requestTitle: string }) => string;
     subscriptionCanceledComplimentary: () => string;
     subscriptionCancellationRequested: (params: { deadline: string | null }) => string;
@@ -142,6 +145,7 @@ const NOTIFICATION_MESSAGE_CATALOG = {
       memberAdded: 'Member added',
       memberRemoved: 'Member removed',
       membersImported: 'Members imported',
+      membershipClaimRequested: 'Access requested',
       prayerRequestCreated: 'New prayer request',
       serviceAssigned: 'You were assigned to a service',
       serviceReminder: 'Service reminder',
@@ -189,6 +193,8 @@ const NOTIFICATION_MESSAGE_CATALOG = {
       memberRemoved: (params) => `${params.memberName} was removed from the organization.`,
       membersImported: (params) =>
         `${String(params.memberCount)} members were imported to the organization.`,
+      membershipClaimRequested: (params) =>
+        `${params.memberName} requested access through an access link and is waiting for approval.`,
       prayerRequestCreated: (params) =>
         `${params.authorName} asked for prayer: ${params.requestTitle}`,
       subscriptionCanceledComplimentary: () =>
@@ -221,6 +227,7 @@ const NOTIFICATION_MESSAGE_CATALOG = {
       memberAdded: 'Додано учасника',
       memberRemoved: 'Учасника видалено',
       membersImported: 'Учасників імпортовано',
+      membershipClaimRequested: 'Запит на доступ',
       prayerRequestCreated: 'Нова молитовна потреба',
       serviceAssigned: 'Вас призначено на служіння',
       serviceReminder: 'Нагадування про служіння',
@@ -268,6 +275,8 @@ const NOTIFICATION_MESSAGE_CATALOG = {
       memberRemoved: (params) => `${params.memberName} видалено з організації.`,
       membersImported: (params) =>
         `До організації імпортовано учасників: ${String(params.memberCount)}.`,
+      membershipClaimRequested: (params) =>
+        `${params.memberName} надіслав(ла) запит на доступ за посиланням і очікує підтвердження.`,
       prayerRequestCreated: (params) =>
         `${params.authorName} просить молитви: ${params.requestTitle}`,
       subscriptionCanceledComplimentary: () =>
@@ -337,6 +346,10 @@ export function renderNotificationBody(
       });
     case 'membersImported':
       return catalog.bodies.membersImported({ memberCount: message.memberCount });
+    case 'membershipClaimRequested':
+      return catalog.bodies.membershipClaimRequested({
+        memberName: message.memberName ?? catalog.unknownMember,
+      });
     case 'prayerRequestCreated':
       return catalog.bodies.prayerRequestCreated({
         authorName: message.authorName ?? catalog.unknownMember,

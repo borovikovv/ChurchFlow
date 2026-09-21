@@ -70,6 +70,7 @@ test('a birthday creates one all-day yearly event on the profile date', async ()
     type: 'BIRTHDAY',
     change: 'created',
     membershipId: 'membership',
+    displayName: 'Maria',
   });
 });
 
