@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { eventImageUrl, formatMonthLabel, toDateInputValue } from './calendar-date-utils';
 
 const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+const BRAND_LOGO_SRC = '/icons/church-flow.svg';
+const BRAND_NAME = 'ChurchFlow';
 
 export function CalendarPreviewModal({
   events,
@@ -81,13 +83,16 @@ export function CalendarPreviewModal({
                 );
 
                 return (
-                  <div key={key} className="min-h-[126px] border-b border-r border-[#1f2328] p-1">
+                  <div
+                    key={key}
+                    className="min-h-[126px] min-w-0 overflow-hidden border-b border-r border-[#1f2328] p-1"
+                  >
                     <div className="mb-0.5 text-2xl font-serif leading-none">{day.getDate()}</div>
                     <div className="grid text-center">
                       {dayEvents.slice(0, 4).map((event) => (
                         <div
                           key={event.occurrenceId}
-                          className="flex min-w-0 items-center gap-1 p-1 text-[11px] font-semibold leading-tight text-[#111827]"
+                          className="flex min-w-0 items-center gap-1 overflow-hidden p-1 text-[11px] font-semibold leading-tight text-[#111827]"
                         >
                           {eventImageUrl(event) ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -101,13 +106,20 @@ export function CalendarPreviewModal({
                               src={eventImageUrl(event) ?? undefined}
                             />
                           ) : null}
-                          <span className="min-w-0 text-left">{event.title}</span>
+                          <span className="line-clamp-2 min-w-0 wrap-anywhere text-left">
+                            {event.title}
+                          </span>
                         </div>
                       ))}
                     </div>
                   </div>
                 );
               })}
+            </div>
+            <div className="mt-2 flex items-center justify-end gap-1.5 text-[#57606a] opacity-35">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt="" className="h-6 w-9" src={BRAND_LOGO_SRC} />
+              <span className="text-xs font-semibold">{BRAND_NAME}</span>
             </div>
           </div>
         </div>
