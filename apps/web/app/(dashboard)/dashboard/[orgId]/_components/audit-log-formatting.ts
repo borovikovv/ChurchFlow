@@ -2,6 +2,9 @@ import { BUDGET_AUDIT_ENTITY_TYPE, type AuditLogListItem } from '@churchflow/sha
 
 const ORGANIZATION_GROUP_ENTITY_TYPE = 'OrganizationGroup';
 
+// Labelled from metadata (milestone type x change), so it stays outside AUDIT_ACTION_KEYS.
+export const MEMBER_MILESTONE_AUDIT_ACTION = 'SYNC_MEMBER_MILESTONE_EVENT';
+
 const BUDGET_AMOUNT_CURRENCIES: Record<string, string> = {
   amountUah: 'UAH',
   amountUsd: 'USD',
@@ -21,39 +24,47 @@ export const AUDIT_ACTION_KEYS = [
   'CONFIRM_WEBSITE_SECTION_BACKGROUND',
   'CREATE',
   'CREATE_BUDGET_CATEGORY',
+  'CREATE_BUDGET_EXCHANGE',
   'CREATE_BUDGET_MONTH',
   'CREATE_CALENDAR_EVENT',
   'CREATE_MANUAL_MEMBER',
   'CREATE_MEMBER_RELATIONSHIP',
+  'CREATE_MEMBERSHIP_CLAIM',
   'CREATE_PRAYER_REQUEST',
   'DELETE',
   'DELETE_BUDGET_CATEGORY',
+  'DELETE_BUDGET_EXCHANGE',
   'DELETE_BUDGET_MONTH',
   'DELETE_CALENDAR_EVENT',
   'DELETE_MEMBER_RELATIONSHIP',
   'DELETE_PRAYER_REQUEST',
   'GRANT_BILLING_EXEMPTION',
+  'IMPORT_MANUAL_MEMBERS',
   'INVITE',
   'REMOVE_BUDGET_ROW',
   'REVOKE_BILLING_EXEMPTION',
   'START_SUBSCRIPTION',
+  'UPDATE_BUDGET_BASE_CURRENCY',
   'UPDATE_BUDGET_CATEGORY',
   'UPDATE_BUDGET_ENTRY',
   'UPDATE_BUDGET_ENTRY_NOTE',
+  'UPDATE_BUDGET_EXCHANGE',
   'UPDATE_BUDGET_OPENING_BALANCE',
   'MEMBERSHIP_CLAIM_CONFLICT',
   'PROMOTE_PLATFORM_ADMIN',
+  'REFRESH_MEMBERSHIP_CLAIM',
   'REJECT',
-  'REJECTED',
+  'REJECT_MEMBERSHIP_CLAIM',
   'REMOVE_MEMBER',
   'RESEND',
   'RESTORE',
   'RESTORE_MEMBER',
   'RESTORE_PRAYER_REQUEST',
   'REVOKE',
-  'REVOKED',
+  'REVOKE_MEMBERSHIP_CLAIM',
   'REQUEST_MEMBERSHIP_CLAIM',
   'SUSPEND',
+  'UPDATE',
   'UPDATE_CALENDAR_EVENT',
   'UPDATE_MEMBER_PHOTO',
   'UPDATE_MEMBER_PROFILE',
@@ -77,23 +88,28 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   CONFIRM_WEBSITE_SECTION_BACKGROUND: 'Website background updated',
   CREATE: 'Created',
   CREATE_BUDGET_CATEGORY: 'Budget category created',
+  CREATE_BUDGET_EXCHANGE: 'Currency exchange recorded',
   CREATE_BUDGET_MONTH: 'Budget month created',
   CREATE_CALENDAR_EVENT: 'Calendar event created',
   CREATE_MANUAL_MEMBER: 'Member added',
   CREATE_MEMBER_RELATIONSHIP: 'Relationship added',
+  CREATE_MEMBERSHIP_CLAIM: 'Access link created',
   CREATE_PRAYER_REQUEST: 'Prayer request created',
   DELETE: 'Deleted',
   DELETE_BUDGET_CATEGORY: 'Budget category deleted',
+  DELETE_BUDGET_EXCHANGE: 'Currency exchange deleted',
   DELETE_BUDGET_MONTH: 'Budget month deleted',
   DELETE_CALENDAR_EVENT: 'Calendar event deleted',
   DELETE_MEMBER_RELATIONSHIP: 'Relationship deleted',
   DELETE_PRAYER_REQUEST: 'Prayer request deleted',
   GRANT_BILLING_EXEMPTION: 'Complimentary access granted',
+  IMPORT_MANUAL_MEMBERS: 'Members imported',
   INVITE: 'Invitation sent',
   MEMBERSHIP_CLAIM_CONFLICT: 'Membership claim conflict recorded',
   PROMOTE_PLATFORM_ADMIN: 'Platform admin promoted',
+  REFRESH_MEMBERSHIP_CLAIM: 'Access link refreshed',
   REJECT: 'Request rejected',
-  REJECTED: 'Membership claim rejected',
+  REJECT_MEMBERSHIP_CLAIM: 'Membership claim rejected',
   REMOVE_BUDGET_ROW: 'Budget row removed',
   REMOVE_MEMBER: 'Member removed',
   RESEND: 'Invitation resent',
@@ -101,14 +117,17 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   RESTORE_MEMBER: 'Member restored',
   RESTORE_PRAYER_REQUEST: 'Prayer request restored',
   REVOKE: 'Invitation revoked',
-  REVOKED: 'Membership claim revoked',
+  REVOKE_MEMBERSHIP_CLAIM: 'Membership claim revoked',
   REQUEST_MEMBERSHIP_CLAIM: 'Membership claim requested',
   REVOKE_BILLING_EXEMPTION: 'Complimentary access revoked',
   START_SUBSCRIPTION: 'Subscription started',
   SUSPEND: 'Organization suspended',
+  UPDATE: 'Updated',
+  UPDATE_BUDGET_BASE_CURRENCY: 'Budget base currency updated',
   UPDATE_BUDGET_CATEGORY: 'Budget category updated',
   UPDATE_BUDGET_ENTRY: 'Budget cell updated',
   UPDATE_BUDGET_ENTRY_NOTE: 'Budget note updated',
+  UPDATE_BUDGET_EXCHANGE: 'Currency exchange updated',
   UPDATE_BUDGET_OPENING_BALANCE: 'Opening balance updated',
   UPDATE_CALENDAR_EVENT: 'Calendar event updated',
   UPDATE_MEMBER_PHOTO: 'Member photo updated',
@@ -144,12 +163,37 @@ export function auditActorName(
   );
 }
 
-export function auditActionLabel(action: string, labels: Record<string, string>): string {
+export type MemberMilestoneAuditMetadata = { type: string; change: string };
+
+export function auditActionLabel(
+  log: AuditLogListItem,
+  labels: {
+    actions: Record<string, string>;
+    memberMilestoneEvent: (milestone: MemberMilestoneAuditMetadata) => string;
+  },
+): string {
+  if (log.action === MEMBER_MILESTONE_AUDIT_ACTION) {
+    const label = labels.memberMilestoneEvent(memberMilestoneAuditMetadata(log.metadata));
+    const displayName = log.metadata['displayName'];
+    return typeof displayName === 'string' && displayName ? `${label}: ${displayName}` : label;
+  }
+
   return (
-    labels[action] ??
-    auditActionLabels[action as keyof typeof auditActionLabels] ??
-    action.toLowerCase().replaceAll('_', ' ')
+    labels.actions[log.action] ??
+    auditActionLabels[log.action as keyof typeof auditActionLabels] ??
+    log.action.toLowerCase().replaceAll('_', ' ')
   );
+}
+
+function memberMilestoneAuditMetadata(
+  metadata: Record<string, unknown>,
+): MemberMilestoneAuditMetadata {
+  const type = metadata['type'];
+  const change = metadata['change'];
+  return {
+    type: typeof type === 'string' ? type : '',
+    change: typeof change === 'string' ? change : '',
+  };
 }
 
 export function auditMetadataSummary(
@@ -159,7 +203,11 @@ export function auditMetadataSummary(
     metadataRole: (role: string) => string;
     metadataStatus: (status: string) => string;
   },
-): string {
+): string | null {
+  if (log.action === MEMBER_MILESTONE_AUDIT_ACTION) {
+    return null;
+  }
+
   if (log.entityType === BUDGET_AUDIT_ENTITY_TYPE) {
     return budgetMetadataSummary(log, labels);
   }
