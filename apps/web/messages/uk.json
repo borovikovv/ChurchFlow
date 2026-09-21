@@ -380,6 +380,7 @@
     "updating": "Оновлення...",
     "uploading": "Завантаження...",
     "viewMember": "Переглянути учасника",
+    "viewRelatedMember": "Переглянути {name}",
     "viewer": "відвідувач",
     "yourRole": "Ваша роль: {role}"
   },

@@ -1,13 +1,18 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EditMemberDialog } from '@/components/members/member-actions';
 import type { MemberProfileUpdate } from '@/components/members/member-actions.types';
-import { organizationGroupRoute, organizationMembersRoute } from '@/features/organizations/routes';
+import {
+  organizationGroupRoute,
+  organizationMemberRoute,
+  organizationMembersRoute,
+} from '@/features/organizations/routes';
 import { GroupBadge } from '@/features/groups/components/group-badge';
 import type { MembersPayload, OrganizationMember } from '../types';
 import { Avatar } from '@/components/ui/avatar';
@@ -189,14 +194,21 @@ export function MemberDetail({
                     relationship.fromMembershipId === member.id
                       ? relationship.toMembership
                       : relationship.fromMembership;
+                  const otherName = other.profile?.displayName ?? t('member');
                   return (
                     <div
-                      className="flex min-w-0 flex-col gap-1 rounded-md border border-[var(--line-muted)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-start"
+                      className="relative flex min-w-0 flex-col gap-1 rounded-md border border-[var(--line-muted)] px-3 py-2 transition-colors hover:border-[var(--line)] hover:bg-[var(--surface-subtle)] focus-within:border-[var(--accent-mobile)] focus-within:ring-2 focus-within:ring-[rgba(22,163,74,0.15)] sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-start"
                       key={relationship.id}
                     >
-                      <span className="min-w-0 break-words font-semibold">
-                        {other.profile?.displayName ?? t('member')}
-                      </span>
+                      <Link
+                        className="absolute inset-0 rounded-md"
+                        href={organizationMemberRoute(organizationId, other.id)}
+                      >
+                        <span className="sr-only">
+                          {t('viewRelatedMember', { name: otherName })}
+                        </span>
+                      </Link>
+                      <span className="min-w-0 break-words font-semibold">{otherName}</span>
                       <span className="text-[var(--muted)]">
                         {t(`relationshipLabels.${relationship.type}`)}
                       </span>
