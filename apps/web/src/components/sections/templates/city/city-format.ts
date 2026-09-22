@@ -124,6 +124,11 @@ export function readCityItems(content: Record<string, unknown>): CityItem[] {
   });
 }
 
+/** Only an absolute address leaves this website, so only it is worth opening in a new tab. */
+export function isExternalHref(href: string): boolean {
+  return href.startsWith('//') || /^https?:\/\//iu.test(href);
+}
+
 export function resolveWebsiteHref(
   href: string,
   website: PublicWebsiteSummary | undefined,

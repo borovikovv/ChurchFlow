@@ -6,22 +6,21 @@ import {
 } from '@churchflow/shared';
 import type { JsonRecord } from './types';
 
-export const SECTION_FIELD_GROUPS = [
-  'font',
-  'titleBody',
-  'eyebrow',
-  'buttons',
-  'items',
-  'contact',
-  'copyright',
-  'socials',
-  'background',
-  'live',
-  'ways',
-  'links',
-] as const;
+/** A named set of inputs the inspector offers together, keyed by the content it edits. */
+export type SectionFieldGroup =
+  | 'font'
+  | 'titleBody'
+  | 'eyebrow'
+  | 'buttons'
+  | 'items'
+  | 'contact'
+  | 'copyright'
+  | 'socials'
+  | 'background'
+  | 'live'
+  | 'ways'
+  | 'links';
 
-export type SectionFieldGroup = (typeof SECTION_FIELD_GROUPS)[number];
 export type SectionType = WebsiteSection['type'];
 
 export interface SectionVariantDefinition {
@@ -31,7 +30,7 @@ export interface SectionVariantDefinition {
   templates: readonly WebsiteTemplateId[];
 }
 
-export const SECTION_VARIANTS: readonly SectionVariantDefinition[] = [
+const SECTION_VARIANTS: readonly SectionVariantDefinition[] = [
   {
     type: 'hero',
     variant: 'hero',

@@ -10,6 +10,7 @@ import {
   FOOTER_LINK_ROW_NAMES,
   GIVING_WAY_ROW_NAMES,
   SECTION_ITEM_ROW_NAMES,
+  inertSectionRows,
   inertSectionText,
   itemRows,
   linkRows,
@@ -58,6 +59,7 @@ export function SectionFields({
         <BackgroundFields section={section} showColor={showBackgroundColor} />
       ) : null}
       <StoredSectionValues entries={inertSectionText(section.content, fields, hiddenControlKeys)} />
+      <StoredSectionRows groups={inertSectionRows(section.content, fields)} />
     </>
   );
 }
@@ -88,6 +90,20 @@ function StoredSectionValues({ entries }: { entries: Array<{ key: string; value:
       {entries.map((entry) => (
         <input key={entry.key} name={entry.key} type="hidden" value={entry.value} />
       ))}
+    </>
+  );
+}
+
+// A list the inspector offers no editor for keeps its rows the same way, one hidden input per stored
+// row and column, so the parallel lists a save reads a row back from arrive complete.
+function StoredSectionRows({ groups }: { groups: Array<{ name: string; values: string[] }> }) {
+  return (
+    <>
+      {groups.map((group) =>
+        group.values.map((value, index) => (
+          <input key={`${group.name}:${index}`} name={group.name} type="hidden" value={value} />
+        )),
+      )}
     </>
   );
 }
@@ -274,8 +290,9 @@ function ItemsField({ section }: { section: DashboardSection }) {
       maxLength: 600,
       name: SECTION_ITEM_ROW_NAMES.body,
     },
-    // No template renders a card's own label or link, so neither is offered. The stored values
-    // travel with their row so a save leaves them untouched.
+    // The city variants that offer this list render only a card's title and body, so neither the
+    // label nor the link is offered. The classic card grid does render both, but it is never given
+    // this editor. The stored values travel with their row so a save leaves them untouched.
     { kind: 'hidden', key: 'label', name: SECTION_ITEM_ROW_NAMES.label },
     { kind: 'hidden', key: 'href', name: SECTION_ITEM_ROW_NAMES.href },
   ];

@@ -5,6 +5,7 @@ import {
   cityTheme,
   formatNextService,
   formatServiceTime,
+  isExternalHref,
   readCityItems,
   resolveWebsiteHref,
 } from '../apps/web/src/components/sections/templates/city/city-format.ts';
@@ -91,4 +92,17 @@ test('about columns keep the items that have a title and drop the rest', () => {
   );
   assert.deepEqual(readCityItems({}), []);
   assert.deepEqual(readCityItems({ items: 'nope' }), []);
+});
+
+test('only an absolute address counts as leaving the website', () => {
+  assert.equal(isExternalHref('https://youtube.com/live'), true);
+  assert.equal(isExternalHref('http://stream.test/x'), true);
+  assert.equal(isExternalHref('//stream.test/x'), true);
+
+  // An owner may type a section anchor or an inner page as the primary link, and neither of those
+  // may end up on an anchor that opens a new tab.
+  assert.equal(isExternalHref('#'), false);
+  assert.equal(isExternalHref('#live'), false);
+  assert.equal(isExternalHref('/o/grace/about'), false);
+  assert.equal(isExternalHref(''), false);
 });

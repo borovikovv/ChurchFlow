@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  inertSectionRows,
   inertSectionText,
   itemRows,
   linkRows,
@@ -390,4 +391,52 @@ test('a variant without a background group keeps the stored image instead of dro
     { key: 'backgroundImageUrl', value: 'https://media.test/bg.jpg' },
     { key: 'backgroundImageAlt', value: 'The congregation singing' },
   ]);
+});
+
+test('a list the form offers no editor for is posted back row by row', () => {
+  // A city footer, about-columns and giving section opened while the classic template is active: it
+  // renders none of them, so the inspector falls back to the basic field groups and offers no list.
+  const content = {
+    links: [
+      { label: 'About | us', href: '/about' },
+      { label: 'Give', href: 'https://give.test/x' },
+    ],
+    items: [{ title: 'Sunday\n10:00', body: 'Main service', label: 'Read', href: '/sunday' }],
+    ways: [{ label: 'By card', value: 'IBAN UA | 123' }],
+  };
+  const carried = inertSectionRows(content, ['titleBody', 'buttons', 'background']);
+
+  // Every column posts one value per stored row, so the parallel lists stay the same length.
+  assert.deepEqual(carried, [
+    { name: 'itemTitle', values: ['Sunday\n10:00'] },
+    { name: 'itemBody', values: ['Main service'] },
+    { name: 'itemLabel', values: ['Read'] },
+    { name: 'itemHref', values: ['/sunday'] },
+    { name: 'wayLabel', values: ['By card'] },
+    { name: 'wayValue', values: ['IBAN UA | 123'] },
+    { name: 'linkLabel', values: ['About | us', 'Give'] },
+    { name: 'linkHref', values: ['/about', 'https://give.test/x'] },
+  ]);
+
+  // Posted back through the form the inspector renders, a save keeps every list unchanged.
+  const posted = new FormData();
+  posted.set('type', 'footer');
+  posted.set('variant', 'columns');
+  posted.set('order', '0');
+  posted.set('title', 'Church name');
+  for (const column of carried) {
+    for (const value of column.values) posted.append(column.name, value);
+  }
+  const saved = sectionInput(posted).content;
+
+  assert.deepEqual(saved?.['links'], content.links);
+  assert.deepEqual(saved?.['items'], content.items);
+  assert.deepEqual(saved?.['ways'], content.ways);
+});
+
+test('a list the form does edit is left to its own editor', () => {
+  const content = { ways: [{ label: 'By card', value: 'Monthly' }] };
+
+  assert.deepEqual(inertSectionRows(content, ['eyebrow', 'titleBody', 'buttons', 'ways']), []);
+  assert.deepEqual(inertSectionRows({}, ['titleBody']), []);
 });

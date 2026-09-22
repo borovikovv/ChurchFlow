@@ -7,6 +7,7 @@ import {
   cityMessages,
   cityPrimaryHref,
   formatNextService,
+  isExternalHref,
   resolveWebsiteHref,
   type CityTheme,
 } from './city-shared';
@@ -22,12 +23,15 @@ export function CityLive({
 }) {
   const live = website?.settings?.live;
   const messages = cityMessages(website);
-  const watchHref = cityPrimaryHref(content, live?.url, website);
+  const streamUrl = live?.url ?? null;
+  const watchHref = cityPrimaryHref(content, streamUrl, website);
   const nextService = live?.nextService ?? null;
 
   if (!watchHref && !nextService) return null;
 
-  const isLive = Boolean(live?.isLive && watchHref);
+  // Being on air is a fact about the stream, so only a configured stream can claim it. A section
+  // link of its own points somewhere useful, but it is not a broadcast.
+  const isLive = Boolean(live?.isLive && streamUrl);
   const liveLabel = readText(content, 'liveLabel', messages.liveNow);
   const title = isLive
     ? readText(content, 'liveTitle', nextService?.label ?? messages.liveNow)
@@ -38,6 +42,8 @@ export function CityLive({
   const secondaryHref = storedSecondaryHref
     ? resolveWebsiteHref(storedSecondaryHref, website)
     : watchHref;
+  // A stream sits on another site and earns a new tab; a link back into this website never does.
+  const watchExternal = isExternalHref(watchHref);
 
   return (
     <section className="px-5 py-14 lg:py-[104px]" id="live">
@@ -49,8 +55,8 @@ export function CityLive({
             aria-label={primaryLabel}
             className={`block aspect-video no-underline hover:no-underline ${CITY_COVER_CLASS}`}
             href={watchHref}
-            rel="noreferrer"
-            target="_blank"
+            rel={watchExternal ? 'noreferrer' : undefined}
+            target={watchExternal ? '_blank' : undefined}
           >
             <LivePoster badge={isLive ? liveLabel : null} content={content} play />
           </a>

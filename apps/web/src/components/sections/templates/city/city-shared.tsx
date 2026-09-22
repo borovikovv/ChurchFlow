@@ -8,6 +8,7 @@ export {
   cityTheme,
   formatNextService,
   formatServiceTime,
+  isExternalHref,
   readCityItems,
   resolveWebsiteHref,
   type CityItem,

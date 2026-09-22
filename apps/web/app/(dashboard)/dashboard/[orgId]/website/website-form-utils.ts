@@ -190,6 +190,60 @@ const SECTION_CARRIED_KEYS = [
   'backgroundImageAlt',
 ] as const;
 
+// The row-shaped keys, the field group that edits each one, and the form name every column posts.
+const SECTION_ROW_GROUPS: ReadonlyArray<{
+  columns: ReadonlyArray<{ key: string; name: string }>;
+  field: SectionFieldGroup;
+  key: string;
+}> = [
+  {
+    field: 'items',
+    key: 'items',
+    columns: [
+      { key: 'title', name: SECTION_ITEM_ROW_NAMES.title },
+      { key: 'body', name: SECTION_ITEM_ROW_NAMES.body },
+      { key: 'label', name: SECTION_ITEM_ROW_NAMES.label },
+      { key: 'href', name: SECTION_ITEM_ROW_NAMES.href },
+    ],
+  },
+  {
+    field: 'ways',
+    key: 'ways',
+    columns: [
+      { key: 'label', name: GIVING_WAY_ROW_NAMES.label },
+      { key: 'value', name: GIVING_WAY_ROW_NAMES.value },
+    ],
+  },
+  {
+    field: 'links',
+    key: 'links',
+    columns: [
+      { key: 'label', name: FOOTER_LINK_ROW_NAMES.label },
+      { key: 'href', name: FOOTER_LINK_ROW_NAMES.href },
+    ],
+  },
+];
+
+/**
+ * Stored list rows the form offers no editor for, one entry per column. A save rebuilds a list from
+ * the columns it is posted, so a list whose field group is absent has to post its rows all the same,
+ * and every column carries exactly one value per row to keep the parallel lists the same length.
+ */
+export function inertSectionRows(
+  content: JsonRecord,
+  fields: readonly SectionFieldGroup[],
+): Array<{ name: string; values: string[] }> {
+  return SECTION_ROW_GROUPS.filter((group) => !fields.includes(group.field)).flatMap((group) => {
+    const rows = jsonRecords(content[group.key]);
+    if (rows.length === 0) return [];
+
+    return group.columns.map((column) => ({
+      name: column.name,
+      values: rows.map((row) => readString(row, column.key)),
+    }));
+  });
+}
+
 /**
  * Stored values the form offers no input for, because the variant leaves their field group out or
  * the active template hides the control. The saved content replaces the stored one, so these travel
