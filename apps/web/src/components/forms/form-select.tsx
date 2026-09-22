@@ -263,32 +263,35 @@ export function FormSelect({
     <FormField label={label} error={error} className={className} labelClassName={labelClassName}>
       {({ id, errorId, invalid }) =>
         isNative ? (
-          <select
-            aria-describedby={errorId}
-            aria-invalid={invalid}
-            className={nativeSelectClassName(size, selectClassName)}
-            disabled={Boolean(disabled)}
-            id={id}
-            name={name}
-            required={Boolean(required)}
-            value={selectedValue}
-            onBlur={onBlur}
-            onChange={(event) => {
-              if (value === undefined) {
-                setInternalValue(event.currentTarget.value);
-              }
-              onChange?.(event);
-            }}
-          >
-            {clearable && !options.some((option) => option.value === '') ? (
-              <option value="" />
-            ) : null}
-            {options.map((option) => (
-              <option disabled={option.isDisabled} key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <>
+            {/* The value is posted by the hidden input: a selected but disabled option submits nothing. */}
+            {name ? <input name={name} type="hidden" value={selectedValue} /> : null}
+            <select
+              aria-describedby={errorId}
+              aria-invalid={invalid}
+              className={nativeSelectClassName(size, selectClassName)}
+              disabled={Boolean(disabled)}
+              id={id}
+              required={Boolean(required)}
+              value={selectedValue}
+              onBlur={onBlur}
+              onChange={(event) => {
+                if (value === undefined) {
+                  setInternalValue(event.currentTarget.value);
+                }
+                onChange?.(event);
+              }}
+            >
+              {clearable && !options.some((option) => option.value === '') ? (
+                <option value="" />
+              ) : null}
+              {options.map((option) => (
+                <option disabled={option.isDisabled} key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </>
         ) : (
           <>
             {name ? <input name={name} type="hidden" value={selectedValue} /> : null}
