@@ -40,6 +40,9 @@ import {
   WEBSITE_LIVE_MODES,
   WEBSITE_NAVIGATION_MAX_LINKS,
   WEBSITE_PAGE_PRESETS,
+  WEBSITE_SECTION_MODULES,
+  WEBSITE_SECTION_SOURCE_MAX_LIMIT,
+  WEBSITE_SECTION_SOURCE_MAX_REFS,
   WEBSITE_TEMPLATES,
 } from './constants.js';
 
@@ -1081,8 +1084,26 @@ const websiteGivingWaySchema = z.object({
   value: websiteTextSchema(300).min(1),
 });
 
+/**
+ * Where a section takes its data from. Absent means manual, which is what every stored section is
+ * today. A churchflow source keeps references and display settings only, never copies of internal
+ * records, so a resolver reads the live data when the page is rendered.
+ */
+export const websiteSectionSourceSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('manual') }).strict(),
+  z
+    .object({
+      mode: z.literal('churchflow'),
+      module: z.enum(WEBSITE_SECTION_MODULES),
+      refs: z.array(uuidSchema).max(WEBSITE_SECTION_SOURCE_MAX_REFS).optional(),
+      limit: z.number().int().min(1).max(WEBSITE_SECTION_SOURCE_MAX_LIMIT).optional(),
+    })
+    .strict(),
+]);
+
 const websiteSectionBaseContentSchema = z
   .object({
+    source: websiteSectionSourceSchema.optional(),
     variant: websiteTextSchema(40).optional(),
     fontPreset: websiteTextSchema(40).optional(),
     backgroundColor: websiteHexColorSchema.optional(),
@@ -1160,10 +1181,56 @@ export function websiteSectionContentSchema(
   return websiteSectionContentSchemas[type];
 }
 
+// Internal configuration the public site never needs: the asset id behind a signed background url,
+// and the data source, which only the resolver that reads it cares about.
+const privateWebsiteSectionContentKeys = new Set(['backgroundImageAssetId', 'source']);
+
 export function publicWebsiteSectionKeys(type: (typeof PUBLIC_SECTION_TYPES)[number]): string[] {
   return Object.keys(websiteSectionContentSchemas[type].shape).filter(
-    (key) => key !== 'backgroundImageAssetId',
+    (key) => !privateWebsiteSectionContentKeys.has(key),
   );
+}
+
+/**
+ * Validates section content the way a save does: the per-type schema (which trims values, enforces
+ * every length and format, and drops unknown keys from nested objects) plus the link safety rule.
+ * Both the write path and the resolver path go through here, so content that reaches the public
+ * site obeys the same rules whoever produced it.
+ */
+export function parseWebsiteSectionContent(
+  type: (typeof PUBLIC_SECTION_TYPES)[number],
+  content: unknown,
+): { success: true; content: Record<string, unknown> } | { success: false; issues: z.ZodIssue[] } {
+  const result = websiteSectionContentSchema(type).safeParse(content);
+  const issues: z.ZodIssue[] = result.success ? [] : [...result.error.issues];
+  const record =
+    typeof content === 'object' && content !== null ? (content as Record<string, unknown>) : {};
+
+  for (const key of unsafeWebsiteUrlKeys(record)) {
+    issues.push({
+      code: z.ZodIssueCode.custom,
+      message: 'Only http(s), mailto, tel or relative links are allowed',
+      path: [key],
+    });
+  }
+
+  if (!result.success) return { success: false, issues };
+  if (issues.length > 0) return { success: false, issues };
+
+  return { success: true, content: result.data };
+}
+
+/** The source of a stored section, defaulting to manual when it is absent or unreadable. */
+export function readWebsiteSectionSource(
+  content: unknown,
+): z.infer<typeof websiteSectionSourceSchema> {
+  if (typeof content !== 'object' || content === null) return { mode: 'manual' };
+
+  const parsed = websiteSectionSourceSchema.safeParse(
+    (content as Record<string, unknown>)['source'],
+  );
+
+  return parsed.success ? parsed.data : { mode: 'manual' };
 }
 
 export const websiteSectionSchema = z.object({
@@ -1184,19 +1251,11 @@ export const upsertWebsiteSectionSchema = z
     content: z.record(z.unknown()).default({}),
   })
   .superRefine((value, ctx) => {
-    const result = websiteSectionContentSchema(value.type).safeParse(value.content);
-    if (!result.success) {
-      for (const issue of result.error.issues) {
-        ctx.addIssue({ ...issue, path: ['content', ...issue.path] });
-      }
-    }
+    const result = parseWebsiteSectionContent(value.type, value.content);
+    if (result.success) return;
 
-    for (const key of unsafeWebsiteUrlKeys(value.content)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Only http(s), mailto, tel or relative links are allowed',
-        path: ['content', key],
-      });
+    for (const issue of result.issues) {
+      ctx.addIssue({ ...issue, path: ['content', ...issue.path] });
     }
   })
   .transform((value) => ({

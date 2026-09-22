@@ -1,14 +1,22 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
+  PUBLIC_SECTION_TYPES,
+  WEBSITE_SECTION_MODULES,
+  WEBSITE_SECTION_SOURCE_MAX_LIMIT,
+  WEBSITE_SECTION_SOURCE_MAX_REFS,
   WEBSITE_TEMPLATE_DEFINITIONS,
   isSafeWebsiteUrl,
+  publicWebsiteSectionKeys,
+  readWebsiteSectionSource,
   updateWebsiteSettingsSchema,
   upsertWebsitePageSchema,
   upsertWebsiteSectionSchema,
   websiteSectionContentSchema,
   websiteSettingsSchema,
 } = require('@churchflow/shared');
+
+const eventRef = '11111111-1111-4111-8111-111111111111';
 
 function issuePaths(result) {
   return result.error.issues.map((issue) => issue.path.join('.'));
@@ -80,6 +88,83 @@ test('content that does not match its section type is rejected with a content pa
 
   assert.equal(result.success, false);
   assert.ok(issuePaths(result).includes('content.ways.0.value'));
+});
+
+test('a section saved without a source round-trips unchanged', () => {
+  const content = { variant: 'cards', title: 'Our ministries' };
+  const result = upsertWebsiteSectionSchema.safeParse({ type: 'about', order: 0, content });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.data.content, content);
+  assert.equal('source' in result.data.content, false);
+  assert.deepEqual(readWebsiteSectionSource(result.data.content), { mode: 'manual' });
+});
+
+test('a churchflow source keeps its module, its references and its display limit', () => {
+  const source = { mode: 'churchflow', module: 'events', refs: [eventRef], limit: 3 };
+  const result = upsertWebsiteSectionSchema.safeParse({
+    type: 'about',
+    order: 0,
+    content: { title: 'Upcoming events', source },
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.data.content.source, source);
+  assert.deepEqual(readWebsiteSectionSource(result.data.content), source);
+});
+
+test('every module the parent ticket names is accepted as a source module', () => {
+  for (const module of WEBSITE_SECTION_MODULES) {
+    const result = upsertWebsiteSectionSchema.safeParse({
+      type: 'about',
+      order: 0,
+      content: { source: { mode: 'churchflow', module } },
+    });
+
+    assert.equal(result.success, true, module);
+  }
+});
+
+test('a malformed source is rejected with a content.source path', () => {
+  const sources = [
+    { mode: 'churchflow' },
+    { mode: 'churchflow', module: 'calendar' },
+    { mode: 'churchflow', module: 'events', refs: ['event-1'] },
+    {
+      mode: 'churchflow',
+      module: 'events',
+      refs: Array.from({ length: WEBSITE_SECTION_SOURCE_MAX_REFS + 1 }, () => eventRef),
+    },
+    { mode: 'churchflow', module: 'events', limit: 0 },
+    { mode: 'churchflow', module: 'events', limit: WEBSITE_SECTION_SOURCE_MAX_LIMIT + 1 },
+    { mode: 'churchflow', module: 'events', memberIds: ['member-1'] },
+    { mode: 'manual', module: 'events' },
+    { mode: 'external' },
+    'events',
+  ];
+
+  for (const source of sources) {
+    const result = upsertWebsiteSectionSchema.safeParse({
+      type: 'about',
+      order: 0,
+      content: { source },
+    });
+
+    assert.equal(result.success, false, JSON.stringify(source));
+    assert.ok(
+      issuePaths(result).some((path) => path.startsWith('content.source')),
+      JSON.stringify(source),
+    );
+  }
+});
+
+test('no section type publishes its asset id or its data source', () => {
+  for (const type of PUBLIC_SECTION_TYPES) {
+    const keys = publicWebsiteSectionKeys(type);
+
+    assert.equal(keys.includes('source'), false, type);
+    assert.equal(keys.includes('backgroundImageAssetId'), false, type);
+  }
 });
 
 test('stored settings written before the typed schema normalize with defaults filled in', () => {

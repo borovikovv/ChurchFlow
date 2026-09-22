@@ -41,6 +41,24 @@ export const WEBSITE_NAVIGATION_MAX_LINKS = 10;
 
 export const WEBSITE_LIVE_MODES = ['schedule', 'manual'] as const;
 
+/**
+ * ChurchFlow modules a section can read live data from. A section keeps manual content until the
+ * module has a resolver, so this list may name modules that nothing resolves yet.
+ */
+export const WEBSITE_SECTION_MODULES = [
+  'events',
+  'groups',
+  'leaders',
+  'media',
+  'announcements',
+  'giving',
+  'serviceSchedule',
+] as const;
+
+/** A source stores references to records, so the list stays short enough to render as one section. */
+export const WEBSITE_SECTION_SOURCE_MAX_REFS = 24;
+export const WEBSITE_SECTION_SOURCE_MAX_LIMIT = 24;
+
 export const CALENDAR_EVENT_TYPES = [
   'BIRTHDAY',
   'ANNIVERSARY',

@@ -15,6 +15,7 @@ import {
   toPublicWebsite,
   type ReadAssetUrl,
 } from '../websites/public-website';
+import { resolveSectionsContent } from '../websites/section-data';
 import { isPrismaKnownRequestError, PagesRepository } from './repositories/pages.repository';
 
 @Injectable()
@@ -190,10 +191,14 @@ export class PagesService {
     website.settings.seo.ogImageUrl = websiteOgImageUrl;
     website.organization.logoUrl = logoUrl;
 
+    const resolved = await resolveSectionsContent(enriched.sections, {
+      organizationId: page.organizationId,
+    });
+
     return {
       title: page.title,
       seo: { ...seo, ogImageUrl: pageOgImageUrl },
-      sections: enriched.sections.map(toPublicSection),
+      sections: resolved.map(toPublicSection),
       website,
     };
   }

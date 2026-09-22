@@ -28,6 +28,7 @@ import type {
   listAdminOrganizationWorkspaceQuerySchema,
   websitePageSchema,
   websiteSectionSchema,
+  websiteSectionSourceSchema,
   updateWebsiteSettingsSchema,
   upsertWebsitePageSchema,
   upsertWebsiteSectionSchema,
@@ -112,6 +113,8 @@ export type AuditLogListItem = z.infer<typeof auditLogListItemSchema>;
 export type AuditLogsPage = z.infer<typeof auditLogsPageSchema>;
 export type WebsitePage = z.infer<typeof websitePageSchema>;
 export type WebsiteSection = z.infer<typeof websiteSectionSchema>;
+export type WebsiteSectionSource = z.infer<typeof websiteSectionSourceSchema>;
+export type WebsiteSectionChurchFlowSource = Extract<WebsiteSectionSource, { mode: 'churchflow' }>;
 export type UpdateWebsiteSettingsInput = z.infer<typeof updateWebsiteSettingsSchema>;
 export type UpsertWebsitePageInput = z.infer<typeof upsertWebsitePageSchema>;
 export type UpsertWebsiteSectionInput = z.infer<typeof upsertWebsiteSectionSchema>;
