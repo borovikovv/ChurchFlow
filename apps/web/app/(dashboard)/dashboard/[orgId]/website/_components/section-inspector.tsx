@@ -103,7 +103,7 @@ function SectionForm({
         ) : (
           <input type="hidden" name="variant" value={definition.variant} />
         )}
-        <SectionFields fields={definition.fields} section={section} />
+        <SectionFields fields={definition.fields} section={section} template={template} />
         <Checkbox
           defaultChecked={section.hidden}
           label={t('hideSection')}

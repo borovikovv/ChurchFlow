@@ -1,17 +1,29 @@
 'use client';
 
 import { useId, useRef } from 'react';
-import { useTranslations } from 'next-intl';
-import { APP_LOCALES, WEBSITE_LIVE_MODES } from '@churchflow/shared';
+import { useLocale, useTranslations } from 'next-intl';
+import { APP_LOCALES, WEBSITE_LIVE_MODES, WEBSITE_NAVIGATION_MAX_LINKS } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FormDialog } from '@/components/ui/form-dialog';
-import { FormSelect } from '@/components/forms/form-select';
+import { FormRepeater, type RepeaterField } from '@/components/forms/form-repeater';
+import { FormSelect, type SelectOption } from '@/components/forms/form-select';
 import { updateSettings } from '../form-actions';
 import type { DashboardWebsite } from '../types';
-import { formatLinks, formatServiceTimes } from '../website-form-utils';
+import {
+  NAVIGATION_ROW_NAMES,
+  SERVICE_TIME_ROW_NAMES,
+  linkRows,
+  serviceTimeRows,
+} from '../website-form-utils';
+import { templateReadsStyleControl } from '../website-template-fields';
 import { OgImageFields } from './og-image-fields';
 import type { SubmitWebsiteForm } from './website-editor.types';
+
+// Mirrors the limit websiteSettingsSchema puts on the stored list.
+const MAX_SERVICE_TIMES = 10;
+// A Sunday, so the weekday numbers the schema stores (0 = Sunday) map straight onto the offsets.
+const WEEKDAY_ANCHOR = Date.UTC(2026, 8, 13);
 
 export function WebsiteSettingsDialog({
   organizationId,
@@ -25,9 +37,62 @@ export function WebsiteSettingsDialog({
   website: DashboardWebsite;
 }) {
   const t = useTranslations('website');
+  const editorLocale = useLocale();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const formId = useId();
   const { settings, theme } = website;
+  const navigationFields: RepeaterField[] = [
+    {
+      kind: 'text',
+      key: 'label',
+      label: t('fields.linkLabel'),
+      maxLength: 80,
+      name: NAVIGATION_ROW_NAMES.label,
+      required: true,
+    },
+    {
+      kind: 'text',
+      key: 'href',
+      label: t('fields.linkUrl'),
+      name: NAVIGATION_ROW_NAMES.href,
+      placeholder: t('fields.hrefPlaceholder'),
+      required: true,
+    },
+  ];
+  const serviceTimeFields: RepeaterField[] = [
+    {
+      kind: 'select',
+      key: 'weekday',
+      label: t('serviceTimeDay'),
+      name: SERVICE_TIME_ROW_NAMES.weekday,
+      options: weekdayOptions(editorLocale),
+    },
+    {
+      kind: 'text',
+      key: 'time',
+      label: t('serviceTimeStart'),
+      name: SERVICE_TIME_ROW_NAMES.time,
+      required: true,
+      type: 'time',
+    },
+    {
+      defaultValue: '90',
+      kind: 'number',
+      key: 'durationMinutes',
+      label: t('serviceTimeDuration'),
+      max: 360,
+      min: 15,
+      name: SERVICE_TIME_ROW_NAMES.durationMinutes,
+      required: true,
+    },
+    {
+      kind: 'text',
+      key: 'label',
+      label: t('serviceTimeLabel'),
+      maxLength: 80,
+      name: SERVICE_TIME_ROW_NAMES.label,
+    },
+  ];
 
   return (
     <FormDialog
@@ -78,10 +143,16 @@ export function WebsiteSettingsDialog({
               {t('accentColor')}
               <input name="accent" defaultValue={theme.accent} />
             </label>
-            <label>
-              {t('background')}
-              <input name="background" defaultValue={theme.background} />
-            </label>
+            {/* The colour stays stored while a template that ignores it is active, so switching
+                back to one that paints with it finds it unchanged. */}
+            {templateReadsStyleControl(settings.template, 'themeBackground') ? (
+              <label>
+                {t('background')}
+                <input name="background" defaultValue={theme.background} />
+              </label>
+            ) : (
+              <input name="background" type="hidden" value={theme.background} />
+            )}
             <FormSelect label={t('siteLocale')} name="locale" defaultValue={settings.locale}>
               {APP_LOCALES.map((locale) => (
                 <option key={locale} value={locale}>
@@ -97,16 +168,14 @@ export function WebsiteSettingsDialog({
         </Fieldset>
 
         <Fieldset title={t('settingsGroups.navigation')}>
-          <label>
-            {t('navigationLinks')}
-            <textarea
-              name="navigation"
-              rows={4}
-              placeholder={t('fields.linksPlaceholder')}
-              defaultValue={formatLinks(settings.navigation)}
-            />
-            <span className="text-xs text-[var(--muted)]">{t('navigationHint')}</span>
-          </label>
+          <FormRepeater
+            addLabel={t('addMenuLink')}
+            fields={navigationFields}
+            hint={t('navigationHint')}
+            label={t('navigationLinks')}
+            maxRows={WEBSITE_NAVIGATION_MAX_LINKS}
+            rows={linkRows(settings.navigation)}
+          />
         </Fieldset>
 
         <Fieldset title={t('settingsGroups.location')}>
@@ -132,16 +201,14 @@ export function WebsiteSettingsDialog({
               />
             </label>
           </div>
-          <label>
-            {t('serviceTimes')}
-            <textarea
-              name="serviceTimes"
-              rows={3}
-              placeholder={t('serviceTimesPlaceholder')}
-              defaultValue={formatServiceTimes(settings.serviceTimes)}
-            />
-            <span className="text-xs text-[var(--muted)]">{t('serviceTimesHint')}</span>
-          </label>
+          <FormRepeater
+            addLabel={t('addServiceTime')}
+            fields={serviceTimeFields}
+            hint={t('serviceTimesHint')}
+            label={t('serviceTimes')}
+            maxRows={MAX_SERVICE_TIMES}
+            rows={serviceTimeRows(settings.serviceTimes)}
+          />
         </Fieldset>
 
         <Fieldset title={t('settingsGroups.live')}>
@@ -221,6 +288,17 @@ export function WebsiteSettingsDialog({
       </form>
     </FormDialog>
   );
+}
+
+// The day names come from the platform rather than from the message files, which keeps the select
+// in the editor's language without a second list of weekdays to translate and keep in step.
+function weekdayOptions(locale: string): SelectOption[] {
+  const format = new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long' });
+
+  return Array.from({ length: 7 }, (_, weekday) => ({
+    label: format.format(WEEKDAY_ANCHOR + weekday * 24 * 60 * 60 * 1000),
+    value: String(weekday),
+  }));
 }
 
 function Fieldset({ children, title }: { children: React.ReactNode; title: string }) {

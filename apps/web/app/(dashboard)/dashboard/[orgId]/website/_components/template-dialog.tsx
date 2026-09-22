@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useId, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { WEBSITE_TEMPLATES, type WebsiteTemplateId } from '@churchflow/shared';
@@ -9,6 +10,9 @@ import { FormDialog } from '@/components/ui/form-dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { applyTemplate } from '../form-actions';
 import type { SubmitWebsiteForm } from './website-editor.types';
+
+const TEMPLATE_PREVIEW_WIDTH = 320;
+const TEMPLATE_PREVIEW_HEIGHT = 200;
 
 export function TemplateDialog({
   currentTemplate,
@@ -59,6 +63,13 @@ export function TemplateDialog({
               className="grid cursor-pointer gap-2 rounded-md border border-[var(--line)] p-3 has-[:checked]:border-[var(--accent)] has-[:checked]:shadow-[0_0_0_3px_rgba(9,105,218,0.2)]"
               key={template}
             >
+              <Image
+                alt={t('templatePreviewAlt', { template: t(`templates.${template}.name`) })}
+                className="h-auto w-full rounded-[var(--radius)] border border-[var(--line)]"
+                height={TEMPLATE_PREVIEW_HEIGHT}
+                src={`/images/website-templates/${template}.svg`}
+                width={TEMPLATE_PREVIEW_WIDTH}
+              />
               <span className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2 font-semibold">
                   <input

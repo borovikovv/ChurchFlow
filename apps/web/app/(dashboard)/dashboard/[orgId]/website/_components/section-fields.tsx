@@ -1,24 +1,46 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import type { WebsiteTemplateId } from '@churchflow/shared';
 import { Checkbox } from '@/components/ui/checkbox';
+import { FormRepeater, type RepeaterField } from '@/components/forms/form-repeater';
 import { FormSelect } from '@/components/forms/form-select';
 import type { DashboardSection } from '../types';
-import { formatItems, formatLinks, formatWays, readString } from '../website-form-utils';
+import {
+  FOOTER_LINK_ROW_NAMES,
+  GIVING_WAY_ROW_NAMES,
+  SECTION_ITEM_ROW_NAMES,
+  itemRows,
+  linkRows,
+  readString,
+  wayRows,
+} from '../website-form-utils';
 import { SECTION_FONT_PRESETS, type SectionFieldGroup } from '../website-section-presets';
+import { templateReadsStyleControl } from '../website-template-fields';
+
+// The limits the section content schemas put on each list.
+const MAX_ITEMS = 24;
+const MAX_GIVING_WAYS = 6;
+const MAX_FOOTER_LINKS = 12;
 
 export function SectionFields({
   fields,
   section,
+  template,
 }: {
   fields: readonly SectionFieldGroup[];
   section: DashboardSection;
+  template: WebsiteTemplateId;
 }) {
   const has = (field: SectionFieldGroup) => fields.includes(field);
 
   return (
     <>
-      {has('font') ? <FontField section={section} /> : null}
+      {has('font') && templateReadsStyleControl(template, 'sectionFontPreset') ? (
+        <FontField section={section} />
+      ) : (
+        <StoredFontPreset section={section} />
+      )}
       {has('eyebrow') ? <EyebrowField section={section} /> : null}
       {has('titleBody') ? <TitleBodyFields section={section} /> : null}
       {has('live') ? <LiveFields section={section} /> : null}
@@ -50,6 +72,14 @@ function FontField({ section }: { section: DashboardSection }) {
       ))}
     </FormSelect>
   );
+}
+
+// A preset the active template never reads has no control, but the section keeps it: the form
+// carries the stored value so switching back to a template that paints with it finds it unchanged.
+function StoredFontPreset({ section }: { section: DashboardSection }) {
+  const fontPreset = readString(section.content, 'fontPreset');
+
+  return fontPreset ? <input name="fontPreset" type="hidden" value={fontPreset} /> : null;
 }
 
 function EyebrowField({ section }: { section: DashboardSection }) {
@@ -218,50 +248,111 @@ function ButtonFields({ section }: { section: DashboardSection }) {
 
 function ItemsField({ section }: { section: DashboardSection }) {
   const t = useTranslations('website');
+  const fields: RepeaterField[] = [
+    {
+      kind: 'text',
+      key: 'title',
+      label: t('fields.itemTitle'),
+      maxLength: 160,
+      name: SECTION_ITEM_ROW_NAMES.title,
+      required: true,
+    },
+    {
+      kind: 'textarea',
+      key: 'body',
+      label: t('fields.itemBody'),
+      maxLength: 600,
+      name: SECTION_ITEM_ROW_NAMES.body,
+    },
+    {
+      kind: 'text',
+      key: 'label',
+      label: t('buttonLabel'),
+      maxLength: 80,
+      name: SECTION_ITEM_ROW_NAMES.label,
+    },
+    {
+      kind: 'text',
+      key: 'href',
+      label: t('fields.linkUrl'),
+      name: SECTION_ITEM_ROW_NAMES.href,
+      placeholder: t('fields.hrefPlaceholder'),
+    },
+  ];
 
   return (
-    <label>
-      {t('cardsOrLinks')}
-      <textarea
-        name="items"
-        rows={4}
-        placeholder={t('itemsPlaceholder')}
-        defaultValue={formatItems(section.content['items'])}
-      />
-    </label>
+    <FormRepeater
+      addLabel={t('fields.addItem')}
+      fields={fields}
+      label={t('cardsOrLinks')}
+      maxRows={MAX_ITEMS}
+      rows={itemRows(section.content['items'])}
+    />
   );
 }
 
 function WaysField({ section }: { section: DashboardSection }) {
   const t = useTranslations('website');
+  const fields: RepeaterField[] = [
+    {
+      kind: 'text',
+      key: 'label',
+      label: t('fields.wayLabel'),
+      maxLength: 80,
+      name: GIVING_WAY_ROW_NAMES.label,
+      required: true,
+    },
+    {
+      kind: 'text',
+      key: 'value',
+      label: t('fields.wayValue'),
+      maxLength: 300,
+      name: GIVING_WAY_ROW_NAMES.value,
+      required: true,
+    },
+  ];
 
   return (
-    <label>
-      {t('fields.givingWays')}
-      <textarea
-        name="ways"
-        rows={3}
-        placeholder={t('fields.givingWaysPlaceholder')}
-        defaultValue={formatWays(section.content['ways'])}
-      />
-    </label>
+    <FormRepeater
+      addLabel={t('fields.addWay')}
+      fields={fields}
+      label={t('fields.givingWays')}
+      maxRows={MAX_GIVING_WAYS}
+      rows={wayRows(section.content['ways'])}
+    />
   );
 }
 
 function LinksField({ section }: { section: DashboardSection }) {
   const t = useTranslations('website');
+  const fields: RepeaterField[] = [
+    {
+      kind: 'text',
+      key: 'label',
+      label: t('fields.linkLabel'),
+      maxLength: 80,
+      name: FOOTER_LINK_ROW_NAMES.label,
+      required: true,
+    },
+    {
+      kind: 'text',
+      key: 'href',
+      label: t('fields.linkUrl'),
+      name: FOOTER_LINK_ROW_NAMES.href,
+      placeholder: t('fields.hrefPlaceholder'),
+      required: true,
+    },
+  ];
 
   return (
-    <label>
-      {t('fields.footerLinks')}
-      <textarea
-        name="links"
-        rows={3}
-        placeholder={t('fields.linksPlaceholder')}
-        defaultValue={formatLinks(section.content['links'])}
-      />
-      <span className="text-xs text-[var(--muted)]">{t('fields.footerLinksHint')}</span>
-    </label>
+    <FormRepeater
+      addLabel={t('fields.addLink')}
+      fields={fields}
+      hint={t('fields.footerLinksHint')}
+      label={t('fields.footerLinks')}
+      maxRows={MAX_FOOTER_LINKS}
+      rows={linkRows(section.content['links'])}
+    />
   );
 }
 

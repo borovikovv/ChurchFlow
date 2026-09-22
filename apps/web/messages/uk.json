@@ -15,6 +15,12 @@
     },
     "name": "Ім'я",
     "notSet": "Не вказано",
+    "repeater": {
+      "empty": "Записів ще немає.",
+      "moveDown": "Перемістити рядок {position} нижче",
+      "moveUp": "Перемістити рядок {position} вище",
+      "remove": "Видалити рядок {position}"
+    },
     "save": "Зберегти",
     "saving": "Збереження..."
   },
@@ -811,6 +817,7 @@
     "addMissingSections": "Додати секції шаблону, яких ще немає на сторінці (додаються прихованими)",
     "resetTheme": "Скинути кольори до стандартних для шаблону",
     "applyTemplate": "Застосувати шаблон",
+    "templatePreviewAlt": "Вигляд шаблону «{template}»",
     "templates": {
       "default": {
         "name": "Класичний",
@@ -841,13 +848,18 @@
     },
     "timeZone": "Часовий пояс",
     "navigationLinks": "Пункти меню",
-    "navigationHint": "По одному на рядок: Назва | /сторінка або https://…",
+    "navigationHint": "Меню сайту в цьому порядку.",
+    "addMenuLink": "Додати пункт меню",
     "address": "Адреса",
     "addressNote": "Примітка (вхід, паркування)",
     "directionsUrl": "Посилання на маршрут",
     "serviceTimes": "Розклад служінь",
-    "serviceTimesPlaceholder": "sun 10:00 | 90 | Недільне служіння\nwed 19:00 | 60 | Молитва",
-    "serviceTimesHint": "По одному на рядок: день тижня і час, далі тривалість у хвилинах і необов'язкова назва.",
+    "serviceTimesHint": "Показується на сайті та вмикає трансляцію навколо служіння.",
+    "serviceTimeDay": "День",
+    "serviceTimeStart": "Початок",
+    "serviceTimeDuration": "Хвилин",
+    "serviceTimeLabel": "Назва (необов'язково)",
+    "addServiceTime": "Додати служіння",
     "liveUrl": "Посилання на трансляцію",
     "liveMode": "Статус ефіру",
     "liveModes": {
@@ -944,7 +956,6 @@
     "buttonLabel": "Текст кнопки",
     "sectionOrUrl": "#section або https://...",
     "cardsOrLinks": "Картки або посилання",
-    "itemsPlaceholder": "Назва | Опис | Текст кнопки | URL",
     "copyrightFooterText": "Copyright/текст футера",
     "metaUrl": "Meta URL",
     "instagramUrl": "Instagram URL",
@@ -965,10 +976,18 @@
       "scheduledTitle": "Заголовок поза ефіром",
       "scheduledBody": "Текст поза ефіром",
       "givingWays": "Способи пожертвувати",
-      "givingWaysPlaceholder": "Карткою | Разово або щомісяця\nПереказом | IBAN …",
+      "wayLabel": "Спосіб",
+      "wayValue": "Деталі",
+      "addWay": "Додати спосіб",
       "footerLinks": "Посилання у футері",
       "footerLinksHint": "Порожньо — використати пункти меню.",
-      "linksPlaceholder": "Назва | /сторінка або https://…"
+      "addLink": "Додати посилання",
+      "itemTitle": "Назва",
+      "itemBody": "Опис",
+      "addItem": "Додати картку",
+      "linkLabel": "Назва",
+      "linkUrl": "Посилання",
+      "hrefPlaceholder": "/сторінка або https://…"
     },
     "devices": {
       "desktop": "Десктоп",

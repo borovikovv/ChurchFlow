@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  formatServiceTimes,
+  itemRows,
+  linkRows,
   navigationAppendInput,
   pageInput,
   parseLinks,
   parseServiceTimes,
+  repeaterRows,
   sectionInput,
+  serviceTimeRow,
+  serviceTimeRows,
   websiteSettingsInput,
 } from '../apps/web/app/(dashboard)/dashboard/[orgId]/website/website-form-utils.ts';
 
@@ -16,14 +20,118 @@ function form(values: Record<string, string>): FormData {
   return formData;
 }
 
-test('service times parse weekday names or numbers and round-trip through the textarea', () => {
-  const parsed = parseServiceTimes('sun 10:00 | 90 | Sunday service\n3 19:00\nbad line\nmon 25:00');
+// The structured editors post one value per row and field, so a form carries parallel lists.
+function rowsForm(columns: Record<string, string[]>): FormData {
+  const formData = new FormData();
+  for (const [key, values] of Object.entries(columns)) {
+    for (const value of values) formData.append(key, value);
+  }
+  return formData;
+}
 
-  assert.deepEqual(parsed, [
-    { weekday: 0, time: '10:00', durationMinutes: 90, label: 'Sunday service' },
-    { weekday: 3, time: '19:00', durationMinutes: 90 },
+test('the line format still parses weekday names or numbers as the fallback path', () => {
+  assert.deepEqual(
+    parseServiceTimes('sun 10:00 | 90 | Sunday service\n3 19:00\nbad line\nmon 25:00'),
+    [
+      { weekday: 0, time: '10:00', durationMinutes: 90, label: 'Sunday service' },
+      { weekday: 3, time: '19:00', durationMinutes: 90 },
+    ],
+  );
+});
+
+test('a submitted row keeps every value, separators and newlines included', () => {
+  const posted = rowsForm({
+    navigationLabel: ['Give | monthly', 'Watch\nlive'],
+    navigationHref: ['/give', 'https://youtube.com/c'],
+  });
+
+  assert.deepEqual(repeaterRows(posted, ['navigationLabel', 'navigationHref']), [
+    ['Give | monthly', '/give'],
+    ['Watch\nlive', 'https://youtube.com/c'],
   ]);
-  assert.equal(formatServiceTimes(parsed), 'sun 10:00 | 90 | Sunday service\nwed 19:00 | 90');
+});
+
+test('a row whose later fields were left out still lines up with the first ones', () => {
+  const posted = rowsForm({ itemTitle: ['Sunday', 'Prayer'], itemBody: ['Every week'] });
+
+  assert.deepEqual(repeaterRows(posted, ['itemTitle', 'itemBody']), [
+    ['Sunday', 'Every week'],
+    ['Prayer', ''],
+  ]);
+});
+
+test('a stored entry the line format could not describe loads into rows unchanged', () => {
+  assert.deepEqual(linkRows([{ label: 'Give | monthly', href: '/give' }, { href: '/x' }]), [
+    { label: 'Give | monthly', href: '/give' },
+    { label: '', href: '/x' },
+  ]);
+  assert.deepEqual(itemRows([{ title: 'A | B', body: 'Line one\nLine two' }]), [
+    { title: 'A | B', body: 'Line one\nLine two', label: '', href: '' },
+  ]);
+  assert.deepEqual(serviceTimeRows([{ weekday: 3, time: '19:00' }, 'nonsense']), [
+    { weekday: '3', time: '19:00', durationMinutes: '90', label: '' },
+  ]);
+});
+
+test('a service time row is only accepted with a real weekday, time and duration', () => {
+  const valid = { weekday: '0', time: '10:00', durationMinutes: '90', label: 'Sunday | main' };
+  assert.deepEqual(serviceTimeRow(valid), {
+    weekday: 0,
+    time: '10:00',
+    durationMinutes: 90,
+    label: 'Sunday | main',
+  });
+  assert.deepEqual(serviceTimeRow({ ...valid, label: '' }), {
+    weekday: 0,
+    time: '10:00',
+    durationMinutes: 90,
+  });
+  assert.equal(serviceTimeRow({ ...valid, time: '25:00' }), null);
+  assert.equal(serviceTimeRow({ ...valid, time: '' }), null);
+  assert.equal(serviceTimeRow({ ...valid, weekday: '7' }), null);
+  assert.equal(serviceTimeRow({ ...valid, durationMinutes: '10' }), null);
+  assert.equal(serviceTimeRow({ ...valid, durationMinutes: '361' }), null);
+  assert.equal(serviceTimeRow({ ...valid, durationMinutes: '' }), null);
+});
+
+test('settings read the menu and the service times from the submitted rows', () => {
+  const posted = rowsForm({
+    title: ['Grace'],
+    navigationLabel: ['Give | monthly', 'Broken'],
+    navigationHref: ['/give', ''],
+    serviceTimeWeekday: ['0', '3'],
+    serviceTimeTime: ['10:00', '19:00'],
+    serviceTimeDuration: ['90', '60'],
+    serviceTimeLabel: ['Sunday | main', ''],
+  });
+  const input = websiteSettingsInput(posted);
+
+  assert.deepEqual(input.settings?.navigation, [{ label: 'Give | monthly', href: '/give' }]);
+  assert.deepEqual(input.settings?.serviceTimes, [
+    { weekday: 0, time: '10:00', durationMinutes: 90, label: 'Sunday | main' },
+    { weekday: 3, time: '19:00', durationMinutes: 60 },
+  ]);
+});
+
+test('a section reads its cards, giving ways and footer links from the submitted rows', () => {
+  const posted = rowsForm({
+    type: ['footer'],
+    variant: ['columns'],
+    order: ['0'],
+    itemTitle: ['Sunday | 10:00', ''],
+    itemBody: ['Main service', 'No title, so dropped'],
+    itemLabel: ['', ''],
+    itemHref: ['', ''],
+    wayLabel: ['By card | monthly'],
+    wayValue: ['IBAN UA | 123'],
+    linkLabel: ['About | us'],
+    linkHref: ['/about'],
+  });
+  const content = sectionInput(posted).content;
+
+  assert.deepEqual(content?.['items'], [{ title: 'Sunday | 10:00', body: 'Main service' }]);
+  assert.deepEqual(content?.['ways'], [{ label: 'By card | monthly', value: 'IBAN UA | 123' }]);
+  assert.deepEqual(content?.['links'], [{ label: 'About | us', href: '/about' }]);
 });
 
 test('links need both a label and an href', () => {
