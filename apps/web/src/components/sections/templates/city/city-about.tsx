@@ -38,7 +38,7 @@ export function CityAbout({
       // One anchor per variant, so a page carrying both does not repeat an id.
       id={variant === 'text' ? 'about' : `about-${variant}`}
     >
-      <CityBackgroundImage content={content} overlay sizes="100vw" />
+      <CityBackgroundImage content={content} overlay />
       <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-8 lg:gap-12">
         <div className="flex max-w-[760px] flex-col gap-5 sm:gap-6">
           {eyebrow ? (

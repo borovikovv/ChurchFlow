@@ -1,4 +1,8 @@
-import type { WebsiteServiceTime, WebsiteSocialLinks } from '@churchflow/shared';
+import {
+  websiteSocialLinksSchema,
+  type WebsiteServiceTime,
+  type WebsiteSocialLinks,
+} from '@churchflow/shared';
 
 // schema.org Church is a PlaceOfWorship, which is the closest published type for a congregation.
 const SCHEMA_CONTEXT = 'https://schema.org';
@@ -12,13 +16,10 @@ const WEEKDAY_NAMES = [
   'Saturday',
 ] as const;
 
-// A fixed order keeps the emitted sameAs list stable no matter how the stored settings are keyed.
-const SOCIAL_KEYS = [
-  'facebook',
-  'instagram',
-  'youtube',
-  'telegram',
-] as const satisfies ReadonlyArray<keyof WebsiteSocialLinks>;
+// Derived from the settings schema rather than restated, so a social platform added there reaches
+// sameAs without a change here. Object.keys follows the shape's declaration order, which keeps the
+// emitted list stable no matter how the stored settings happen to be keyed.
+const SOCIAL_KEYS = Object.keys(websiteSocialLinksSchema.shape);
 
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -92,7 +93,7 @@ export function churchStructuredData({
     name: page.website.title,
     url,
     ...(description?.trim() ? { description: description.trim() } : {}),
-    ...(logo?.trim() ? { logo } : {}),
+    ...(logo?.trim() ? { logo: logo.trim() } : {}),
     ...(sameAs.length > 0 ? { sameAs } : {}),
     ...(address?.trim()
       ? { address: { '@type': 'PostalAddress' as const, streetAddress: address.trim() } }
@@ -110,10 +111,12 @@ export function structuredDataJson(data: ChurchStructuredData): string {
 }
 
 function socialUrls(socials: WebsiteSocialLinks): string[] {
-  return SOCIAL_KEYS.flatMap((key) => {
-    const url = socials[key];
+  const storedUrls: Readonly<Record<string, string | undefined>> = socials;
 
-    return typeof url === 'string' && url.trim() ? [url.trim()] : [];
+  return SOCIAL_KEYS.flatMap((key) => {
+    const url = storedUrls[key];
+
+    return url?.trim() ? [url.trim()] : [];
   });
 }
 

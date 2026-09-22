@@ -48,7 +48,7 @@ export function CityLocation({
             aria-hidden={imageUrl ? undefined : true}
             className={`min-h-[220px] lg:min-h-[520px] ${CITY_IMAGE_PLATE_CLASS}`}
           >
-            <CityBackgroundImage content={content} sizes="(min-width: 1024px) 720px, 100vw" />
+            <CityBackgroundImage content={content} />
           </div>
           <div className="flex flex-col justify-between gap-8 p-6 lg:border-l lg:border-[#e5e5e5] lg:p-11">
             <div className="flex flex-col gap-7">

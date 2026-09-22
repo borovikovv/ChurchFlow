@@ -141,12 +141,10 @@ export function CityBackgroundImage({
   content,
   overlay = false,
   priority = false,
-  sizes,
 }: {
   content: Record<string, unknown>;
   overlay?: boolean;
   priority?: boolean;
-  sizes: string;
 }) {
   const imageUrl = readText(content, 'backgroundImageUrl');
   if (!imageUrl) return null;
@@ -161,9 +159,11 @@ export function CityBackgroundImage({
         className="-z-10 object-cover"
         fill
         priority={priority}
-        sizes={sizes}
         src={imageUrl}
         // Media urls are signed per request and expire, so they cannot pass the image optimizer.
+        // That costs the srcset entirely: no resizing, no format conversion, and next/image drops
+        // `sizes` for an unoptimized source, so setting it would be dead weight. What is left is
+        // still worth it: real alt text, lazy loading below the fold and the hero preload.
         unoptimized
       />
       {overlay ? <span aria-hidden="true" className="absolute inset-0 -z-10 bg-black/50" /> : null}

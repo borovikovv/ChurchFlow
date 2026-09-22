@@ -48,7 +48,7 @@ export function CityLive({
           rel="noreferrer"
           target="_blank"
         >
-          <CityBackgroundImage content={content} overlay sizes="(min-width: 1024px) 720px, 100vw" />
+          <CityBackgroundImage content={content} overlay />
           <span className="absolute left-1/2 top-1/2 inline-flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white">
             <svg aria-hidden="true" fill="#0a0a0a" height="20" viewBox="0 0 24 24" width="20">
               <polygon points="8 5 19 12 8 19 8 5" />

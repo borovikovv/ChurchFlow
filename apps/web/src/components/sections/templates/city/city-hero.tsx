@@ -37,7 +37,7 @@ function CityHeroCover({ content, theme, website }: CityHeroProps) {
     <section
       className={`flex min-h-[640px] flex-col text-white lg:min-h-[840px] ${CITY_COVER_CLASS}`}
     >
-      <CityBackgroundImage content={content} overlay priority sizes="100vw" />
+      <CityBackgroundImage content={content} overlay priority />
       <CityHeader website={website} />
       <div className="mx-auto flex w-full max-w-[1240px] flex-grow flex-col justify-end gap-5 px-5 pb-12 sm:gap-7 lg:items-center lg:justify-center lg:pb-[60px] lg:text-center">
         {eyebrow ? <CityEyebrow className="text-white/80">{eyebrow}</CityEyebrow> : null}
@@ -76,7 +76,7 @@ function CityHeroSplit({ content, theme, website }: CityHeroProps) {
           aria-hidden={imageUrl ? undefined : true}
           className={`order-1 min-h-[260px] sm:min-h-[360px] lg:order-2 lg:min-h-[620px] ${CITY_IMAGE_PLATE_CLASS}`}
         >
-          <CityBackgroundImage content={content} priority sizes="(min-width: 1024px) 50vw, 100vw" />
+          <CityBackgroundImage content={content} priority />
         </div>
         <div className="order-2 flex flex-col justify-center gap-5 px-5 py-12 sm:gap-7 lg:order-1 lg:px-12 lg:py-[88px]">
           {eyebrow ? <CityEyebrow style={{ color: theme.accentInk }}>{eyebrow}</CityEyebrow> : null}

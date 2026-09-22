@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+// The built package, because a bare '@churchflow/shared' is not resolvable from the repository root.
+import { websiteSocialLinksSchema } from '../packages/shared/dist/index.js';
 import {
   churchStructuredData,
   structuredDataJson,
@@ -88,6 +90,23 @@ test('a fully filled website becomes a Church node with address, socials and ser
       },
     ],
   });
+});
+
+// The builder derives its key list from the schema, so this fails the day a platform is added to
+// websiteSocialLinksSchema and the builder stops seeing it.
+test('every social platform the settings schema defines reaches sameAs', () => {
+  const platforms = Object.keys(websiteSocialLinksSchema.shape);
+  const socials = Object.fromEntries(
+    platforms.map((platform) => [platform, `https://social.test/${platform}`]),
+  );
+
+  const data = churchStructuredData({ page: page({ socials }), url: URL_UNDER_TEST });
+
+  assert.ok(platforms.length >= 4);
+  assert.deepEqual(
+    data?.sameAs,
+    platforms.map((platform) => `https://social.test/${platform}`),
+  );
 });
 
 test('the SEO description wins over the website description', () => {
