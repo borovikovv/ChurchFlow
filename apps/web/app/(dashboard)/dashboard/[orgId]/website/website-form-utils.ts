@@ -14,6 +14,7 @@ import {
   type WebsitePagePreset,
   type WebsiteServiceTime,
 } from '@churchflow/shared';
+import type { RepeaterRow } from '@/components/forms/form-repeater';
 import type { DashboardWebsite, JsonRecord } from './types';
 import type { SectionType } from './website-section-presets';
 
@@ -22,6 +23,31 @@ type WebsiteSeoPayload = NonNullable<NonNullable<UpdateWebsiteSettingsPayload['s
 export const PAGE_STATUSES: Array<WebsitePage['status']> = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
 
 const WEEKDAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/u;
+const SERVICE_TIME_DEFAULT_DURATION = 90;
+const SERVICE_TIME_MIN_DURATION = 15;
+const SERVICE_TIME_MAX_DURATION = 360;
+
+// The structured editors post one value per row and field, so every field name arrives as its own
+// parallel list and a row is the same index taken out of each list. Unlike the line format these
+// fields used to carry, this keeps a value that contains a separator, a quote or a newline intact.
+export const NAVIGATION_ROW_NAMES = { href: 'navigationHref', label: 'navigationLabel' } as const;
+export const FOOTER_LINK_ROW_NAMES = { href: 'linkHref', label: 'linkLabel' } as const;
+export const GIVING_WAY_ROW_NAMES = { label: 'wayLabel', value: 'wayValue' } as const;
+export const SECTION_ITEM_ROW_NAMES = {
+  body: 'itemBody',
+  href: 'itemHref',
+  label: 'itemLabel',
+  title: 'itemTitle',
+} as const;
+export const SERVICE_TIME_ROW_NAMES = {
+  durationMinutes: 'serviceTimeDuration',
+  label: 'serviceTimeLabel',
+  time: 'serviceTimeTime',
+  weekday: 'serviceTimeWeekday',
+} as const;
+
+type LinkRowNames = { href: string; label: string };
 
 export function websiteSettingsInput(formData: FormData): UpdateWebsiteSettingsPayload {
   return {
@@ -34,8 +60,8 @@ export function websiteSettingsInput(formData: FormData): UpdateWebsiteSettingsP
     settings: {
       locale: appLocale(optionalString(formData.get('locale'))),
       timeZone: optionalString(formData.get('timeZone')) ?? 'UTC',
-      navigation: parseLinks(optionalString(formData.get('navigation'))),
-      serviceTimes: parseServiceTimes(optionalString(formData.get('serviceTimes'))),
+      navigation: linksInput(formData, NAVIGATION_ROW_NAMES, 'navigation'),
+      serviceTimes: serviceTimesInput(formData),
       location: {
         address: optionalString(formData.get('address')),
         addressNote: optionalString(formData.get('addressNote')),
@@ -163,13 +189,13 @@ export function sectionInput(formData: FormData): UpsertWebsiteSectionPayload {
     if (backgroundImageAlt) content['backgroundImageAlt'] = backgroundImageAlt;
   }
 
-  const items = parseItems(optionalString(formData.get('items')));
+  const items = itemsInput(formData);
   if (items.length > 0) content['items'] = items;
 
-  const ways = parseWays(optionalString(formData.get('ways')));
+  const ways = waysInput(formData);
   if (ways.length > 0) content['ways'] = ways;
 
-  const links = parseLinks(optionalString(formData.get('links')));
+  const links = linksInput(formData, FOOTER_LINK_ROW_NAMES, 'links');
   if (links.length > 0) content['links'] = links;
 
   return {
@@ -180,69 +206,130 @@ export function sectionInput(formData: FormData): UpsertWebsiteSectionPayload {
   };
 }
 
-export function formatItems(value: unknown): string {
-  if (!Array.isArray(value)) return '';
-
-  return value
-    .map((item) => {
-      if (!isItemRecord(item)) return '';
-      return [item.title, item.body, item.label, item.href]
-        .map((part) => (typeof part === 'string' ? part : ''))
-        .join(' | ')
-        .replace(/(?:\s\|\s)*$/u, '');
-    })
-    .filter(Boolean)
-    .join('\n');
+// Rows are built from the stored value rather than from a formatted line, so an entry the line
+// format could not describe (a label holding a separator, a link with no label) still loads.
+export function linkRows(value: unknown): RepeaterRow[] {
+  return jsonRecords(value).map((record) => ({
+    label: readString(record, 'label'),
+    href: readString(record, 'href'),
+  }));
 }
 
-export function formatLinks(value: unknown): string {
-  if (!Array.isArray(value)) return '';
-
-  return value
-    .flatMap((link) => {
-      if (typeof link !== 'object' || link === null) return [];
-      const record = link as JsonRecord;
-      return typeof record['label'] === 'string' && typeof record['href'] === 'string'
-        ? [`${record['label']} | ${record['href']}`]
-        : [];
-    })
-    .join('\n');
+export function wayRows(value: unknown): RepeaterRow[] {
+  return jsonRecords(value).map((record) => ({
+    label: readString(record, 'label'),
+    value: readString(record, 'value'),
+  }));
 }
 
-export function formatWays(value: unknown): string {
-  if (!Array.isArray(value)) return '';
-
-  return value
-    .flatMap((way) => {
-      if (typeof way !== 'object' || way === null) return [];
-      const record = way as JsonRecord;
-      return typeof record['label'] === 'string' && typeof record['value'] === 'string'
-        ? [`${record['label']} | ${record['value']}`]
-        : [];
-    })
-    .join('\n');
+export function itemRows(value: unknown): RepeaterRow[] {
+  return jsonRecords(value).map((record) => ({
+    title: readString(record, 'title'),
+    body: readString(record, 'body'),
+    label: readString(record, 'label'),
+    href: readString(record, 'href'),
+  }));
 }
 
-export function formatServiceTimes(value: unknown): string {
-  if (!Array.isArray(value)) return '';
+export function serviceTimeRows(value: unknown): RepeaterRow[] {
+  return jsonRecords(value).map((record) => ({
+    weekday: String(readNumber(record, 'weekday', 0)),
+    time: readString(record, 'time'),
+    durationMinutes: String(readNumber(record, 'durationMinutes', SERVICE_TIME_DEFAULT_DURATION)),
+    label: readString(record, 'label'),
+  }));
+}
 
-  return value
-    .flatMap((service) => {
-      if (typeof service !== 'object' || service === null) return [];
-      const record = service as JsonRecord;
-      if (typeof record['weekday'] !== 'number' || typeof record['time'] !== 'string') return [];
-      const weekday = WEEKDAY_NAMES[record['weekday']] ?? String(record['weekday']);
-      const duration =
-        typeof record['durationMinutes'] === 'number' ? record['durationMinutes'] : 90;
-      const label = typeof record['label'] === 'string' ? record['label'] : '';
+// One entry per submitted row, holding the values of the given field names in that order.
+export function repeaterRows(formData: FormData, names: readonly string[]): string[][] {
+  const columns = names.map((name) => formData.getAll(name).map(entryText));
+  const rowCount = Math.max(0, ...columns.map((column) => column.length));
 
-      return [
-        [`${weekday} ${record['time']}`, String(duration), label]
-          .join(' | ')
-          .replace(/(?:\s\|\s)*$/u, ''),
-      ];
-    })
-    .join('\n');
+  return Array.from({ length: rowCount }, (_, index) =>
+    columns.map((column) => column[index] ?? ''),
+  );
+}
+
+// The weekday, time and duration inputs constrain themselves in the browser, so a row that still
+// arrives broken was not typed in the editor and is dropped rather than stored half-valid.
+export function serviceTimeRow(row: {
+  durationMinutes: string;
+  label: string;
+  time: string;
+  weekday: string;
+}): WebsiteServiceTime | null {
+  const weekday = Number(row.weekday);
+  const durationMinutes = Number(row.durationMinutes);
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return null;
+  if (!TIME_PATTERN.test(row.time)) return null;
+  if (
+    !Number.isInteger(durationMinutes) ||
+    durationMinutes < SERVICE_TIME_MIN_DURATION ||
+    durationMinutes > SERVICE_TIME_MAX_DURATION
+  ) {
+    return null;
+  }
+
+  return {
+    weekday,
+    time: row.time,
+    durationMinutes,
+    ...(row.label ? { label: row.label } : {}),
+  };
+}
+
+// The line format stays the fallback for a form that still posts a single text field.
+function linksInput(formData: FormData, names: LinkRowNames, legacyKey: string): WebsiteLink[] {
+  const rows = repeaterRows(formData, [names.label, names.href]);
+  if (rows.length === 0) return parseLinks(optionalString(formData.get(legacyKey)));
+
+  return rows
+    .map(([label = '', href = '']) => ({ label, href }))
+    .filter((link) => link.label && link.href);
+}
+
+function waysInput(formData: FormData): Array<{ label: string; value: string }> {
+  const rows = repeaterRows(formData, [GIVING_WAY_ROW_NAMES.label, GIVING_WAY_ROW_NAMES.value]);
+  if (rows.length === 0) return parseWays(optionalString(formData.get('ways')));
+
+  return rows
+    .map(([label = '', value = '']) => ({ label, value }))
+    .filter((way) => way.label && way.value);
+}
+
+function itemsInput(formData: FormData) {
+  const rows = repeaterRows(formData, [
+    SECTION_ITEM_ROW_NAMES.title,
+    SECTION_ITEM_ROW_NAMES.body,
+    SECTION_ITEM_ROW_NAMES.label,
+    SECTION_ITEM_ROW_NAMES.href,
+  ]);
+  if (rows.length === 0) return parseItems(optionalString(formData.get('items')));
+
+  return rows
+    .filter(([title = '']) => title)
+    .map(([title = '', body = '', label = '', href = '']) => ({
+      title,
+      ...(body ? { body } : {}),
+      ...(label ? { label } : {}),
+      ...(href ? { href } : {}),
+    }));
+}
+
+function serviceTimesInput(formData: FormData): WebsiteServiceTime[] {
+  const rows = repeaterRows(formData, [
+    SERVICE_TIME_ROW_NAMES.weekday,
+    SERVICE_TIME_ROW_NAMES.time,
+    SERVICE_TIME_ROW_NAMES.durationMinutes,
+    SERVICE_TIME_ROW_NAMES.label,
+  ]);
+  if (rows.length === 0) return parseServiceTimes(optionalString(formData.get('serviceTimes')));
+
+  return rows.flatMap(([weekday = '', time = '', durationMinutes = '', label = '']) => {
+    const service = serviceTimeRow({ weekday, time, durationMinutes, label });
+
+    return service ? [service] : [];
+  });
 }
 
 export function parseLinks(value: string | undefined): WebsiteLink[] {
@@ -276,13 +363,13 @@ export function parseServiceTimes(value: string | undefined): WebsiteServiceTime
     const [slot = '', duration = '', label = ''] = line.split('|').map((part) => part.trim());
     const [weekdayText = '', time = ''] = slot.split(/\s+/u);
     const weekday = parseWeekday(weekdayText);
-    if (weekday === null || !/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(time)) return [];
+    if (weekday === null || !TIME_PATTERN.test(time)) return [];
 
     return [
       {
         weekday,
         time,
-        durationMinutes: Number(duration) || 90,
+        durationMinutes: Number(duration) || SERVICE_TIME_DEFAULT_DURATION,
         ...(label ? { label } : {}),
       },
     ];
@@ -338,11 +425,22 @@ function parseItems(value: string | undefined) {
     .filter((item) => item.title);
 }
 
-function isItemRecord(value: unknown): value is {
-  body?: string;
-  href?: string;
-  label?: string;
-  title?: string;
-} {
-  return typeof value === 'object' && value !== null;
+function jsonRecords(value: unknown): JsonRecord[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return [];
+
+    return [{ ...entry }];
+  });
+}
+
+function readNumber(record: JsonRecord, key: string, fallback: number): number {
+  const value = record[key];
+
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function entryText(value: FormDataEntryValue): string {
+  return typeof value === 'string' ? value.trim() : '';
 }

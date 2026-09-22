@@ -15,6 +15,12 @@
     },
     "name": "Name",
     "notSet": "Not set",
+    "repeater": {
+      "empty": "No entries yet.",
+      "moveDown": "Move row {position} down",
+      "moveUp": "Move row {position} up",
+      "remove": "Remove row {position}"
+    },
     "save": "Save",
     "saving": "Saving..."
   },
@@ -811,6 +817,7 @@
     "addMissingSections": "Add the template sections this page does not have yet (they are added hidden)",
     "resetTheme": "Reset colours to the template defaults",
     "applyTemplate": "Apply template",
+    "templatePreviewAlt": "A preview of the {template} template",
     "templates": {
       "default": {
         "name": "Classic",
@@ -841,13 +848,18 @@
     },
     "timeZone": "Time zone",
     "navigationLinks": "Menu links",
-    "navigationHint": "One link per line: Label | /page or https://…",
+    "navigationHint": "The site menu, in this order.",
+    "addMenuLink": "Add menu link",
     "address": "Address",
     "addressNote": "Note (entrance, parking)",
     "directionsUrl": "Directions link",
     "serviceTimes": "Service times",
-    "serviceTimesPlaceholder": "sun 10:00 | 90 | Sunday service\nwed 19:00 | 60 | Prayer",
-    "serviceTimesHint": "One per line: weekday and time, then duration in minutes and an optional label.",
+    "serviceTimesHint": "Shown on the site and used to put the stream on air around a service.",
+    "serviceTimeDay": "Day",
+    "serviceTimeStart": "Start",
+    "serviceTimeDuration": "Minutes",
+    "serviceTimeLabel": "Label (optional)",
+    "addServiceTime": "Add service time",
     "liveUrl": "Stream link",
     "liveMode": "On-air status",
     "liveModes": {
@@ -944,7 +956,6 @@
     "buttonLabel": "Button label",
     "sectionOrUrl": "#section or https://...",
     "cardsOrLinks": "Cards or links",
-    "itemsPlaceholder": "Title | Description | Button label | URL",
     "copyrightFooterText": "Copyright/footer text",
     "metaUrl": "Meta URL",
     "instagramUrl": "Instagram URL",
@@ -965,10 +976,18 @@
       "scheduledTitle": "Title when not live",
       "scheduledBody": "Text when not live",
       "givingWays": "Ways to give",
-      "givingWaysPlaceholder": "By card | One-off or monthly\nBank transfer | IBAN …",
+      "wayLabel": "Way",
+      "wayValue": "Details",
+      "addWay": "Add way to give",
       "footerLinks": "Footer links",
       "footerLinksHint": "Leave empty to reuse the menu links.",
-      "linksPlaceholder": "Label | /page or https://…"
+      "addLink": "Add footer link",
+      "itemTitle": "Title",
+      "itemBody": "Description",
+      "addItem": "Add card",
+      "linkLabel": "Label",
+      "linkUrl": "Link",
+      "hrefPlaceholder": "/page or https://…"
     },
     "devices": {
       "desktop": "Desktop",
