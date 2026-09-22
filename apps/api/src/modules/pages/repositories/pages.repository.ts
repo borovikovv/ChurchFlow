@@ -1,7 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@churchflow/db';
-import type { UpsertWebsitePageInput, UpsertWebsiteSectionInput } from '@churchflow/shared';
+import {
+  websiteTemplatePageSections,
+  type UpsertWebsitePageInput,
+  type UpsertWebsiteSectionInput,
+} from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { normalizeWebsiteSettings } from '../../websites/public-website';
+import { templateSectionContent } from '../../websites/template-sections';
+
+const pageSectionsInclude = {
+  sections: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
+} satisfies Prisma.WebsitePageInclude;
 
 @Injectable()
 export class PagesRepository {
@@ -23,7 +33,7 @@ export class PagesRepository {
       include: {
         website: { include: { organization: true } },
         sections: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, hidden: false },
           orderBy: { order: 'asc' },
         },
       },
@@ -57,9 +67,11 @@ export class PagesRepository {
       },
       select: {
         slug: true,
+        seo: true,
         updatedAt: true,
         website: {
           select: {
+            settings: true,
             organization: {
               select: { slug: true },
             },
@@ -83,64 +95,128 @@ export class PagesRepository {
     });
   }
 
-  async createPage(organizationId: string, input: UpsertWebsitePageInput) {
-    const website = await this.prisma.organizationWebsite.findUnique({
-      where: { organizationId },
-      select: { id: true },
-    });
-    if (!website) throw new Error('WEBSITE_NOT_FOUND');
+  async createPage(organizationId: string, actorUserId: string, input: UpsertWebsitePageInput) {
+    return this.prisma.$transaction(async (tx) => {
+      const website = await tx.organizationWebsite.findUnique({
+        where: { organizationId },
+        select: { id: true, settings: true },
+      });
+      if (!website) throw new Error('WEBSITE_NOT_FOUND');
 
-    return this.prisma.websitePage.create({
-      data: {
-        organizationId,
-        websiteId: website.id,
-        slug: input.slug,
-        title: input.title,
-        status: input.status,
-        seo: input.seo as Prisma.InputJsonObject,
-        publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
-      },
-      include: {
-        sections: {
-          where: { deletedAt: null },
-          orderBy: { order: 'asc' },
+      // A preset the active template does not define adds no sections; the page is still created.
+      const presetSections = input.preset
+        ? websiteTemplatePageSections(
+            normalizeWebsiteSettings(website.settings).template,
+            input.preset,
+          )
+        : [];
+
+      const page = await tx.websitePage.create({
+        data: {
+          organizationId,
+          websiteId: website.id,
+          slug: input.slug,
+          title: input.title,
+          status: input.status,
+          seo: input.seo,
+          publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
+          // The composite page relation supplies pageId and organizationId, so a
+          // nested section create must not pass them itself.
+          sections: {
+            create: presetSections.map(
+              (section, order): Prisma.WebsiteSectionCreateWithoutPageInput => ({
+                type: section.type,
+                order,
+                hidden: false,
+                content: templateSectionContent(section),
+              }),
+            ),
+          },
         },
-      },
+        include: pageSectionsInclude,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'CREATE',
+          entityType: 'WebsitePage',
+          entityId: page.id,
+          metadata: {
+            slug: input.slug,
+            title: input.title,
+            ...(input.preset ? { preset: input.preset, sections: presetSections.length } : {}),
+          },
+        },
+      });
+
+      return page;
     });
   }
 
-  async updatePage(organizationId: string, pageId: string, input: UpsertWebsitePageInput) {
-    return this.prisma.websitePage.update({
-      where: { id: pageId, organizationId, deletedAt: null },
-      data: {
-        slug: input.slug,
-        title: input.title,
-        status: input.status,
-        seo: input.seo as Prisma.InputJsonObject,
-        publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
-      },
-      include: {
-        sections: {
-          where: { deletedAt: null },
-          orderBy: { order: 'asc' },
+  async updatePage(
+    organizationId: string,
+    actorUserId: string,
+    pageId: string,
+    input: UpsertWebsitePageInput,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const page = await tx.websitePage.update({
+        where: { id: pageId, organizationId, deletedAt: null },
+        data: {
+          slug: input.slug,
+          title: input.title,
+          status: input.status,
+          seo: input.seo,
+          publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
         },
-      },
+        include: pageSectionsInclude,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'UPDATE',
+          entityType: 'WebsitePage',
+          entityId: pageId,
+          metadata: { slug: input.slug, title: input.title, status: input.status },
+        },
+      });
+
+      return page;
     });
   }
 
-  async setPagePublished(organizationId: string, pageId: string, published: boolean) {
-    return this.prisma.websitePage.update({
-      where: { id: pageId, organizationId, deletedAt: null },
-      data: {
-        status: published ? 'PUBLISHED' : 'DRAFT',
-        publishedAt: published ? new Date() : null,
-      },
-      include: {
-        sections: {
-          where: { deletedAt: null },
-          orderBy: { order: 'asc' },
+  async setPagePublished(
+    organizationId: string,
+    actorUserId: string,
+    pageId: string,
+    published: boolean,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const page = await tx.websitePage.update({
+        where: { id: pageId, organizationId, deletedAt: null },
+        data: {
+          status: published ? 'PUBLISHED' : 'DRAFT',
+          publishedAt: published ? new Date() : null,
         },
-      },
+        include: pageSectionsInclude,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: published ? 'PUBLISH' : 'UNPUBLISH',
+          entityType: 'WebsitePage',
+          entityId: pageId,
+          metadata: { slug: page.slug, title: page.title },
+        },
+      });
+
+      return page;
     });
   }
 
@@ -157,6 +233,7 @@ export class PagesRepository {
         pageId,
         type: input.type,
         order: input.order,
+        hidden: input.hidden,
         content: input.content as Prisma.InputJsonObject,
       },
     });
@@ -168,16 +245,69 @@ export class PagesRepository {
       data: {
         type: input.type,
         order: input.order,
+        hidden: input.hidden,
         content: input.content as Prisma.InputJsonObject,
       },
     });
   }
 
-  async deleteSection(organizationId: string, sectionId: string) {
+  async setSectionHidden(organizationId: string, sectionId: string, hidden: boolean) {
     return this.prisma.websiteSection.update({
       where: { id: sectionId, organizationId, deletedAt: null },
-      data: { deletedAt: new Date() },
-      select: { id: true },
+      data: { hidden },
+    });
+  }
+
+  async duplicateSection(organizationId: string, sectionId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const source = await tx.websiteSection.findFirst({
+        where: { id: sectionId, organizationId, deletedAt: null },
+      });
+      if (!source) throw new Error('SECTION_NOT_FOUND');
+
+      await tx.websiteSection.updateMany({
+        where: {
+          pageId: source.pageId,
+          organizationId,
+          deletedAt: null,
+          order: { gt: source.order },
+        },
+        data: { order: { increment: 1 } },
+      });
+
+      return tx.websiteSection.create({
+        data: {
+          organizationId,
+          pageId: source.pageId,
+          type: source.type,
+          order: source.order + 1,
+          hidden: source.hidden,
+          content: source.content as Prisma.InputJsonObject,
+        },
+      });
+    });
+  }
+
+  async deleteSection(organizationId: string, actorUserId: string, sectionId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const section = await tx.websiteSection.update({
+        where: { id: sectionId, organizationId, deletedAt: null },
+        data: { deletedAt: new Date() },
+        select: { id: true, type: true, pageId: true },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'DELETE',
+          entityType: 'WebsiteSection',
+          entityId: sectionId,
+          metadata: { type: section.type, pageId: section.pageId },
+        },
+      });
+
+      return { id: section.id };
     });
   }
 

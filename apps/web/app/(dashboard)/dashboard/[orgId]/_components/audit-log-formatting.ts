@@ -1,6 +1,9 @@
 import { BUDGET_AUDIT_ENTITY_TYPE, type AuditLogListItem } from '@churchflow/shared';
 
 const ORGANIZATION_GROUP_ENTITY_TYPE = 'OrganizationGroup';
+const WEBSITE_ENTITY_TYPE = 'OrganizationWebsite';
+const WEBSITE_PAGE_ENTITY_TYPE = 'WebsitePage';
+const WEBSITE_SECTION_ENTITY_TYPE = 'WebsiteSection';
 
 // Labelled from metadata (milestone type x change), so it stays outside AUDIT_ACTION_KEYS.
 export const MEMBER_MILESTONE_AUDIT_ACTION = 'SYNC_MEMBER_MILESTONE_EVENT';
@@ -52,6 +55,7 @@ export const AUDIT_ACTION_KEYS = [
   'UPDATE_BUDGET_OPENING_BALANCE',
   'MEMBERSHIP_CLAIM_CONFLICT',
   'PROMOTE_PLATFORM_ADMIN',
+  'PUBLISH',
   'REFRESH_MEMBERSHIP_CLAIM',
   'REJECT',
   'REJECT_MEMBERSHIP_CLAIM',
@@ -64,6 +68,7 @@ export const AUDIT_ACTION_KEYS = [
   'REVOKE_MEMBERSHIP_CLAIM',
   'REQUEST_MEMBERSHIP_CLAIM',
   'SUSPEND',
+  'UNPUBLISH',
   'UPDATE',
   'UPDATE_CALENDAR_EVENT',
   'UPDATE_MEMBER_PHOTO',
@@ -107,6 +112,7 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   INVITE: 'Invitation sent',
   MEMBERSHIP_CLAIM_CONFLICT: 'Membership claim conflict recorded',
   PROMOTE_PLATFORM_ADMIN: 'Platform admin promoted',
+  PUBLISH: 'Published',
   REFRESH_MEMBERSHIP_CLAIM: 'Access link refreshed',
   REJECT: 'Request rejected',
   REJECT_MEMBERSHIP_CLAIM: 'Membership claim rejected',
@@ -122,6 +128,7 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   REVOKE_BILLING_EXEMPTION: 'Complimentary access revoked',
   START_SUBSCRIPTION: 'Subscription started',
   SUSPEND: 'Organization suspended',
+  UNPUBLISH: 'Unpublished',
   UPDATE: 'Updated',
   UPDATE_BUDGET_BASE_CURRENCY: 'Budget base currency updated',
   UPDATE_BUDGET_CATEGORY: 'Budget category updated',
@@ -137,6 +144,30 @@ const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   UPDATE_PRAYER_REQUEST: 'Prayer request updated',
   ARCHIVE_PRAYER_REQUEST: 'Prayer request archived',
   UPDATE_SUBSCRIPTION: 'Subscription updated',
+};
+
+// Generic actions (CREATE, UPDATE, PUBLISH, ...) read better when the label names the record,
+// so these entity-specific labels take precedence over the plain action label.
+export const AUDIT_ENTITY_ACTION_KEYS = [
+  'OrganizationWebsite.PUBLISH',
+  'OrganizationWebsite.UNPUBLISH',
+  'OrganizationWebsite.UPDATE',
+  'WebsitePage.CREATE',
+  'WebsitePage.UPDATE',
+  'WebsitePage.PUBLISH',
+  'WebsitePage.UNPUBLISH',
+  'WebsiteSection.DELETE',
+] as const;
+
+const auditEntityActionLabels: Record<(typeof AUDIT_ENTITY_ACTION_KEYS)[number], string> = {
+  'OrganizationWebsite.PUBLISH': 'Website published',
+  'OrganizationWebsite.UNPUBLISH': 'Website unpublished',
+  'OrganizationWebsite.UPDATE': 'Website settings updated',
+  'WebsitePage.CREATE': 'Website page created',
+  'WebsitePage.UPDATE': 'Website page updated',
+  'WebsitePage.PUBLISH': 'Website page published',
+  'WebsitePage.UNPUBLISH': 'Website page unpublished',
+  'WebsiteSection.DELETE': 'Website section deleted',
 };
 
 export function createAuditDateFormatter(locale: string) {
@@ -169,6 +200,7 @@ export function auditActionLabel(
   log: AuditLogListItem,
   labels: {
     actions: Record<string, string>;
+    entityActions: Record<string, string>;
     memberMilestoneEvent: (milestone: MemberMilestoneAuditMetadata) => string;
   },
 ): string {
@@ -178,7 +210,11 @@ export function auditActionLabel(
     return typeof displayName === 'string' && displayName ? `${label}: ${displayName}` : label;
   }
 
+  const entityAction = `${log.entityType}.${log.action}`;
+
   return (
+    labels.entityActions[entityAction] ??
+    auditEntityActionLabels[entityAction as keyof typeof auditEntityActionLabels] ??
     labels.actions[log.action] ??
     auditActionLabels[log.action as keyof typeof auditActionLabels] ??
     log.action.toLowerCase().replaceAll('_', ' ')
@@ -200,6 +236,7 @@ export function auditMetadataSummary(
   log: AuditLogListItem,
   labels: {
     changedFields: (fields: string) => string;
+    metadataNoChanges: string;
     metadataRole: (role: string) => string;
     metadataStatus: (status: string) => string;
   },
@@ -215,6 +252,20 @@ export function auditMetadataSummary(
   if (log.entityType === ORGANIZATION_GROUP_ENTITY_TYPE) {
     const summary = organizationGroupMetadataSummary(log, labels);
     if (summary) return summary;
+  }
+
+  if (log.entityType === WEBSITE_ENTITY_TYPE) {
+    const summary = websiteMetadataSummary(log, labels);
+    if (summary) return summary;
+  }
+
+  if (log.entityType === WEBSITE_PAGE_ENTITY_TYPE) {
+    const summary = websitePageMetadataSummary(log, labels);
+    if (summary) return summary;
+  }
+
+  if (log.entityType === WEBSITE_SECTION_ENTITY_TYPE && typeof log.metadata['type'] === 'string') {
+    return log.metadata['type'];
   }
 
   const changedFields = log.metadata['changedFields'];
@@ -253,6 +304,37 @@ function organizationGroupMetadataSummary(
 
   const changedFields = Object.keys(log.metadata).filter((field) => field !== 'membershipId');
   return changedFields.length > 0 ? labels.changedFields(changedFields.join(', ')) : null;
+}
+
+function websiteMetadataSummary(
+  log: AuditLogListItem,
+  labels: { changedFields: (fields: string) => string; metadataNoChanges: string },
+): string | null {
+  // A settings save that changed nothing is routine, so it is named rather than left to the
+  // generic fallback, which would show the internal entity type.
+  const changedKeys = log.metadata['changedKeys'];
+  if (Array.isArray(changedKeys)) {
+    return changedKeys.length > 0
+      ? labels.changedFields(changedKeys.map(String).join(', '))
+      : labels.metadataNoChanges;
+  }
+
+  const templateId = log.metadata['templateId'];
+  return typeof templateId === 'string' ? labels.changedFields(`template: ${templateId}`) : null;
+}
+
+function websitePageMetadataSummary(
+  log: AuditLogListItem,
+  labels: { metadataStatus: (status: string) => string },
+): string | null {
+  const title = log.metadata['title'];
+  const slug = log.metadata['slug'];
+  if (typeof title !== 'string' || typeof slug !== 'string') return null;
+
+  const status = log.metadata['status'];
+  const page = `${title} (/${slug})`;
+
+  return typeof status === 'string' ? `${page} · ${labels.metadataStatus(status)}` : page;
 }
 
 function budgetMetadataSummary(

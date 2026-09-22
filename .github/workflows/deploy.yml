@@ -496,6 +496,17 @@ jobs:
 
           BIND_ADDRESS=127.0.0.1
 
+          # The API links a published website's media to itself, so it needs the same public base
+          # url the browser uses. There is one such address per environment, already validated
+          # above, so it is reused rather than configured twice and left to drift. The name the
+          # API reads it under exists in no GitHub Environment, so the failure has to name the
+          # variable someone can actually go and set.
+          if [[ -z "${NEXT_PUBLIC_API_URL:-}" ]]; then
+            echo "NEXT_PUBLIC_API_URL is required: the API reads it as PUBLIC_API_URL."
+            exit 1
+          fi
+          PUBLIC_API_URL="$NEXT_PUBLIC_API_URL"
+
           for key in \
             DEPLOY_ENV COMMIT_SHA IMAGE_TAG API_IMAGE MIGRATOR_IMAGE WEB_IMAGE \
             TELEGRAM_CLIENT_ID BIND_ADDRESS API_HOST_PORT WEB_HOST_PORT INTERNAL_NETWORK \
@@ -504,7 +515,7 @@ jobs:
           done
 
           for key in \
-            DATABASE_URL WEB_APP_URL PLATFORM_ADMIN_EMAIL \
+            DATABASE_URL WEB_APP_URL PUBLIC_API_URL PLATFORM_ADMIN_EMAIL \
             TELEGRAM_CLIENT_ID TELEGRAM_CLIENT_SECRET TELEGRAM_REDIRECT_URI \
             EMAIL_PROVIDER EMAIL_FROM \
             S3_ENDPOINT S3_REGION S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do

@@ -11,6 +11,7 @@ import { FormSelect } from '@/components/forms/form-select';
 import { loadAuditLogsAction } from '../actions';
 import {
   AUDIT_ACTION_KEYS,
+  AUDIT_ENTITY_ACTION_KEYS,
   MEMBER_MILESTONE_AUDIT_ACTION,
   auditActionLabel,
   auditActorName,
@@ -38,6 +39,9 @@ export function AuditLogsSection({
   const auditActionLabels = {
     actions: Object.fromEntries(
       AUDIT_ACTION_KEYS.map((action) => [action, t(`auditActions.${action}`)]),
+    ),
+    entityActions: Object.fromEntries(
+      AUDIT_ENTITY_ACTION_KEYS.map((key) => [key, t(`auditEntityActions.${key}`)]),
     ),
     memberMilestoneEvent: (milestone: MemberMilestoneAuditMetadata) =>
       t(`auditActions.${MEMBER_MILESTONE_AUDIT_ACTION}`, milestone),
@@ -137,6 +141,7 @@ export function AuditLogsSection({
           {items.map((log) => {
             const metadataSummary = auditMetadataSummary(log, {
               changedFields: (fields) => t('changedFields', { fields }),
+              metadataNoChanges: t('metadataNoChanges'),
               metadataRole: (role) => t('metadataRole', { role }),
               metadataStatus: (status) => t('metadataStatus', { status }),
             });

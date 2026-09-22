@@ -3,8 +3,19 @@ import type {
   ReorderWebsiteSectionsInput,
   UpsertWebsitePageInput,
   UpsertWebsiteSectionInput,
+  WebsiteSection,
 } from '@churchflow/shared';
 import { MediaService } from '../media/media.service';
+import {
+  enrichSectionBackgrounds,
+  normalizeWebsiteSettings,
+  readSeo,
+  toDashboardPage,
+  toPublicSection,
+  toPublicWebsite,
+  type ReadAssetUrl,
+} from '../websites/public-website';
+import { resolveSectionsContent } from '../websites/section-data';
 import { isPrismaKnownRequestError, PagesRepository } from './repositories/pages.repository';
 
 @Injectable()
@@ -21,23 +32,47 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.enrichSectionBackgrounds(page);
+    return this.toPublicPage(page, this.publicReadUrl);
+  }
+
+  async findPreviewPage(organizationId: string, pageId: string) {
+    const page = await this.pagesRepository.findDashboardPage(organizationId, pageId);
+
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    // The owner previews a page the public route would refuse, draft or not, so its images stay on
+    // signed urls: the public media route serves nothing that is not published.
+    return this.toPublicPage(
+      {
+        ...page,
+        sections: page.sections.filter((section) => !section.hidden),
+      },
+      this.readUrl,
+    );
   }
 
   async listDashboardPages(organizationId: string) {
     const pages = await this.pagesRepository.listDashboardPages(organizationId);
 
-    return Promise.all(pages.map((page) => this.enrichSectionBackgrounds(page)));
+    return Promise.all(pages.map((page) => this.toDashboardPage(page)));
   }
 
   async listPublicPagesForSitemap() {
     const pages = await this.pagesRepository.listPublicPagesForSitemap();
 
-    return pages.map((page) => ({
-      orgSlug: page.website.organization.slug,
-      pageSlug: page.slug,
-      updatedAt: page.updatedAt,
-    }));
+    return pages
+      .filter(
+        (page) =>
+          !readSeo(page.seo).noindex &&
+          !normalizeWebsiteSettings(page.website.settings).seo.noindex,
+      )
+      .map((page) => ({
+        orgSlug: page.website.organization.slug,
+        pageSlug: page.slug,
+        updatedAt: page.updatedAt,
+      }));
   }
 
   async findDashboardPage(organizationId: string, pageId: string) {
@@ -47,28 +82,44 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.enrichSectionBackgrounds(page);
+    return this.toDashboardPage(page);
   }
 
-  async createPage(organizationId: string, input: UpsertWebsitePageInput) {
+  async createPage(organizationId: string, actorUserId: string, input: UpsertWebsitePageInput) {
     try {
-      return await this.pagesRepository.createPage(organizationId, input);
+      return await this.toDashboardPage(
+        await this.pagesRepository.createPage(organizationId, actorUserId, input),
+      );
     } catch (error) {
       throw this.toHttpError(error);
     }
   }
 
-  async updatePage(organizationId: string, pageId: string, input: UpsertWebsitePageInput) {
+  async updatePage(
+    organizationId: string,
+    actorUserId: string,
+    pageId: string,
+    input: UpsertWebsitePageInput,
+  ) {
     try {
-      return await this.pagesRepository.updatePage(organizationId, pageId, input);
+      return await this.toDashboardPage(
+        await this.pagesRepository.updatePage(organizationId, actorUserId, pageId, input),
+      );
     } catch (error) {
       throw this.toHttpError(error);
     }
   }
 
-  async setPagePublished(organizationId: string, pageId: string, published: boolean) {
+  async setPagePublished(
+    organizationId: string,
+    actorUserId: string,
+    pageId: string,
+    published: boolean,
+  ) {
     try {
-      return await this.pagesRepository.setPagePublished(organizationId, pageId, published);
+      return await this.toDashboardPage(
+        await this.pagesRepository.setPagePublished(organizationId, actorUserId, pageId, published),
+      );
     } catch (error) {
       throw this.toHttpError(error);
     }
@@ -90,9 +141,25 @@ export class PagesService {
     }
   }
 
-  async deleteSection(organizationId: string, sectionId: string) {
+  async setSectionHidden(organizationId: string, sectionId: string, hidden: boolean) {
     try {
-      return await this.pagesRepository.deleteSection(organizationId, sectionId);
+      return await this.pagesRepository.setSectionHidden(organizationId, sectionId, hidden);
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+  }
+
+  async duplicateSection(organizationId: string, sectionId: string) {
+    try {
+      return await this.pagesRepository.duplicateSection(organizationId, sectionId);
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+  }
+
+  async deleteSection(organizationId: string, actorUserId: string, sectionId: string) {
+    try {
+      return await this.pagesRepository.deleteSection(organizationId, actorUserId, sectionId);
     } catch (error) {
       throw this.toHttpError(error);
     }
@@ -110,6 +177,73 @@ export class PagesService {
     }
   }
 
+  private async toPublicPage(
+    page: {
+      organizationId: string;
+      title: string;
+      seo: unknown;
+      sections: Array<{
+        id: string;
+        type: WebsiteSection['type'];
+        order: number;
+        content: unknown;
+      }>;
+      website: Parameters<typeof toPublicWebsite>[0] & { logoAssetId: string | null };
+    },
+    readUrl: ReadAssetUrl,
+  ) {
+    const website = toPublicWebsite(page.website);
+    const seo = readSeo(page.seo);
+    const [enriched, websiteOgImageUrl, logoUrl, pageOgImageUrl] = await Promise.all([
+      enrichSectionBackgrounds(page, readUrl),
+      readUrl(website.settings.seo.ogImageAssetId, page.organizationId),
+      readUrl(page.website.logoAssetId, page.organizationId),
+      readUrl(seo.ogImageAssetId, page.organizationId),
+    ]);
+
+    website.settings.seo.ogImageUrl = websiteOgImageUrl;
+    website.organization.logoUrl = logoUrl;
+
+    const resolved = await resolveSectionsContent(enriched.sections, {
+      organizationId: page.organizationId,
+    });
+
+    return {
+      title: page.title,
+      seo: { ...seo, ogImageUrl: pageOgImageUrl },
+      sections: resolved.map(toPublicSection),
+      website,
+    };
+  }
+
+  private toDashboardPage<
+    TPage extends { organizationId: string; seo: unknown; sections: Array<{ content: unknown }> },
+  >(page: TPage) {
+    return toDashboardPage(page, this.readUrl);
+  }
+
+  // Dashboard and preview responses: a signed-in owner reading unpublished content, which the
+  // public media route does not serve, so those images stay on short-lived signed urls.
+  private readonly readUrl: ReadAssetUrl = async (assetId, organizationId) => {
+    if (!assetId) return null;
+    try {
+      return (await this.mediaService.getReadUrl(assetId, organizationId)).url;
+    } catch {
+      return null;
+    }
+  };
+
+  // A published page links to media instead of signing it, so the url survives the crawl that
+  // reads the page and the visitor who scrolls to it ten minutes later.
+  private readonly publicReadUrl: ReadAssetUrl = async (assetId, organizationId) => {
+    if (!assetId) return null;
+    try {
+      return await this.mediaService.getPublicReadUrl(assetId, organizationId);
+    } catch {
+      return null;
+    }
+  };
+
   private toHttpError(error: unknown) {
     if (error instanceof Error) {
       if (error.message === 'WEBSITE_NOT_FOUND') return new NotFoundException('Website not found');
@@ -124,56 +258,4 @@ export class PagesService {
 
     return error;
   }
-
-  private async enrichSectionBackgrounds<
-    TPage extends {
-      organizationId: string;
-      sections: Array<{ content: unknown }>;
-    },
-  >(page: TPage): Promise<TPage> {
-    const assetIds = new Set<string>();
-    page.sections.forEach((section) => {
-      const assetId = readContentText(section.content, 'backgroundImageAssetId');
-      if (assetId) assetIds.add(assetId);
-    });
-
-    if (assetIds.size === 0) {
-      return page;
-    }
-
-    const urls = new Map<string, string>();
-    await Promise.all(
-      [...assetIds].map(async (assetId) => {
-        try {
-          const result = await this.mediaService.getReadUrl(assetId, page.organizationId);
-          urls.set(assetId, result.url);
-        } catch {
-          // Missing background assets should not hide otherwise published page content.
-        }
-      }),
-    );
-
-    return {
-      ...page,
-      sections: page.sections.map((section) => {
-        const assetId = readContentText(section.content, 'backgroundImageAssetId');
-        if (!assetId || !urls.has(assetId)) return section;
-
-        return {
-          ...section,
-          content:
-            typeof section.content === 'object' && section.content !== null
-              ? { ...section.content, backgroundImageUrl: urls.get(assetId) }
-              : section.content,
-        };
-      }),
-    };
-  }
-}
-
-function readContentText(content: unknown, key: string): string | undefined {
-  if (typeof content !== 'object' || content === null) return undefined;
-  const value = (content as Record<string, unknown>)[key];
-
-  return typeof value === 'string' && value.trim() ? value : undefined;
 }

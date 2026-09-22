@@ -1,46 +1,115 @@
-import type { WebsiteSection } from '@churchflow/shared';
+import {
+  PUBLIC_SECTION_TYPES,
+  WEBSITE_TEMPLATE_DEFINITIONS,
+  type WebsiteSection,
+  type WebsiteTemplateId,
+} from '@churchflow/shared';
 import type { JsonRecord } from './types';
 
-export const SECTION_FIELD_GROUPS = [
-  'preset',
-  'font',
-  'titleBody',
-  'buttons',
-  'items',
-  'contact',
-  'copyright',
-  'background',
-] as const;
+/** A named set of inputs the inspector offers together, keyed by the content it edits. */
+export type SectionFieldGroup =
+  | 'font'
+  | 'titleBody'
+  | 'eyebrow'
+  | 'buttons'
+  | 'items'
+  | 'contact'
+  | 'copyright'
+  | 'socials'
+  | 'background'
+  | 'live'
+  | 'ways'
+  | 'links';
 
-export type SectionFieldGroup = (typeof SECTION_FIELD_GROUPS)[number];
+export type SectionType = WebsiteSection['type'];
 
-export const SECTION_PRESETS = [
-  {
-    label: 'Hero',
-    type: 'hero',
-    variant: 'hero',
-    fields: ['preset', 'font', 'titleBody', 'buttons', 'background'],
-  },
-  {
-    label: 'Contact',
-    type: 'contact',
-    variant: 'contact',
-    fields: ['preset', 'font', 'titleBody', 'contact', 'buttons', 'background'],
-  },
-  {
-    label: 'Footer',
-    type: 'contact',
-    variant: 'footer',
-    fields: ['preset', 'font', 'titleBody', 'contact', 'copyright', 'buttons', 'background'],
-  },
-] as const satisfies Array<{
-  label: string;
-  type: WebsiteSection['type'];
+export interface SectionVariantDefinition {
+  type: SectionType;
   variant: string;
   fields: readonly SectionFieldGroup[];
-}>;
+  templates: readonly WebsiteTemplateId[];
+}
 
-export type SectionPresetValue = (typeof SECTION_PRESETS)[number]['variant'];
+const SECTION_VARIANTS: readonly SectionVariantDefinition[] = [
+  {
+    type: 'hero',
+    variant: 'hero',
+    fields: ['font', 'titleBody', 'buttons', 'background'],
+    templates: ['default'],
+  },
+  {
+    type: 'contact',
+    variant: 'contact',
+    fields: ['font', 'titleBody', 'contact', 'buttons', 'background'],
+    templates: ['default'],
+  },
+  {
+    type: 'contact',
+    variant: 'footer',
+    fields: ['font', 'titleBody', 'contact', 'copyright', 'socials', 'buttons', 'background'],
+    templates: ['default'],
+  },
+  {
+    type: 'hero',
+    variant: 'cover',
+    fields: ['eyebrow', 'titleBody', 'buttons', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'hero',
+    variant: 'split',
+    fields: ['eyebrow', 'titleBody', 'buttons', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'about',
+    variant: 'text',
+    fields: ['eyebrow', 'titleBody', 'buttons', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'about',
+    variant: 'columns',
+    fields: ['eyebrow', 'titleBody', 'items', 'buttons', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'live',
+    variant: 'banner',
+    fields: ['live', 'buttons', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'schedule',
+    variant: 'location',
+    fields: ['eyebrow', 'titleBody', 'buttons', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'giving',
+    variant: 'cover',
+    fields: ['eyebrow', 'titleBody', 'buttons', 'ways', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'giving',
+    variant: 'ways',
+    fields: ['eyebrow', 'titleBody', 'buttons', 'ways'],
+    templates: ['city'],
+  },
+  {
+    type: 'contact',
+    variant: 'details',
+    fields: ['eyebrow', 'titleBody', 'contact', 'buttons'],
+    templates: ['city'],
+  },
+  {
+    type: 'footer',
+    variant: 'columns',
+    fields: ['titleBody', 'contact', 'copyright', 'links'],
+    templates: ['city'],
+  },
+];
 
 export const SECTION_FONT_PRESETS = [
   { label: 'Default', value: 'default' },
@@ -48,82 +117,75 @@ export const SECTION_FONT_PRESETS = [
   { label: 'Montserrat heading', value: 'montserrat-heading' },
 ] as const;
 
-const SECTION_TYPE_PRESET_FALLBACKS = {
-  about: 'hero',
-  contact: 'contact',
-  gallery: 'hero',
-  hero: 'hero',
-  schedule: 'hero',
-} as const satisfies Record<WebsiteSection['type'], SectionPresetValue>;
+export function sectionVariantsForTemplate(
+  template: WebsiteTemplateId,
+): SectionVariantDefinition[] {
+  const renderable = WEBSITE_TEMPLATE_DEFINITIONS[template].sectionTypes;
 
-export const STARTER_HOME_SECTIONS = [
-  {
-    type: 'hero',
-    order: 0,
-    content: {
-      variant: 'hero',
-      headline: 'Welcome to our church',
-      subheading: 'A place to worship, grow, serve, and belong.',
-      primaryLabel: 'Plan a visit',
-      primaryHref: '#visit',
-      secondaryLabel: 'Watch online',
-      secondaryHref: '#',
-    },
-  },
-  {
-    type: 'contact',
-    order: 1,
-    content: {
-      variant: 'contact',
-      title: 'Contact us',
-      body: 'We would love to hear from you.',
-      email: 'hello@example.com',
-      phone: '(555) 000-0000',
-      address: '123 Church Street',
-    },
-  },
-  {
-    type: 'contact',
-    order: 2,
-    content: {
-      variant: 'footer',
-      title: 'Church name',
-      address: '123 Church Street',
-      email: 'hello@example.com',
-      phone: '(555) 000-0000',
-      copyright: '© 2026 Church name',
-      primaryLabel: 'Give',
-      primaryHref: '#give',
-    },
-  },
-] as const satisfies Array<{
-  type: WebsiteSection['type'];
-  order: number;
-  content: JsonRecord;
-}>;
-
-export function sectionPreset(value: string) {
-  return SECTION_PRESETS.find((preset) => preset.variant === value) ?? SECTION_PRESETS[0];
+  return SECTION_VARIANTS.filter(
+    (definition) => definition.templates.includes(template) && renderable.includes(definition.type),
+  );
 }
 
-export function sectionPresetValue(section: {
-  type: WebsiteSection['type'];
-  content: JsonRecord;
-}): SectionPresetValue {
+/** Enough to edit a section whose variant no template describes. */
+const BASIC_FIELD_GROUPS: readonly SectionFieldGroup[] = ['titleBody', 'buttons', 'background'];
+
+/**
+ * The field groups the inspector offers for a section. Only the active template's own definitions are
+ * consulted, because it is that template's components that read the values: a stored variant it does
+ * not define still needs editable fields, so its first variant for the section type answers for it,
+ * and a section type it cannot render at all falls back to the basics. The groups are all that is
+ * borrowed — the variant itself is never taken from another definition, because the form posts it
+ * back and a save must not rewrite what the owner did not change.
+ */
+export function sectionFieldGroups(
+  section: { type: SectionType; content: JsonRecord },
+  template: WebsiteTemplateId,
+): readonly SectionFieldGroup[] {
   const variant = sectionVariant(section);
+  const byType = sectionVariantsForTemplate(template).filter(
+    (definition) => definition.type === section.type,
+  );
+  const definition = byType.find((candidate) => candidate.variant === variant) ?? byType[0];
 
-  if (SECTION_PRESETS.some((preset) => preset.variant === variant)) {
-    return variant as SectionPresetValue;
-  }
-
-  return SECTION_TYPE_PRESET_FALLBACKS[section.type];
+  return definition?.fields ?? BASIC_FIELD_GROUPS;
 }
 
-export function sectionVariant(section: {
-  type: WebsiteSection['type'];
-  content: JsonRecord;
-}): string {
+export interface SectionVariantChoice {
+  variant: string;
+  /** False for a stored variant the active template cannot render, which is shown but not offered. */
+  renderable: boolean;
+}
+
+/**
+ * The variants the inspector may offer for a section: the ones the active template renders, plus
+ * the section's own stored variant when that template does not render it, so selecting nothing
+ * keeps the section exactly as it is.
+ */
+export function sectionVariantChoices(
+  section: { type: SectionType; content: JsonRecord },
+  template: WebsiteTemplateId,
+): SectionVariantChoice[] {
+  const variant = sectionVariant(section);
+  const renderable = sectionVariantsForTemplate(template)
+    .filter((definition) => definition.type === section.type)
+    .map((definition) => ({ variant: definition.variant, renderable: true }));
+
+  return renderable.some((choice) => choice.variant === variant)
+    ? renderable
+    : [...renderable, { variant, renderable: false }];
+}
+
+export function sectionVariant(section: { type: SectionType; content: JsonRecord }): string {
   const variant = section.content['variant'];
 
   return typeof variant === 'string' && variant.trim() ? variant : section.type;
+}
+
+export function isSectionType(value: string): value is SectionType {
+  return (PUBLIC_SECTION_TYPES as readonly string[]).includes(value);
+}
+
+export function isRenderableByTemplate(type: SectionType, template: WebsiteTemplateId): boolean {
+  return WEBSITE_TEMPLATE_DEFINITIONS[template].sectionTypes.includes(type);
 }
