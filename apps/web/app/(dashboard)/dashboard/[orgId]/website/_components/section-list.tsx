@@ -45,6 +45,8 @@ export function SectionList({
   const t = useTranslations('website');
   const sections = page?.sections ?? [];
   const sectionIds = sections.map((section) => section.id).join(',');
+  // Deleting a section leaves a gap in the stored order, so append past the highest one.
+  const nextOrder = sections.reduce((max, section) => Math.max(max, section.order + 1), 0);
   const variants = sectionVariantsForTemplate(template);
 
   return (
@@ -105,7 +107,7 @@ export function SectionList({
                   templateId: template,
                   type: definition.type,
                   variant: definition.variant,
-                  order: sections.length,
+                  order: nextOrder,
                 }),
                 `page:${page.id}:section-create`,
               ),
