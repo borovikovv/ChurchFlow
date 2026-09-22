@@ -15,7 +15,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { ENTITLEMENTS } from '@churchflow/shared';
+import { ENTITLEMENTS, uuidSchema } from '@churchflow/shared';
 import type {
   ConfirmUserAvatarUploadInput,
   CreateMemberPhotoUploadInput,
@@ -277,12 +277,22 @@ export class MediaService {
    * exist inside the organization, so an image that was deleted leaves the page without an image
    * rather than with a link that answers 404. Whether the link may be served is decided again,
    * from the published website, each time it is followed.
+   *
+   * The link carries the reference exactly as the website stored it, never a canonicalized form of
+   * it. Serving the link means finding that same reference again, and a reference stored inside a
+   * json document is compared as text: rewriting the case of a uuid on the way out would leave a
+   * working image permanently unreachable. It is validated here because it is about to become part
+   * of a url, and because a reference that is not a uuid cannot name an asset anyway.
    */
   async getPublicReadUrl(assetId: string, organizationId: string): Promise<string> {
+    if (!uuidSchema.safeParse(assetId).success) {
+      throw new NotFoundException('Media asset was not found');
+    }
+
     const asset = await this.mediaRepository.findAsset(assetId, organizationId);
     if (!asset) throw new NotFoundException('Media asset was not found');
 
-    return publicWebsiteMediaUrl(this.publicApiUrl, asset.id);
+    return publicWebsiteMediaUrl(this.publicApiUrl, assetId);
   }
 
   async createUserAvatarUpload(userId: string, input: CreateMemberPhotoUploadInput) {

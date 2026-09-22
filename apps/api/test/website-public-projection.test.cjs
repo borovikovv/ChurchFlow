@@ -178,6 +178,21 @@ test('a public page links its og image and its section backgrounds to the api', 
   assert.equal(JSON.stringify(page).includes('X-Amz-Signature'), false);
 });
 
+test('a published link carries the reference exactly as the website stored it', async () => {
+  const uppercase = '1111111A-1111-4111-8111-000000000005';
+  const page = { ...storedPage(), seo: { ogImageAssetId: uppercase } };
+  const service = new PagesService(
+    { findPublicPage: async () => page },
+    mediaService([uppercase, LOGO_ASSET, WEBSITE_OG_ASSET, BACKGROUND_ASSET]),
+  );
+
+  const published = await service.findPublicPage('grace', 'home');
+
+  // Canonicalizing the case here would publish a link the media route cannot trace back to the
+  // reference, because a reference inside a json document is compared as text.
+  assert.equal(published.seo.ogImageUrl, mediaUrl(uppercase));
+});
+
 test('media the organization no longer owns leaves the page without an image, not a dead link', async () => {
   const websites = new WebsitesService(
     { findPublicWebsite: async () => storedWebsite() },

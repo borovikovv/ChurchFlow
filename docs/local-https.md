@@ -49,6 +49,7 @@ Use the proxy URL for browser-visible URLs:
 
 ```env
 WEB_APP_URL=https://churchflow.test
+PUBLIC_API_URL=https://churchflow.test/v1
 COOKIE_DOMAIN=
 TELEGRAM_REDIRECT_URI=https://churchflow.test/v1/auth/telegram/callback
 
@@ -58,6 +59,8 @@ API_INTERNAL_URL=http://localhost:4000/v1
 ```
 
 `API_INTERNAL_URL` stays on localhost because Next server-side code can call the API directly without going through TLS.
+
+`PUBLIC_API_URL` must be set to the proxy URL, matching `NEXT_PUBLIC_API_URL`. A published website links its images to it, so leaving it on its `http://localhost:4000/v1` default makes every section background mixed content on an `https://churchflow.test` page, which the browser blocks, and points `og:image` at a host no unfurler can reach.
 
 ## BotFather
 

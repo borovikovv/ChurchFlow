@@ -212,6 +212,8 @@ Optional variables with defaults, used by the nightly session retention job:
 Leaving any of these blank falls back to the default shown above.
 
 `API_INTERNAL_URL` is a Docker-network URL used by Next.js server code and rewrites. Do not use `localhost` for it inside containers.
+
+The API needs `PUBLIC_API_URL`, its own browser-visible base URL including the `/v1` prefix, because a published website links its images to a route on the API rather than publishing a signed storage URL that expires. The deploy workflow derives it from `NEXT_PUBLIC_API_URL`, which is the same address, so there is no separate GitHub Environment variable to create. A deployment that renders its own env files, rather than running the workflow, must set `PUBLIC_API_URL` explicitly: it defaults to `http://localhost:4000/v1`, and left at that default every published page advertises `og:image`, the JSON-LD logo and its section backgrounds as localhost links that no visitor or crawler can fetch.
 Leave `COOKIE_DOMAIN` unset in both environments so auth and Telegram OAuth cookies are host-only.
 
 ## GitHub Environment Secrets

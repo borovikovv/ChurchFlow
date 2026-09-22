@@ -42,11 +42,14 @@ export class WebsitesService {
    * Signs a read of media a published website still references. An id that is not a uuid cannot
    * name an asset, and answering it the same way as an unknown one keeps the route from telling a
    * caller anything about which ids exist.
+   *
+   * The id is looked up exactly as it arrives, because that is how the published link carries the
+   * website's own reference and how the reference is stored: the asset id columns compare as uuids
+   * and ignore case, while a reference inside a json document is compared as text.
    */
   async findPublicWebsiteMediaUrl(assetId: string): Promise<string> {
     const asset = uuidSchema.safeParse(assetId).success
-      ? // Stored asset ids are lowercase uuids, and the JSON references are compared as text.
-        await this.websitesRepository.findPublishedWebsiteAsset(assetId.toLowerCase())
+      ? await this.websitesRepository.findPublishedWebsiteAsset(assetId)
       : null;
     if (!asset) throw new NotFoundException('Media asset was not found');
 
