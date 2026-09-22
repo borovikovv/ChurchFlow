@@ -120,14 +120,17 @@ export class PagesRepository {
           status: input.status,
           seo: input.seo,
           publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
+          // The composite page relation supplies pageId and organizationId, so a
+          // nested section create must not pass them itself.
           sections: {
-            create: presetSections.map((section, order) => ({
-              organizationId,
-              type: section.type,
-              order,
-              hidden: false,
-              content: templateSectionContent(section),
-            })),
+            create: presetSections.map(
+              (section, order): Prisma.WebsiteSectionCreateWithoutPageInput => ({
+                type: section.type,
+                order,
+                hidden: false,
+                content: templateSectionContent(section),
+              }),
+            ),
           },
         },
         include: pageSectionsInclude,

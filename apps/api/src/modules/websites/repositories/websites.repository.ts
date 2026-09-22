@@ -148,14 +148,17 @@ export class WebsitesRepository {
             title: 'Home',
             status: 'DRAFT',
             seo: {},
+            // The composite page relation supplies pageId and organizationId, so a
+            // nested section create must not pass them itself.
             sections: {
-              create: template.home.map((section, order) => ({
-                organizationId: input.organizationId,
-                type: section.type,
-                order,
-                hidden: false,
-                content: templateSectionContent(section),
-              })),
+              create: template.home.map(
+                (section, order): Prisma.WebsiteSectionCreateWithoutPageInput => ({
+                  type: section.type,
+                  order,
+                  hidden: false,
+                  content: templateSectionContent(section),
+                }),
+              ),
             },
           },
           include: homeSectionsInclude,

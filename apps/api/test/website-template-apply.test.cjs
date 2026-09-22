@@ -93,6 +93,14 @@ test('applying a template keeps existing sections and adds only the missing ones
     writes.some((entry) => entry.operation === 'websiteSection.update'),
     false,
   );
+  // Top level section creates are unchecked, so they still carry both foreign key scalars.
+  assert.ok(
+    created.every(
+      (entry) =>
+        entry.args.data.organizationId === ORGANIZATION_ID && entry.args.data.pageId === PAGE_ID,
+    ),
+    'sections added to an existing home page pass organizationId and pageId themselves',
+  );
   assert.equal(result.addedSections, 4);
 });
 
@@ -146,6 +154,14 @@ test('without a home page the template creates one as a draft with visible secti
   assert.equal(create.args.data.organizationId, ORGANIZATION_ID);
   assert.equal(create.args.data.sections.create.length, 5);
   assert.ok(create.args.data.sections.create.every((section) => section.hidden === false));
+  // The composite page relation supplies both foreign key scalars, so Prisma rejects
+  // them in a nested create; the sections inherit the organization from the page row.
+  assert.ok(
+    create.args.data.sections.create.every(
+      (section) => !('organizationId' in section) && !('pageId' in section),
+    ),
+    'nested home section creates pass neither organizationId nor pageId',
+  );
   assert.equal(result.addedSections, 5);
 });
 

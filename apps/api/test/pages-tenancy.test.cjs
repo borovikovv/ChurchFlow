@@ -130,11 +130,15 @@ test('each city preset creates its template sections, visible and in template or
       expected.map((section, order) => `${section.type}:${section.variant}:${order}`),
     );
     assert.ok(create.args.data.sections.create.every((section) => section.hidden === false));
+    // The composite page relation supplies both foreign key scalars, so Prisma rejects
+    // them in a nested create; the sections inherit the organization from the page row.
     assert.ok(
       create.args.data.sections.create.every(
-        (section) => section.organizationId === ORGANIZATION_ID,
+        (section) => !('organizationId' in section) && !('pageId' in section),
       ),
+      'nested preset section creates pass neither organizationId nor pageId',
     );
+    assert.equal(create.args.data.organizationId, ORGANIZATION_ID);
   }
 });
 
