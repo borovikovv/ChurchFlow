@@ -135,7 +135,8 @@ export function resolveWebsiteHref(
 ): string {
   const slug = website?.organization?.slug;
   if (!slug || !href.startsWith('/') || href.startsWith('//')) return href || '#';
-  if (href === `/o/${slug}` || href.startsWith(`/o/${slug}/`)) return href;
+  const path = href.split(/[?#]/u)[0] ?? '';
+  if (path === `/o/${slug}` || path.startsWith(`/o/${slug}/`)) return href;
 
   return `/o/${slug}${href === '/' ? '' : href}`;
 }

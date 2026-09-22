@@ -68,6 +68,8 @@ test('internal links are resolved under the organization path, external ones unt
   assert.equal(resolved('/about'), '/o/grace/about');
   assert.equal(resolved('/'), '/o/grace');
   assert.equal(resolved('/o/grace/give'), '/o/grace/give');
+  assert.equal(resolved('/o/grace#location'), '/o/grace#location');
+  assert.equal(resolved('/o/grace?tab=live'), '/o/grace?tab=live');
   assert.equal(resolved('#live'), '#live');
   assert.equal(resolved('https://youtube.com/c'), 'https://youtube.com/c');
   assert.equal(resolved(''), '#');
