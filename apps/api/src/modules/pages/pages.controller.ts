@@ -1,6 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ENTITLEMENTS } from '@churchflow/shared';
-import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
   RequireOrganizationOwner,
@@ -61,8 +64,12 @@ export class PagesController {
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
   @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
-  async createPage(@Param('organizationId') organizationId: string, @Body() body: UpsertPageDto) {
-    return this.pagesService.createPage(organizationId, body);
+  async createPage(
+    @Param('organizationId') organizationId: string,
+    @Body() body: UpsertPageDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.pagesService.createPage(organizationId, this.actorUserId(request), body);
   }
 
   @Patch('organizations/:organizationId/pages/:pageId')
@@ -73,8 +80,9 @@ export class PagesController {
     @Param('organizationId') organizationId: string,
     @Param('pageId') pageId: string,
     @Body() body: UpsertPageDto,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.pagesService.updatePage(organizationId, pageId, body);
+    return this.pagesService.updatePage(organizationId, this.actorUserId(request), pageId, body);
   }
 
   @Post('organizations/:organizationId/pages/:pageId/publish')
@@ -85,8 +93,14 @@ export class PagesController {
     @Param('organizationId') organizationId: string,
     @Param('pageId') pageId: string,
     @Body() body: PublishPageDto,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.pagesService.setPagePublished(organizationId, pageId, body.published);
+    return this.pagesService.setPagePublished(
+      organizationId,
+      this.actorUserId(request),
+      pageId,
+      body.published,
+    );
   }
 
   @Post('organizations/:organizationId/pages/:pageId/sections')
@@ -143,8 +157,9 @@ export class PagesController {
   async deleteSection(
     @Param('organizationId') organizationId: string,
     @Param('sectionId') sectionId: string,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.pagesService.deleteSection(organizationId, sectionId);
+    return this.pagesService.deleteSection(organizationId, this.actorUserId(request), sectionId);
   }
 
   @Post('organizations/:organizationId/pages/:pageId/sections/reorder')
@@ -157,5 +172,14 @@ export class PagesController {
     @Body() body: ReorderSectionsDto,
   ) {
     return this.pagesService.reorderSections(organizationId, pageId, body);
+  }
+
+  private actorUserId(request: AuthenticatedRequest): string {
+    const userId = request.auth?.userId;
+    if (!userId) {
+      throw new Error('Authenticated request missing auth payload');
+    }
+
+    return userId;
   }
 }

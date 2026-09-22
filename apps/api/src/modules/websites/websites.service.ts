@@ -20,6 +20,10 @@ export class WebsitesService {
       publicWebsite.settings.seo.ogImageAssetId,
       website.organizationId,
     );
+    publicWebsite.organization.logoUrl = await this.readUrlOrNull(
+      website.logoAssetId,
+      website.organizationId,
+    );
 
     return publicWebsite;
   }
@@ -34,20 +38,28 @@ export class WebsitesService {
     return this.toDashboardWebsite(website);
   }
 
-  async updateSettings(organizationId: string, input: UpdateWebsiteSettingsInput) {
+  async updateSettings(
+    organizationId: string,
+    actorUserId: string,
+    input: UpdateWebsiteSettingsInput,
+  ) {
     try {
-      return this.toDashboardWebsite(
-        await this.websitesRepository.updateSettings(organizationId, input),
+      return await this.toDashboardWebsite(
+        await this.websitesRepository.updateSettings({
+          organizationId,
+          actorUserId,
+          settings: input,
+        }),
       );
     } catch (error) {
       throw this.toHttpError(error);
     }
   }
 
-  async setPublished(organizationId: string, published: boolean) {
+  async setPublished(organizationId: string, actorUserId: string, published: boolean) {
     try {
-      return this.toDashboardWebsite(
-        await this.websitesRepository.setPublished(organizationId, published),
+      return await this.toDashboardWebsite(
+        await this.websitesRepository.setPublished({ organizationId, actorUserId, published }),
       );
     } catch (error) {
       throw this.toHttpError(error);
@@ -67,7 +79,7 @@ export class WebsitesService {
       });
 
       return {
-        website: this.toDashboardWebsite(result.website),
+        website: await this.toDashboardWebsite(result.website),
         page: result.page,
         addedSections: result.addedSections,
       };
@@ -76,13 +88,24 @@ export class WebsitesService {
     }
   }
 
-  private toDashboardWebsite<TWebsite extends { theme: unknown; settings: unknown }>(
-    website: TWebsite,
-  ) {
+  private async toDashboardWebsite<
+    TWebsite extends { organizationId: string; theme: unknown; settings: unknown },
+  >(website: TWebsite) {
+    const settings = normalizeWebsiteSettings(website.settings);
+
     return {
       ...website,
       theme: normalizeWebsiteTheme(website.theme),
-      settings: normalizeWebsiteSettings(website.settings),
+      settings: {
+        ...settings,
+        seo: {
+          ...settings.seo,
+          ogImageUrl: await this.readUrlOrNull(
+            settings.seo.ogImageAssetId ?? null,
+            website.organizationId,
+          ),
+        },
+      },
     };
   }
 

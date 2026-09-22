@@ -35,32 +35,69 @@ export class WebsitesRepository {
     });
   }
 
-  async updateSettings(organizationId: string, input: UpdateWebsiteSettingsInput) {
+  async updateSettings(input: {
+    organizationId: string;
+    actorUserId: string;
+    settings: UpdateWebsiteSettingsInput;
+  }) {
+    const { organizationId, actorUserId, settings: patch } = input;
+
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.organizationWebsite.findUnique({
         where: { organizationId },
-        select: { theme: true, settings: true },
+        select: { id: true, title: true, description: true, theme: true, settings: true },
       });
       if (!existing) throw new Error('WEBSITE_NOT_FOUND');
 
-      return tx.organizationWebsite.update({
+      const data = {
+        title: patch.title,
+        description: patch.description ?? null,
+        theme: mergeJson(existing.theme, patch.theme),
+        settings: mergeJson(existing.settings, patch.settings),
+      };
+      const website = await tx.organizationWebsite.update({
         where: { organizationId },
-        data: {
-          title: input.title,
-          description: input.description ?? null,
-          theme: mergeJson(existing.theme, input.theme),
-          settings: mergeJson(existing.settings, input.settings),
-        },
+        data,
         include: websiteInclude,
       });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'UPDATE',
+          entityType: 'OrganizationWebsite',
+          entityId: existing.id,
+          metadata: { changedKeys: changedSettingsKeys(existing, data) },
+        },
+      });
+
+      return website;
     });
   }
 
-  async setPublished(organizationId: string, published: boolean) {
-    return this.prisma.organizationWebsite.update({
-      where: { organizationId },
-      data: { publishedAt: published ? new Date() : null },
-      include: websiteInclude,
+  async setPublished(input: { organizationId: string; actorUserId: string; published: boolean }) {
+    const { organizationId, actorUserId, published } = input;
+
+    return this.prisma.$transaction(async (tx) => {
+      const website = await tx.organizationWebsite.update({
+        where: { organizationId },
+        data: { publishedAt: published ? new Date() : null },
+        include: websiteInclude,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: published ? 'PUBLISH' : 'UNPUBLISH',
+          entityType: 'OrganizationWebsite',
+          entityId: website.id,
+          metadata: {},
+        },
+      });
+
+      return website;
     });
   }
 
@@ -189,6 +226,64 @@ function sectionKey(type: string, content: unknown): string {
       : undefined;
 
   return `${type}:${typeof variant === 'string' && variant.trim() ? variant : type}`;
+}
+
+interface WebsiteSettingsSnapshot {
+  title: string;
+  description: string | null;
+  theme: Prisma.JsonValue | Prisma.InputJsonObject;
+  settings: Prisma.JsonValue | Prisma.InputJsonObject;
+}
+
+// Top-level keys that differ between the stored row and the patched one, e.g. `title`,
+// `theme.accent` or `settings.seo`. Nested objects are compared as a whole.
+function changedSettingsKeys(
+  stored: WebsiteSettingsSnapshot,
+  next: WebsiteSettingsSnapshot,
+): string[] {
+  const changed: string[] = [];
+
+  if (stored.title !== next.title) changed.push('title');
+  if (stored.description !== next.description) changed.push('description');
+
+  for (const field of ['theme', 'settings'] as const) {
+    const before = jsonObject(stored[field]);
+    const after = jsonObject(next[field]);
+
+    for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      if (!sameJson(before[key], after[key])) changed.push(`${field}.${key}`);
+    }
+  }
+
+  return changed;
+}
+
+function jsonObject(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+// Structural equality for JSON values; key order does not matter because jsonb reorders keys.
+function sameJson(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((item, index) => sameJson(item, right[index]))
+    );
+  }
+  if (typeof left === 'object' && left !== null && typeof right === 'object' && right !== null) {
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    const keys = new Set([...Object.keys(leftRecord), ...Object.keys(rightRecord)]);
+
+    return [...keys].every((key) => sameJson(leftRecord[key], rightRecord[key]));
+  }
+
+  return false;
 }
 
 function mergeJson(

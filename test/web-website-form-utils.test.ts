@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   formatServiceTimes,
+  pageInput,
   parseLinks,
   parseServiceTimes,
   sectionInput,
@@ -94,4 +95,36 @@ test('website settings read the live switch, locale and navigation from the form
   });
   assert.equal(input.settings?.seo?.noindex, true);
   assert.equal(input.theme?.accent, '#ffffff');
+});
+
+test('saving settings keeps the stored OG image unless its removal was requested', () => {
+  const kept = websiteSettingsInput(form({ title: 'Grace', ogImageAssetId: 'asset-1' }));
+  assert.equal(kept.settings?.seo?.ogImageAssetId, 'asset-1');
+
+  const removed = websiteSettingsInput(
+    form({ title: 'Grace', ogImageAssetId: 'asset-1', removeOgImage: 'true' }),
+  );
+  assert.equal(removed.settings?.seo?.ogImageAssetId, undefined);
+
+  const none = websiteSettingsInput(form({ title: 'Grace', ogImageAssetId: '' }));
+  assert.equal(none.settings?.seo?.ogImageAssetId, undefined);
+});
+
+test('a page keeps, drops or replaces its OG image the same way', () => {
+  const base = { slug: 'about', title: 'About', status: 'DRAFT', seoTitle: 'About us' };
+
+  const kept = pageInput(form({ ...base, ogImageAssetId: 'asset-1' }));
+  assert.deepEqual(kept.seo, {
+    title: 'About us',
+    description: undefined,
+    noindex: false,
+    ogImageAssetId: 'asset-1',
+  });
+
+  const removed = pageInput(form({ ...base, ogImageAssetId: 'asset-1', removeOgImage: 'true' }));
+  assert.equal(removed.seo?.ogImageAssetId, undefined);
+
+  // The upload helper rewrites the hidden id to the freshly confirmed asset before submit.
+  const replaced = pageInput(form({ ...base, ogImageAssetId: 'asset-2' }));
+  assert.equal(replaced.seo?.ogImageAssetId, 'asset-2');
 });

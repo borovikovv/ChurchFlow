@@ -3,6 +3,10 @@ import { Prisma } from '@churchflow/db';
 import type { UpsertWebsitePageInput, UpsertWebsiteSectionInput } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 
+const pageSectionsInclude = {
+  sections: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
+} satisfies Prisma.WebsitePageInclude;
+
 @Injectable()
 export class PagesRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -85,64 +89,104 @@ export class PagesRepository {
     });
   }
 
-  async createPage(organizationId: string, input: UpsertWebsitePageInput) {
-    const website = await this.prisma.organizationWebsite.findUnique({
-      where: { organizationId },
-      select: { id: true },
-    });
-    if (!website) throw new Error('WEBSITE_NOT_FOUND');
+  async createPage(organizationId: string, actorUserId: string, input: UpsertWebsitePageInput) {
+    return this.prisma.$transaction(async (tx) => {
+      const website = await tx.organizationWebsite.findUnique({
+        where: { organizationId },
+        select: { id: true },
+      });
+      if (!website) throw new Error('WEBSITE_NOT_FOUND');
 
-    return this.prisma.websitePage.create({
-      data: {
-        organizationId,
-        websiteId: website.id,
-        slug: input.slug,
-        title: input.title,
-        status: input.status,
-        seo: input.seo,
-        publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
-      },
-      include: {
-        sections: {
-          where: { deletedAt: null },
-          orderBy: { order: 'asc' },
+      const page = await tx.websitePage.create({
+        data: {
+          organizationId,
+          websiteId: website.id,
+          slug: input.slug,
+          title: input.title,
+          status: input.status,
+          seo: input.seo,
+          publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
         },
-      },
-    });
-  }
+        include: pageSectionsInclude,
+      });
 
-  async updatePage(organizationId: string, pageId: string, input: UpsertWebsitePageInput) {
-    return this.prisma.websitePage.update({
-      where: { id: pageId, organizationId, deletedAt: null },
-      data: {
-        slug: input.slug,
-        title: input.title,
-        status: input.status,
-        seo: input.seo,
-        publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
-      },
-      include: {
-        sections: {
-          where: { deletedAt: null },
-          orderBy: { order: 'asc' },
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'CREATE',
+          entityType: 'WebsitePage',
+          entityId: page.id,
+          metadata: { slug: input.slug, title: input.title },
         },
-      },
+      });
+
+      return page;
     });
   }
 
-  async setPagePublished(organizationId: string, pageId: string, published: boolean) {
-    return this.prisma.websitePage.update({
-      where: { id: pageId, organizationId, deletedAt: null },
-      data: {
-        status: published ? 'PUBLISHED' : 'DRAFT',
-        publishedAt: published ? new Date() : null,
-      },
-      include: {
-        sections: {
-          where: { deletedAt: null },
-          orderBy: { order: 'asc' },
+  async updatePage(
+    organizationId: string,
+    actorUserId: string,
+    pageId: string,
+    input: UpsertWebsitePageInput,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const page = await tx.websitePage.update({
+        where: { id: pageId, organizationId, deletedAt: null },
+        data: {
+          slug: input.slug,
+          title: input.title,
+          status: input.status,
+          seo: input.seo,
+          publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
         },
-      },
+        include: pageSectionsInclude,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'UPDATE',
+          entityType: 'WebsitePage',
+          entityId: pageId,
+          metadata: { slug: input.slug, title: input.title, status: input.status },
+        },
+      });
+
+      return page;
+    });
+  }
+
+  async setPagePublished(
+    organizationId: string,
+    actorUserId: string,
+    pageId: string,
+    published: boolean,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const page = await tx.websitePage.update({
+        where: { id: pageId, organizationId, deletedAt: null },
+        data: {
+          status: published ? 'PUBLISHED' : 'DRAFT',
+          publishedAt: published ? new Date() : null,
+        },
+        include: pageSectionsInclude,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: published ? 'PUBLISH' : 'UNPUBLISH',
+          entityType: 'WebsitePage',
+          entityId: pageId,
+          metadata: { slug: page.slug, title: page.title },
+        },
+      });
+
+      return page;
     });
   }
 
@@ -214,11 +258,26 @@ export class PagesRepository {
     });
   }
 
-  async deleteSection(organizationId: string, sectionId: string) {
-    return this.prisma.websiteSection.update({
-      where: { id: sectionId, organizationId, deletedAt: null },
-      data: { deletedAt: new Date() },
-      select: { id: true },
+  async deleteSection(organizationId: string, actorUserId: string, sectionId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const section = await tx.websiteSection.update({
+        where: { id: sectionId, organizationId, deletedAt: null },
+        data: { deletedAt: new Date() },
+        select: { id: true, type: true, pageId: true },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId,
+          action: 'DELETE',
+          entityType: 'WebsiteSection',
+          entityId: sectionId,
+          metadata: { type: section.type, pageId: section.pageId },
+        },
+      });
+
+      return { id: section.id };
     });
   }
 

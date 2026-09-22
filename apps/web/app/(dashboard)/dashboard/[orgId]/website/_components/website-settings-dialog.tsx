@@ -10,6 +10,7 @@ import { FormSelect } from '@/components/forms/form-select';
 import { updateSettings } from '../form-actions';
 import type { DashboardWebsite } from '../types';
 import { formatLinks, formatServiceTimes } from '../website-form-utils';
+import { OgImageFields } from './og-image-fields';
 import type { SubmitWebsiteForm } from './website-editor.types';
 
 export function WebsiteSettingsDialog({
@@ -211,6 +212,10 @@ export function WebsiteSettingsDialog({
             label={t('noindex')}
             name="noindex"
             value="true"
+          />
+          <OgImageFields
+            ogImageAssetId={settings.seo.ogImageAssetId ?? ''}
+            ogImageUrl={settings.seo.ogImageUrl ?? ''}
           />
         </Fieldset>
       </form>

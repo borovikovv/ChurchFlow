@@ -866,6 +866,10 @@
     "seoTitle": "SEO title",
     "seoDescription": "SEO description",
     "noindex": "Hide from search engines",
+    "ogImage": "Social share image",
+    "ogImageHint": "Shown when the site is shared on social networks and messengers. JPEG, PNG or WebP, up to 5 MB, ideally 1200x630.",
+    "ogImagePreview": "Current social share image",
+    "removeOgImage": "Remove image",
     "saveSettings": "Save settings",
     "page": "Page",
     "createPage": "Create page",
@@ -965,6 +969,9 @@
     "chooseBackgroundImage": "Choose a JPEG, PNG, or WebP background image.",
     "backgroundImageTooLarge": "The background image must not exceed 5 MB.",
     "backgroundImageUploadFailed": "Background image upload failed.",
+    "chooseOgImage": "Choose a JPEG, PNG, or WebP social share image.",
+    "ogImageTooLarge": "The social share image must not exceed 5 MB.",
+    "ogImageUploadFailed": "Social share image upload failed.",
     "messages": {
       "settingsSaved": "Website settings saved.",
       "publicationUpdated": "Website publication status updated.",
@@ -1119,6 +1126,8 @@
       "CREATE_PRAYER_REQUEST": "Prayer request created",
       "DELETE": "Deleted",
       "UPDATE": "Updated",
+      "PUBLISH": "Published",
+      "UNPUBLISH": "Unpublished",
       "DELETE_CALENDAR_EVENT": "Calendar event deleted",
       "DELETE_MEMBER_RELATIONSHIP": "Relationship deleted",
       "DELETE_PRAYER_REQUEST": "Prayer request deleted",
@@ -1163,6 +1172,22 @@
       "DELETE_BUDGET_EXCHANGE": "Currency exchange deleted",
       "SYNC_MEMBER_MILESTONE_EVENT": "{type, select, BIRTHDAY {Birthday} ANNIVERSARY {Anniversary} other {Milestone}} event {change, select, created {created} updated {updated} deleted {deleted} other {synced}}"
     },
+    "auditEntityActions": {
+      "OrganizationWebsite": {
+        "PUBLISH": "Website published",
+        "UNPUBLISH": "Website unpublished",
+        "UPDATE": "Website settings updated"
+      },
+      "WebsitePage": {
+        "CREATE": "Website page created",
+        "UPDATE": "Website page updated",
+        "PUBLISH": "Website page published",
+        "UNPUBLISH": "Website page unpublished"
+      },
+      "WebsiteSection": {
+        "DELETE": "Website section deleted"
+      }
+    },
     "auditEntityTypeFilter": "Record type",
     "auditEntityTypes": {
       "ALL": "All types",
@@ -1177,6 +1202,9 @@
       "OrganizationMember": "Members",
       "OrganizationMemberRelationship": "Member relationships",
       "OrganizationRequest": "Organization requests",
+      "OrganizationWebsite": "Website",
+      "WebsitePage": "Website pages",
+      "WebsiteSection": "Website sections",
       "PrayerRequest": "Prayer requests",
       "Subscription": "Subscription",
       "User": "Users"

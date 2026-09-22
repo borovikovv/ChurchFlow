@@ -7,13 +7,17 @@ import type {
 
 export type JsonRecord = Record<string, unknown>;
 
+export interface DashboardWebsiteSettings extends WebsiteSettings {
+  seo: WebsiteSettings['seo'] & { ogImageUrl: string | null };
+}
+
 export interface DashboardWebsite {
   id: string;
   title: string;
   description: string | null;
   publishedAt: string | null;
   theme: WebsiteTheme;
-  settings: WebsiteSettings;
+  settings: DashboardWebsiteSettings;
   organization: {
     name: string;
     slug: string;

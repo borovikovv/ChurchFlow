@@ -21,6 +21,7 @@ export interface PublicWebsiteResponse extends PublicWebsiteSummary {
   organization: {
     name: string;
     slug: string;
+    logoUrl: string | null;
   };
 }
 

@@ -9,12 +9,16 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { setPagePublished, setWebsitePublished } from '../form-actions';
 import type { DashboardPage, DashboardWebsite, WebsiteFeedback } from '../types';
 import { PageDialog } from './page-dialog';
-import { uploadSectionBackgroundImage } from './section-background-upload';
 import { SectionInspector } from './section-inspector';
 import { SectionList } from './section-list';
 import { TemplateDialog } from './template-dialog';
 import { applyWebsiteMutation, type WebsiteEditorState } from './website-editor-state';
 import { formDataOf, type SubmitWebsiteForm } from './website-editor.types';
+import {
+  OG_IMAGE_FIELDS,
+  SECTION_BACKGROUND_IMAGE_FIELDS,
+  uploadWebsiteImage,
+} from './website-image-upload';
 import { WebsitePreview } from './website-preview';
 import { WebsiteSettingsDialog } from './website-settings-dialog';
 
@@ -50,15 +54,31 @@ export function WebsiteEditor({
   const submitForm: SubmitWebsiteForm = async (action, formData, nextPendingKey) => {
     setPendingKey(nextPendingKey);
     try {
-      const uploadResult = await uploadSectionBackgroundImage(formData, {
-        backgroundImageTooLarge: t('backgroundImageTooLarge'),
-        backgroundImageUploadFailed: t('backgroundImageUploadFailed'),
-        chooseBackgroundImage: t('chooseBackgroundImage'),
-      });
-      if (!uploadResult.ok) {
-        setFeedbackState({ error: uploadResult.error });
-        toast.error(uploadResult.error);
-        return false;
+      const uploads = [
+        [
+          SECTION_BACKGROUND_IMAGE_FIELDS,
+          {
+            tooLarge: t('backgroundImageTooLarge'),
+            uploadFailed: t('backgroundImageUploadFailed'),
+            wrongType: t('chooseBackgroundImage'),
+          },
+        ],
+        [
+          OG_IMAGE_FIELDS,
+          {
+            tooLarge: t('ogImageTooLarge'),
+            uploadFailed: t('ogImageUploadFailed'),
+            wrongType: t('chooseOgImage'),
+          },
+        ],
+      ] as const;
+      for (const [fields, messages] of uploads) {
+        const uploadResult = await uploadWebsiteImage(formData, fields, messages);
+        if (!uploadResult.ok) {
+          setFeedbackState({ error: uploadResult.error });
+          toast.error(uploadResult.error);
+          return false;
+        }
       }
 
       const result = await action(formData);

@@ -40,8 +40,9 @@ export class WebsitesController {
   async updateSettings(
     @Param('organizationId') organizationId: string,
     @Body() body: UpdateWebsiteSettingsDto,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.websitesService.updateSettings(organizationId, body);
+    return this.websitesService.updateSettings(organizationId, this.actorUserId(request), body);
   }
 
   @Post('organizations/:organizationId/website/publish')
@@ -51,8 +52,13 @@ export class WebsitesController {
   async setPublished(
     @Param('organizationId') organizationId: string,
     @Body() body: PublishWebsiteDto,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.websitesService.setPublished(organizationId, body.published);
+    return this.websitesService.setPublished(
+      organizationId,
+      this.actorUserId(request),
+      body.published,
+    );
   }
 
   @Post('organizations/:organizationId/website/template')

@@ -141,9 +141,12 @@ export const AUDIT_ENTITY_TYPES = [
   'OrganizationMember',
   'OrganizationMemberRelationship',
   'OrganizationRequest',
+  'OrganizationWebsite',
   'PrayerRequest',
   'Subscription',
   'User',
+  'WebsitePage',
+  'WebsiteSection',
 ] as const;
 
 export const PRAYER_REQUEST_TABS = ['active', 'archived'] as const;

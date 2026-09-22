@@ -46,6 +46,7 @@ export interface PublicWebsiteSummary {
   organization?: {
     name: string;
     slug: string;
+    logoUrl?: string | null | undefined;
   };
 }
 

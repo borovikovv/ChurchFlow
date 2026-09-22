@@ -10,6 +10,7 @@ export function CityHeader({
 }) {
   const navigation = website?.settings?.navigation ?? [];
   const messages = cityMessages(website);
+  const logoUrl = website?.organization?.logoUrl;
 
   return (
     <header
@@ -21,23 +22,32 @@ export function CityHeader({
         className="flex items-center gap-3 text-[13px] font-extrabold uppercase tracking-[0.22em] text-white no-underline hover:no-underline sm:text-[15px]"
         href={website?.organization ? `/o/${website.organization.slug}` : '#'}
       >
-        <span
-          aria-hidden="true"
-          className="inline-flex size-[34px] items-center justify-center border-2 border-white"
-        >
-          <svg
-            fill="none"
-            height="18"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="2.5"
-            viewBox="0 0 24 24"
-            width="18"
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            alt={website?.title ?? ''}
+            className="size-[34px] shrink-0 object-contain"
+            src={logoUrl}
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="inline-flex size-[34px] items-center justify-center border-2 border-white"
           >
-            <path d="M12 3v18" />
-            <path d="M6 9h12" />
-          </svg>
-        </span>
+            <svg
+              fill="none"
+              height="18"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeWidth="2.5"
+              viewBox="0 0 24 24"
+              width="18"
+            >
+              <path d="M12 3v18" />
+              <path d="M6 9h12" />
+            </svg>
+          </span>
+        )}
         {website?.title}
       </a>
 

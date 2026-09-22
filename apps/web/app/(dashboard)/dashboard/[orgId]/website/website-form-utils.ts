@@ -14,6 +14,8 @@ import {
 import type { JsonRecord } from './types';
 import type { SectionType } from './website-section-presets';
 
+type WebsiteSeoPayload = NonNullable<NonNullable<UpdateWebsiteSettingsPayload['settings']>['seo']>;
+
 export const PAGE_STATUSES: Array<WebsitePage['status']> = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
 
 const WEEKDAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -48,11 +50,7 @@ export function websiteSettingsInput(formData: FormData): UpdateWebsiteSettingsP
         youtube: optionalString(formData.get('youtube')),
         telegram: optionalString(formData.get('telegram')),
       },
-      seo: {
-        title: optionalString(formData.get('seoTitle')),
-        description: optionalString(formData.get('seoDescription')),
-        noindex: formData.get('noindex') === 'true',
-      },
+      seo: seoInput(formData),
     },
   };
 }
@@ -62,11 +60,21 @@ export function pageInput(formData: FormData): UpsertWebsitePagePayload {
     slug: String(formData.get('slug') ?? ''),
     title: String(formData.get('title') ?? ''),
     status: String(formData.get('status') ?? 'DRAFT') as WebsitePage['status'],
-    seo: {
-      title: optionalString(formData.get('seoTitle')),
-      description: optionalString(formData.get('seoDescription')),
-      noindex: formData.get('noindex') === 'true',
-    },
+    seo: seoInput(formData),
+  };
+}
+
+// The saved seo object replaces the stored one, so the current OG image id travels with the
+// form in a hidden input and is only left out when its removal was requested.
+function seoInput(formData: FormData): WebsiteSeoPayload {
+  return {
+    title: optionalString(formData.get('seoTitle')),
+    description: optionalString(formData.get('seoDescription')),
+    noindex: formData.get('noindex') === 'true',
+    ogImageAssetId:
+      formData.get('removeOgImage') === 'true'
+        ? undefined
+        : optionalString(formData.get('ogImageAssetId')),
   };
 }
 

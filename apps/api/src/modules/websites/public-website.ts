@@ -36,14 +36,19 @@ export interface PublicWebsiteSettings {
   live: { url: string | null } & WebsiteLiveState;
 }
 
+export interface PublicWebsiteTheme {
+  accent: WebsiteTheme['accent'];
+  background: WebsiteTheme['background'];
+}
+
 export interface PublicWebsite {
   id: string;
   title: string;
   description: string | null;
   publishedAt: Date | null;
-  theme: WebsiteTheme;
+  theme: PublicWebsiteTheme;
   settings: PublicWebsiteSettings;
-  organization: { name: string; slug: string };
+  organization: { name: string; slug: string; logoUrl: string | null };
 }
 
 export function normalizeWebsiteSettings(settings: unknown): WebsiteSettings {
@@ -60,13 +65,14 @@ export function normalizeWebsiteTheme(theme: unknown): WebsiteTheme {
 
 export function toPublicWebsite(website: StoredWebsite, now = new Date()): PublicWebsite {
   const settings = normalizeWebsiteSettings(website.settings);
+  const theme = normalizeWebsiteTheme(website.theme);
 
   return {
     id: website.id,
     title: website.title,
     description: website.description,
     publishedAt: website.publishedAt,
-    theme: normalizeWebsiteTheme(website.theme),
+    theme: { accent: theme.accent, background: theme.background },
     settings: {
       template: settings.template,
       timeZone: settings.timeZone,
@@ -84,7 +90,11 @@ export function toPublicWebsite(website: StoredWebsite, now = new Date()): Publi
       },
       live: { url: settings.live.url ?? null, ...computeLiveState(settings, now) },
     },
-    organization: { name: website.organization.name, slug: website.organization.slug },
+    organization: {
+      name: website.organization.name,
+      slug: website.organization.slug,
+      logoUrl: null,
+    },
   };
 }
 

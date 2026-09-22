@@ -46,7 +46,7 @@ export class PagesService {
   async listDashboardPages(organizationId: string) {
     const pages = await this.pagesRepository.listDashboardPages(organizationId);
 
-    return Promise.all(pages.map((page) => this.enrichSectionBackgrounds(page)));
+    return Promise.all(pages.map((page) => this.toDashboardPage(page)));
   }
 
   async listPublicPagesForSitemap() {
@@ -72,28 +72,44 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.enrichSectionBackgrounds(page);
+    return this.toDashboardPage(page);
   }
 
-  async createPage(organizationId: string, input: UpsertWebsitePageInput) {
+  async createPage(organizationId: string, actorUserId: string, input: UpsertWebsitePageInput) {
     try {
-      return await this.pagesRepository.createPage(organizationId, input);
+      return await this.toDashboardPage(
+        await this.pagesRepository.createPage(organizationId, actorUserId, input),
+      );
     } catch (error) {
       throw this.toHttpError(error);
     }
   }
 
-  async updatePage(organizationId: string, pageId: string, input: UpsertWebsitePageInput) {
+  async updatePage(
+    organizationId: string,
+    actorUserId: string,
+    pageId: string,
+    input: UpsertWebsitePageInput,
+  ) {
     try {
-      return await this.pagesRepository.updatePage(organizationId, pageId, input);
+      return await this.toDashboardPage(
+        await this.pagesRepository.updatePage(organizationId, actorUserId, pageId, input),
+      );
     } catch (error) {
       throw this.toHttpError(error);
     }
   }
 
-  async setPagePublished(organizationId: string, pageId: string, published: boolean) {
+  async setPagePublished(
+    organizationId: string,
+    actorUserId: string,
+    pageId: string,
+    published: boolean,
+  ) {
     try {
-      return await this.pagesRepository.setPagePublished(organizationId, pageId, published);
+      return await this.toDashboardPage(
+        await this.pagesRepository.setPagePublished(organizationId, actorUserId, pageId, published),
+      );
     } catch (error) {
       throw this.toHttpError(error);
     }
@@ -131,9 +147,9 @@ export class PagesService {
     }
   }
 
-  async deleteSection(organizationId: string, sectionId: string) {
+  async deleteSection(organizationId: string, actorUserId: string, sectionId: string) {
     try {
-      return await this.pagesRepository.deleteSection(organizationId, sectionId);
+      return await this.pagesRepository.deleteSection(organizationId, actorUserId, sectionId);
     } catch (error) {
       throw this.toHttpError(error);
     }
@@ -156,12 +172,16 @@ export class PagesService {
     title: string;
     seo: unknown;
     sections: Array<{ id: string; type: WebsiteSection['type']; order: number; content: unknown }>;
-    website: Parameters<typeof toPublicWebsite>[0];
+    website: Parameters<typeof toPublicWebsite>[0] & { logoAssetId: string | null };
   }) {
     const enriched = await this.enrichSectionBackgrounds(page);
     const website = toPublicWebsite(page.website);
     website.settings.seo.ogImageUrl = await this.readUrlOrNull(
       website.settings.seo.ogImageAssetId,
+      page.organizationId,
+    );
+    website.organization.logoUrl = await this.readUrlOrNull(
+      page.website.logoAssetId,
       page.organizationId,
     );
     const seo = readSeo(page.seo);
@@ -174,6 +194,23 @@ export class PagesService {
       },
       sections: enriched.sections.map(toPublicSection),
       website,
+    };
+  }
+
+  // Dashboard pages keep the stored seo record and add the signed url of its OG image, so the
+  // editor can preview it without a second request.
+  private async toDashboardPage<
+    TPage extends { organizationId: string; seo: unknown; sections: Array<{ content: unknown }> },
+  >(page: TPage) {
+    const enriched = await this.enrichSectionBackgrounds(page);
+    const seo = typeof page.seo === 'object' && page.seo !== null ? page.seo : {};
+
+    return {
+      ...enriched,
+      seo: {
+        ...seo,
+        ogImageUrl: await this.readUrlOrNull(readSeo(page.seo).ogImageAssetId, page.organizationId),
+      },
     };
   }
 

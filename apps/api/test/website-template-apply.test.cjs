@@ -172,10 +172,10 @@ test('a website owned by another organization is not found and nothing is writte
 test('settings updates patch stored json instead of replacing it', async () => {
   const { prisma, writes } = websitesPrisma({ homeSections: [] });
 
-  await new WebsitesRepository(prisma).updateSettings(ORGANIZATION_ID, {
-    title: 'Grace',
-    theme: { accent: '#000000' },
-    settings: { template: 'city' },
+  await new WebsitesRepository(prisma).updateSettings({
+    organizationId: ORGANIZATION_ID,
+    actorUserId: ACTOR_USER_ID,
+    settings: { title: 'Grace', theme: { accent: '#000000' }, settings: { template: 'city' } },
   });
 
   const update = writes.find((entry) => entry.operation === 'organizationWebsite.update');

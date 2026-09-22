@@ -866,6 +866,10 @@
     "seoTitle": "SEO назва",
     "seoDescription": "SEO опис",
     "noindex": "Приховати від пошукових систем",
+    "ogImage": "Зображення для соцмереж",
+    "ogImageHint": "Показується, коли сайтом діляться в соцмережах і месенджерах. JPEG, PNG або WebP до 5 МБ, бажано 1200x630.",
+    "ogImagePreview": "Поточне зображення для соцмереж",
+    "removeOgImage": "Видалити зображення",
     "saveSettings": "Зберегти налаштування",
     "page": "Сторінка",
     "createPage": "Створити сторінку",
@@ -965,6 +969,9 @@
     "chooseBackgroundImage": "Оберіть фонове зображення JPEG, PNG або WebP.",
     "backgroundImageTooLarge": "Фонове зображення не має перевищувати 5 МБ.",
     "backgroundImageUploadFailed": "Не вдалося завантажити фонове зображення.",
+    "chooseOgImage": "Оберіть зображення для соцмереж у форматі JPEG, PNG або WebP.",
+    "ogImageTooLarge": "Зображення для соцмереж не має перевищувати 5 МБ.",
+    "ogImageUploadFailed": "Не вдалося завантажити зображення для соцмереж.",
     "messages": {
       "settingsSaved": "Налаштування сайту збережено.",
       "publicationUpdated": "Статус публікації сайту оновлено.",
@@ -1119,6 +1126,8 @@
       "CREATE_PRAYER_REQUEST": "Молитовну потребу створено",
       "DELETE": "Видалено",
       "UPDATE": "Оновлено",
+      "PUBLISH": "Опубліковано",
+      "UNPUBLISH": "Знято з публікації",
       "DELETE_CALENDAR_EVENT": "Подію календаря видалено",
       "DELETE_MEMBER_RELATIONSHIP": "Зв'язок видалено",
       "DELETE_PRAYER_REQUEST": "Молитовну потребу видалено",
@@ -1163,6 +1172,22 @@
       "DELETE_BUDGET_EXCHANGE": "Обмін валюти видалено",
       "SYNC_MEMBER_MILESTONE_EVENT": "Подію {type, select, BIRTHDAY {дня народження} ANNIVERSARY {річниці} other {памʼятної дати}} {change, select, created {створено} updated {оновлено} deleted {видалено} other {синхронізовано}}"
     },
+    "auditEntityActions": {
+      "OrganizationWebsite": {
+        "PUBLISH": "Сайт опубліковано",
+        "UNPUBLISH": "Сайт знято з публікації",
+        "UPDATE": "Налаштування сайту оновлено"
+      },
+      "WebsitePage": {
+        "CREATE": "Сторінку сайту створено",
+        "UPDATE": "Сторінку сайту оновлено",
+        "PUBLISH": "Сторінку сайту опубліковано",
+        "UNPUBLISH": "Сторінку сайту знято з публікації"
+      },
+      "WebsiteSection": {
+        "DELETE": "Секцію сайту видалено"
+      }
+    },
     "auditEntityTypeFilter": "Тип запису",
     "auditEntityTypes": {
       "ALL": "Усі типи",
@@ -1177,6 +1202,9 @@
       "OrganizationMember": "Учасники",
       "OrganizationMemberRelationship": "Звʼязки учасників",
       "OrganizationRequest": "Запити організацій",
+      "OrganizationWebsite": "Сайт",
+      "WebsitePage": "Сторінки сайту",
+      "WebsiteSection": "Секції сайту",
       "PrayerRequest": "Молитовні потреби",
       "Subscription": "Підписка",
       "User": "Користувачі"

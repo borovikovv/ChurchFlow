@@ -9,6 +9,7 @@ import { FormSelect } from '@/components/forms/form-select';
 import { createPage, updatePage } from '../form-actions';
 import type { DashboardPage } from '../types';
 import { PAGE_STATUSES, readString } from '../website-form-utils';
+import { OgImageFields } from './og-image-fields';
 import type { SubmitWebsiteForm } from './website-editor.types';
 
 export function PageDialog({
@@ -26,6 +27,7 @@ export function PageDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const formId = useId();
   const pendingKey = page ? `page:${page.id}:update` : 'page-create';
+  const seo = page?.seo ?? {};
 
   return (
     <FormDialog
@@ -89,26 +91,26 @@ export function PageDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <label>
             {t('seoTitle')}
-            <input
-              name="seoTitle"
-              maxLength={160}
-              defaultValue={readString(page?.seo ?? {}, 'title')}
-            />
+            <input name="seoTitle" maxLength={160} defaultValue={readString(seo, 'title')} />
           </label>
           <label>
             {t('seoDescription')}
             <input
               name="seoDescription"
               maxLength={300}
-              defaultValue={readString(page?.seo ?? {}, 'description')}
+              defaultValue={readString(seo, 'description')}
             />
           </label>
         </div>
         <Checkbox
-          defaultChecked={page?.seo['noindex'] === true}
+          defaultChecked={seo['noindex'] === true}
           label={t('noindex')}
           name="noindex"
           value="true"
+        />
+        <OgImageFields
+          ogImageAssetId={readString(seo, 'ogImageAssetId')}
+          ogImageUrl={readString(seo, 'ogImageUrl')}
         />
       </form>
     </FormDialog>

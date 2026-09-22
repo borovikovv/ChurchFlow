@@ -4,6 +4,7 @@ const { PagesRepository } = require('../dist/modules/pages/repositories/pages.re
 
 const ORGANIZATION_ID = 'organization-a';
 const OTHER_ORGANIZATION_ID = 'organization-b';
+const ACTOR_USER_ID = 'user-1';
 const WEBSITE_ID = 'website';
 const PAGE_ID = 'page';
 
@@ -67,6 +68,7 @@ function pagesPrisma(options = {}) {
       findFirst: findFirst(sectionRows),
       findMany: async ({ where }) => sectionRows.filter((row) => matches(row, where)),
     },
+    auditLog: { create: write('auditLog.create', {}) },
   };
   client.$transaction = async (callback) => callback(client);
 
@@ -77,7 +79,7 @@ test('page creation stamps the organization and the website it belongs to', asyn
   const { prisma, writes } = pagesPrisma();
   const repository = new PagesRepository(prisma);
 
-  await repository.createPage(ORGANIZATION_ID, PAGE_INPUT);
+  await repository.createPage(ORGANIZATION_ID, ACTOR_USER_ID, PAGE_INPUT);
 
   const create = writes.find((entry) => entry.operation === 'websitePage.create');
   assert.ok(create);
@@ -90,7 +92,10 @@ test('page creation refuses an organization that has no website', async () => {
   const { prisma, writes } = pagesPrisma({ websiteOrganizationId: OTHER_ORGANIZATION_ID });
   const repository = new PagesRepository(prisma);
 
-  await assert.rejects(repository.createPage(ORGANIZATION_ID, PAGE_INPUT), /WEBSITE_NOT_FOUND/);
+  await assert.rejects(
+    repository.createPage(ORGANIZATION_ID, ACTOR_USER_ID, PAGE_INPUT),
+    /WEBSITE_NOT_FOUND/,
+  );
   assert.deepEqual(writes, []);
 });
 
@@ -98,7 +103,7 @@ test('page update scopes the write by organization and skips soft deleted rows',
   const { prisma, writes } = pagesPrisma();
   const repository = new PagesRepository(prisma);
 
-  await repository.updatePage(ORGANIZATION_ID, PAGE_ID, PAGE_INPUT);
+  await repository.updatePage(ORGANIZATION_ID, ACTOR_USER_ID, PAGE_ID, PAGE_INPUT);
 
   const update = writes.find((entry) => entry.operation === 'websitePage.update');
   assert.ok(update);
@@ -113,8 +118,8 @@ test('publishing a page stamps published at and unpublishing clears it', async (
   const { prisma, writes } = pagesPrisma();
   const repository = new PagesRepository(prisma);
 
-  await repository.setPagePublished(ORGANIZATION_ID, PAGE_ID, true);
-  await repository.setPagePublished(ORGANIZATION_ID, PAGE_ID, false);
+  await repository.setPagePublished(ORGANIZATION_ID, ACTOR_USER_ID, PAGE_ID, true);
+  await repository.setPagePublished(ORGANIZATION_ID, ACTOR_USER_ID, PAGE_ID, false);
 
   const [published, unpublished] = writes.filter(
     (entry) => entry.operation === 'websitePage.update',
@@ -152,7 +157,7 @@ test('section delete is a soft delete scoped by organization', async () => {
   const { prisma, writes } = pagesPrisma();
   const repository = new PagesRepository(prisma);
 
-  await repository.deleteSection(ORGANIZATION_ID, 'section-1');
+  await repository.deleteSection(ORGANIZATION_ID, ACTOR_USER_ID, 'section-1');
 
   const update = writes.find((entry) => entry.operation === 'websiteSection.update');
   assert.ok(update);

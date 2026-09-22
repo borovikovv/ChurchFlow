@@ -51,6 +51,7 @@ test('the public website exposes the live state, not the live switch or unknown 
         live: { mode: 'manual', isLive: true, url: 'https://youtube.com/live/abc', leadMinutes: 5 },
         internalFlag: true,
       },
+      logoAssetId: 'asset-logo',
       organization: { name: 'Grace', slug: 'grace', id: 'org-1', status: 'ACTIVE' },
     },
     new Date('2026-09-21T12:00:00Z'),
@@ -65,7 +66,10 @@ test('the public website exposes the live state, not the live switch or unknown 
   assert.equal(website.settings.live.nextService.weekday, 0);
   assert.equal('mode' in website.settings.live, false);
   assert.equal('internalFlag' in website.settings, false);
-  assert.deepEqual(website.organization, { name: 'Grace', slug: 'grace' });
+  assert.deepEqual(website.organization, { name: 'Grace', slug: 'grace', logoUrl: null });
+  assert.equal('logoAssetId' in website, false);
+  assert.equal('logoAssetId' in website.organization, false);
+  assert.deepEqual(website.theme, { accent: '#ffffff', background: '#ffffff' });
   assert.equal(website.settings.seo.noindex, false);
   assert.equal(website.settings.seo.ogImageUrl, null);
 });
