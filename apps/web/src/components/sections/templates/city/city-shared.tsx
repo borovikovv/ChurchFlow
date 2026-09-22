@@ -8,12 +8,28 @@ export {
   cityTheme,
   formatNextService,
   formatServiceTime,
+  isExternalHref,
   readCityItems,
   resolveWebsiteHref,
   type CityItem,
   type CityMessages,
   type CityTheme,
 } from './city-format';
+
+/**
+ * Where a section's primary button sends a visitor. The section may carry its own link; otherwise the
+ * matching website setting answers for it. An empty result means there is nowhere to go, so the
+ * caller draws no control rather than a link to nothing.
+ */
+export function cityPrimaryHref(
+  content: Record<string, unknown>,
+  settingsHref: string | null | undefined,
+  website: PublicWebsiteSummary | undefined,
+): string {
+  const href = readText(content, 'primaryHref') || settingsHref || '';
+
+  return href ? resolveWebsiteHref(href, website) : '';
+}
 
 export function CityButton({
   children,

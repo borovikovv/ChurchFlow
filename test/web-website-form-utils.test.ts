@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  inertSectionRows,
+  inertSectionText,
   itemRows,
   linkRows,
   navigationAppendInput,
@@ -352,4 +354,89 @@ test('a full menu reports itself instead of dropping a link', () => {
     navigationAppendInput(storedWebsite(navigation), { slug: 'about', title: 'About' }).status,
     'menu-full',
   );
+});
+
+test('a stored value the form offers no input for travels back in a hidden input', () => {
+  const content = {
+    eyebrow: 'Who we are',
+    backgroundColor: '#f6f8fa',
+    fontPreset: 'montserrat-body',
+    backgroundImageUrl: 'https://media.test/bg.jpg',
+    primaryLabel: 'Give',
+  };
+
+  // The live banner offers no eyebrow and the city template hides the section background colour.
+  assert.deepEqual(
+    inertSectionText(content, ['live', 'buttons', 'background'], ['backgroundColor']),
+    [
+      { key: 'eyebrow', value: 'Who we are' },
+      { key: 'backgroundColor', value: '#f6f8fa' },
+      { key: 'fontPreset', value: 'montserrat-body' },
+    ],
+  );
+
+  // With every group present and nothing hidden, the form itself carries all of it.
+  assert.deepEqual(inertSectionText(content, ['font', 'eyebrow', 'buttons', 'background']), []);
+});
+
+test('a variant without a background group keeps the stored image instead of dropping it', () => {
+  const content = {
+    backgroundImageAssetId: '11111111-1111-4111-8111-111111111111',
+    backgroundImageUrl: 'https://media.test/bg.jpg',
+    backgroundImageAlt: 'The congregation singing',
+  };
+
+  assert.deepEqual(inertSectionText(content, ['titleBody', 'contact', 'copyright', 'links']), [
+    { key: 'backgroundImageAssetId', value: '11111111-1111-4111-8111-111111111111' },
+    { key: 'backgroundImageUrl', value: 'https://media.test/bg.jpg' },
+    { key: 'backgroundImageAlt', value: 'The congregation singing' },
+  ]);
+});
+
+test('a list the form offers no editor for is posted back row by row', () => {
+  // A city footer, about-columns and giving section opened while the classic template is active: it
+  // renders none of them, so the inspector falls back to the basic field groups and offers no list.
+  const content = {
+    links: [
+      { label: 'About | us', href: '/about' },
+      { label: 'Give', href: 'https://give.test/x' },
+    ],
+    items: [{ title: 'Sunday\n10:00', body: 'Main service', label: 'Read', href: '/sunday' }],
+    ways: [{ label: 'By card', value: 'IBAN UA | 123' }],
+  };
+  const carried = inertSectionRows(content, ['titleBody', 'buttons', 'background']);
+
+  // Every column posts one value per stored row, so the parallel lists stay the same length.
+  assert.deepEqual(carried, [
+    { name: 'itemTitle', values: ['Sunday\n10:00'] },
+    { name: 'itemBody', values: ['Main service'] },
+    { name: 'itemLabel', values: ['Read'] },
+    { name: 'itemHref', values: ['/sunday'] },
+    { name: 'wayLabel', values: ['By card'] },
+    { name: 'wayValue', values: ['IBAN UA | 123'] },
+    { name: 'linkLabel', values: ['About | us', 'Give'] },
+    { name: 'linkHref', values: ['/about', 'https://give.test/x'] },
+  ]);
+
+  // Posted back through the form the inspector renders, a save keeps every list unchanged.
+  const posted = new FormData();
+  posted.set('type', 'footer');
+  posted.set('variant', 'columns');
+  posted.set('order', '0');
+  posted.set('title', 'Church name');
+  for (const column of carried) {
+    for (const value of column.values) posted.append(column.name, value);
+  }
+  const saved = sectionInput(posted).content;
+
+  assert.deepEqual(saved?.['links'], content.links);
+  assert.deepEqual(saved?.['items'], content.items);
+  assert.deepEqual(saved?.['ways'], content.ways);
+});
+
+test('a list the form does edit is left to its own editor', () => {
+  const content = { ways: [{ label: 'By card', value: 'Monthly' }] };
+
+  assert.deepEqual(inertSectionRows(content, ['eyebrow', 'titleBody', 'buttons', 'ways']), []);
+  assert.deepEqual(inertSectionRows({}, ['titleBody']), []);
 });

@@ -970,7 +970,7 @@
     "fields": {
       "eyebrow": "Small line above the title",
       "eyebrowPlaceholder": "Leave empty to show the next service and address",
-      "liveHint": "The stream link and on-air status are set in the website settings.",
+      "liveHint": "The on-air status comes from the website settings. The stream link does too, unless the primary link below replaces it.",
       "liveLabel": "On-air badge",
       "liveTitle": "On-air title",
       "scheduledTitle": "Title when not live",

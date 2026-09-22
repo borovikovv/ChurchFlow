@@ -15,9 +15,10 @@ import {
 import type { DashboardPage, DashboardSection } from '../types';
 import {
   isRenderableByTemplate,
-  sectionDefinition,
+  sectionVariant,
   sectionVariantsForTemplate,
 } from '../website-section-presets';
+import { sectionVariantLabel } from './section-variant-label';
 import { formDataOf, type SubmitWebsiteForm } from './website-editor.types';
 
 export function SectionList({
@@ -84,7 +85,6 @@ export function SectionList({
             sectionIds={sectionIds}
             selected={section.id === selectedSectionId}
             submitForm={submitForm}
-            template={template}
             total={sections.length}
           />
         ))}
@@ -127,7 +127,6 @@ function SectionRow({
   sectionIds,
   selected,
   submitForm,
-  template,
   total,
 }: {
   index: number;
@@ -140,11 +139,9 @@ function SectionRow({
   sectionIds: string;
   selected: boolean;
   submitForm: SubmitWebsiteForm;
-  template: WebsiteTemplateId;
   total: number;
 }) {
   const t = useTranslations('website');
-  const definition = sectionDefinition(section, template);
   const move = (toIndex: number) =>
     void submitForm(
       reorderSections,
@@ -172,7 +169,7 @@ function SectionRow({
           {t(`sectionTypes.${section.type}`)}
         </span>
         <span className="text-xs text-[var(--muted)]">
-          {t(`variants.${definition.variant}`)}
+          {sectionVariantLabel(t, sectionVariant(section))}
           {section.hidden ? ` · ${t('hidden')}` : ''}
           {!renderable ? ` · ${t('notInTemplate')}` : ''}
         </span>

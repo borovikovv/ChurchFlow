@@ -28,6 +28,7 @@ export function CityFooter({
   })).filter((social) => social.href);
   const email = readText(content, 'email');
   const phone = readText(content, 'phone');
+  const body = readText(content, 'body');
   const copyright = readText(
     content,
     'copyright',
@@ -42,6 +43,9 @@ export function CityFooter({
             <span className="text-[18px] font-extrabold uppercase tracking-[0.2em] sm:text-[22px]">
               {readText(content, 'title', website?.title ?? '')}
             </span>
+            {body ? (
+              <p className="m-0 max-w-[420px] text-[14px] leading-[1.7] text-[#9a9a9a]">{body}</p>
+            ) : null}
             {address || (settings?.serviceTimes?.length ?? 0) > 0 ? (
               <p className="m-0 text-[14px] leading-[1.7] text-[#9a9a9a]">
                 {address}

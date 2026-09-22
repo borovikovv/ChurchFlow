@@ -44,11 +44,23 @@ export interface RepeaterSelectField extends RepeaterFieldBase {
   options: readonly SelectOption[];
 }
 
+/**
+ * A value a row carries without editing it. It has to travel with its own row, because the server
+ * reads a row back by index out of the parallel lists the fields post.
+ */
+export interface RepeaterHiddenField {
+  defaultValue?: string | undefined;
+  key: string;
+  kind: 'hidden';
+  name: string;
+}
+
 export type RepeaterField =
   | RepeaterTextField
   | RepeaterTextAreaField
   | RepeaterNumberField
-  | RepeaterSelectField;
+  | RepeaterSelectField
+  | RepeaterHiddenField;
 
 interface RepeaterEntry {
   id: string;
@@ -187,6 +199,10 @@ function RepeaterFieldInput({
   value: string;
   onChange: (value: string) => void;
 }) {
+  if (field.kind === 'hidden') {
+    return <input name={field.name} readOnly type="hidden" value={value} />;
+  }
+
   if (field.kind === 'select') {
     return (
       <FormSelect

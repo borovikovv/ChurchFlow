@@ -6,6 +6,7 @@ import {
   CityEyebrow,
   CityHeading,
   cityMessages,
+  cityPrimaryHref,
   formatServiceTime,
   resolveWebsiteHref,
   type CityTheme,
@@ -26,12 +27,13 @@ export function CityLocation({
   const address = settings?.location?.address;
   const addressNote = settings?.location?.addressNote;
   const serviceTimes = settings?.serviceTimes ?? [];
-  const directionsUrl = settings?.location?.directionsUrl;
   const imageUrl = readText(content, 'backgroundImageUrl');
 
   if (!address && serviceTimes.length === 0) return null;
 
+  const body = readText(content, 'body');
   const primaryLabel = readText(content, 'primaryLabel');
+  const primaryHref = cityPrimaryHref(content, settings?.location?.directionsUrl, website);
   const secondaryLabel = readText(content, 'secondaryLabel');
 
   return (
@@ -42,6 +44,11 @@ export function CityLocation({
             {readText(content, 'eyebrow')}
           </CityEyebrow>
           <CityHeading>{readText(content, 'title', messages.address)}</CityHeading>
+          {body ? (
+            <p className="m-0 max-w-[620px] text-[16px] leading-[1.7] text-[#3d3d3d] sm:text-[18px]">
+              {body}
+            </p>
+          ) : null}
         </div>
         <div className="grid border border-[#e5e5e5] lg:grid-cols-[7fr_5fr]">
           <div
@@ -84,11 +91,11 @@ export function CityLocation({
                 </div>
               ) : null}
             </div>
-            {(primaryLabel && directionsUrl) || secondaryLabel ? (
+            {(primaryLabel && primaryHref) || secondaryLabel ? (
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                {primaryLabel && directionsUrl ? (
+                {primaryLabel && primaryHref ? (
                   <CityButton
-                    href={directionsUrl}
+                    href={primaryHref}
                     style={{ background: theme.accentInk, color: theme.onAccentInk }}
                     tone="accent"
                   >
