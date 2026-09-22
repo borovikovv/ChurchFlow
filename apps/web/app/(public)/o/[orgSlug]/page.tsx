@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { apiFetch } from '@/api/client';
 import { SectionRenderer } from '@/components/sections/section-renderer';
+import { WebsiteJsonLd } from '../_components/website-json-ld';
 import {
   publicPageMetadata,
   websiteToFallbackPage,
@@ -37,6 +38,7 @@ export default async function OrganizationLandingPage({
 
   return (
     <main>
+      <WebsiteJsonLd orgSlug={orgSlug} page={page} />
       <SectionRenderer sections={page.sections} website={page.website} />
     </main>
   );

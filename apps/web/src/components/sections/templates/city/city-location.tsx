@@ -1,5 +1,7 @@
 import { readText, type PublicWebsiteSummary } from '../../types';
 import {
+  CITY_IMAGE_PLATE_CLASS,
+  CityBackgroundImage,
   CityButton,
   CityEyebrow,
   CityHeading,
@@ -44,17 +46,10 @@ export function CityLocation({
         <div className="grid border border-[#e5e5e5] lg:grid-cols-[7fr_5fr]">
           <div
             aria-hidden={imageUrl ? undefined : true}
-            className="min-h-[220px] bg-[#e9e9e9] lg:min-h-[520px]"
-            style={
-              imageUrl
-                ? {
-                    backgroundImage: `url(${imageUrl})`,
-                    backgroundPosition: 'center',
-                    backgroundSize: 'cover',
-                  }
-                : undefined
-            }
-          />
+            className={`min-h-[220px] lg:min-h-[520px] ${CITY_IMAGE_PLATE_CLASS}`}
+          >
+            <CityBackgroundImage content={content} sizes="(min-width: 1024px) 720px, 100vw" />
+          </div>
           <div className="flex flex-col justify-between gap-8 p-6 lg:border-l lg:border-[#e5e5e5] lg:p-11">
             <div className="flex flex-col gap-7">
               {address ? (

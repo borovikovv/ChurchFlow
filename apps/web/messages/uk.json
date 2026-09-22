@@ -952,6 +952,8 @@
     "xUrl": "X URL",
     "sectionBackgroundColor": "Колір фону секції",
     "sectionBackgroundImage": "Зображення фону секції",
+    "sectionBackgroundImageAlt": "Опис фонового зображення",
+    "sectionBackgroundImageAltHint": "Читають програми для незрячих. Залиште порожнім, якщо зображення лише декоративне.",
     "removeBackgroundImage": "Видалити фонове зображення",
     "backgroundPreview": "Попередній перегляд поточного фонового зображення секції",
     "fields": {

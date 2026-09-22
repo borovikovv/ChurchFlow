@@ -41,6 +41,18 @@ export function websiteToFallbackPage(website: PublicWebsiteResponse): PublicPag
   };
 }
 
+export function publicPageUrl({
+  orgSlug,
+  pageSlug,
+}: {
+  orgSlug: string;
+  pageSlug?: string | undefined;
+}): string {
+  const pathname = pageSlug ? `/o/${orgSlug}/${pageSlug}` : `/o/${orgSlug}`;
+
+  return new URL(pathname, serverEnv.NEXT_PUBLIC_WEB_URL).toString();
+}
+
 export function publicPageMetadata({
   page,
   orgSlug,
@@ -64,8 +76,7 @@ export function publicPageMetadata({
     websiteSeo.description ??
     page.website.description ??
     page.website.title;
-  const pathname = pageSlug ? `/o/${orgSlug}/${pageSlug}` : `/o/${orgSlug}`;
-  const url = new URL(pathname, serverEnv.NEXT_PUBLIC_WEB_URL).toString();
+  const url = publicPageUrl({ orgSlug, pageSlug });
   const image = page.seo.ogImageUrl ?? websiteSeo.ogImageUrl;
   const index = !page.seo.noindex && !websiteSeo.noindex;
 

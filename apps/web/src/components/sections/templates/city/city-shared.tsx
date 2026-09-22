@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
 import { readText, type PublicWebsiteSummary } from '../../types';
 import { resolveWebsiteHref, type CityTheme } from './city-format';
@@ -127,15 +128,45 @@ export function CityHeading({
   return <h2 className={`${shared} text-[32px] sm:text-[48px]`}>{children}</h2>;
 }
 
-export function coverStyle(content: Record<string, unknown>): CSSProperties {
+/**
+ * A cover host paints the dark base colour and owns the stacking context the background image and
+ * its overlay sit in, so the section content stays above them without a wrapper of its own.
+ */
+export const CITY_COVER_CLASS = 'relative isolate bg-[#1a1a1a]';
+
+/** An empty background slot keeps its grey plate and stays out of the accessibility tree. */
+export const CITY_IMAGE_PLATE_CLASS = 'relative isolate bg-[#e9e9e9]';
+
+export function CityBackgroundImage({
+  content,
+  overlay = false,
+  priority = false,
+  sizes,
+}: {
+  content: Record<string, unknown>;
+  overlay?: boolean;
+  priority?: boolean;
+  sizes: string;
+}) {
   const imageUrl = readText(content, 'backgroundImageUrl');
+  if (!imageUrl) return null;
 
-  if (!imageUrl) return { backgroundColor: '#1a1a1a' };
+  const alt = readText(content, 'backgroundImageAlt');
 
-  return {
-    backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${imageUrl})`,
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-    backgroundSize: 'cover',
-  };
+  return (
+    <>
+      <Image
+        alt={alt}
+        aria-hidden={alt ? undefined : true}
+        className="-z-10 object-cover"
+        fill
+        priority={priority}
+        sizes={sizes}
+        src={imageUrl}
+        // Media urls are signed per request and expire, so they cannot pass the image optimizer.
+        unoptimized
+      />
+      {overlay ? <span aria-hidden="true" className="absolute inset-0 -z-10 bg-black/50" /> : null}
+    </>
+  );
 }

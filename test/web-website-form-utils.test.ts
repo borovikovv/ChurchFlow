@@ -54,6 +54,27 @@ test('a hero stores its title and text as headline and subheading', () => {
   });
 });
 
+test('the background image, its asset id and its alt text travel together', () => {
+  const values = {
+    type: 'about',
+    variant: 'text',
+    order: '1',
+    backgroundImageAssetId: '11111111-1111-4111-8111-111111111111',
+    backgroundImageUrl: 'https://media.test/bg.jpg',
+    backgroundImageAlt: 'The congregation singing',
+  };
+
+  assert.deepEqual(sectionInput(form(values)).content, {
+    variant: 'text',
+    backgroundImageAssetId: '11111111-1111-4111-8111-111111111111',
+    backgroundImageUrl: 'https://media.test/bg.jpg',
+    backgroundImageAlt: 'The congregation singing',
+  });
+  assert.deepEqual(sectionInput(form({ ...values, removeBackgroundImage: 'true' })).content, {
+    variant: 'text',
+  });
+});
+
 test('giving ways and footer links come from their line textareas', () => {
   const giving = sectionInput(
     form({ type: 'giving', variant: 'cover', order: '3', ways: 'Card | Monthly\nCash |' }),

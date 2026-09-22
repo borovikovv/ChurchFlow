@@ -342,6 +342,15 @@ function BackgroundFields({ section }: { section: DashboardSection }) {
           <input name="backgroundImageFile" accept="image/jpeg,image/png,image/webp" type="file" />
         </label>
       </div>
+      <label>
+        {t('sectionBackgroundImageAlt')}
+        <input
+          name="backgroundImageAlt"
+          maxLength={200}
+          defaultValue={readString(section.content, 'backgroundImageAlt')}
+        />
+        <small>{t('sectionBackgroundImageAltHint')}</small>
+      </label>
       <input type="hidden" name="backgroundImageAssetId" value={backgroundImageAssetId} />
       <input type="hidden" name="backgroundImageUrl" value={backgroundImageUrl} />
       {backgroundImageUrl ? (

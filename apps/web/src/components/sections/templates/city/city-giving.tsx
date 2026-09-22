@@ -1,5 +1,12 @@
 import { readText, type PublicWebsiteSummary } from '../../types';
-import { CityButtons, CityEyebrow, CityHeading, coverStyle, type CityTheme } from './city-shared';
+import {
+  CITY_COVER_CLASS,
+  CityBackgroundImage,
+  CityButtons,
+  CityEyebrow,
+  CityHeading,
+  type CityTheme,
+} from './city-shared';
 
 interface GivingWay {
   label: string;
@@ -43,10 +50,10 @@ function CityGivingCover({
 
   return (
     <section
-      className="flex flex-col justify-between text-white lg:min-h-[640px]"
+      className={`flex flex-col justify-between text-white lg:min-h-[640px] ${CITY_COVER_CLASS}`}
       id="giving"
-      style={coverStyle(content)}
     >
+      <CityBackgroundImage content={content} overlay sizes="100vw" />
       <div className="mx-auto flex w-full max-w-[1240px] flex-col justify-between gap-10 px-5 py-14 lg:py-[88px]">
         <div className="flex max-w-[720px] flex-col gap-5 sm:gap-6">
           <CityEyebrow className="text-white/70">{readText(content, 'eyebrow')}</CityEyebrow>

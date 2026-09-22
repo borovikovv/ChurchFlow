@@ -1,9 +1,10 @@
 import { readText, type PublicWebsiteSummary } from '../../types';
 import {
+  CITY_COVER_CLASS,
+  CityBackgroundImage,
   CityButtons,
   CityEyebrow,
   CityHeading,
-  coverStyle,
   readCityItems,
   type CityItem,
   type CityTheme,
@@ -31,11 +32,13 @@ export function CityAbout({
 
   return (
     <section
-      className={`px-5 py-14 lg:py-[104px] ${onDark ? 'text-white' : 'text-[#0a0a0a]'}`}
+      className={`px-5 py-14 lg:py-[104px] ${
+        onDark ? `text-white ${CITY_COVER_CLASS}` : 'text-[#0a0a0a]'
+      }`}
       // One anchor per variant, so a page carrying both does not repeat an id.
       id={variant === 'text' ? 'about' : `about-${variant}`}
-      style={onDark ? coverStyle(content) : undefined}
     >
+      <CityBackgroundImage content={content} overlay sizes="100vw" />
       <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-8 lg:gap-12">
         <div className="flex max-w-[760px] flex-col gap-5 sm:gap-6">
           {eyebrow ? (

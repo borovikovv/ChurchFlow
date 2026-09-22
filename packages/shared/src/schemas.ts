@@ -1088,6 +1088,7 @@ const websiteSectionBaseContentSchema = z
     backgroundColor: websiteHexColorSchema.optional(),
     backgroundImageAssetId: uuidSchema.optional(),
     backgroundImageUrl: websiteHttpUrlSchema.optional(),
+    backgroundImageAlt: websiteTextSchema(200).optional(),
     eyebrow: websiteTextSchema(120).optional(),
     title: websiteTextSchema(200).optional(),
     body: websiteTextSchema(4000).optional(),

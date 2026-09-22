@@ -153,11 +153,14 @@ export function sectionInput(formData: FormData): UpsertWebsiteSectionPayload {
     if (value) content[key] = value;
   }
 
+  // The alt text describes the background image, so removing the image drops it too.
   if (formData.get('removeBackgroundImage') !== 'true') {
     const backgroundImageAssetId = optionalString(formData.get('backgroundImageAssetId'));
     const backgroundImageUrl = optionalString(formData.get('backgroundImageUrl'));
+    const backgroundImageAlt = optionalString(formData.get('backgroundImageAlt'));
     if (backgroundImageAssetId) content['backgroundImageAssetId'] = backgroundImageAssetId;
     if (backgroundImageUrl) content['backgroundImageUrl'] = backgroundImageUrl;
+    if (backgroundImageAlt) content['backgroundImageAlt'] = backgroundImageAlt;
   }
 
   const items = parseItems(optionalString(formData.get('items')));

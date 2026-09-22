@@ -1,9 +1,10 @@
 import { readText, type PublicWebsiteSummary } from '../../types';
 import {
+  CITY_COVER_CLASS,
+  CityBackgroundImage,
   CityButton,
   CityEyebrow,
   cityMessages,
-  coverStyle,
   formatNextService,
   resolveWebsiteHref,
   type CityTheme,
@@ -42,12 +43,12 @@ export function CityLive({
       <div className="mx-auto grid w-full max-w-[1240px] bg-[#0a0a0a] text-white lg:grid-cols-[7fr_5fr]">
         <a
           aria-label={primaryLabel}
-          className="relative block aspect-video no-underline hover:no-underline"
+          className={`block aspect-video no-underline hover:no-underline ${CITY_COVER_CLASS}`}
           href={url ?? secondaryHref}
           rel="noreferrer"
           target="_blank"
-          style={coverStyle(content)}
         >
+          <CityBackgroundImage content={content} overlay sizes="(min-width: 1024px) 720px, 100vw" />
           <span className="absolute left-1/2 top-1/2 inline-flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white">
             <svg aria-hidden="true" fill="#0a0a0a" height="20" viewBox="0 0 24 24" width="20">
               <polygon points="8 5 19 12 8 19 8 5" />
