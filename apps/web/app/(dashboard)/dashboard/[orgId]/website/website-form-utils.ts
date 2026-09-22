@@ -16,7 +16,7 @@ import {
 } from '@churchflow/shared';
 import type { RepeaterRow } from '@/components/forms/form-repeater';
 import type { DashboardWebsite, JsonRecord } from './types';
-import type { SectionType } from './website-section-presets';
+import type { SectionFieldGroup, SectionType } from './website-section-presets';
 
 type WebsiteSeoPayload = NonNullable<NonNullable<UpdateWebsiteSettingsPayload['settings']>['seo']>;
 
@@ -158,6 +158,58 @@ const SECTION_TEXT_KEYS = [
   'scheduledTitle',
   'scheduledBody',
 ] as const;
+
+// The content keys the inputs of each field group post. A group the inspector leaves out therefore
+// names exactly the keys the form would not carry back.
+const SECTION_FIELD_GROUP_KEYS: Record<SectionFieldGroup, readonly string[]> = {
+  font: ['fontPreset'],
+  titleBody: ['title', 'body'],
+  eyebrow: ['eyebrow'],
+  buttons: ['primaryLabel', 'primaryHref', 'secondaryLabel', 'secondaryHref'],
+  items: ['items'],
+  contact: ['address', 'email', 'phone'],
+  copyright: ['copyright'],
+  socials: ['socialMetaHref', 'socialInstagramHref', 'socialTiktokHref', 'socialXHref'],
+  background: [
+    'backgroundColor',
+    'backgroundImageAssetId',
+    'backgroundImageUrl',
+    'backgroundImageAlt',
+  ],
+  live: ['liveLabel', 'liveTitle', 'scheduledTitle', 'scheduledBody'],
+  ways: ['ways'],
+  links: ['links'],
+};
+
+// Every single-value key a save copies straight through, so a stored one the form does not offer can
+// travel back in a hidden input instead of being dropped.
+const SECTION_CARRIED_KEYS = [
+  ...SECTION_TEXT_KEYS,
+  'backgroundImageAssetId',
+  'backgroundImageUrl',
+  'backgroundImageAlt',
+] as const;
+
+/**
+ * Stored values the form offers no input for, because the variant leaves their field group out or
+ * the active template hides the control. The saved content replaces the stored one, so these travel
+ * in hidden inputs and switching back to a template that reads them finds them unchanged.
+ */
+export function inertSectionText(
+  content: JsonRecord,
+  fields: readonly SectionFieldGroup[],
+  hiddenControlKeys: readonly string[] = [],
+): Array<{ key: string; value: string }> {
+  const offered = new Set(
+    fields
+      .flatMap((field) => SECTION_FIELD_GROUP_KEYS[field])
+      .filter((key) => !hiddenControlKeys.includes(key)),
+  );
+
+  return SECTION_CARRIED_KEYS.filter((key) => !offered.has(key))
+    .map((key) => ({ key, value: readString(content, key) }))
+    .filter((entry) => entry.value);
+}
 
 export function sectionInput(formData: FormData): UpsertWebsiteSectionPayload {
   const type = sectionType(String(formData.get('type') ?? 'hero'));

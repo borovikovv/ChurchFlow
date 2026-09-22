@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  inertSectionText,
   itemRows,
   linkRows,
   navigationAppendInput,
@@ -352,4 +353,41 @@ test('a full menu reports itself instead of dropping a link', () => {
     navigationAppendInput(storedWebsite(navigation), { slug: 'about', title: 'About' }).status,
     'menu-full',
   );
+});
+
+test('a stored value the form offers no input for travels back in a hidden input', () => {
+  const content = {
+    eyebrow: 'Who we are',
+    backgroundColor: '#f6f8fa',
+    fontPreset: 'montserrat-body',
+    backgroundImageUrl: 'https://media.test/bg.jpg',
+    primaryLabel: 'Give',
+  };
+
+  // The live banner offers no eyebrow and the city template hides the section background colour.
+  assert.deepEqual(
+    inertSectionText(content, ['live', 'buttons', 'background'], ['backgroundColor']),
+    [
+      { key: 'eyebrow', value: 'Who we are' },
+      { key: 'backgroundColor', value: '#f6f8fa' },
+      { key: 'fontPreset', value: 'montserrat-body' },
+    ],
+  );
+
+  // With every group present and nothing hidden, the form itself carries all of it.
+  assert.deepEqual(inertSectionText(content, ['font', 'eyebrow', 'buttons', 'background']), []);
+});
+
+test('a variant without a background group keeps the stored image instead of dropping it', () => {
+  const content = {
+    backgroundImageAssetId: '11111111-1111-4111-8111-111111111111',
+    backgroundImageUrl: 'https://media.test/bg.jpg',
+    backgroundImageAlt: 'The congregation singing',
+  };
+
+  assert.deepEqual(inertSectionText(content, ['titleBody', 'contact', 'copyright', 'links']), [
+    { key: 'backgroundImageAssetId', value: '11111111-1111-4111-8111-111111111111' },
+    { key: 'backgroundImageUrl', value: 'https://media.test/bg.jpg' },
+    { key: 'backgroundImageAlt', value: 'The congregation singing' },
+  ]);
 });

@@ -10,6 +10,7 @@ import {
   FOOTER_LINK_ROW_NAMES,
   GIVING_WAY_ROW_NAMES,
   SECTION_ITEM_ROW_NAMES,
+  inertSectionText,
   itemRows,
   linkRows,
   readString,
@@ -33,14 +34,16 @@ export function SectionFields({
   template: WebsiteTemplateId;
 }) {
   const has = (field: SectionFieldGroup) => fields.includes(field);
+  const showFontPreset = templateReadsStyleControl(template, 'sectionFontPreset');
+  const showBackgroundColor = templateReadsStyleControl(template, 'sectionBackgroundColor');
+  const hiddenControlKeys = [
+    ...(showFontPreset ? [] : ['fontPreset']),
+    ...(showBackgroundColor ? [] : ['backgroundColor']),
+  ];
 
   return (
     <>
-      {has('font') && templateReadsStyleControl(template, 'sectionFontPreset') ? (
-        <FontField section={section} />
-      ) : (
-        <StoredFontPreset section={section} />
-      )}
+      {has('font') && showFontPreset ? <FontField section={section} /> : null}
       {has('eyebrow') ? <EyebrowField section={section} /> : null}
       {has('titleBody') ? <TitleBodyFields section={section} /> : null}
       {has('live') ? <LiveFields section={section} /> : null}
@@ -51,7 +54,10 @@ export function SectionFields({
       {has('links') ? <LinksField section={section} /> : null}
       {has('copyright') ? <CopyrightField section={section} /> : null}
       {has('socials') ? <SocialFields section={section} /> : null}
-      {has('background') ? <BackgroundFields section={section} /> : null}
+      {has('background') ? (
+        <BackgroundFields section={section} showColor={showBackgroundColor} />
+      ) : null}
+      <StoredSectionValues entries={inertSectionText(section.content, fields, hiddenControlKeys)} />
     </>
   );
 }
@@ -74,12 +80,16 @@ function FontField({ section }: { section: DashboardSection }) {
   );
 }
 
-// A preset the active template never reads has no control, but the section keeps it: the form
-// carries the stored value so switching back to a template that paints with it finds it unchanged.
-function StoredFontPreset({ section }: { section: DashboardSection }) {
-  const fontPreset = readString(section.content, 'fontPreset');
-
-  return fontPreset ? <input name="fontPreset" type="hidden" value={fontPreset} /> : null;
+// A value the active template never reads has no control, but the section keeps it: the form carries
+// the stored value so switching back to a template that reads it finds it unchanged.
+function StoredSectionValues({ entries }: { entries: Array<{ key: string; value: string }> }) {
+  return (
+    <>
+      {entries.map((entry) => (
+        <input key={entry.key} name={entry.key} type="hidden" value={entry.value} />
+      ))}
+    </>
+  );
 }
 
 function EyebrowField({ section }: { section: DashboardSection }) {
@@ -264,20 +274,10 @@ function ItemsField({ section }: { section: DashboardSection }) {
       maxLength: 600,
       name: SECTION_ITEM_ROW_NAMES.body,
     },
-    {
-      kind: 'text',
-      key: 'label',
-      label: t('buttonLabel'),
-      maxLength: 80,
-      name: SECTION_ITEM_ROW_NAMES.label,
-    },
-    {
-      kind: 'text',
-      key: 'href',
-      label: t('fields.linkUrl'),
-      name: SECTION_ITEM_ROW_NAMES.href,
-      placeholder: t('fields.hrefPlaceholder'),
-    },
+    // No template renders a card's own label or link, so neither is offered. The stored values
+    // travel with their row so a save leaves them untouched.
+    { kind: 'hidden', key: 'label', name: SECTION_ITEM_ROW_NAMES.label },
+    { kind: 'hidden', key: 'href', name: SECTION_ITEM_ROW_NAMES.href },
   ];
 
   return (
@@ -412,7 +412,13 @@ function SocialFields({ section }: { section: DashboardSection }) {
   );
 }
 
-function BackgroundFields({ section }: { section: DashboardSection }) {
+function BackgroundFields({
+  section,
+  showColor,
+}: {
+  section: DashboardSection;
+  showColor: boolean;
+}) {
   const t = useTranslations('website');
   const backgroundImageAssetId = readString(section.content, 'backgroundImageAssetId');
   const backgroundImageUrl = readString(section.content, 'backgroundImageUrl');
@@ -420,14 +426,16 @@ function BackgroundFields({ section }: { section: DashboardSection }) {
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label>
-          {t('sectionBackgroundColor')}
-          <input
-            name="backgroundColor"
-            placeholder="#f6f8fa"
-            defaultValue={readString(section.content, 'backgroundColor')}
-          />
-        </label>
+        {showColor ? (
+          <label>
+            {t('sectionBackgroundColor')}
+            <input
+              name="backgroundColor"
+              placeholder="#f6f8fa"
+              defaultValue={readString(section.content, 'backgroundColor')}
+            />
+          </label>
+        ) : null}
         <label>
           {t('sectionBackgroundImage')}
           <input name="backgroundImageFile" accept="image/jpeg,image/png,image/webp" type="file" />

@@ -4,6 +4,7 @@ import {
   CityEyebrow,
   CityHeading,
   cityMessages,
+  cityPrimaryHref,
   resolveWebsiteHref,
   type CityTheme,
 } from './city-shared';
@@ -26,9 +27,9 @@ export function CityContact({
   const addressNote = settings?.location?.addressNote;
   const email = readText(content, 'email');
   const phone = readText(content, 'phone');
-  const directionsUrl = settings?.location?.directionsUrl;
   const eyebrow = readText(content, 'eyebrow');
   const primaryLabel = readText(content, 'primaryLabel');
+  const primaryHref = cityPrimaryHref(content, settings?.location?.directionsUrl, website);
   const secondaryLabel = readText(content, 'secondaryLabel');
 
   if (!title && !body && !address && !email && !phone) return null;
@@ -90,11 +91,11 @@ export function CityContact({
               </div>
             ) : null}
           </dl>
-          {(primaryLabel && directionsUrl) || secondaryLabel ? (
+          {(primaryLabel && primaryHref) || secondaryLabel ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              {primaryLabel && directionsUrl ? (
+              {primaryLabel && primaryHref ? (
                 <CityButton
-                  href={directionsUrl}
+                  href={primaryHref}
                   style={{ background: theme.accentInk, color: theme.onAccentInk }}
                   tone="accent"
                 >

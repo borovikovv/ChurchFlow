@@ -8,11 +8,12 @@ import { FormSelect } from '@/components/forms/form-select';
 import { updateSection } from '../form-actions';
 import type { DashboardSection } from '../types';
 import {
-  SECTION_VARIANTS,
-  sectionDefinition,
-  sectionVariantsForTemplate,
+  sectionFieldGroups,
+  sectionVariant,
+  sectionVariantChoices,
 } from '../website-section-presets';
 import { SectionFields } from './section-fields';
+import { sectionVariantLabel } from './section-variant-label';
 import { sectionEditorKey } from './website-editor-state';
 import type { SubmitWebsiteForm } from './website-editor.types';
 
@@ -66,13 +67,10 @@ function SectionForm({
   template: WebsiteTemplateId;
 }) {
   const t = useTranslations('website');
-  const definition = sectionDefinition(section, template);
-  const variantOptions = [
-    ...sectionVariantsForTemplate(template).filter((option) => option.type === section.type),
-    ...SECTION_VARIANTS.filter(
-      (option) => option.type === section.type && !option.templates.includes(template),
-    ),
-  ];
+  // The stored variant is what the form posts back, so a save cannot move a section to a variant the
+  // owner did not pick — not even when the active template has no definition for this one.
+  const variant = sectionVariant(section);
+  const variantChoices = sectionVariantChoices(section, template);
 
   return (
     <aside className="grid content-start gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] p-4">
@@ -92,18 +90,24 @@ function SectionForm({
         <input type="hidden" name="sectionId" value={section.id} />
         <input type="hidden" name="type" value={section.type} />
         <input type="hidden" name="order" value={section.order} />
-        {variantOptions.length > 1 ? (
-          <FormSelect label={t('variant')} name="variant" defaultValue={definition.variant}>
-            {variantOptions.map((option) => (
-              <option key={option.variant} value={option.variant}>
-                {t(`variants.${option.variant}`)}
+        {variantChoices.length > 1 ? (
+          <FormSelect label={t('variant')} name="variant" defaultValue={variant}>
+            {variantChoices.map((choice) => (
+              <option disabled={!choice.renderable} key={choice.variant} value={choice.variant}>
+                {choice.renderable
+                  ? sectionVariantLabel(t, choice.variant)
+                  : `${sectionVariantLabel(t, choice.variant)} · ${t('notInTemplate')}`}
               </option>
             ))}
           </FormSelect>
         ) : (
-          <input type="hidden" name="variant" value={definition.variant} />
+          <input type="hidden" name="variant" value={variant} />
         )}
-        <SectionFields fields={definition.fields} section={section} template={template} />
+        <SectionFields
+          fields={sectionFieldGroups(section, template)}
+          section={section}
+          template={template}
+        />
         <Checkbox
           defaultChecked={section.hidden}
           label={t('hideSection')}
