@@ -62,6 +62,25 @@ test('a service that is still running counts as the current one, not next week',
   assert.equal(state.nextService.startsAt, kyiv('2026-09-20T10:00:00').toISOString());
 });
 
+test('a service running past midnight stays the current one on the next day', () => {
+  const overnight = settings({
+    serviceTimes: [
+      { weekday: 6, time: '23:30', durationMinutes: 120, label: 'Saturday night' },
+      { weekday: 0, time: '10:00', durationMinutes: 90, label: 'Sunday service' },
+    ],
+  });
+
+  const during = computeLiveState(overnight, kyiv('2026-09-20T00:15:00'));
+  assert.equal(during.isLive, true);
+  assert.equal(during.nextService.label, 'Saturday night');
+  assert.equal(during.nextService.startsAt, kyiv('2026-09-19T23:30:00').toISOString());
+
+  const after = computeLiveState(overnight, kyiv('2026-09-20T01:45:00'));
+  assert.equal(after.isLive, false);
+  assert.equal(after.nextService.label, 'Sunday service');
+  assert.equal(after.nextService.startsAt, kyiv('2026-09-20T10:00:00').toISOString());
+});
+
 test('no service times means nothing is live and there is no next service', () => {
   const state = computeLiveState(settings({ serviceTimes: [] }), kyiv('2026-09-20T10:30:00'));
   assert.equal(state.isLive, false);

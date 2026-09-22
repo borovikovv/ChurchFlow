@@ -39,7 +39,8 @@ function nextServiceTime(
     const [hour = 0, minute = 0] = service.time.split(':').map(Number);
     const daysAhead = (service.weekday - today.weekday + 7) % 7;
 
-    for (const offset of [daysAhead, daysAhead + 7]) {
+    // The previous occurrence can still be running when a service crosses midnight.
+    for (const offset of [daysAhead - 7, daysAhead, daysAhead + 7]) {
       const day = new Date(Date.UTC(today.year, today.month - 1, today.day + offset));
       const startsAt = zonedToUtc(
         {
