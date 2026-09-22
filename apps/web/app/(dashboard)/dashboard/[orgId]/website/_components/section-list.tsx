@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import type { WebsiteTemplateId } from '@churchflow/shared';
 import { ActionMenuButton } from '@/components/ui/action-menu-button';
 import { FormSelect } from '@/components/forms/form-select';
-import { StatusBadge } from '@/components/ui/status-badge';
+import { TableRowAction, TableRowActions } from '@/components/ui/table-row-actions';
 import {
   createSection,
   deleteSection,
@@ -174,42 +174,42 @@ function SectionRow({
           {!renderable ? ` · ${t('notInTemplate')}` : ''}
         </span>
       </button>
-      {section.hidden ? <StatusBadge label={t('hidden')} status="off" /> : null}
-      <ActionMenuButton
-        className="ui-button-ghost px-2"
-        label={t('sectionActions')}
-        size="medium"
-        items={[
-          ...(index > 0 ? [{ label: t('up'), onSelect: () => move(index - 1) }] : []),
-          ...(index < total - 1 ? [{ label: t('down'), onSelect: () => move(index + 1) }] : []),
-          {
-            label: section.hidden ? t('show') : t('hide'),
-            onSelect: () =>
-              void submitForm(
-                setSectionHidden,
-                formDataOf({ ...base, hidden: !section.hidden }),
-                `section:${section.id}:hidden`,
-              ),
-          },
-          {
-            label: t('duplicate'),
-            onSelect: () =>
-              void submitForm(
-                duplicateSection,
-                formDataOf(base),
-                `section:${section.id}:duplicate`,
-              ),
-          },
-          {
-            label: t('delete'),
-            onSelect: () => {
-              if (window.confirm(t('confirmDeleteSection'))) {
-                void submitForm(deleteSection, formDataOf(base), `section:${section.id}:delete`);
-              }
-            },
-          },
-        ]}
-      />
+      <TableRowActions className="group relative shrink-0" label={t('sectionActions')}>
+        {index > 0 ? (
+          <TableRowAction onSelect={() => move(index - 1)}>{t('up')}</TableRowAction>
+        ) : null}
+        {index < total - 1 ? (
+          <TableRowAction onSelect={() => move(index + 1)}>{t('down')}</TableRowAction>
+        ) : null}
+        <TableRowAction
+          onSelect={() =>
+            void submitForm(
+              setSectionHidden,
+              formDataOf({ ...base, hidden: !section.hidden }),
+              `section:${section.id}:hidden`,
+            )
+          }
+        >
+          {section.hidden ? t('show') : t('hide')}
+        </TableRowAction>
+        <TableRowAction
+          onSelect={() =>
+            void submitForm(duplicateSection, formDataOf(base), `section:${section.id}:duplicate`)
+          }
+        >
+          {t('duplicate')}
+        </TableRowAction>
+        <TableRowAction
+          destructive
+          onSelect={() => {
+            if (window.confirm(t('confirmDeleteSection'))) {
+              void submitForm(deleteSection, formDataOf(base), `section:${section.id}:delete`);
+            }
+          }}
+        >
+          {t('delete')}
+        </TableRowAction>
+      </TableRowActions>
     </li>
   );
 }
