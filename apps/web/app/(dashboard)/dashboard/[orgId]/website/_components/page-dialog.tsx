@@ -9,7 +9,7 @@ import { FormDialog } from '@/components/ui/form-dialog';
 import { FormSelect } from '@/components/forms/form-select';
 import { createPage, updatePage } from '../form-actions';
 import type { DashboardPage, DashboardWebsite } from '../types';
-import { formatLinks, PAGE_STATUSES, readString } from '../website-form-utils';
+import { PAGE_STATUSES, readString } from '../website-form-utils';
 import { OgImageFields } from './og-image-fields';
 import type { SubmitWebsiteForm } from './website-editor.types';
 
@@ -105,18 +105,7 @@ export function PageDialog({
             <span className="text-xs text-[var(--muted)]">{t('startFromHint')}</span>
           </>
         ) : null}
-        {!page ? (
-          <>
-            <Checkbox label={t('addToMenu')} name="addToMenu" value="true" />
-            <input type="hidden" name="websiteTitle" value={website.title} />
-            <input type="hidden" name="websiteDescription" value={website.description ?? ''} />
-            <input
-              type="hidden"
-              name="navigation"
-              value={formatLinks(website.settings.navigation)}
-            />
-          </>
-        ) : null}
+        {!page ? <Checkbox label={t('addToMenu')} name="addToMenu" value="true" /> : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <label>
             {t('seoTitle')}

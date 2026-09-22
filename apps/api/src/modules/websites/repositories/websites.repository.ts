@@ -4,9 +4,9 @@ import {
   websiteTemplate,
   type ApplyWebsiteTemplateInput,
   type UpdateWebsiteSettingsInput,
-  type WebsiteTemplateSectionDefinition,
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { templateSectionContent } from '../template-sections';
 
 const websiteInclude = { organization: true } satisfies Prisma.OrganizationWebsiteInclude;
 const homeSectionsInclude = {
@@ -213,10 +213,6 @@ export class WebsitesRepository {
       return { website, page, addedSections };
     });
   }
-}
-
-function templateSectionContent(section: WebsiteTemplateSectionDefinition): Prisma.InputJsonObject {
-  return { variant: section.variant, ...section.content };
 }
 
 function sectionKey(type: string, content: unknown): string {

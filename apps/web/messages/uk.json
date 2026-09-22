@@ -999,7 +999,7 @@
       "sectionDuplicated": "Секцію продубльовано.",
       "sectionRemoved": "Секцію видалено.",
       "sectionsReordered": "Порядок секцій оновлено.",
-      "pageCreatedMenuFull": "Сторінку створено. У меню вже 10 посилань, тому її не додано.",
+      "pageCreatedMenuFull": "Сторінку створено. У меню вже {max} посилань, тому її не додано.",
       "pageCreatedMenuFailed": "Сторінку створено, але не вдалося додати її до меню."
     },
     "placeholders": {

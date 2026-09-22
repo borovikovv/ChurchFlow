@@ -27,6 +27,7 @@ export function CityContact({
   const email = readText(content, 'email');
   const phone = readText(content, 'phone');
   const directionsUrl = settings?.location?.directionsUrl;
+  const eyebrow = readText(content, 'eyebrow');
   const primaryLabel = readText(content, 'primaryLabel');
   const secondaryLabel = readText(content, 'secondaryLabel');
 
@@ -36,9 +37,7 @@ export function CityContact({
     <section className="px-5 py-14 lg:py-[104px]" id="contact">
       <div className="mx-auto grid w-full max-w-[1240px] gap-8 lg:grid-cols-2 lg:gap-16">
         <div className="flex flex-col gap-5 sm:gap-6">
-          <CityEyebrow style={{ color: theme.accentInk }}>
-            {readText(content, 'eyebrow')}
-          </CityEyebrow>
+          {eyebrow ? <CityEyebrow style={{ color: theme.accentInk }}>{eyebrow}</CityEyebrow> : null}
           <CityHeading className="text-balance">
             {readText(content, 'title', messages.contact)}
           </CityHeading>

@@ -95,7 +95,7 @@ export const SECTION_VARIANTS: readonly SectionVariantDefinition[] = [
   {
     type: 'giving',
     variant: 'ways',
-    fields: ['eyebrow', 'titleBody', 'buttons', 'ways', 'background'],
+    fields: ['eyebrow', 'titleBody', 'buttons', 'ways'],
     templates: ['city'],
   },
   {

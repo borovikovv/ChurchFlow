@@ -999,7 +999,7 @@
       "sectionDuplicated": "Section duplicated.",
       "sectionRemoved": "Section removed.",
       "sectionsReordered": "Sections reordered.",
-      "pageCreatedMenuFull": "Page created. The menu already has 10 links, so this page was not added to it.",
+      "pageCreatedMenuFull": "Page created. The menu already has {max} links, so this page was not added to it.",
       "pageCreatedMenuFailed": "Page created, but it could not be added to the menu."
     },
     "placeholders": {

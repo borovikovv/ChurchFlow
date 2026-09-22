@@ -14,7 +14,7 @@ import {
   type WebsitePagePreset,
   type WebsiteServiceTime,
 } from '@churchflow/shared';
-import type { JsonRecord } from './types';
+import type { DashboardWebsite, JsonRecord } from './types';
 import type { SectionType } from './website-section-presets';
 
 type WebsiteSeoPayload = NonNullable<NonNullable<UpdateWebsiteSettingsPayload['settings']>['seo']>;
@@ -75,15 +75,14 @@ export type NavigationAppendResult =
   | { status: 'menu-full' }
   | { status: 'ready'; settings: UpdateWebsiteSettingsPayload };
 
-// The menu lives in the website settings, so adding a page to it is a settings patch. The stored
-// title, description and links travel with the page form because the patch replaces them.
+// The menu lives in the website settings, so adding a page to it is a settings patch. The patch
+// replaces the title and description, so it is built from the stored website that the action reads
+// back rather than from anything the editor sends.
 export function navigationAppendInput(
-  formData: FormData,
+  website: DashboardWebsite,
   page: { slug: string; title: string },
 ): NavigationAppendResult {
-  if (formData.get('addToMenu') !== 'true') return { status: 'skipped' };
-
-  const navigation = parseLinks(optionalString(formData.get('navigation')));
+  const navigation = website.settings.navigation;
   const href = `/${page.slug}`;
   if (navigation.some((link) => link.href === href)) return { status: 'skipped' };
   if (navigation.length >= WEBSITE_NAVIGATION_MAX_LINKS) return { status: 'menu-full' };
@@ -91,8 +90,8 @@ export function navigationAppendInput(
   return {
     status: 'ready',
     settings: {
-      title: String(formData.get('websiteTitle') ?? ''),
-      description: optionalString(formData.get('websiteDescription')),
+      title: website.title,
+      description: website.description ?? undefined,
       settings: { navigation: [...navigation, { label: page.title, href }] },
     },
   };

@@ -3,6 +3,7 @@ const test = require('node:test');
 const {
   WebsitesRepository,
 } = require('../dist/modules/websites/repositories/websites.repository.js');
+const { websiteTemplate, websiteTemplateVariantContent } = require('@churchflow/shared');
 
 const ORGANIZATION_ID = 'organization-a';
 const ACTOR_USER_ID = 'user-1';
@@ -184,4 +185,56 @@ test('settings updates patch stored json instead of replacing it', async () => {
     navigation: [{ label: 'Give', href: '/give' }],
   });
   assert.deepEqual(update.args.data.theme, { accent: '#000000', background: '#ffffff' });
+});
+
+test('variant defaults are found for variants the home page does not use', () => {
+  const split = websiteTemplateVariantContent('city', 'hero', 'split');
+  assert.equal(split.primaryLabel, 'Plan a visit');
+  assert.equal(
+    websiteTemplate('city').home.some((section) => section.variant === 'split'),
+    false,
+  );
+
+  assert.equal(
+    websiteTemplateVariantContent('city', 'about', 'columns').title,
+    'What holds us together',
+  );
+});
+
+test('variant defaults still answer for the sections a home page does use', () => {
+  assert.equal(
+    websiteTemplateVariantContent('default', 'hero', 'hero').headline,
+    'Welcome to our church',
+  );
+  assert.equal(
+    websiteTemplateVariantContent('city', 'hero', 'cover').headline,
+    'You are welcome here',
+  );
+});
+
+test('an unknown variant has no defaults instead of borrowing another one', () => {
+  assert.equal(websiteTemplateVariantContent('city', 'about', 'nope'), undefined);
+  assert.equal(websiteTemplateVariantContent('default', 'hero', 'split'), undefined);
+});
+
+test('the city starter pages are the sets the editor offers, in order', () => {
+  const key = (section) => `${section.type}:${section.variant}`;
+  const pages = websiteTemplate('city').pages;
+
+  assert.deepEqual(pages.about.map(key), ['about:text', 'about:columns', 'footer:columns']);
+  assert.deepEqual(pages.contacts.map(key), ['contact:details', 'footer:columns']);
+  assert.deepEqual(pages.giving.map(key), ['giving:ways', 'footer:columns']);
+});
+
+test('a starter page footer leaves the copyright to the website title', () => {
+  for (const preset of ['about', 'contacts', 'giving']) {
+    const footer = websiteTemplate('city').pages[preset].at(-1);
+    assert.equal(footer.type, 'footer');
+    assert.equal('copyright' in footer.content, false);
+  }
+});
+
+test('the about starter page sends its visit link to the home location anchor', () => {
+  const [intro] = websiteTemplate('city').pages.about;
+  assert.equal(intro.content.primaryHref, '/#location');
 });

@@ -76,7 +76,8 @@ const CITY_ABOUT_TEXT: WebsiteTemplateSectionDefinition = {
     title: 'A church for this city',
     body: 'We are a community of people who follow Jesus together. We gather every week to worship, to learn from the Bible and to serve the neighbourhood we live in.',
     primaryLabel: 'Plan a visit',
-    primaryHref: '#location',
+    // An inner page has no location section of its own, so the visit link points at the home one.
+    primaryHref: '/#location',
   },
 };
 
@@ -127,6 +128,13 @@ const CITY_FOOTER_COLUMNS: WebsiteTemplateSectionDefinition = {
   content: {
     copyright: '© 2026 Church name',
   },
+};
+
+// Starter pages leave the copyright empty so their footer follows the website title.
+const CITY_PAGE_FOOTER: WebsiteTemplateSectionDefinition = {
+  type: 'footer',
+  variant: 'columns',
+  content: {},
 };
 
 const CITY_TEMPLATE: WebsiteTemplateDefinition = {
@@ -202,9 +210,9 @@ const CITY_TEMPLATE: WebsiteTemplateDefinition = {
     CITY_GIVING_WAYS,
   ],
   pages: {
-    about: [CITY_ABOUT_TEXT, CITY_ABOUT_COLUMNS, CITY_FOOTER_COLUMNS],
-    contacts: [CITY_CONTACT_DETAILS, CITY_FOOTER_COLUMNS],
-    giving: [CITY_GIVING_WAYS, CITY_FOOTER_COLUMNS],
+    about: [CITY_ABOUT_TEXT, CITY_ABOUT_COLUMNS, CITY_PAGE_FOOTER],
+    contacts: [CITY_CONTACT_DETAILS, CITY_PAGE_FOOTER],
+    giving: [CITY_GIVING_WAYS, CITY_PAGE_FOOTER],
   },
 };
 

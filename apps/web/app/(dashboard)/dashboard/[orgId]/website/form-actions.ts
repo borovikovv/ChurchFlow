@@ -2,6 +2,7 @@
 
 import {
   websiteTemplateVariantContent,
+  WEBSITE_NAVIGATION_MAX_LINKS,
   WEBSITE_TEMPLATES,
   type WebsiteTemplateId,
 } from '@churchflow/shared';
@@ -15,6 +16,7 @@ import {
   duplicateWebsiteSectionAction,
   publishWebsiteAction,
   publishWebsitePageAction,
+  readWebsiteAction,
   reorderWebsiteSectionsAction,
   setWebsiteSectionHiddenAction,
   updateWebsitePageAction,
@@ -98,29 +100,34 @@ export async function createPage(formData: FormData) {
   });
   if (!result.ok) return actionError(result.error);
 
-  const menu = navigationAppendInput(formData, result.page);
-  if (menu.status === 'ready') {
-    const updated = await updateWebsiteSettingsAction({ organizationId, settings: menu.settings });
-
-    return {
-      ok: true as const,
-      message: updated.ok ? messages.messages.pageCreated : messages.messages.pageCreatedMenuFailed,
-      mutation: {
-        type: 'page-created' as const,
-        page: result.page,
-        ...(updated.ok ? { website: updated.website } : {}),
-      },
-    };
+  const created = (mutation: WebsiteMutation, message: string): WebsiteFormResult => ({
+    ok: true,
+    message,
+    mutation,
+  });
+  const pageCreated = { type: 'page-created' as const, page: result.page };
+  if (formData.get('addToMenu') !== 'true') {
+    return created(pageCreated, messages.messages.pageCreated);
   }
 
-  return {
-    ok: true as const,
-    message:
-      menu.status === 'menu-full'
-        ? messages.messages.pageCreatedMenuFull
-        : messages.messages.pageCreated,
-    mutation: { type: 'page-created' as const, page: result.page },
-  };
+  // The stored website answers for the menu, not the editor that submitted the form.
+  const current = await readWebsiteAction({ organizationId });
+  if (!current.ok) return created(pageCreated, messages.messages.pageCreatedMenuFailed);
+
+  const menu = navigationAppendInput(current.website, result.page);
+  if (menu.status === 'menu-full') {
+    return created(
+      pageCreated,
+      messages.messages.pageCreatedMenuFull.replace('{max}', String(WEBSITE_NAVIGATION_MAX_LINKS)),
+    );
+  }
+  if (menu.status === 'skipped') return created(pageCreated, messages.messages.pageCreated);
+
+  const updated = await updateWebsiteSettingsAction({ organizationId, settings: menu.settings });
+
+  return updated.ok
+    ? created({ ...pageCreated, website: updated.website }, messages.messages.pageCreated)
+    : created(pageCreated, messages.messages.pageCreatedMenuFailed);
 }
 
 export async function updatePage(formData: FormData) {

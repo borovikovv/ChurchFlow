@@ -15,6 +15,16 @@ import type {
 
 const jsonHeaders = { 'content-type': 'application/json' };
 
+// Read back the stored website before an action that patches part of it, so a stale editor cannot
+// send its own copy of the title, description or menu.
+export async function readWebsiteAction(input: { organizationId: string }) {
+  const result = await apiFetch<DashboardWebsite>(`/organizations/${input.organizationId}/website`);
+
+  return result.ok
+    ? { ok: true as const, website: result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
 export async function updateWebsiteSettingsAction(input: {
   organizationId: string;
   settings: UpdateWebsiteSettingsPayload;

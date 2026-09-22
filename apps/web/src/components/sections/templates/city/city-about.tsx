@@ -18,9 +18,11 @@ export function CityAbout({
   theme: CityTheme;
   website: PublicWebsiteSummary | undefined;
 }) {
+  const variant = readText(content, 'variant') || 'text';
   const title = readText(content, 'title');
   const body = readText(content, 'body');
-  const items = readText(content, 'variant') === 'columns' ? readCityItems(content) : [];
+  const eyebrow = readText(content, 'eyebrow');
+  const items = variant === 'columns' ? readCityItems(content) : [];
 
   if (!title && !body && items.length === 0) return null;
 
@@ -30,17 +32,20 @@ export function CityAbout({
   return (
     <section
       className={`px-5 py-14 lg:py-[104px] ${onDark ? 'text-white' : 'text-[#0a0a0a]'}`}
-      id="about"
+      // One anchor per variant, so a page carrying both does not repeat an id.
+      id={variant === 'text' ? 'about' : `about-${variant}`}
       style={onDark ? coverStyle(content) : undefined}
     >
       <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-8 lg:gap-12">
         <div className="flex max-w-[760px] flex-col gap-5 sm:gap-6">
-          <CityEyebrow
-            className={onDark ? 'text-white/70' : ''}
-            style={onDark ? undefined : { color: theme.accentInk }}
-          >
-            {readText(content, 'eyebrow')}
-          </CityEyebrow>
+          {eyebrow ? (
+            <CityEyebrow
+              className={onDark ? 'text-white/70' : ''}
+              style={onDark ? undefined : { color: theme.accentInk }}
+            >
+              {eyebrow}
+            </CityEyebrow>
+          ) : null}
           {title ? (
             <CityHeading className={onDark ? 'text-white text-balance' : 'text-balance'}>
               {title}
@@ -65,12 +70,12 @@ export function CityAbout({
 
 function AboutColumns({ items, onDark }: { items: CityItem[]; onDark: boolean }) {
   return (
-    <ul className="m-0 grid list-none gap-0 p-0 sm:grid-cols-2 lg:grid-cols-3">
-      {items.map((item, index) => (
+    <ul className="m-0 grid list-none gap-x-8 p-0 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((item) => (
         <li
-          className={`flex flex-col gap-3 border-t px-0 py-6 sm:px-6 sm:py-7 ${
+          className={`flex flex-col gap-3 border-t py-6 sm:py-7 ${
             onDark ? 'border-white/25' : 'border-[#e5e5e5]'
-          } ${index > 0 ? 'sm:border-l' : ''} sm:first:pl-0`}
+          }`}
           key={item.title}
         >
           <h3 className="m-0 text-[18px] font-extrabold uppercase leading-[1.15] tracking-[-0.01em] sm:text-[20px]">

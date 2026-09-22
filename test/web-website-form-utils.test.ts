@@ -139,51 +139,88 @@ test('a page carries a known starter preset and ignores anything else', () => {
   assert.equal(pageInput(form(base)).preset, undefined);
 });
 
+const storedWebsite = (navigation: Array<{ label: string; href: string }>) => ({
+  id: 'w',
+  title: 'Grace Church',
+  description: 'A church in the city',
+  publishedAt: null,
+  theme: { accent: '#ffffff', background: '#ffffff' },
+  settings: {
+    template: 'city' as const,
+    timeZone: 'UTC',
+    locale: 'en' as const,
+    navigation,
+    serviceTimes: [],
+    location: {},
+    live: { mode: 'schedule' as const, isLive: false, leadMinutes: 5 },
+    socials: {},
+    seo: { noindex: false, ogImageUrl: null },
+  },
+  organization: { name: 'Grace', slug: 'grace' },
+});
+
+// The settings patch replaces the title and description, so the append must be built from the
+// website the action read back and never from values an editor could have sent.
 test('adding a page to the menu appends its link to the stored navigation', () => {
-  const result = navigationAppendInput(
-    form({
-      addToMenu: 'true',
-      websiteTitle: 'Grace',
-      websiteDescription: 'A church',
-      navigation: 'Give | /give',
-    }),
-    { slug: 'about', title: 'About us' },
-  );
+  const result = navigationAppendInput(storedWebsite([{ label: 'Give', href: '/give' }]), {
+    slug: 'about',
+    title: 'About us',
+  });
 
   assert.equal(result.status, 'ready');
-  assert.equal(result.status === 'ready' ? result.settings.title : '', 'Grace');
-  assert.equal(result.status === 'ready' ? result.settings.description : '', 'A church');
+  assert.equal(result.status === 'ready' ? result.settings.title : '', 'Grace Church');
+  assert.equal(
+    result.status === 'ready' ? result.settings.description : '',
+    'A church in the city',
+  );
   assert.deepEqual(result.status === 'ready' ? result.settings.settings?.navigation : [], [
     { label: 'Give', href: '/give' },
     { label: 'About us', href: '/about' },
   ]);
 });
 
-test('the menu is left alone when it was not requested or already holds the page', () => {
-  assert.equal(
-    navigationAppendInput(form({ websiteTitle: 'Grace' }), { slug: 'about', title: 'About' })
-      .status,
-    'skipped',
+test('the menu patch carries no theme or other settings keys to overwrite', () => {
+  const result = navigationAppendInput(storedWebsite([]), { slug: 'about', title: 'About' });
+
+  assert.deepEqual(result.status === 'ready' ? Object.keys(result.settings.settings ?? {}) : [], [
+    'navigation',
+  ]);
+  assert.equal(result.status === 'ready' ? result.settings.theme : undefined, undefined);
+});
+
+test('a label holding a pipe survives, because the menu no longer round-trips through text', () => {
+  const result = navigationAppendInput(
+    storedWebsite([{ label: 'Give | monthly', href: '/give' }]),
+    {
+      slug: 'about',
+      title: 'About | us',
+    },
   );
+
+  assert.deepEqual(result.status === 'ready' ? result.settings.settings?.navigation : [], [
+    { label: 'Give | monthly', href: '/give' },
+    { label: 'About | us', href: '/about' },
+  ]);
+});
+
+test('a page already in the menu is not appended twice', () => {
   assert.equal(
-    navigationAppendInput(
-      form({ addToMenu: 'true', websiteTitle: 'Grace', navigation: 'About | /about' }),
-      { slug: 'about', title: 'About us' },
-    ).status,
+    navigationAppendInput(storedWebsite([{ label: 'About', href: '/about' }]), {
+      slug: 'about',
+      title: 'About us',
+    }).status,
     'skipped',
   );
 });
 
 test('a full menu reports itself instead of dropping a link', () => {
-  const navigation = Array.from({ length: 10 }, (_, index) => `Link ${index} | /p${index}`).join(
-    '\n',
-  );
+  const navigation = Array.from({ length: 10 }, (_, index) => ({
+    label: `Link ${index}`,
+    href: `/p${index}`,
+  }));
 
   assert.equal(
-    navigationAppendInput(form({ addToMenu: 'true', websiteTitle: 'Grace', navigation }), {
-      slug: 'about',
-      title: 'About',
-    }).status,
+    navigationAppendInput(storedWebsite(navigation), { slug: 'about', title: 'About' }).status,
     'menu-full',
   );
 });

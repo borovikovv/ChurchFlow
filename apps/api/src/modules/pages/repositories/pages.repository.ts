@@ -1,15 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@churchflow/db';
 import {
-  DEFAULT_WEBSITE_TEMPLATE,
-  websiteTemplateIdSchema,
   websiteTemplatePageSections,
   type UpsertWebsitePageInput,
   type UpsertWebsiteSectionInput,
-  type WebsiteTemplateId,
-  type WebsiteTemplateSectionDefinition,
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { normalizeWebsiteSettings } from '../../websites/public-website';
+import { templateSectionContent } from '../../websites/template-sections';
 
 const pageSectionsInclude = {
   sections: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
@@ -107,7 +105,10 @@ export class PagesRepository {
 
       // A preset the active template does not define adds no sections; the page is still created.
       const presetSections = input.preset
-        ? websiteTemplatePageSections(websiteTemplateId(website.settings), input.preset)
+        ? websiteTemplatePageSections(
+            normalizeWebsiteSettings(website.settings).template,
+            input.preset,
+          )
         : [];
 
       const page = await tx.websitePage.create({
@@ -337,20 +338,6 @@ export class PagesRepository {
       });
     });
   }
-}
-
-function templateSectionContent(section: WebsiteTemplateSectionDefinition): Prisma.InputJsonObject {
-  return { variant: section.variant, ...section.content };
-}
-
-function websiteTemplateId(settings: Prisma.JsonValue): WebsiteTemplateId {
-  const stored =
-    typeof settings === 'object' && settings !== null && !Array.isArray(settings)
-      ? (settings as Record<string, unknown>)['template']
-      : undefined;
-  const parsed = websiteTemplateIdSchema.safeParse(stored);
-
-  return parsed.success ? parsed.data : DEFAULT_WEBSITE_TEMPLATE;
 }
 
 export function isPrismaKnownRequestError(

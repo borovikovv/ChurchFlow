@@ -138,6 +138,19 @@ test('each city preset creates its template sections, visible and in template or
   }
 });
 
+test('the About preset reaches the create call as its literal section set', async () => {
+  const { prisma, writes } = pagesPrisma();
+  const repository = new PagesRepository(prisma);
+
+  await repository.createPage(ORGANIZATION_ID, ACTOR_USER_ID, { ...PAGE_INPUT, preset: 'about' });
+
+  const create = writes.find((entry) => entry.operation === 'websitePage.create');
+  assert.deepEqual(
+    create.args.data.sections.create.map((section) => `${section.type}:${section.content.variant}`),
+    ['about:text', 'about:columns', 'footer:columns'],
+  );
+});
+
 test('a preset the active template does not define is ignored and the page is still created', async () => {
   const { prisma, writes } = pagesPrisma({ websiteSettings: { template: 'default' } });
   const repository = new PagesRepository(prisma);
