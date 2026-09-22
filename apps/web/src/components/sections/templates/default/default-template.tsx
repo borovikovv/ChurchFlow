@@ -17,16 +17,18 @@ type PublicThemeStyle = CSSProperties & {
 function PublicSectionShell({
   children,
   content,
+  divider = false,
   tone = 'light',
 }: {
   children: ReactNode;
   content?: Record<string, unknown> | undefined;
-  tone?: 'light' | 'muted' | 'accent';
+  divider?: boolean;
+  tone?: 'light' | 'muted' | 'dark';
 }) {
   const toneClassName = {
     light: 'bg-[var(--public-background)] text-[#1f2328]',
     muted: 'bg-[#f6f8fa] text-[#1f2328]',
-    accent: 'bg-[var(--public-accent)] text-white',
+    dark: 'bg-[#14171a] text-white',
   }[tone];
   const fontClassName = sectionFontClassName(content);
   const frameClassName = sectionFrameClassName(content);
@@ -36,14 +38,24 @@ function PublicSectionShell({
       className={`${toneClassName} ${fontClassName} ${frameClassName}`}
       style={sectionBackgroundStyle(content)}
     >
-      <div className="mx-auto grid w-full max-w-6xl gap-4 px-5 py-12 sm:px-8 sm:py-16">
+      <div
+        className={`mx-auto grid w-full max-w-6xl gap-4 px-5 py-12 sm:px-8 sm:py-16 ${
+          divider ? 'border-t border-[#d0d7de]' : ''
+        }`}
+      >
         {children}
       </div>
     </section>
   );
 }
 
-function ButtonRow({ content }: { content: Record<string, unknown> }) {
+function ButtonRow({
+  content,
+  onDark = false,
+}: {
+  content: Record<string, unknown>;
+  onDark?: boolean;
+}) {
   const primaryLabel = readText(content, 'primaryLabel');
   const primaryHref = readText(content, 'primaryHref', '#');
   const secondaryLabel = readText(content, 'secondaryLabel');
@@ -55,7 +67,9 @@ function ButtonRow({ content }: { content: Record<string, unknown> }) {
     <div className="flex flex-wrap gap-3">
       {primaryLabel ? (
         <a
-          className="inline-flex min-h-11 items-center rounded-md bg-[#1f2328] px-5 font-bold text-white no-underline"
+          className={`inline-flex min-h-11 items-center rounded-md px-5 font-bold no-underline ${
+            onDark ? 'bg-white text-[#1f2328]' : 'bg-[#1f2328] text-white'
+          }`}
           href={primaryHref}
         >
           {primaryLabel}
@@ -80,18 +94,33 @@ function HeroSection({
   content: Record<string, unknown>;
   website?: PublicWebsiteSummary | undefined;
 }) {
+  // A hero photo still carries the light text it was chosen for; without one the section is white
+  // and the accent colour is left to the rule and the eyebrow.
+  const onPhoto = Boolean(readText(content, 'backgroundImageUrl'));
+
   return (
-    <PublicSectionShell content={content} tone="accent">
-      <p className="m-0 text-sm font-bold uppercase text-white tracking-[0.08em] opacity-80">
+    <PublicSectionShell content={content} tone={onPhoto ? 'dark' : 'light'}>
+      {onPhoto ? null : (
+        <span aria-hidden="true" className="h-1 w-12 rounded-sm bg-[var(--public-accent)]" />
+      )}
+      <p
+        className={`m-0 text-sm font-bold uppercase tracking-[0.08em] ${
+          onPhoto ? 'text-white opacity-80' : 'text-[var(--public-accent)]'
+        }`}
+      >
         {website?.title}
       </p>
-      <h1 className="m-0 max-w-3xl text-4xl font-bold leading-tight text-white sm:text-6xl">
+      <h1 className="m-0 max-w-3xl text-4xl font-bold leading-tight sm:text-6xl">
         {readText(content, 'headline', website?.title ?? '')}
       </h1>
-      <p className="m-0 max-w-2xl text-lg leading-8 text-white opacity-90">
+      <p
+        className={`m-0 max-w-2xl text-lg leading-8 ${
+          onPhoto ? 'text-white opacity-90' : 'text-[#57606a]'
+        }`}
+      >
         {readText(content, 'subheading', website?.description ?? '')}
       </p>
-      <ButtonRow content={content} />
+      <ButtonRow content={content} onDark={onPhoto} />
     </PublicSectionShell>
   );
 }
@@ -194,9 +223,15 @@ function CardsSection({ content }: { content: Record<string, unknown> }) {
   );
 }
 
-function EventsSection({ content }: { content: Record<string, unknown> }) {
+function EventsSection({
+  content,
+  divider,
+}: {
+  content: Record<string, unknown>;
+  divider: boolean;
+}) {
   return (
-    <PublicSectionShell content={content} tone="muted">
+    <PublicSectionShell content={content} divider={divider}>
       <SectionHeaderWithAction content={content} fallbackTitle="What's happening" />
       <CardGrid items={readItems(content)} compact />
     </PublicSectionShell>
@@ -205,13 +240,13 @@ function EventsSection({ content }: { content: Record<string, unknown> }) {
 
 function HighlightSection({ content }: { content: Record<string, unknown> }) {
   return (
-    <PublicSectionShell content={content} tone="accent">
+    <PublicSectionShell content={content} tone="dark">
       <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
         <div className="grid gap-3">
           <SectionHeading title={readText(content, 'title', 'Take a next step')} />
           <p className="m-0 max-w-3xl text-lg leading-8 opacity-90">{readText(content, 'body')}</p>
         </div>
-        <ButtonRow content={content} />
+        <ButtonRow content={content} onDark />
       </div>
     </PublicSectionShell>
   );
@@ -239,7 +274,7 @@ function FooterSection({
           {readText(content, 'phone') ? <span>{readText(content, 'phone')}</span> : null}
         </div>
         <div className="grid gap-4 lg:justify-items-end">
-          <ButtonRow content={content} />
+          <ButtonRow content={content} onDark />
           <FooterSocialLinks content={content} />
           <span className="text-sm text-white/70 self-end">
             {readText(content, 'copyright', `© 2026 ${website?.title ?? 'Church'}`)}
@@ -361,7 +396,7 @@ export function DefaultTemplate({
 
   return (
     <div className="min-h-screen bg-[var(--public-background)]" style={style}>
-      {renderedSections.map((section) => {
+      {renderedSections.map((section, index) => {
         const props = { content: section.content };
         const variant = readText(section.content, 'variant');
         if (variant === 'quick-links') return <QuickLinksSection key={section.id} {...props} />;
@@ -369,7 +404,9 @@ export function DefaultTemplate({
         if (variant === 'connect' || variant === 'sermons') {
           return <CardsSection key={section.id} {...props} />;
         }
-        if (variant === 'events') return <EventsSection key={section.id} {...props} />;
+        if (variant === 'events') {
+          return <EventsSection divider={index > 0} key={section.id} {...props} />;
+        }
         if (['newsletter', 'app', 'cta'].includes(variant)) {
           return <HighlightSection key={section.id} {...props} />;
         }
