@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 import { OrganizationAccessGuard } from '../../common/guards/organization-access.guard';
 import { SubscriptionEntitlementGuard } from '../../common/guards/subscription-entitlement.guard';
 import { BillingModule } from '../billing/billing.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { MembershipClaimsController } from './membership-claims.controller';
 import { MembershipClaimsService } from './membership-claims.service';
 import { MembershipClaimsRepository } from './repositories/membership-claims.repository';
 
 @Module({
-  imports: [BillingModule],
+  imports: [BillingModule, NotificationsModule],
   controllers: [MembershipClaimsController],
   providers: [
     MembershipClaimsService,

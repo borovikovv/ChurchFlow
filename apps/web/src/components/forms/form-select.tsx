@@ -48,8 +48,15 @@ type OptionElementProps = {
   value?: string | number | readonly string[];
 };
 
+// Same breakpoint as the anti-zoom rule in globals.css. That rule cannot reach react-select's
+// inputs (the search input carries an inline `font: inherit`, the non-searchable dummy input an
+// unlayered emotion class), so the 16px floor is restated on the elements they inherit from.
+const MOBILE_VIEWPORT_MEDIA_QUERY = '@media (max-width: 767.98px)';
+const MOBILE_INPUT_FONT_SIZE = 16;
+
 export function createSelectStyles<IsMulti extends boolean = false>(
   size: SelectSize,
+  { wrapValues = false }: { wrapValues?: boolean } = {},
 ): StylesConfig<SelectOption, IsMulti> {
   const medium = size === 'medium';
   const controlHeight = medium ? 32 : 42;
@@ -59,7 +66,7 @@ export function createSelectStyles<IsMulti extends boolean = false>(
       ...base,
       alignItems: 'center',
       minHeight: controlHeight,
-      height: controlHeight,
+      height: wrapValues ? 'auto' : controlHeight,
       borderColor: state.isFocused ? 'var(--accent)' : 'var(--line)',
       borderRadius: 'var(--radius)',
       backgroundColor: state.isDisabled ? 'var(--surface-subtle)' : 'var(--surface)',
@@ -113,6 +120,9 @@ export function createSelectStyles<IsMulti extends boolean = false>(
         background: 'transparent',
         boxShadow: 'none',
         lineHeight: medium ? '20px' : 'inherit',
+      },
+      [MOBILE_VIEWPORT_MEDIA_QUERY]: {
+        fontSize: MOBILE_INPUT_FONT_SIZE,
       },
     }),
     menu: (base) => ({
@@ -200,15 +210,20 @@ export function createSelectStyles<IsMulti extends boolean = false>(
     valueContainer: (base) => ({
       ...base,
       alignItems: 'center',
-      display: medium ? 'flex' : 'grid',
-      flexWrap: 'nowrap',
-      height: '100%',
+      display: medium || wrapValues ? 'flex' : 'grid',
+      flexWrap: wrapValues ? 'wrap' : 'nowrap',
+      height: wrapValues ? 'auto' : '100%',
       minHeight: 0,
       overflow: 'hidden',
       paddingBottom: 0,
       paddingLeft: medium ? 8 : 12,
       paddingRight: medium ? 8 : 12,
       paddingTop: 0,
+      [MOBILE_VIEWPORT_MEDIA_QUERY]: {
+        '& > input': {
+          fontSize: MOBILE_INPUT_FONT_SIZE,
+        },
+      },
     }),
   };
 }

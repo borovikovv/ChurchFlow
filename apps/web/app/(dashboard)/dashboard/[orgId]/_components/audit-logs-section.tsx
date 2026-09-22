@@ -11,10 +11,12 @@ import { FormSelect } from '@/components/forms/form-select';
 import { loadAuditLogsAction } from '../actions';
 import {
   AUDIT_ACTION_KEYS,
+  MEMBER_MILESTONE_AUDIT_ACTION,
   auditActionLabel,
   auditActorName,
   createAuditDateFormatter,
   auditMetadataSummary,
+  type MemberMilestoneAuditMetadata,
 } from './audit-log-formatting';
 
 const ALL_ENTITY_TYPES = 'ALL';
@@ -33,9 +35,13 @@ export function AuditLogsSection({
   const locale = useLocale();
   const t = useTranslations('home');
   const errorsT = useTranslations('errors');
-  const auditActionLabels = Object.fromEntries(
-    AUDIT_ACTION_KEYS.map((action) => [action, t(`auditActions.${action}`)]),
-  );
+  const auditActionLabels = {
+    actions: Object.fromEntries(
+      AUDIT_ACTION_KEYS.map((action) => [action, t(`auditActions.${action}`)]),
+    ),
+    memberMilestoneEvent: (milestone: MemberMilestoneAuditMetadata) =>
+      t(`auditActions.${MEMBER_MILESTONE_AUDIT_ACTION}`, milestone),
+  };
   const auditDateFormatter = createAuditDateFormatter(locale);
   const [entityType, setEntityType] = useState<string>(ALL_ENTITY_TYPES);
   const {
@@ -128,35 +134,39 @@ export function AuditLogsSection({
       ) : null}
       {items.length > 0 ? (
         <ol className="grid gap-0 md:grid-cols-2 md:gap-x-12">
-          {items.map((log) => (
-            <li className="grid grid-cols-[24px_1fr] gap-3 pb-4" key={log.id}>
-              <div className="flex flex-col items-center justify-center">
-                <span className="pt-1.5 h-3 w-3 rounded-full border-[3px] border-[var(--accent)] bg-[var(--surface)]" />
-                <span className="h-full w-px bg-[var(--line)]" />
-              </div>
-              <div className="grid gap-1">
-                <p className="m-0 text-sm">
-                  {auditActionLabel(log.action, auditActionLabels)} {t('by')}{' '}
-                  <strong className="text-[var(--accent)]">
-                    {auditActorName(log, {
-                      system: t('system'),
-                      unknownActor: t('unknownActor'),
-                    })}
-                  </strong>
-                </p>
-                <p className="m-0 text-xs text-[var(--muted)]">
-                  {auditDateFormatter.format(new Date(log.createdAt))}
-                </p>
-                <p className="m-0 text-xs text-[var(--muted)]">
-                  {auditMetadataSummary(log, {
-                    changedFields: (fields) => t('changedFields', { fields }),
-                    metadataRole: (role) => t('metadataRole', { role }),
-                    metadataStatus: (status) => t('metadataStatus', { status }),
-                  })}
-                </p>
-              </div>
-            </li>
-          ))}
+          {items.map((log) => {
+            const metadataSummary = auditMetadataSummary(log, {
+              changedFields: (fields) => t('changedFields', { fields }),
+              metadataRole: (role) => t('metadataRole', { role }),
+              metadataStatus: (status) => t('metadataStatus', { status }),
+            });
+
+            return (
+              <li className="grid grid-cols-[24px_1fr] gap-3 pb-4" key={log.id}>
+                <div className="flex flex-col items-center justify-center">
+                  <span className="pt-1.5 h-3 w-3 rounded-full border-[3px] border-[var(--accent)] bg-[var(--surface)]" />
+                  <span className="h-full w-px bg-[var(--line)]" />
+                </div>
+                <div className="grid gap-1">
+                  <p className="m-0 text-sm">
+                    {auditActionLabel(log, auditActionLabels)} {t('by')}{' '}
+                    <strong className="text-[var(--accent)]">
+                      {auditActorName(log, {
+                        system: t('system'),
+                        unknownActor: t('unknownActor'),
+                      })}
+                    </strong>
+                  </p>
+                  <p className="m-0 text-xs text-[var(--muted)]">
+                    {auditDateFormatter.format(new Date(log.createdAt))}
+                  </p>
+                  {metadataSummary ? (
+                    <p className="m-0 text-xs text-[var(--muted)]">{metadataSummary}</p>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
         </ol>
       ) : !feedFailed ? (
         <p className="m-0 text-[var(--muted)]">{isFetching ? t('loading') : t('noAuditLogs')}</p>

@@ -9,6 +9,7 @@ const MEMBERSHIP_ID = 'membership';
 
 function auditingTransaction() {
   const auditRows = [];
+  const upsertedMemberships = [];
   const group = { id: GROUP_ID, organizationId: ORGANIZATION_ID, name: 'Worship', members: [] };
 
   const tx = {
@@ -24,7 +25,10 @@ function auditingTransaction() {
     },
     organizationGroupMember: {
       findFirst: async () => ({ groupId: GROUP_ID }),
-      upsert: async () => ({}),
+      upsert: async ({ where }) => {
+        upsertedMemberships.push(where.groupId_membershipId);
+        return {};
+      },
       update: async () => ({}),
       delete: async () => ({}),
     },
@@ -36,7 +40,11 @@ function auditingTransaction() {
     },
   };
 
-  return { prisma: { $transaction: async (callback) => callback(tx) }, auditRows };
+  return {
+    prisma: { $transaction: async (callback) => callback(tx) },
+    auditRows,
+    upsertedMemberships,
+  };
 }
 
 test('creating a group records a CREATE audit entry', async () => {
@@ -112,4 +120,28 @@ test('membership changes are audited against the group', async () => {
     auditRows.map((row) => row.entityId),
     [GROUP_ID, GROUP_ID],
   );
+});
+
+test('adding several members upserts each one and audits every id', async () => {
+  const { prisma, auditRows, upsertedMemberships } = auditingTransaction();
+  const repository = new GroupsRepository(prisma);
+  const membershipIds = ['membership-a', 'membership-b', 'membership-c'];
+
+  await repository.addMembers({
+    organizationId: ORGANIZATION_ID,
+    groupId: GROUP_ID,
+    actorUserId: ACTOR_USER_ID,
+    members: membershipIds.map((membershipId) => ({
+      membershipId,
+      role: 'MEMBER',
+      responsibility: null,
+    })),
+  });
+
+  assert.deepEqual(
+    upsertedMemberships,
+    membershipIds.map((membershipId) => ({ groupId: GROUP_ID, membershipId })),
+  );
+  assert.equal(auditRows.length, 1);
+  assert.deepEqual(auditRows[0].metadata, { addedMembershipIds: membershipIds });
 });

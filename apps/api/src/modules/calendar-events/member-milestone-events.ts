@@ -126,7 +126,7 @@ async function recordMilestoneAudit(
       action: 'SYNC_MEMBER_MILESTONE_EVENT',
       entityType: 'CalendarEvent',
       entityId: eventId,
-      metadata: { type, change, membershipId: input.membershipId },
+      metadata: { type, change, membershipId: input.membershipId, displayName: input.displayName },
     },
   });
 }
