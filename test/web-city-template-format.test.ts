@@ -5,6 +5,7 @@ import {
   cityTheme,
   formatNextService,
   formatServiceTime,
+  readCityItems,
   resolveWebsiteHref,
 } from '../apps/web/src/components/sections/templates/city/city-format.ts';
 
@@ -70,4 +71,24 @@ test('internal links are resolved under the organization path, external ones unt
   assert.equal(resolved('https://youtube.com/c'), 'https://youtube.com/c');
   assert.equal(resolved(''), '#');
   assert.equal(resolveWebsiteHref('/about', site), '/about');
+});
+
+test('about columns keep the items that have a title and drop the rest', () => {
+  assert.deepEqual(
+    readCityItems({
+      items: [
+        { title: 'The Bible', body: 'We read it together.' },
+        { title: 'Community' },
+        { body: 'No title, no card.' },
+        'not an item',
+        null,
+      ],
+    }),
+    [
+      { title: 'The Bible', body: 'We read it together.' },
+      { title: 'Community', body: '' },
+    ],
+  );
+  assert.deepEqual(readCityItems({}), []);
+  assert.deepEqual(readCityItems({ items: 'nope' }), []);
 });

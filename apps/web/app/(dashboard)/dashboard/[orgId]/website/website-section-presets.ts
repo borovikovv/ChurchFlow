@@ -57,6 +57,24 @@ export const SECTION_VARIANTS: readonly SectionVariantDefinition[] = [
     templates: ['city'],
   },
   {
+    type: 'hero',
+    variant: 'split',
+    fields: ['eyebrow', 'titleBody', 'buttons', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'about',
+    variant: 'text',
+    fields: ['eyebrow', 'titleBody', 'buttons', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'about',
+    variant: 'columns',
+    fields: ['eyebrow', 'titleBody', 'items', 'buttons', 'background'],
+    templates: ['city'],
+  },
+  {
     type: 'live',
     variant: 'banner',
     fields: ['live', 'buttons', 'background'],
@@ -72,6 +90,18 @@ export const SECTION_VARIANTS: readonly SectionVariantDefinition[] = [
     type: 'giving',
     variant: 'cover',
     fields: ['eyebrow', 'titleBody', 'buttons', 'ways', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'giving',
+    variant: 'ways',
+    fields: ['eyebrow', 'titleBody', 'buttons', 'ways', 'background'],
+    templates: ['city'],
+  },
+  {
+    type: 'contact',
+    variant: 'details',
+    fields: ['titleBody', 'contact', 'buttons'],
     templates: ['city'],
   },
   {

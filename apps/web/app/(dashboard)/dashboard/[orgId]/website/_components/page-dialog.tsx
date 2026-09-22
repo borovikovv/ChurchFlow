@@ -2,13 +2,14 @@
 
 import { useId, useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import { websiteTemplatePagePresets } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { FormSelect } from '@/components/forms/form-select';
 import { createPage, updatePage } from '../form-actions';
-import type { DashboardPage } from '../types';
-import { PAGE_STATUSES, readString } from '../website-form-utils';
+import type { DashboardPage, DashboardWebsite } from '../types';
+import { formatLinks, PAGE_STATUSES, readString } from '../website-form-utils';
 import { OgImageFields } from './og-image-fields';
 import type { SubmitWebsiteForm } from './website-editor.types';
 
@@ -17,17 +18,20 @@ export function PageDialog({
   page,
   pending,
   submitForm,
+  website,
 }: {
   organizationId: string;
   page?: DashboardPage | undefined;
   pending: boolean;
   submitForm: SubmitWebsiteForm;
+  website: DashboardWebsite;
 }) {
   const t = useTranslations('website');
   const dialogRef = useRef<HTMLDialogElement>(null);
   const formId = useId();
   const pendingKey = page ? `page:${page.id}:update` : 'page-create';
   const seo = page?.seo ?? {};
+  const presets = websiteTemplatePagePresets(website.settings.template);
 
   return (
     <FormDialog
@@ -88,6 +92,31 @@ export function PageDialog({
             </option>
           ))}
         </FormSelect>
+        {!page && presets.length > 0 ? (
+          <>
+            <FormSelect label={t('startFrom')} name="preset" defaultValue="">
+              <option value="">{t('pagePresets.empty')}</option>
+              {presets.map((preset) => (
+                <option key={preset} value={preset}>
+                  {t(`pagePresets.${preset}`)}
+                </option>
+              ))}
+            </FormSelect>
+            <span className="text-xs text-[var(--muted)]">{t('startFromHint')}</span>
+          </>
+        ) : null}
+        {!page ? (
+          <>
+            <Checkbox label={t('addToMenu')} name="addToMenu" value="true" />
+            <input type="hidden" name="websiteTitle" value={website.title} />
+            <input type="hidden" name="websiteDescription" value={website.description ?? ''} />
+            <input
+              type="hidden"
+              name="navigation"
+              value={formatLinks(website.settings.navigation)}
+            />
+          </>
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <label>
             {t('seoTitle')}

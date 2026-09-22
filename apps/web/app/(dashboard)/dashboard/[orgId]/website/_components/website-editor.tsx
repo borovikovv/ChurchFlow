@@ -166,6 +166,7 @@ export function WebsiteEditor({
           organizationId={organizationId}
           pending={pendingKey === 'page-create'}
           submitForm={submitForm}
+          website={state.website}
         />
         {currentPage ? (
           <>
@@ -174,6 +175,7 @@ export function WebsiteEditor({
               page={currentPage}
               pending={pendingKey === `page:${currentPage.id}:update`}
               submitForm={submitForm}
+              website={state.website}
             />
             <Button
               type="button"

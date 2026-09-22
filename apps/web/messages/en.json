@@ -874,6 +874,15 @@
     "page": "Page",
     "createPage": "Create page",
     "pageSettings": "Page settings",
+    "startFrom": "Start from",
+    "startFromHint": "A starter set of sections you can edit or remove afterwards.",
+    "pagePresets": {
+      "empty": "Empty page",
+      "about": "About",
+      "contacts": "Contacts",
+      "giving": "Giving"
+    },
+    "addToMenu": "Add this page to the site menu",
     "slug": "Slug",
     "pageTitle": "Title",
     "status": "Status",
@@ -903,7 +912,11 @@
       "cover": "Full-screen photo",
       "banner": "Player banner",
       "location": "Address and service times",
-      "columns": "Columns"
+      "columns": "Columns",
+      "split": "Photo beside text",
+      "text": "Text block",
+      "details": "Contact details",
+      "ways": "Ways to give"
     },
     "variant": "Variant",
     "hidden": "Hidden",
@@ -985,7 +998,9 @@
       "sectionShown": "Section shown.",
       "sectionDuplicated": "Section duplicated.",
       "sectionRemoved": "Section removed.",
-      "sectionsReordered": "Sections reordered."
+      "sectionsReordered": "Sections reordered.",
+      "pageCreatedMenuFull": "Page created. The menu already has 10 links, so this page was not added to it.",
+      "pageCreatedMenuFailed": "Page created, but it could not be added to the menu."
     },
     "placeholders": {
       "aboutSlug": "about",

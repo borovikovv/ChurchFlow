@@ -36,6 +36,9 @@ const CITY_MESSAGES = {
   en: {
     menu: 'Menu',
     address: 'Address',
+    contact: 'Contact',
+    email: 'Email',
+    phone: 'Phone',
     services: 'Services',
     nextService: 'Next service',
     liveNow: 'Live now',
@@ -46,6 +49,9 @@ const CITY_MESSAGES = {
   uk: {
     menu: 'Меню',
     address: 'Адреса',
+    contact: 'Контакти',
+    email: 'Пошта',
+    phone: 'Телефон',
     services: 'Служіння',
     nextService: 'Наступне служіння',
     liveNow: 'Зараз наживо',
@@ -96,6 +102,26 @@ export function formatNextService(
 
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+export interface CityItem {
+  title: string;
+  body: string;
+}
+
+/** Stored section items, keeping only the ones with a title to render. */
+export function readCityItems(content: Record<string, unknown>): CityItem[] {
+  const value = content['items'];
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    if (typeof item !== 'object' || item === null) return [];
+    const record = item as Record<string, unknown>;
+    const title = typeof record['title'] === 'string' ? record['title'] : '';
+    const body = typeof record['body'] === 'string' ? record['body'] : '';
+
+    return title ? [{ title, body }] : [];
+  });
 }
 
 export function resolveWebsiteHref(

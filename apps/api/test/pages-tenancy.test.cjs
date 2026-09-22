@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { PagesRepository } = require('../dist/modules/pages/repositories/pages.repository');
+const { WEBSITE_PAGE_PRESETS, websiteTemplate } = require('@churchflow/shared');
 
 const ORGANIZATION_ID = 'organization-a';
 const OTHER_ORGANIZATION_ID = 'organization-b';
@@ -27,6 +28,7 @@ function findFirst(rows) {
 function pagesPrisma(options = {}) {
   const {
     websiteOrganizationId = ORGANIZATION_ID,
+    websiteSettings = { template: 'city' },
     pageOrganizationId = ORGANIZATION_ID,
     sectionRows = [
       {
@@ -54,7 +56,9 @@ function pagesPrisma(options = {}) {
 
   const client = {
     organizationWebsite: {
-      findUnique: findFirst([{ id: WEBSITE_ID, organizationId: websiteOrganizationId }]),
+      findUnique: findFirst([
+        { id: WEBSITE_ID, organizationId: websiteOrganizationId, settings: websiteSettings },
+      ]),
     },
     websitePage: {
       findFirst: findFirst([{ id: PAGE_ID, organizationId: pageOrganizationId, deletedAt: null }]),
@@ -94,6 +98,76 @@ test('page creation refuses an organization that has no website', async () => {
 
   await assert.rejects(
     repository.createPage(ORGANIZATION_ID, ACTOR_USER_ID, PAGE_INPUT),
+    /WEBSITE_NOT_FOUND/,
+  );
+  assert.deepEqual(writes, []);
+});
+
+test('creating a page without a preset creates no sections', async () => {
+  const { prisma, writes } = pagesPrisma();
+  const repository = new PagesRepository(prisma);
+
+  await repository.createPage(ORGANIZATION_ID, ACTOR_USER_ID, PAGE_INPUT);
+
+  const create = writes.find((entry) => entry.operation === 'websitePage.create');
+  assert.deepEqual(create.args.data.sections.create, []);
+});
+
+test('each city preset creates its template sections, visible and in template order', async () => {
+  for (const preset of WEBSITE_PAGE_PRESETS) {
+    const { prisma, writes } = pagesPrisma();
+    const repository = new PagesRepository(prisma);
+
+    await repository.createPage(ORGANIZATION_ID, ACTOR_USER_ID, { ...PAGE_INPUT, preset });
+
+    const create = writes.find((entry) => entry.operation === 'websitePage.create');
+    const expected = websiteTemplate('city').pages[preset];
+    assert.ok(expected.length > 0, `the city template defines the ${preset} preset`);
+    assert.deepEqual(
+      create.args.data.sections.create.map(
+        (section) => `${section.type}:${section.content.variant}:${section.order}`,
+      ),
+      expected.map((section, order) => `${section.type}:${section.variant}:${order}`),
+    );
+    assert.ok(create.args.data.sections.create.every((section) => section.hidden === false));
+    assert.ok(
+      create.args.data.sections.create.every(
+        (section) => section.organizationId === ORGANIZATION_ID,
+      ),
+    );
+  }
+});
+
+test('a preset the active template does not define is ignored and the page is still created', async () => {
+  const { prisma, writes } = pagesPrisma({ websiteSettings: { template: 'default' } });
+  const repository = new PagesRepository(prisma);
+
+  await repository.createPage(ORGANIZATION_ID, ACTOR_USER_ID, { ...PAGE_INPUT, preset: 'giving' });
+
+  const create = writes.find((entry) => entry.operation === 'websitePage.create');
+  assert.deepEqual(create.args.data.sections.create, []);
+  assert.equal(create.args.data.organizationId, ORGANIZATION_ID);
+});
+
+test('a preset page still writes the create audit entry, naming the preset', async () => {
+  const { prisma, writes } = pagesPrisma();
+  const repository = new PagesRepository(prisma);
+
+  await repository.createPage(ORGANIZATION_ID, ACTOR_USER_ID, { ...PAGE_INPUT, preset: 'about' });
+
+  const audit = writes.find((entry) => entry.operation === 'auditLog.create');
+  assert.equal(audit.args.data.actorUserId, ACTOR_USER_ID);
+  assert.equal(audit.args.data.entityType, 'WebsitePage');
+  assert.equal(audit.args.data.metadata.preset, 'about');
+  assert.equal(audit.args.data.metadata.sections, 3);
+});
+
+test('a preset cannot reach an organization that has no website', async () => {
+  const { prisma, writes } = pagesPrisma({ websiteOrganizationId: OTHER_ORGANIZATION_ID });
+  const repository = new PagesRepository(prisma);
+
+  await assert.rejects(
+    repository.createPage(ORGANIZATION_ID, ACTOR_USER_ID, { ...PAGE_INPUT, preset: 'about' }),
     /WEBSITE_NOT_FOUND/,
   );
   assert.deepEqual(writes, []);

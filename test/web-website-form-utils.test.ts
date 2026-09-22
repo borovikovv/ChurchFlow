@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   formatServiceTimes,
+  navigationAppendInput,
   pageInput,
   parseLinks,
   parseServiceTimes,
@@ -127,4 +128,62 @@ test('a page keeps, drops or replaces its OG image the same way', () => {
   // The upload helper rewrites the hidden id to the freshly confirmed asset before submit.
   const replaced = pageInput(form({ ...base, ogImageAssetId: 'asset-2' }));
   assert.equal(replaced.seo?.ogImageAssetId, 'asset-2');
+});
+
+test('a page carries a known starter preset and ignores anything else', () => {
+  const base = { slug: 'about', title: 'About', status: 'DRAFT' };
+
+  assert.equal(pageInput(form({ ...base, preset: 'contacts' })).preset, 'contacts');
+  assert.equal(pageInput(form({ ...base, preset: 'nope' })).preset, undefined);
+  assert.equal(pageInput(form({ ...base, preset: '' })).preset, undefined);
+  assert.equal(pageInput(form(base)).preset, undefined);
+});
+
+test('adding a page to the menu appends its link to the stored navigation', () => {
+  const result = navigationAppendInput(
+    form({
+      addToMenu: 'true',
+      websiteTitle: 'Grace',
+      websiteDescription: 'A church',
+      navigation: 'Give | /give',
+    }),
+    { slug: 'about', title: 'About us' },
+  );
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.status === 'ready' ? result.settings.title : '', 'Grace');
+  assert.equal(result.status === 'ready' ? result.settings.description : '', 'A church');
+  assert.deepEqual(result.status === 'ready' ? result.settings.settings?.navigation : [], [
+    { label: 'Give', href: '/give' },
+    { label: 'About us', href: '/about' },
+  ]);
+});
+
+test('the menu is left alone when it was not requested or already holds the page', () => {
+  assert.equal(
+    navigationAppendInput(form({ websiteTitle: 'Grace' }), { slug: 'about', title: 'About' })
+      .status,
+    'skipped',
+  );
+  assert.equal(
+    navigationAppendInput(
+      form({ addToMenu: 'true', websiteTitle: 'Grace', navigation: 'About | /about' }),
+      { slug: 'about', title: 'About us' },
+    ).status,
+    'skipped',
+  );
+});
+
+test('a full menu reports itself instead of dropping a link', () => {
+  const navigation = Array.from({ length: 10 }, (_, index) => `Link ${index} | /p${index}`).join(
+    '\n',
+  );
+
+  assert.equal(
+    navigationAppendInput(form({ addToMenu: 'true', websiteTitle: 'Grace', navigation }), {
+      slug: 'about',
+      title: 'About',
+    }).status,
+    'menu-full',
+  );
 });

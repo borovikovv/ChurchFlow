@@ -3,12 +3,15 @@ import {
   DEFAULT_APP_LOCALE,
   PUBLIC_SECTION_TYPES,
   WEBSITE_LIVE_MODES,
+  WEBSITE_NAVIGATION_MAX_LINKS,
+  WEBSITE_PAGE_PRESETS,
   type AppLocale,
   type UpdateWebsiteSettingsPayload,
   type UpsertWebsitePagePayload,
   type UpsertWebsiteSectionPayload,
   type WebsiteLink,
   type WebsitePage,
+  type WebsitePagePreset,
   type WebsiteServiceTime,
 } from '@churchflow/shared';
 import type { JsonRecord } from './types';
@@ -56,11 +59,42 @@ export function websiteSettingsInput(formData: FormData): UpdateWebsiteSettingsP
 }
 
 export function pageInput(formData: FormData): UpsertWebsitePagePayload {
+  const preset = pagePreset(optionalString(formData.get('preset')));
+
   return {
     slug: String(formData.get('slug') ?? ''),
     title: String(formData.get('title') ?? ''),
     status: String(formData.get('status') ?? 'DRAFT') as WebsitePage['status'],
     seo: seoInput(formData),
+    ...(preset ? { preset } : {}),
+  };
+}
+
+export type NavigationAppendResult =
+  | { status: 'skipped' }
+  | { status: 'menu-full' }
+  | { status: 'ready'; settings: UpdateWebsiteSettingsPayload };
+
+// The menu lives in the website settings, so adding a page to it is a settings patch. The stored
+// title, description and links travel with the page form because the patch replaces them.
+export function navigationAppendInput(
+  formData: FormData,
+  page: { slug: string; title: string },
+): NavigationAppendResult {
+  if (formData.get('addToMenu') !== 'true') return { status: 'skipped' };
+
+  const navigation = parseLinks(optionalString(formData.get('navigation')));
+  const href = `/${page.slug}`;
+  if (navigation.some((link) => link.href === href)) return { status: 'skipped' };
+  if (navigation.length >= WEBSITE_NAVIGATION_MAX_LINKS) return { status: 'menu-full' };
+
+  return {
+    status: 'ready',
+    settings: {
+      title: String(formData.get('websiteTitle') ?? ''),
+      description: optionalString(formData.get('websiteDescription')),
+      settings: { navigation: [...navigation, { label: page.title, href }] },
+    },
   };
 }
 
@@ -276,6 +310,10 @@ export function readString(record: JsonRecord, key: string, fallback = ''): stri
 
 function sectionType(value: string): SectionType {
   return PUBLIC_SECTION_TYPES.find((type) => type === value) ?? 'hero';
+}
+
+function pagePreset(value: string | undefined): WebsitePagePreset | undefined {
+  return WEBSITE_PAGE_PRESETS.find((preset) => preset === value);
 }
 
 function appLocale(value: string | undefined): AppLocale {

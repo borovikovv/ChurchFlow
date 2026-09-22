@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@churchflow/db';
-import type { UpsertWebsitePageInput, UpsertWebsiteSectionInput } from '@churchflow/shared';
+import {
+  DEFAULT_WEBSITE_TEMPLATE,
+  websiteTemplateIdSchema,
+  websiteTemplatePageSections,
+  type UpsertWebsitePageInput,
+  type UpsertWebsiteSectionInput,
+  type WebsiteTemplateId,
+  type WebsiteTemplateSectionDefinition,
+} from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 const pageSectionsInclude = {
@@ -93,9 +101,14 @@ export class PagesRepository {
     return this.prisma.$transaction(async (tx) => {
       const website = await tx.organizationWebsite.findUnique({
         where: { organizationId },
-        select: { id: true },
+        select: { id: true, settings: true },
       });
       if (!website) throw new Error('WEBSITE_NOT_FOUND');
+
+      // A preset the active template does not define adds no sections; the page is still created.
+      const presetSections = input.preset
+        ? websiteTemplatePageSections(websiteTemplateId(website.settings), input.preset)
+        : [];
 
       const page = await tx.websitePage.create({
         data: {
@@ -106,6 +119,15 @@ export class PagesRepository {
           status: input.status,
           seo: input.seo,
           publishedAt: input.status === 'PUBLISHED' ? new Date() : null,
+          sections: {
+            create: presetSections.map((section, order) => ({
+              organizationId,
+              type: section.type,
+              order,
+              hidden: false,
+              content: templateSectionContent(section),
+            })),
+          },
         },
         include: pageSectionsInclude,
       });
@@ -117,7 +139,11 @@ export class PagesRepository {
           action: 'CREATE',
           entityType: 'WebsitePage',
           entityId: page.id,
-          metadata: { slug: input.slug, title: input.title },
+          metadata: {
+            slug: input.slug,
+            title: input.title,
+            ...(input.preset ? { preset: input.preset, sections: presetSections.length } : {}),
+          },
         },
       });
 
@@ -311,6 +337,20 @@ export class PagesRepository {
       });
     });
   }
+}
+
+function templateSectionContent(section: WebsiteTemplateSectionDefinition): Prisma.InputJsonObject {
+  return { variant: section.variant, ...section.content };
+}
+
+function websiteTemplateId(settings: Prisma.JsonValue): WebsiteTemplateId {
+  const stored =
+    typeof settings === 'object' && settings !== null && !Array.isArray(settings)
+      ? (settings as Record<string, unknown>)['template']
+      : undefined;
+  const parsed = websiteTemplateIdSchema.safeParse(stored);
+
+  return parsed.success ? parsed.data : DEFAULT_WEBSITE_TEMPLATE;
 }
 
 export function isPrismaKnownRequestError(

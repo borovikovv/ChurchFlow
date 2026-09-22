@@ -1,7 +1,7 @@
 'use server';
 
 import {
-  WEBSITE_TEMPLATE_DEFINITIONS,
+  websiteTemplateVariantContent,
   WEBSITE_TEMPLATES,
   type WebsiteTemplateId,
 } from '@churchflow/shared';
@@ -22,7 +22,12 @@ import {
   updateWebsiteSettingsAction,
 } from './actions';
 import type { DashboardPage, DashboardSection, DashboardWebsite } from './types';
-import { pageInput, sectionInput, websiteSettingsInput } from './website-form-utils';
+import {
+  navigationAppendInput,
+  pageInput,
+  sectionInput,
+  websiteSettingsInput,
+} from './website-form-utils';
 
 export type WebsiteFormResult =
   | { ok: false; error: string }
@@ -31,7 +36,7 @@ export type WebsiteFormResult =
 export type WebsiteMutation =
   | { type: 'website'; website: DashboardWebsite }
   | { type: 'page'; page: DashboardPage }
-  | { type: 'page-created'; page: DashboardPage }
+  | { type: 'page-created'; page: DashboardPage; website?: DashboardWebsite }
   | { type: 'section-created'; pageId: string; section: DashboardSection }
   | { type: 'section-updated'; section: DashboardSection }
   | { type: 'section-deleted'; sectionId: string }
@@ -82,6 +87,8 @@ export async function applyTemplate(formData: FormData) {
   }));
 }
 
+// The new page is created first; only then can its link be appended to the stored menu, so the
+// menu is patched with a second request and never blocks the page from being created.
 export async function createPage(formData: FormData) {
   const messages = await currentWebsiteMessages();
   const organizationId = readOrganizationId(formData);
@@ -89,10 +96,31 @@ export async function createPage(formData: FormData) {
     organizationId,
     page: pageInput(formData),
   });
-  return actionResult(result, messages.messages.pageCreated, (success) => ({
-    type: 'page-created',
-    page: success.page,
-  }));
+  if (!result.ok) return actionError(result.error);
+
+  const menu = navigationAppendInput(formData, result.page);
+  if (menu.status === 'ready') {
+    const updated = await updateWebsiteSettingsAction({ organizationId, settings: menu.settings });
+
+    return {
+      ok: true as const,
+      message: updated.ok ? messages.messages.pageCreated : messages.messages.pageCreatedMenuFailed,
+      mutation: {
+        type: 'page-created' as const,
+        page: result.page,
+        ...(updated.ok ? { website: updated.website } : {}),
+      },
+    };
+  }
+
+  return {
+    ok: true as const,
+    message:
+      menu.status === 'menu-full'
+        ? messages.messages.pageCreatedMenuFull
+        : messages.messages.pageCreated,
+    mutation: { type: 'page-created' as const, page: result.page },
+  };
 }
 
 export async function updatePage(formData: FormData) {
@@ -128,15 +156,15 @@ export async function createSection(formData: FormData) {
   const organizationId = readOrganizationId(formData);
   const section = sectionInput(formData);
   const content = section.content ?? {};
-  const defaults = WEBSITE_TEMPLATE_DEFINITIONS[
-    templateId(String(formData.get('templateId') ?? ''))
-  ].home.find(
-    (definition) => definition.type === section.type && definition.variant === content['variant'],
+  const defaults = websiteTemplateVariantContent(
+    templateId(String(formData.get('templateId') ?? '')),
+    section.type,
+    String(content['variant'] ?? ''),
   );
   const result = await createWebsiteSectionAction({
     organizationId,
     pageId: String(formData.get('pageId')),
-    section: { ...section, content: { ...defaults?.content, ...content } },
+    section: { ...section, content: { ...defaults, ...content } },
   });
   return actionResult(result, messages.messages.sectionAdded, (success) => ({
     type: 'section-created',

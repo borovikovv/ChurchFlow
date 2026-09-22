@@ -34,6 +34,11 @@ export const PUBLIC_SECTION_TYPES = [
 export const WEBSITE_TEMPLATES = ['default', 'city'] as const;
 export const DEFAULT_WEBSITE_TEMPLATE = 'default';
 
+/** Starter section sets a template can offer when an owner creates an inner page. */
+export const WEBSITE_PAGE_PRESETS = ['about', 'contacts', 'giving'] as const;
+
+export const WEBSITE_NAVIGATION_MAX_LINKS = 10;
+
 export const WEBSITE_LIVE_MODES = ['schedule', 'manual'] as const;
 
 export const CALENDAR_EVENT_TYPES = [

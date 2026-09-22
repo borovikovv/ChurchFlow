@@ -92,3 +92,27 @@ test('deleting a section removes it from every page and keeps the rest untouched
   );
   assert.equal(next.website, state.website);
 });
+
+test('a created page arrives with the website when its link was added to the menu', () => {
+  const navigation = [{ label: 'About us', href: '/about' }];
+  const next = applyWebsiteMutation(state, {
+    type: 'page-created',
+    page: { ...page, id: 'about', slug: 'about', sections: [] },
+    website: { ...website, settings: { ...website.settings, navigation } },
+  });
+
+  assert.deepEqual(next.website.settings.navigation, navigation);
+  assert.deepEqual(
+    next.pages.map((item) => item.id),
+    ['about', 'home'],
+  );
+});
+
+test('a created page without a menu change keeps the website as it was', () => {
+  const next = applyWebsiteMutation(state, {
+    type: 'page-created',
+    page: { ...page, id: 'about', slug: 'about', sections: [] },
+  });
+
+  assert.equal(next.website, state.website);
+});

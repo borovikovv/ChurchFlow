@@ -38,6 +38,8 @@ import {
   DEFAULT_APP_LOCALE,
   DEFAULT_WEBSITE_TEMPLATE,
   WEBSITE_LIVE_MODES,
+  WEBSITE_NAVIGATION_MAX_LINKS,
+  WEBSITE_PAGE_PRESETS,
   WEBSITE_TEMPLATES,
 } from './constants.js';
 
@@ -1019,7 +1021,7 @@ export const websiteSettingsSchema = z
     template: z.enum(WEBSITE_TEMPLATES).default(DEFAULT_WEBSITE_TEMPLATE),
     timeZone: websiteTimeZoneSchema.default('UTC'),
     locale: z.enum(APP_LOCALES).default(DEFAULT_APP_LOCALE),
-    navigation: z.array(websiteLinkSchema).max(10).default([]),
+    navigation: z.array(websiteLinkSchema).max(WEBSITE_NAVIGATION_MAX_LINKS).default([]),
     serviceTimes: z.array(websiteServiceTimeSchema).max(10).default([]),
     location: websiteLocationSettingsSchema.default({}),
     live: websiteLiveSettingsSchema.default({}),
@@ -1054,11 +1056,15 @@ export const websitePageSchema = z.object({
   status: pageStatusSchema,
 });
 
+export const websitePagePresetSchema = z.enum(WEBSITE_PAGE_PRESETS);
+
 export const upsertWebsitePageSchema = z.object({
   slug: slugSchema,
   title: z.string().min(1).max(160),
   status: pageStatusSchema.default('DRAFT'),
   seo: websiteSeoSchema.default({}),
+  // Only read when the page is created, and only when the active template defines the preset.
+  preset: websitePagePresetSchema.optional(),
 });
 
 export const sectionTypeSchema = z.enum(PUBLIC_SECTION_TYPES);

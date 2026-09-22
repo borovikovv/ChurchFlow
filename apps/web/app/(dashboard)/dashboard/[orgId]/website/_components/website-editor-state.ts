@@ -14,8 +14,12 @@ export function applyWebsiteMutation(
     case 'website':
       return { ...state, website: mutation.website };
     case 'page':
-    case 'page-created':
       return { ...state, pages: upsertPage(state.pages, mutation.page) };
+    case 'page-created':
+      return {
+        website: mutation.website ?? state.website,
+        pages: upsertPage(state.pages, mutation.page),
+      };
     case 'section-created':
       return {
         ...state,
