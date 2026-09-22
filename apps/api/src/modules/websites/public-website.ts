@@ -98,6 +98,97 @@ export function toPublicWebsite(website: StoredWebsite, now = new Date()): Publi
   };
 }
 
+export type ReadAssetUrl = (
+  assetId: string | null,
+  organizationId: string,
+) => Promise<string | null>;
+
+export interface StoredSeo {
+  title: string | null;
+  description: string | null;
+  noindex: boolean;
+  ogImageAssetId: string | null;
+}
+
+export function readSeo(seo: unknown): StoredSeo {
+  const record = typeof seo === 'object' && seo !== null ? (seo as Record<string, unknown>) : {};
+
+  return {
+    title: readContentText(record, 'title') ?? null,
+    description: readContentText(record, 'description') ?? null,
+    noindex: record['noindex'] === true,
+    ogImageAssetId: readContentText(record, 'ogImageAssetId') ?? null,
+  };
+}
+
+interface StoredPage {
+  organizationId: string;
+  seo: unknown;
+  sections: Array<{ content: unknown }>;
+}
+
+// A dashboard page keeps the stored seo record and adds the signed url of its OG image, so the
+// editor can preview it without a second request.
+export async function toDashboardPage<TPage extends StoredPage>(
+  page: TPage,
+  readUrl: ReadAssetUrl,
+): Promise<TPage & { seo: Record<string, unknown> & { ogImageUrl: string | null } }> {
+  const stored = typeof page.seo === 'object' && page.seo !== null ? page.seo : {};
+  const [enriched, ogImageUrl] = await Promise.all([
+    enrichSectionBackgrounds(page, readUrl),
+    readUrl(readSeo(page.seo).ogImageAssetId, page.organizationId),
+  ]);
+
+  return { ...enriched, seo: { ...stored, ogImageUrl } };
+}
+
+export async function enrichSectionBackgrounds<TPage extends StoredPage>(
+  page: TPage,
+  readUrl: ReadAssetUrl,
+): Promise<TPage> {
+  const assetIds = new Set<string>();
+  page.sections.forEach((section) => {
+    const assetId = readContentText(section.content, 'backgroundImageAssetId');
+    if (assetId) assetIds.add(assetId);
+  });
+
+  if (assetIds.size === 0) {
+    return page;
+  }
+
+  const urls = new Map<string, string>();
+  await Promise.all(
+    [...assetIds].map(async (assetId) => {
+      // Missing background assets should not hide otherwise published page content.
+      const url = await readUrl(assetId, page.organizationId);
+      if (url) urls.set(assetId, url);
+    }),
+  );
+
+  return {
+    ...page,
+    sections: page.sections.map((section) => {
+      const assetId = readContentText(section.content, 'backgroundImageAssetId');
+      if (!assetId || !urls.has(assetId)) return section;
+
+      return {
+        ...section,
+        content:
+          typeof section.content === 'object' && section.content !== null
+            ? { ...section.content, backgroundImageUrl: urls.get(assetId) }
+            : section.content,
+      };
+    }),
+  };
+}
+
+function readContentText(content: unknown, key: string): string | undefined {
+  if (typeof content !== 'object' || content === null) return undefined;
+  const value = (content as Record<string, unknown>)[key];
+
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
 export interface PublicSection {
   id: string;
   type: WebsiteSection['type'];

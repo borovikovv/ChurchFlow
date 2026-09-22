@@ -1,7 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { ApplyWebsiteTemplateInput, UpdateWebsiteSettingsInput } from '@churchflow/shared';
 import { MediaService } from '../media/media.service';
-import { normalizeWebsiteSettings, normalizeWebsiteTheme, toPublicWebsite } from './public-website';
+import {
+  normalizeWebsiteSettings,
+  normalizeWebsiteTheme,
+  toDashboardPage,
+  toPublicWebsite,
+  type ReadAssetUrl,
+} from './public-website';
 import { WebsitesRepository } from './repositories/websites.repository';
 
 @Injectable()
@@ -16,11 +22,11 @@ export class WebsitesService {
     if (!website) return null;
 
     const publicWebsite = toPublicWebsite(website);
-    publicWebsite.settings.seo.ogImageUrl = await this.readUrlOrNull(
+    publicWebsite.settings.seo.ogImageUrl = await this.readUrl(
       publicWebsite.settings.seo.ogImageAssetId,
       website.organizationId,
     );
-    publicWebsite.organization.logoUrl = await this.readUrlOrNull(
+    publicWebsite.organization.logoUrl = await this.readUrl(
       website.logoAssetId,
       website.organizationId,
     );
@@ -80,7 +86,7 @@ export class WebsitesService {
 
       return {
         website: await this.toDashboardWebsite(result.website),
-        page: result.page,
+        page: result.page ? await toDashboardPage(result.page, this.readUrl) : null,
         addedSections: result.addedSections,
       };
     } catch (error) {
@@ -100,7 +106,7 @@ export class WebsitesService {
         ...settings,
         seo: {
           ...settings.seo,
-          ogImageUrl: await this.readUrlOrNull(
+          ogImageUrl: await this.readUrl(
             settings.seo.ogImageAssetId ?? null,
             website.organizationId,
           ),
@@ -109,14 +115,14 @@ export class WebsitesService {
     };
   }
 
-  private async readUrlOrNull(assetId: string | null, organizationId: string) {
+  private readonly readUrl: ReadAssetUrl = async (assetId, organizationId) => {
     if (!assetId) return null;
     try {
       return (await this.mediaService.getReadUrl(assetId, organizationId)).url;
     } catch {
       return null;
     }
-  }
+  };
 
   private toHttpError(error: unknown) {
     if (error instanceof Error && error.message === 'WEBSITE_NOT_FOUND') {

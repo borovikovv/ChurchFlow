@@ -1106,6 +1106,7 @@
     "changedFields": "Змінено {fields}",
     "metadataRole": "Роль: {role}",
     "metadataStatus": "Статус: {status}",
+    "metadataNoChanges": "Без змін",
     "auditActions": {
       "CANCEL_SUBSCRIPTION": "Підписку скасовано",
       "GRANT_BILLING_EXEMPTION": "Надано безкоштовний доступ",

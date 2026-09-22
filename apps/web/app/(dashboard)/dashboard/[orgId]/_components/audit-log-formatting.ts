@@ -236,6 +236,7 @@ export function auditMetadataSummary(
   log: AuditLogListItem,
   labels: {
     changedFields: (fields: string) => string;
+    metadataNoChanges: string;
     metadataRole: (role: string) => string;
     metadataStatus: (status: string) => string;
   },
@@ -307,11 +308,15 @@ function organizationGroupMetadataSummary(
 
 function websiteMetadataSummary(
   log: AuditLogListItem,
-  labels: { changedFields: (fields: string) => string },
+  labels: { changedFields: (fields: string) => string; metadataNoChanges: string },
 ): string | null {
+  // A settings save that changed nothing is routine, so it is named rather than left to the
+  // generic fallback, which would show the internal entity type.
   const changedKeys = log.metadata['changedKeys'];
   if (Array.isArray(changedKeys)) {
-    return changedKeys.length > 0 ? labels.changedFields(changedKeys.map(String).join(', ')) : null;
+    return changedKeys.length > 0
+      ? labels.changedFields(changedKeys.map(String).join(', '))
+      : labels.metadataNoChanges;
   }
 
   const templateId = log.metadata['templateId'];

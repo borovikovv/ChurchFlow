@@ -1106,6 +1106,7 @@
     "changedFields": "Changed {fields}",
     "metadataRole": "Role: {role}",
     "metadataStatus": "Status: {status}",
+    "metadataNoChanges": "No changes",
     "auditActions": {
       "CANCEL_SUBSCRIPTION": "Subscription canceled",
       "GRANT_BILLING_EXEMPTION": "Complimentary access granted",

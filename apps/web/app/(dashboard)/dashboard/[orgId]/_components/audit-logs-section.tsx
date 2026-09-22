@@ -141,6 +141,7 @@ export function AuditLogsSection({
           {items.map((log) => {
             const metadataSummary = auditMetadataSummary(log, {
               changedFields: (fields) => t('changedFields', { fields }),
+              metadataNoChanges: t('metadataNoChanges'),
               metadataRole: (role) => t('metadataRole', { role }),
               metadataStatus: (status) => t('metadataStatus', { status }),
             });

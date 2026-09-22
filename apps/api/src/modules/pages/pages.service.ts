@@ -7,9 +7,13 @@ import type {
 } from '@churchflow/shared';
 import { MediaService } from '../media/media.service';
 import {
+  enrichSectionBackgrounds,
   normalizeWebsiteSettings,
+  readSeo,
+  toDashboardPage,
   toPublicSection,
   toPublicWebsite,
+  type ReadAssetUrl,
 } from '../websites/public-website';
 import { isPrismaKnownRequestError, PagesRepository } from './repositories/pages.repository';
 
@@ -174,54 +178,40 @@ export class PagesService {
     sections: Array<{ id: string; type: WebsiteSection['type']; order: number; content: unknown }>;
     website: Parameters<typeof toPublicWebsite>[0] & { logoAssetId: string | null };
   }) {
-    const enriched = await this.enrichSectionBackgrounds(page);
     const website = toPublicWebsite(page.website);
-    website.settings.seo.ogImageUrl = await this.readUrlOrNull(
-      website.settings.seo.ogImageAssetId,
-      page.organizationId,
-    );
-    website.organization.logoUrl = await this.readUrlOrNull(
-      page.website.logoAssetId,
-      page.organizationId,
-    );
     const seo = readSeo(page.seo);
+    const [enriched, websiteOgImageUrl, logoUrl, pageOgImageUrl] = await Promise.all([
+      enrichSectionBackgrounds(page, this.readUrl),
+      this.readUrl(website.settings.seo.ogImageAssetId, page.organizationId),
+      this.readUrl(page.website.logoAssetId, page.organizationId),
+      this.readUrl(seo.ogImageAssetId, page.organizationId),
+    ]);
+
+    website.settings.seo.ogImageUrl = websiteOgImageUrl;
+    website.organization.logoUrl = logoUrl;
 
     return {
       title: page.title,
-      seo: {
-        ...seo,
-        ogImageUrl: await this.readUrlOrNull(seo.ogImageAssetId, page.organizationId),
-      },
+      seo: { ...seo, ogImageUrl: pageOgImageUrl },
       sections: enriched.sections.map(toPublicSection),
       website,
     };
   }
 
-  // Dashboard pages keep the stored seo record and add the signed url of its OG image, so the
-  // editor can preview it without a second request.
-  private async toDashboardPage<
+  private toDashboardPage<
     TPage extends { organizationId: string; seo: unknown; sections: Array<{ content: unknown }> },
   >(page: TPage) {
-    const enriched = await this.enrichSectionBackgrounds(page);
-    const seo = typeof page.seo === 'object' && page.seo !== null ? page.seo : {};
-
-    return {
-      ...enriched,
-      seo: {
-        ...seo,
-        ogImageUrl: await this.readUrlOrNull(readSeo(page.seo).ogImageAssetId, page.organizationId),
-      },
-    };
+    return toDashboardPage(page, this.readUrl);
   }
 
-  private async readUrlOrNull(assetId: string | null, organizationId: string) {
+  private readonly readUrl: ReadAssetUrl = async (assetId, organizationId) => {
     if (!assetId) return null;
     try {
       return (await this.mediaService.getReadUrl(assetId, organizationId)).url;
     } catch {
       return null;
     }
-  }
+  };
 
   private toHttpError(error: unknown) {
     if (error instanceof Error) {
@@ -237,72 +227,4 @@ export class PagesService {
 
     return error;
   }
-
-  private async enrichSectionBackgrounds<
-    TPage extends {
-      organizationId: string;
-      sections: Array<{ content: unknown }>;
-    },
-  >(page: TPage): Promise<TPage> {
-    const assetIds = new Set<string>();
-    page.sections.forEach((section) => {
-      const assetId = readContentText(section.content, 'backgroundImageAssetId');
-      if (assetId) assetIds.add(assetId);
-    });
-
-    if (assetIds.size === 0) {
-      return page;
-    }
-
-    const urls = new Map<string, string>();
-    await Promise.all(
-      [...assetIds].map(async (assetId) => {
-        try {
-          const result = await this.mediaService.getReadUrl(assetId, page.organizationId);
-          urls.set(assetId, result.url);
-        } catch {
-          // Missing background assets should not hide otherwise published page content.
-        }
-      }),
-    );
-
-    return {
-      ...page,
-      sections: page.sections.map((section) => {
-        const assetId = readContentText(section.content, 'backgroundImageAssetId');
-        if (!assetId || !urls.has(assetId)) return section;
-
-        return {
-          ...section,
-          content:
-            typeof section.content === 'object' && section.content !== null
-              ? { ...section.content, backgroundImageUrl: urls.get(assetId) }
-              : section.content,
-        };
-      }),
-    };
-  }
-}
-
-function readSeo(seo: unknown): {
-  title: string | null;
-  description: string | null;
-  noindex: boolean;
-  ogImageAssetId: string | null;
-} {
-  const record = typeof seo === 'object' && seo !== null ? (seo as Record<string, unknown>) : {};
-
-  return {
-    title: readContentText(record, 'title') ?? null,
-    description: readContentText(record, 'description') ?? null,
-    noindex: record['noindex'] === true,
-    ogImageAssetId: readContentText(record, 'ogImageAssetId') ?? null,
-  };
-}
-
-function readContentText(content: unknown, key: string): string | undefined {
-  if (typeof content !== 'object' || content === null) return undefined;
-  const value = (content as Record<string, unknown>)[key];
-
-  return typeof value === 'string' && value.trim() ? value : undefined;
 }
