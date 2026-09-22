@@ -12,6 +12,11 @@ const websiteInclude = { organization: true } satisfies Prisma.OrganizationWebsi
 const homeSectionsInclude = {
   sections: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
 } satisfies Prisma.WebsitePageInclude;
+const publishedPageWhere = {
+  status: 'PUBLISHED',
+  publishedAt: { not: null },
+  deletedAt: null,
+} satisfies Prisma.WebsitePageWhereInput;
 
 @Injectable()
 export class WebsitesRepository {
@@ -26,6 +31,63 @@ export class WebsitesRepository {
       },
       include: websiteInclude,
     });
+  }
+
+  /**
+   * The stored object behind a public media link, or null when nothing public points at it.
+   * Reachability is the authorization: the asset has to be referenced right now by a published,
+   * live website of an active organization, as its logo, its OG image, the OG image of a published
+   * page, or the background of a visible section on one. A draft page, a hidden section and an
+   * unpublished website are all unreachable, and so is an asset nothing references any more.
+   *
+   * The asset ids stored in website JSON are not checked against the organization when they are
+   * saved, so the referencing website is looked for inside the asset's own organization only. One
+   * organization pasting another's asset id therefore publishes nothing.
+   */
+  async findPublishedWebsiteAsset(assetId: string) {
+    const asset = await this.prisma.mediaAsset.findFirst({
+      where: { id: assetId, deletedAt: null },
+      select: { bucket: true, objectKey: true, organizationId: true },
+    });
+    if (!asset?.organizationId) return null;
+
+    const reference = await this.prisma.organizationWebsite.findFirst({
+      where: {
+        organizationId: asset.organizationId,
+        publishedAt: { not: null },
+        deletedAt: null,
+        organization: { status: 'ACTIVE', deletedAt: null },
+        OR: [
+          { logoAssetId: assetId },
+          { settings: { path: ['seo', 'ogImageAssetId'], equals: assetId } },
+          {
+            pages: {
+              some: {
+                ...publishedPageWhere,
+                seo: { path: ['ogImageAssetId'], equals: assetId },
+              },
+            },
+          },
+          {
+            pages: {
+              some: {
+                ...publishedPageWhere,
+                sections: {
+                  some: {
+                    deletedAt: null,
+                    hidden: false,
+                    content: { path: ['backgroundImageAssetId'], equals: assetId },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+
+    return reference ? { bucket: asset.bucket, objectKey: asset.objectKey } : null;
   }
 
   async findByOrganizationId(organizationId: string) {

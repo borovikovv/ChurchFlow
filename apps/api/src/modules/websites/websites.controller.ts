@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { ENTITLEMENTS } from '@churchflow/shared';
 import {
   SessionAuthGuard,
@@ -12,6 +13,7 @@ import {
   RequireEntitlement,
   SubscriptionEntitlementGuard,
 } from '../../common/guards/subscription-entitlement.guard';
+import { PUBLIC_WEBSITE_MEDIA_HEADERS, PUBLIC_WEBSITE_MEDIA_PATH } from '../media/public-media-url';
 import { WebsitesService } from './websites.service';
 import { ApplyWebsiteTemplateDto } from './dto/apply-website-template.dto';
 import { PublishWebsiteDto } from './dto/publish-website.dto';
@@ -24,6 +26,30 @@ export class WebsitesController {
   @Get('public/o/:orgSlug')
   async publicWebsite(@Param('orgSlug') orgSlug: string) {
     return this.websitesService.findPublicWebsite(orgSlug);
+  }
+
+  /**
+   * An image a published website references, as a temporary redirect to a signature minted for
+   * this request. Unguarded on purpose, like the payload that links to it: browsers, crawlers and
+   * social unfurlers fetch these urls with no session, minutes to months after the page was
+   * rendered, and a session would make the response depend on who asked. Nothing here reads the
+   * request beyond the id in the path, no cookie is consulted, and no bytes pass through the API.
+   *
+   * 302 rather than 301 or 308: a permanent redirect is cached indefinitely by browsers, proxies
+   * and image crawlers, which would pin a url that stops working in five minutes. 307 would do as
+   * well but buys nothing for a GET, and 302 is what every unfurler handles.
+   */
+  @Get(`${PUBLIC_WEBSITE_MEDIA_PATH}/:assetId`)
+  async publicWebsiteMedia(
+    @Param('assetId') assetId: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    const url = await this.websitesService.findPublicWebsiteMediaUrl(assetId);
+
+    for (const [header, value] of Object.entries(PUBLIC_WEBSITE_MEDIA_HEADERS)) {
+      response.setHeader(header, value);
+    }
+    response.redirect(302, url);
   }
 
   @Get('organizations/:organizationId/website')

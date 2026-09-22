@@ -44,6 +44,10 @@ export const apiEnvSchema = z
     DATABASE_URL: z.string().url(),
     COOKIE_DOMAIN: optionalTrimmedNonEmptyString,
     WEB_APP_URL: z.string().url(),
+    // Where this API answers from the outside, i.e. what the web app knows as NEXT_PUBLIC_API_URL,
+    // global prefix included. A published website links to its media here instead of publishing a
+    // signed url, and a crawler resolves that link with no request of ours to read a host from.
+    PUBLIC_API_URL: z.string().url().default('http://localhost:4000/v1'),
     PLATFORM_ADMIN_EMAIL: z.string().email(),
     TELEGRAM_CLIENT_ID: optionalNonEmptyString,
     TELEGRAM_CLIENT_SECRET: optionalNonEmptyString,

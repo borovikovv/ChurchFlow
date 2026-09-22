@@ -176,10 +176,13 @@ export function CityBackgroundImage({
         fill
         priority={priority}
         src={imageUrl}
-        // Media urls are signed per request and expire, so they cannot pass the image optimizer.
-        // That costs the srcset entirely: no resizing, no format conversion, and next/image drops
-        // `sizes` for an unoptimized source, so setting it would be dead weight. What is left is
-        // still worth it: real alt text, lazy loading below the fold and the hero preload.
+        // A published page now carries the API's stable media url, which the optimizer could be
+        // allowed to fetch, but the same component renders the owner preview, and that still gets
+        // a signed url on a storage host no `images.remotePatterns` entry can name. Optimizing
+        // needs the API host configured here first, so this stays unoptimized: no srcset, no
+        // resizing, no format conversion, and next/image drops `sizes` for an unoptimized source,
+        // so setting it would be dead weight. Real alt text, lazy loading and the hero preload all
+        // still work.
         unoptimized
       />
       {overlay ? <span aria-hidden="true" className="absolute inset-0 -z-10 bg-black/50" /> : null}

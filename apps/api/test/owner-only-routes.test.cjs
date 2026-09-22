@@ -45,7 +45,9 @@ test('every budget route is owner-only', () => {
 });
 
 test('website and page dashboard routes are owner-only, public ones are not', () => {
-  assertCoverage(WebsitesController, 'WebsitesController', ['publicWebsite']);
+  // publicWebsiteMedia is unguarded with the rest of the public surface: it serves images a
+  // published website already advertises, to callers that carry no session.
+  assertCoverage(WebsitesController, 'WebsitesController', ['publicWebsite', 'publicWebsiteMedia']);
   assertCoverage(PagesController, 'PagesController', ['publicPage', 'publicPagesForSitemap']);
 });
 

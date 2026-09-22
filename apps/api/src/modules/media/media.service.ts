@@ -21,6 +21,7 @@ import type {
   CreateMemberPhotoUploadInput,
 } from '@churchflow/shared';
 import { EntitlementsService } from '../billing/entitlements.service';
+import { publicWebsiteMediaUrl } from './public-media-url';
 import { MediaRepository } from './repositories/media.repository';
 import type { ReadUrlLookup, StoredObject } from './user-avatar-url';
 
@@ -29,12 +30,14 @@ export class MediaService {
   private readonly logger = new Logger(MediaService.name);
   private readonly s3: S3Client;
   private readonly bucket: string;
+  private readonly publicApiUrl: string;
   constructor(
     private readonly mediaRepository: MediaRepository,
     private readonly entitlementsService: EntitlementsService,
     config: ConfigService,
   ) {
     this.bucket = config.getOrThrow('S3_BUCKET');
+    this.publicApiUrl = config.getOrThrow('PUBLIC_API_URL');
     this.s3 = new S3Client({
       endpoint: config.getOrThrow('S3_ENDPOINT'),
       region: config.getOrThrow('S3_REGION'),
@@ -267,6 +270,19 @@ export class MediaService {
       url: await this.signReadUrl(asset),
       expiresIn: 300,
     };
+  }
+
+  /**
+   * The stable url a public surface publishes instead of a signed one. The asset still has to
+   * exist inside the organization, so an image that was deleted leaves the page without an image
+   * rather than with a link that answers 404. Whether the link may be served is decided again,
+   * from the published website, each time it is followed.
+   */
+  async getPublicReadUrl(assetId: string, organizationId: string): Promise<string> {
+    const asset = await this.mediaRepository.findAsset(assetId, organizationId);
+    if (!asset) throw new NotFoundException('Media asset was not found');
+
+    return publicWebsiteMediaUrl(this.publicApiUrl, asset.id);
   }
 
   async createUserAvatarUpload(userId: string, input: CreateMemberPhotoUploadInput) {

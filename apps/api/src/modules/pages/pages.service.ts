@@ -32,7 +32,7 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.toPublicPage(page);
+    return this.toPublicPage(page, this.publicReadUrl);
   }
 
   async findPreviewPage(organizationId: string, pageId: string) {
@@ -42,10 +42,15 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    return this.toPublicPage({
-      ...page,
-      sections: page.sections.filter((section) => !section.hidden),
-    });
+    // The owner previews a page the public route would refuse, draft or not, so its images stay on
+    // signed urls: the public media route serves nothing that is not published.
+    return this.toPublicPage(
+      {
+        ...page,
+        sections: page.sections.filter((section) => !section.hidden),
+      },
+      this.readUrl,
+    );
   }
 
   async listDashboardPages(organizationId: string) {
@@ -172,20 +177,28 @@ export class PagesService {
     }
   }
 
-  private async toPublicPage(page: {
-    organizationId: string;
-    title: string;
-    seo: unknown;
-    sections: Array<{ id: string; type: WebsiteSection['type']; order: number; content: unknown }>;
-    website: Parameters<typeof toPublicWebsite>[0] & { logoAssetId: string | null };
-  }) {
+  private async toPublicPage(
+    page: {
+      organizationId: string;
+      title: string;
+      seo: unknown;
+      sections: Array<{
+        id: string;
+        type: WebsiteSection['type'];
+        order: number;
+        content: unknown;
+      }>;
+      website: Parameters<typeof toPublicWebsite>[0] & { logoAssetId: string | null };
+    },
+    readUrl: ReadAssetUrl,
+  ) {
     const website = toPublicWebsite(page.website);
     const seo = readSeo(page.seo);
     const [enriched, websiteOgImageUrl, logoUrl, pageOgImageUrl] = await Promise.all([
-      enrichSectionBackgrounds(page, this.readUrl),
-      this.readUrl(website.settings.seo.ogImageAssetId, page.organizationId),
-      this.readUrl(page.website.logoAssetId, page.organizationId),
-      this.readUrl(seo.ogImageAssetId, page.organizationId),
+      enrichSectionBackgrounds(page, readUrl),
+      readUrl(website.settings.seo.ogImageAssetId, page.organizationId),
+      readUrl(page.website.logoAssetId, page.organizationId),
+      readUrl(seo.ogImageAssetId, page.organizationId),
     ]);
 
     website.settings.seo.ogImageUrl = websiteOgImageUrl;
@@ -209,10 +222,23 @@ export class PagesService {
     return toDashboardPage(page, this.readUrl);
   }
 
+  // Dashboard and preview responses: a signed-in owner reading unpublished content, which the
+  // public media route does not serve, so those images stay on short-lived signed urls.
   private readonly readUrl: ReadAssetUrl = async (assetId, organizationId) => {
     if (!assetId) return null;
     try {
       return (await this.mediaService.getReadUrl(assetId, organizationId)).url;
+    } catch {
+      return null;
+    }
+  };
+
+  // A published page links to media instead of signing it, so the url survives the crawl that
+  // reads the page and the visitor who scrolls to it ten minutes later.
+  private readonly publicReadUrl: ReadAssetUrl = async (assetId, organizationId) => {
+    if (!assetId) return null;
+    try {
+      return await this.mediaService.getPublicReadUrl(assetId, organizationId);
     } catch {
       return null;
     }
