@@ -5,8 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@churchflow/db';
-import { MediaService } from '../media/media.service';
-import { userAvatarUrl, type ReadUrlLookup } from '../media/user-avatar-url';
+import { organizationMediaContentUrl } from '../media/private-media-url';
+import { userAvatarUrl } from '../media/user-avatar-url';
 import { ORG_PERMISSIONS } from '@churchflow/shared';
 import type {
   AddOrganizationGroupMembersInput,
@@ -28,10 +28,7 @@ import {
 
 @Injectable()
 export class GroupsService {
-  constructor(
-    private readonly groupsRepository: GroupsRepository,
-    private readonly mediaService: MediaService,
-  ) {}
+  constructor(private readonly groupsRepository: GroupsRepository) {}
 
   async listForOrganization(
     organizationId: string,
@@ -67,7 +64,7 @@ export class GroupsService {
 
     return {
       canManage,
-      group: await this.groupDetail(group),
+      group: groupToDetail(group),
       memberCandidates: candidates.map((candidate) => ({
         id: candidate.id,
         displayName: membershipDisplayName(candidate),
@@ -78,7 +75,7 @@ export class GroupsService {
   async listDetailsForOrganization(organizationId: string): Promise<OrganizationGroupDetail[]> {
     const groups = await this.groupsRepository.listDetailsForOrganization(organizationId);
 
-    return Promise.all(groups.map((group) => this.groupDetail(group)));
+    return groups.map((group) => groupToDetail(group));
   }
 
   async create(
@@ -90,7 +87,7 @@ export class GroupsService {
       this.groupsRepository.create({ organizationId, actorUserId, group: input }),
     );
 
-    return this.groupDetail(group);
+    return groupToDetail(group);
   }
 
   async update(
@@ -104,7 +101,7 @@ export class GroupsService {
     );
     if (!group) throw new NotFoundException('Group was not found');
 
-    return this.groupDetail(group);
+    return groupToDetail(group);
   }
 
   async delete(
@@ -133,7 +130,7 @@ export class GroupsService {
       });
       if (!group) throw new NotFoundException('Group was not found');
 
-      return await this.groupDetail(group);
+      return groupToDetail(group);
     } catch (error) {
       if (error instanceof UnknownGroupMembershipsError) {
         throw new BadRequestException('Some members do not belong to this organization');
@@ -159,7 +156,7 @@ export class GroupsService {
     });
     if (!group) throw new NotFoundException('Group member was not found');
 
-    return this.groupDetail(group);
+    return groupToDetail(group);
   }
 
   async removeMember(
@@ -176,19 +173,7 @@ export class GroupsService {
     });
     if (!group) throw new NotFoundException('Group member was not found');
 
-    return this.groupDetail(group);
-  }
-
-  private async groupDetail(
-    group: OrganizationGroupDetailRecord,
-  ): Promise<OrganizationGroupDetail> {
-    const readUrl = await this.mediaService.readUrlLookup(
-      group.members.flatMap(({ membership }) => [
-        membership.profile?.profilePhotoAsset,
-        membership.user?.avatarAsset,
-      ]),
-    );
-    return groupToDetail(group, readUrl);
+    return groupToDetail(group);
   }
 
   private async runUniqueName<T>(operation: () => Promise<T>): Promise<T> {
@@ -226,10 +211,7 @@ function groupToListItem(group: OrganizationGroupListRecord): OrganizationGroupL
   };
 }
 
-function groupToDetail(
-  group: OrganizationGroupDetailRecord,
-  readUrl: ReadUrlLookup,
-): OrganizationGroupDetail {
+function groupToDetail(group: OrganizationGroupDetailRecord): OrganizationGroupDetail {
   return {
     id: group.id,
     name: group.name,
@@ -239,9 +221,12 @@ function groupToDetail(
     members: group.members.map((member) => ({
       membershipId: member.membershipId,
       displayName: membershipDisplayName(member.membership),
-      photoUrl:
-        readUrl(member.membership.profile?.profilePhotoAsset) ??
-        userAvatarUrl(member.membership.user, readUrl),
+      photoUrl: member.membership.profile?.profilePhotoAsset
+        ? organizationMediaContentUrl(
+            group.organizationId,
+            member.membership.profile.profilePhotoAsset.id,
+          )
+        : userAvatarUrl(member.membership.user, group.organizationId),
       role: member.role,
       responsibility: member.responsibility,
     })),

@@ -21,9 +21,15 @@ import type {
   CreateMemberPhotoUploadInput,
 } from '@churchflow/shared';
 import { EntitlementsService } from '../billing/entitlements.service';
+import { currentUserAvatarContentUrl } from './private-media-url';
 import { publicWebsiteMediaUrl } from './public-media-url';
 import { MediaRepository } from './repositories/media.repository';
-import type { ReadUrlLookup, StoredObject } from './user-avatar-url';
+import type { StoredObject } from './user-avatar-url';
+
+export interface MediaContent {
+  body: Uint8Array;
+  mimeType: string;
+}
 
 @Injectable()
 export class MediaService {
@@ -347,7 +353,11 @@ export class MediaService {
       }
     }
 
-    return { assetId: asset.id, avatarUrl: await this.signReadUrl(asset), copiedToMembershipId };
+    return {
+      assetId: asset.id,
+      avatarUrl: currentUserAvatarContentUrl(asset.id),
+      copiedToMembershipId,
+    };
   }
 
   async removeUserAvatar(userId: string) {
@@ -355,18 +365,23 @@ export class MediaService {
     return { ok: true };
   }
 
-  async readUrlLookup(objects: Iterable<StoredObject | null | undefined>): Promise<ReadUrlLookup> {
-    const distinct = new Map<string, StoredObject>();
-    for (const object of objects) {
-      if (object) distinct.set(`${object.bucket}/${object.objectKey}`, object);
-    }
-    const signed = new Map(
-      await Promise.all(
-        [...distinct].map(async ([key, object]) => [key, await this.signReadUrl(object)] as const),
-      ),
-    );
-    return (object) =>
-      object ? (signed.get(`${object.bucket}/${object.objectKey}`) ?? null) : null;
+  /**
+   * The bytes of a photo a member of the organization may see: an asset of the organization itself,
+   * or the personal avatar of someone who is still a member of it.
+   */
+  async readOrganizationMedia(organizationId: string, assetId: string): Promise<MediaContent> {
+    if (!uuidSchema.safeParse(assetId).success)
+      throw new NotFoundException('Media asset was not found');
+    const asset = await this.mediaRepository.findOrganizationVisibleImage(assetId, organizationId);
+    if (!asset) throw new NotFoundException('Media asset was not found');
+    return this.readObject(asset);
+  }
+
+  async readCurrentUserAvatar(userId: string, assetId: string): Promise<MediaContent> {
+    if (!uuidSchema.safeParse(assetId).success) throw new NotFoundException('Avatar was not found');
+    const asset = await this.mediaRepository.findCurrentUserAvatar(assetId, userId);
+    if (!asset) throw new NotFoundException('Avatar was not found');
+    return this.readObject(asset);
   }
 
   signReadUrl(asset: StoredObject): Promise<string> {
@@ -375,6 +390,20 @@ export class MediaService {
       new GetObjectCommand({ Bucket: asset.bucket, Key: asset.objectKey }),
       { expiresIn: 300 },
     );
+  }
+
+  private async readObject(asset: StoredObject & { mimeType: string }): Promise<MediaContent> {
+    try {
+      const object = await this.s3.send(
+        new GetObjectCommand({ Bucket: asset.bucket, Key: asset.objectKey }),
+      );
+      if (!object.Body) throw new NotFoundException('Media asset was not found');
+      return { body: await object.Body.transformToByteArray(), mimeType: asset.mimeType };
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'NoSuchKey')
+        throw new NotFoundException('Media asset was not found');
+      throw error;
+    }
   }
 
   private async copyAvatarToMemberPhoto(

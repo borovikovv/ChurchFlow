@@ -10,7 +10,7 @@ export class UsersRepository {
   async findById(userId: string) {
     return this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
-      include: { avatarAsset: { select: { bucket: true, objectKey: true } } },
+      include: { avatarAsset: { select: { id: true } } },
     });
   }
 

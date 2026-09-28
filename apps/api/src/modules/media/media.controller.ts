@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  Res,
+  StreamableFile,
+  UseGuards,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import type { AuthenticatedRequest } from '../../common/guards/session-auth.guard';
 import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
 import { ENTITLEMENTS } from '@churchflow/shared';
@@ -11,6 +22,7 @@ import {
   SubscriptionEntitlementGuard,
 } from '../../common/guards/subscription-entitlement.guard';
 import { MediaService } from './media.service';
+import { privateMediaFile } from './private-media-file';
 import { ConfirmMemberPhotoUploadDto, CreateMemberPhotoUploadDto } from './dto/member-photo.dto';
 
 @Controller('organizations/:organizationId/media')
@@ -146,6 +158,16 @@ export class MediaController {
   @Get(':assetId/read-url')
   readUrl(@Param('organizationId') organizationId: string, @Param('assetId') assetId: string) {
     return this.mediaService.getReadUrl(assetId, organizationId);
+  }
+
+  @Get(':assetId/content')
+  async content(
+    @Param('organizationId') organizationId: string,
+    @Param('assetId') assetId: string,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<StreamableFile> {
+    const media = await this.mediaService.readOrganizationMedia(organizationId, assetId);
+    return privateMediaFile(media, response);
   }
 
   private actorUserId(request: AuthenticatedRequest): string {
