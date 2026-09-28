@@ -22,7 +22,7 @@ const groupMemberInclude = {
       profile: {
         select: {
           displayName: true,
-          profilePhotoAsset: { select: { bucket: true, objectKey: true } },
+          profilePhotoAsset: { select: { id: true } },
         },
       },
       user: { select: { displayName: true, email: true, ...userAvatarSelect } },

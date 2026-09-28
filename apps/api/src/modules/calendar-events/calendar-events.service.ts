@@ -30,8 +30,7 @@ import {
 } from './recurrence/calendar-recurrence';
 import { sanitizeRichText } from './rich-text/sanitize-rich-text';
 import { validTimeZoneOrFallback } from '../../common/time/date-time';
-import { MediaService } from '../media/media.service';
-import { userAvatarUrl, type ReadUrlLookup } from '../media/user-avatar-url';
+import { userAvatarUrl } from '../media/user-avatar-url';
 import { NotificationsService } from '../notifications/notifications.service';
 import type {
   NotificationBodyMessage,
@@ -59,7 +58,6 @@ export class CalendarEventsService {
   constructor(
     private readonly calendarEventsRepository: CalendarEventsRepository,
     private readonly notificationsService: NotificationsService,
-    private readonly mediaService: MediaService,
   ) {}
 
   async listForOrganization(
@@ -85,11 +83,6 @@ export class CalendarEventsService {
       rangeEnd,
       types,
     );
-    const readUrl = await this.mediaService.readUrlLookup([
-      ...members.map((member) => member.user?.avatarAsset),
-      ...events.flatMap(eventAvatarAssets),
-    ]);
-
     return {
       actorRole: actorMembership?.role ?? null,
       canManage: actorMembership?.role === 'OWNER' || actorMembership?.role === 'ADMIN',
@@ -101,10 +94,10 @@ export class CalendarEventsService {
         birthday: formatDateOnly(member.profile?.birthday ?? null),
         anniversary: formatDateOnly(member.profile?.anniversary ?? null),
         photoAssetId: member.profile?.profilePhotoAssetId ?? null,
-        photoUrl: userAvatarUrl(member.user, readUrl),
+        photoUrl: userAvatarUrl(member.user, organizationId),
         groups: member.groups.map(({ group }) => group),
       })),
-      events: events.flatMap((event) => expandEvent(event, rangeStart, rangeEnd, readUrl)),
+      events: events.flatMap((event) => expandEvent(event, rangeStart, rangeEnd)),
     };
   }
 
@@ -137,7 +130,7 @@ export class CalendarEventsService {
         excludeMembershipIds: notifiedMembershipIds,
       });
 
-      return await this.eventItem(event);
+      return this.eventItem(event);
     } catch (error) {
       throw this.toHttpError(error);
     }
@@ -207,7 +200,7 @@ export class CalendarEventsService {
         excludeMembershipIds: notifiedMembershipIds,
       });
 
-      return await this.eventItem(event);
+      return this.eventItem(event);
     } catch (error) {
       throw this.toHttpError(error);
     }
@@ -228,7 +221,7 @@ export class CalendarEventsService {
     actorUserId: string,
   ) {
     try {
-      return await this.eventItem(
+      return this.eventItem(
         await this.calendarEventsRepository.toggleTaskCompletion(
           organizationId,
           eventId,
@@ -241,8 +234,8 @@ export class CalendarEventsService {
     }
   }
 
-  private async eventItem(event: CalendarEventRecord): Promise<CalendarEventItem> {
-    return baseEventToItem(event, await this.mediaService.readUrlLookup(eventAvatarAssets(event)));
+  private eventItem(event: CalendarEventRecord): CalendarEventItem {
+    return baseEventToItem(event);
   }
 
   async createDueReminderNotifications(now = new Date()) {
@@ -933,25 +926,12 @@ function groupReminderRecipientsByTimeZone(
   return groups;
 }
 
-function eventAvatarAssets(event: CalendarEventRecord) {
-  const memberships: Array<
-    | CalendarEventRecord['linkedMembership']
-    | CalendarEventRecord['assignees'][number]['membership']
-    | null
-  > = [
-    event.linkedMembership,
-    ...event.assignees.map((assignee) => assignee.membership),
-    ...(event.serviceDetails?.participants ?? []).map((participant) => participant.membership),
-  ];
-  return memberships.map((membership) => membership?.user?.avatarAsset);
-}
-
 function memberSummary(
   member:
     | CalendarEventRecord['linkedMembership']
     | CalendarEventRecord['assignees'][number]['membership']
     | null,
-  readUrl: ReadUrlLookup,
+  organizationId: string,
 ): CalendarEventMemberSummary | null {
   if (!member) return null;
 
@@ -960,11 +940,11 @@ function memberSummary(
     displayName:
       member.profile?.displayName ?? member.user?.displayName ?? member.user?.email ?? 'Member',
     photoAssetId: member.profile?.profilePhotoAssetId ?? null,
-    photoUrl: userAvatarUrl(member.user, readUrl),
+    photoUrl: userAvatarUrl(member.user, organizationId),
   };
 }
 
-function baseEventToItem(event: CalendarEventRecord, readUrl: ReadUrlLookup): CalendarEventItem {
+function baseEventToItem(event: CalendarEventRecord): CalendarEventItem {
   return {
     id: event.id,
     occurrenceId: event.id,
@@ -978,18 +958,18 @@ function baseEventToItem(event: CalendarEventRecord, readUrl: ReadUrlLookup): Ca
     reminder: event.reminder,
     repeatPeriod: event.repeatPeriod,
     taskCompleted: event.taskCompleted,
-    linkedMember: memberSummary(event.linkedMembership, readUrl),
+    linkedMember: memberSummary(event.linkedMembership, event.organizationId),
     assignees: event.assignees
-      .map((assignee) => memberSummary(assignee.membership, readUrl))
+      .map((assignee) => memberSummary(assignee.membership, event.organizationId))
       .filter((member): member is CalendarEventMemberSummary => member !== null),
     image: event.imageAsset ? { id: event.imageAsset.id, url: null } : null,
-    serviceDetails: serviceDetailsSummary(event.serviceDetails, readUrl),
+    serviceDetails: serviceDetailsSummary(event.serviceDetails, event.organizationId),
   };
 }
 
 function servicePersonSummary(
   participant: NonNullable<CalendarEventRecord['serviceDetails']>['participants'][number],
-  readUrl: ReadUrlLookup,
+  organizationId: string,
 ): CalendarServicePerson {
   return {
     membershipId: participant.membershipId,
@@ -1002,19 +982,19 @@ function servicePersonSummary(
       participant.customName ??
       'Guest',
     photoAssetId: participant.membership?.profile?.profilePhotoAssetId ?? null,
-    photoUrl: userAvatarUrl(participant.membership?.user, readUrl),
+    photoUrl: userAvatarUrl(participant.membership?.user, organizationId),
   };
 }
 
 function serviceDetailsSummary(
   details: CalendarEventRecord['serviceDetails'],
-  readUrl: ReadUrlLookup,
+  organizationId: string,
 ): CalendarServiceDetails | null {
   if (!details) return null;
   const participants = new Map(
     details.participants.map((participant) => [
       participant.role,
-      servicePersonSummary(participant, readUrl),
+      servicePersonSummary(participant, organizationId),
     ]),
   );
 
@@ -1033,7 +1013,6 @@ function expandEvent(
   event: CalendarEventRecord,
   rangeStart: Date,
   rangeEnd: Date,
-  readUrl: ReadUrlLookup,
 ): CalendarEventItem[] {
   try {
     return expandCalendarEventOccurrences({
@@ -1042,7 +1021,7 @@ function expandEvent(
       rangeEnd,
       timeZone: 'Europe/Kyiv',
     }).map((occurrence) => {
-      const item = baseEventToItem(event, readUrl);
+      const item = baseEventToItem(event);
       item.occurrenceId = `${event.id}:${occurrence.startsAt.toISOString()}`;
       item.startsAt = occurrence.startsAt.toISOString();
       item.endsAt = occurrence.endsAt?.toISOString() ?? null;

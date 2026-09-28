@@ -4,19 +4,30 @@ import { revalidatePath } from 'next/cache';
 import { apiFetch } from '@/api/client';
 import type { DashboardPage, DashboardSection, DashboardWebsite } from './types';
 import type {
+  ApplyWebsiteTemplateInput,
   PublishWebsiteInput,
   PublishWebsitePageInput,
   ReorderWebsiteSectionsInput,
-  UpdateWebsiteSettingsInput,
-  UpsertWebsitePageInput,
-  UpsertWebsiteSectionInput,
+  UpdateWebsiteSettingsPayload,
+  UpsertWebsitePagePayload,
+  UpsertWebsiteSectionPayload,
 } from '@churchflow/shared';
 
 const jsonHeaders = { 'content-type': 'application/json' };
 
+// Read back the stored website before an action that patches part of it, so a stale editor cannot
+// send its own copy of the title, description or menu.
+export async function readWebsiteAction(input: { organizationId: string }) {
+  const result = await apiFetch<DashboardWebsite>(`/organizations/${input.organizationId}/website`);
+
+  return result.ok
+    ? { ok: true as const, website: result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
 export async function updateWebsiteSettingsAction(input: {
   organizationId: string;
-  settings: UpdateWebsiteSettingsInput;
+  settings: UpdateWebsiteSettingsPayload;
 }) {
   const result = await apiFetch<DashboardWebsite>(
     `/organizations/${input.organizationId}/website`,
@@ -52,9 +63,29 @@ export async function publishWebsiteAction(input: {
     : { ok: false as const, error: result.error.message };
 }
 
+export async function applyWebsiteTemplateAction(input: {
+  organizationId: string;
+  template: ApplyWebsiteTemplateInput;
+}) {
+  const result = await apiFetch<{
+    website: DashboardWebsite;
+    page: DashboardPage | null;
+    addedSections: number;
+  }>(`/organizations/${input.organizationId}/website/template`, {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify(input.template),
+  });
+  revalidateWebsite(input.organizationId);
+
+  return result.ok
+    ? { ok: true as const, ...result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
 export async function createWebsitePageAction(input: {
   organizationId: string;
-  page: UpsertWebsitePageInput;
+  page: UpsertWebsitePagePayload;
 }) {
   const result = await apiFetch<DashboardPage>(`/organizations/${input.organizationId}/pages`, {
     method: 'POST',
@@ -71,7 +102,7 @@ export async function createWebsitePageAction(input: {
 export async function updateWebsitePageAction(input: {
   organizationId: string;
   pageId: string;
-  page: UpsertWebsitePageInput;
+  page: UpsertWebsitePagePayload;
 }) {
   const result = await apiFetch<DashboardPage>(
     `/organizations/${input.organizationId}/pages/${input.pageId}`,
@@ -111,7 +142,7 @@ export async function publishWebsitePageAction(input: {
 export async function createWebsiteSectionAction(input: {
   organizationId: string;
   pageId: string;
-  section: UpsertWebsiteSectionInput;
+  section: UpsertWebsiteSectionPayload;
 }) {
   const result = await apiFetch<DashboardSection>(
     `/organizations/${input.organizationId}/pages/${input.pageId}/sections`,
@@ -131,7 +162,7 @@ export async function createWebsiteSectionAction(input: {
 export async function updateWebsiteSectionAction(input: {
   organizationId: string;
   sectionId: string;
-  section: UpsertWebsiteSectionInput;
+  section: UpsertWebsiteSectionPayload;
 }) {
   const result = await apiFetch<DashboardSection>(
     `/organizations/${input.organizationId}/sections/${input.sectionId}`,
@@ -140,6 +171,41 @@ export async function updateWebsiteSectionAction(input: {
       headers: jsonHeaders,
       body: JSON.stringify(input.section),
     },
+  );
+  revalidateWebsite(input.organizationId);
+
+  return result.ok
+    ? { ok: true as const, section: result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
+export async function setWebsiteSectionHiddenAction(input: {
+  organizationId: string;
+  sectionId: string;
+  hidden: boolean;
+}) {
+  const result = await apiFetch<DashboardSection>(
+    `/organizations/${input.organizationId}/sections/${input.sectionId}/hidden`,
+    {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify({ hidden: input.hidden }),
+    },
+  );
+  revalidateWebsite(input.organizationId);
+
+  return result.ok
+    ? { ok: true as const, section: result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
+export async function duplicateWebsiteSectionAction(input: {
+  organizationId: string;
+  sectionId: string;
+}) {
+  const result = await apiFetch<DashboardSection>(
+    `/organizations/${input.organizationId}/sections/${input.sectionId}/duplicate`,
+    { method: 'POST' },
   );
   revalidateWebsite(input.organizationId);
 

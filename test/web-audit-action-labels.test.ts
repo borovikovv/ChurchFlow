@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import {
+  AUDIT_ENTITY_ACTION_KEYS,
+  auditMetadataSummary,
+} from '../apps/web/app/(dashboard)/dashboard/[orgId]/_components/audit-log-formatting.ts';
 
 // AuditLog.action is a free-form string written at each call site in the API, so nothing at
 // compile time ties a new action to a label. The dashboard renders `home.auditActions.<action>`,
@@ -48,9 +52,12 @@ function auditActionsWrittenIn(source: string): string[] {
   });
 }
 
+function homeMessages(locale: string) {
+  return JSON.parse(readFileSync(new URL(`${locale}.json`, WEB_MESSAGES), 'utf8')).home;
+}
+
 function auditActionLabelKeys(locale: string): Set<string> {
-  const messages = JSON.parse(readFileSync(new URL(`${locale}.json`, WEB_MESSAGES), 'utf8'));
-  return new Set(Object.keys(messages.home.auditActions));
+  return new Set(Object.keys(homeMessages(locale).auditActions));
 }
 
 const writtenActions = new Map<string, Set<string>>();
@@ -71,6 +78,8 @@ test('the scan finds the audit actions the API writes', () => {
   assert.ok(writtenActions.has('REVOKE_MEMBERSHIP_CLAIM'), 'ternary split across lines');
   assert.ok(!writtenActions.has('REJECTED'), 'ternary condition is not an action');
   assert.ok(writtenActions.has('SYNC_MEMBER_MILESTONE_EVENT'));
+  assert.ok(writtenActions.has('PUBLISH'), 'website publish');
+  assert.ok(writtenActions.has('UNPUBLISH'), 'website unpublish');
 });
 
 test('an action outside the audit call is not attributed to it', () => {
@@ -88,5 +97,51 @@ for (const locale of ['en', 'uk']) {
       .filter(([action]) => !USER_SCOPED_ACTIONS.has(action) && !labels.has(action))
       .map(([action, files]) => `${action} (${[...files].join(', ')})`);
     assert.deepEqual(missing, []);
+  });
+}
+
+for (const locale of ['en', 'uk']) {
+  test(`every entity-specific audit label has a ${locale} message`, () => {
+    const entityActions = homeMessages(locale).auditEntityActions;
+    const missing = AUDIT_ENTITY_ACTION_KEYS.filter((key) => {
+      const [entityType, action] = key.split('.');
+      return typeof entityActions?.[entityType]?.[action] !== 'string';
+    });
+    assert.deepEqual(missing, []);
+  });
+}
+
+const summaryLabels = {
+  changedFields: (fields: string) => `Changed ${fields}`,
+  metadataNoChanges: 'No changes',
+  metadataRole: (role: string) => `Role: ${role}`,
+  metadataStatus: (status: string) => `Status: ${status}`,
+};
+
+function websiteLog(metadata: Record<string, unknown>) {
+  return {
+    id: 'log',
+    organizationId: 'organization',
+    action: 'UPDATE',
+    entityType: 'OrganizationWebsite',
+    entityId: 'website',
+    actorUserId: 'user',
+    actor: null,
+    metadata,
+    createdAt: '2026-09-22T00:00:00.000Z',
+  };
+}
+
+test('a settings save that changed nothing is named instead of showing the entity type', () => {
+  assert.equal(auditMetadataSummary(websiteLog({ changedKeys: [] }), summaryLabels), 'No changes');
+  assert.equal(
+    auditMetadataSummary(websiteLog({ changedKeys: ['title', 'settings.seo'] }), summaryLabels),
+    'Changed title, settings.seo',
+  );
+});
+
+for (const locale of ['en', 'uk']) {
+  test(`the no-changes audit summary has a ${locale} message`, () => {
+    assert.equal(typeof homeMessages(locale).metadataNoChanges, 'string');
   });
 }

@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InvitationsRepository } from '../invitations/repositories/invitations.repository';
-import { MediaService } from '../media/media.service';
+import { organizationMediaContentUrl } from '../media/private-media-url';
 import { userAvatarUrl } from '../media/user-avatar-url';
 import { NotificationsService } from '../notifications/notifications.service';
 import type {
@@ -33,7 +33,6 @@ export class MembershipsService {
     private readonly membershipsRepository: MembershipsRepository,
     private readonly invitationsRepository: InvitationsRepository,
     private readonly notificationsService: NotificationsService,
-    private readonly mediaService: MediaService,
   ) {}
 
   async listForOrganization(
@@ -71,10 +70,6 @@ export class MembershipsService {
 
     const canManageProfiles =
       actorMembership?.role === 'OWNER' || actorMembership?.role === 'ADMIN';
-    const readUrl = await this.mediaService.readUrlLookup(
-      members.map((member) => member.user?.avatarAsset),
-    );
-
     return {
       actorRole: actorMembership?.role ?? null,
       actorMembershipId: actorMembership?.id ?? null,
@@ -131,7 +126,9 @@ export class MembershipsService {
                 notes: canViewProfile ? member.profile.notes : null,
                 biography: canViewProfile ? member.profile.biography : null,
                 familyNotes: canViewProfile ? member.profile.familyNotes : null,
-                photoUrl: userAvatarUrl(member.user, readUrl),
+                photoUrl: member.profile.profilePhotoAssetId
+                  ? organizationMediaContentUrl(organizationId, member.profile.profilePhotoAssetId)
+                  : userAvatarUrl(member.user, organizationId),
               }
             : {
                 displayName: member.user?.displayName ?? member.user?.email ?? 'Member',
@@ -144,7 +141,7 @@ export class MembershipsService {
                 biography: null,
                 familyNotes: null,
                 profilePhotoAssetId: null,
-                photoUrl: userAvatarUrl(member.user, readUrl),
+                photoUrl: userAvatarUrl(member.user, organizationId),
               },
           user: member.user
             ? {
