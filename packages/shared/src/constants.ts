@@ -20,7 +20,44 @@ export const BUDGET_AUDIT_ENTITY_TYPE = 'Budget';
 export const PHOTO_UPLOAD_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const PHOTO_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 
-export const PUBLIC_SECTION_TYPES = ['hero', 'about', 'schedule', 'gallery', 'contact'] as const;
+export const PUBLIC_SECTION_TYPES = [
+  'hero',
+  'about',
+  'schedule',
+  'gallery',
+  'contact',
+  'live',
+  'giving',
+  'footer',
+] as const;
+
+export const WEBSITE_TEMPLATES = ['default', 'city'] as const;
+export const DEFAULT_WEBSITE_TEMPLATE = 'default';
+
+/** Starter section sets a template can offer when an owner creates an inner page. */
+export const WEBSITE_PAGE_PRESETS = ['about', 'contacts', 'giving'] as const;
+
+export const WEBSITE_NAVIGATION_MAX_LINKS = 10;
+
+export const WEBSITE_LIVE_MODES = ['schedule', 'manual'] as const;
+
+/**
+ * ChurchFlow modules a section can read live data from. A section keeps manual content until the
+ * module has a resolver, so this list may name modules that nothing resolves yet.
+ */
+export const WEBSITE_SECTION_MODULES = [
+  'events',
+  'groups',
+  'leaders',
+  'media',
+  'announcements',
+  'giving',
+  'serviceSchedule',
+] as const;
+
+/** A source stores references to records, so the list stays short enough to render as one section. */
+export const WEBSITE_SECTION_SOURCE_MAX_REFS = 24;
+export const WEBSITE_SECTION_SOURCE_MAX_LIMIT = 24;
 
 export const CALENDAR_EVENT_TYPES = [
   'BIRTHDAY',
@@ -127,9 +164,12 @@ export const AUDIT_ENTITY_TYPES = [
   'OrganizationMember',
   'OrganizationMemberRelationship',
   'OrganizationRequest',
+  'OrganizationWebsite',
   'PrayerRequest',
   'Subscription',
   'User',
+  'WebsitePage',
+  'WebsiteSection',
 ] as const;
 
 export const PRAYER_REQUEST_TABS = ['active', 'archived'] as const;

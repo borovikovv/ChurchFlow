@@ -1,6 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ENTITLEMENTS } from '@churchflow/shared';
-import { SessionAuthGuard } from '../../common/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedRequest,
+} from '../../common/guards/session-auth.guard';
 import {
   OrganizationAccessGuard,
   RequireOrganizationOwner,
@@ -12,6 +15,7 @@ import {
 import { PagesService } from './pages.service';
 import { PublishPageDto } from './dto/publish-page.dto';
 import { ReorderSectionsDto } from './dto/reorder-sections.dto';
+import { SetSectionHiddenDto } from './dto/set-section-hidden.dto';
 import { UpsertPageDto } from './dto/upsert-page.dto';
 import { UpsertSectionDto } from './dto/upsert-section.dto';
 
@@ -46,12 +50,26 @@ export class PagesController {
     return this.pagesService.findDashboardPage(organizationId, pageId);
   }
 
+  @Get('organizations/:organizationId/pages/:pageId/preview')
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireOrganizationOwner()
+  async previewPage(
+    @Param('organizationId') organizationId: string,
+    @Param('pageId') pageId: string,
+  ) {
+    return this.pagesService.findPreviewPage(organizationId, pageId);
+  }
+
   @Post('organizations/:organizationId/pages')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
   @RequireOrganizationOwner()
   @RequireEntitlement(ENTITLEMENTS.websiteWrite)
-  async createPage(@Param('organizationId') organizationId: string, @Body() body: UpsertPageDto) {
-    return this.pagesService.createPage(organizationId, body);
+  async createPage(
+    @Param('organizationId') organizationId: string,
+    @Body() body: UpsertPageDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.pagesService.createPage(organizationId, this.actorUserId(request), body);
   }
 
   @Patch('organizations/:organizationId/pages/:pageId')
@@ -62,8 +80,9 @@ export class PagesController {
     @Param('organizationId') organizationId: string,
     @Param('pageId') pageId: string,
     @Body() body: UpsertPageDto,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.pagesService.updatePage(organizationId, pageId, body);
+    return this.pagesService.updatePage(organizationId, this.actorUserId(request), pageId, body);
   }
 
   @Post('organizations/:organizationId/pages/:pageId/publish')
@@ -74,8 +93,14 @@ export class PagesController {
     @Param('organizationId') organizationId: string,
     @Param('pageId') pageId: string,
     @Body() body: PublishPageDto,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.pagesService.setPagePublished(organizationId, pageId, body.published);
+    return this.pagesService.setPagePublished(
+      organizationId,
+      this.actorUserId(request),
+      pageId,
+      body.published,
+    );
   }
 
   @Post('organizations/:organizationId/pages/:pageId/sections')
@@ -102,6 +127,29 @@ export class PagesController {
     return this.pagesService.updateSection(organizationId, sectionId, body);
   }
 
+  @Patch('organizations/:organizationId/sections/:sectionId/hidden')
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireOrganizationOwner()
+  @RequireEntitlement(ENTITLEMENTS.websiteWrite)
+  async setSectionHidden(
+    @Param('organizationId') organizationId: string,
+    @Param('sectionId') sectionId: string,
+    @Body() body: SetSectionHiddenDto,
+  ) {
+    return this.pagesService.setSectionHidden(organizationId, sectionId, body.hidden);
+  }
+
+  @Post('organizations/:organizationId/sections/:sectionId/duplicate')
+  @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
+  @RequireOrganizationOwner()
+  @RequireEntitlement(ENTITLEMENTS.websiteWrite)
+  async duplicateSection(
+    @Param('organizationId') organizationId: string,
+    @Param('sectionId') sectionId: string,
+  ) {
+    return this.pagesService.duplicateSection(organizationId, sectionId);
+  }
+
   @Delete('organizations/:organizationId/sections/:sectionId')
   @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
   @RequireOrganizationOwner()
@@ -109,8 +157,9 @@ export class PagesController {
   async deleteSection(
     @Param('organizationId') organizationId: string,
     @Param('sectionId') sectionId: string,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.pagesService.deleteSection(organizationId, sectionId);
+    return this.pagesService.deleteSection(organizationId, this.actorUserId(request), sectionId);
   }
 
   @Post('organizations/:organizationId/pages/:pageId/sections/reorder')
@@ -123,5 +172,14 @@ export class PagesController {
     @Body() body: ReorderSectionsDto,
   ) {
     return this.pagesService.reorderSections(organizationId, pageId, body);
+  }
+
+  private actorUserId(request: AuthenticatedRequest): string {
+    const userId = request.auth?.userId;
+    if (!userId) {
+      throw new Error('Authenticated request missing auth payload');
+    }
+
+    return userId;
   }
 }

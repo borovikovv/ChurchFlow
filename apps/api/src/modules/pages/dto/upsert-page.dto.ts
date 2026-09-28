@@ -2,6 +2,8 @@ import {
   upsertWebsitePageSchema,
   type UpsertWebsitePageInput,
   type WebsitePage,
+  type WebsitePagePreset,
+  type WebsiteSeo,
 } from '@churchflow/shared';
 
 export class UpsertPageDto implements UpsertWebsitePageInput {
@@ -10,5 +12,6 @@ export class UpsertPageDto implements UpsertWebsitePageInput {
   slug!: string;
   title!: string;
   status!: WebsitePage['status'];
-  seo!: Record<string, unknown>;
+  seo!: WebsiteSeo;
+  preset?: WebsitePagePreset;
 }

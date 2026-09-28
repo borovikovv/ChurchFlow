@@ -8,6 +8,8 @@ The deployment flow is intentionally manual and runs from one GitHub Actions wor
 2. Run `Deploy` with the target GitHub Environment.
 3. The workflow builds, publishes, migrates, deploys, and health-checks the exact `github.sha` selected by GitHub.
 
+Both `stage` and `prod` deploys are gated on CI. The first job, `Require green CI`, looks up runs of the `CI` workflow for the selected `github.sha` from any event (push or pull request) and continues only if at least one of them completed successfully. It does not wait: the deploy fails if there is no CI run for the commit, if CI is still running, or if CI failed or was cancelled. A failed or cancelled CI run must be re-run green before deploying; then run `Deploy` again.
+
 Images are always deployed by immutable commit SHA tags. Do not deploy `latest`.
 
 ## Runtime Shape
@@ -212,6 +214,8 @@ Optional variables with defaults, used by the nightly session retention job:
 Leaving any of these blank falls back to the default shown above.
 
 `API_INTERNAL_URL` is a Docker-network URL used by Next.js server code and rewrites. Do not use `localhost` for it inside containers.
+
+The API needs `PUBLIC_API_URL`, its own browser-visible base URL including the `/v1` prefix, because a published website links its images to a route on the API rather than publishing a signed storage URL that expires. The deploy workflow derives it from `NEXT_PUBLIC_API_URL`, which is the same address, so there is no separate GitHub Environment variable to create. A deployment that renders its own env files, rather than running the workflow, must set `PUBLIC_API_URL` explicitly: it defaults to `http://localhost:4000/v1`, and left at that default every published page advertises `og:image`, the JSON-LD logo and its section backgrounds as localhost links that no visitor or crawler can fetch.
 Leave `COOKIE_DOMAIN` unset in both environments so auth and Telegram OAuth cookies are host-only.
 
 ## GitHub Environment Secrets

@@ -34,9 +34,49 @@ env:
   ALLOW_DESTRUCTIVE_MIGRATIONS: ${{ inputs.allow_destructive_migrations }}
 
 jobs:
+  ci-gate:
+    name: Require green CI
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Validate CI status of selected commit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          runs="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f head_sha="$COMMIT_SHA" -f per_page=100 \
+            --jq '[.workflow_runs[] | {status, conclusion, html_url}]')"
+
+          if [[ "$(jq 'length' <<<"$runs")" -eq 0 ]]; then
+            echo "::error::No CI run found for commit $COMMIT_SHA. Push the commit or open a pull request so CI runs, then deploy once it is green."
+            exit 1
+          fi
+
+          green_url="$(jq -r 'map(select(.status == "completed" and .conclusion == "success")) | first | .html_url // empty' <<<"$runs")"
+          if [[ -n "$green_url" ]]; then
+            echo "CI passed for commit $COMMIT_SHA: $green_url"
+            exit 0
+          fi
+
+          running_url="$(jq -r 'map(select(.status != "completed")) | first | .html_url // empty' <<<"$runs")"
+          if [[ -n "$running_url" ]]; then
+            echo "::error::CI is still running for commit $COMMIT_SHA: $running_url. Deploy again once it has passed."
+            exit 1
+          fi
+
+          latest_conclusion="$(jq -r 'first | .conclusion // "unknown"' <<<"$runs")"
+          latest_url="$(jq -r 'first | .html_url' <<<"$runs")"
+          echo "::error::CI did not pass for commit $COMMIT_SHA (conclusion: $latest_conclusion): $latest_url. Fix it or re-run CI until it is green, then deploy again."
+          exit 1
+
   build:
     name: Build and publish images
     runs-on: ubuntu-latest
+    needs: ci-gate
     environment:
       name: ${{ inputs.environment }}
     env:
@@ -496,6 +536,17 @@ jobs:
 
           BIND_ADDRESS=127.0.0.1
 
+          # The API links a published website's media to itself, so it needs the same public base
+          # url the browser uses. There is one such address per environment, already validated
+          # above, so it is reused rather than configured twice and left to drift. The name the
+          # API reads it under exists in no GitHub Environment, so the failure has to name the
+          # variable someone can actually go and set.
+          if [[ -z "${NEXT_PUBLIC_API_URL:-}" ]]; then
+            echo "NEXT_PUBLIC_API_URL is required: the API reads it as PUBLIC_API_URL."
+            exit 1
+          fi
+          PUBLIC_API_URL="$NEXT_PUBLIC_API_URL"
+
           for key in \
             DEPLOY_ENV COMMIT_SHA IMAGE_TAG API_IMAGE MIGRATOR_IMAGE WEB_IMAGE \
             TELEGRAM_CLIENT_ID BIND_ADDRESS API_HOST_PORT WEB_HOST_PORT INTERNAL_NETWORK \
@@ -504,7 +555,7 @@ jobs:
           done
 
           for key in \
-            DATABASE_URL WEB_APP_URL PLATFORM_ADMIN_EMAIL \
+            DATABASE_URL WEB_APP_URL PUBLIC_API_URL PLATFORM_ADMIN_EMAIL \
             TELEGRAM_CLIENT_ID TELEGRAM_CLIENT_SECRET TELEGRAM_REDIRECT_URI \
             EMAIL_PROVIDER EMAIL_FROM \
             S3_ENDPOINT S3_REGION S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do

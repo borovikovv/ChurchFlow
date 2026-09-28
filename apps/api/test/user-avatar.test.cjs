@@ -90,7 +90,7 @@ test('confirming an avatar copies it to the membership that has no photo', async
   assert.match(copy.objectKey, /^organizations\/organization\/members\/membership\/.+\.webp$/);
   assert.notEqual(copy.objectKey, avatarAsset.objectKey);
   assert.equal(result.copiedToMembershipId, MEMBERSHIP_ID);
-  assert.equal(typeof result.avatarUrl, 'string');
+  assert.equal(result.avatarUrl, `/v1/users/me/avatar/${ASSET_ID}`);
 });
 
 test('a membership that already has a photo keeps it', async () => {
@@ -184,32 +184,25 @@ test('attaching a new avatar retires the previous one', async () => {
 });
 
 test('the current user profile prefers the uploaded avatar over the provider URL', async () => {
-  const mediaService = { signReadUrl: async (asset) => `signed:${asset.objectKey}` };
-  const withAsset = new UsersService(
-    {
-      findById: async () => ({
-        id: USER_ID,
-        avatarUrl: 'https://t.me/photo.jpg',
-        avatarAsset: { bucket: 'bucket', objectKey: 'users/user/avatar/one.webp' },
-      }),
-    },
-    mediaService,
-  );
-  const withoutAsset = new UsersService(
-    {
-      findById: async () => ({
-        id: USER_ID,
-        avatarUrl: 'https://t.me/photo.jpg',
-        avatarAsset: null,
-      }),
-    },
-    mediaService,
-  );
+  const withAsset = new UsersService({
+    findById: async () => ({
+      id: USER_ID,
+      avatarUrl: 'https://t.me/photo.jpg',
+      avatarAsset: { id: ASSET_ID },
+    }),
+  });
+  const withoutAsset = new UsersService({
+    findById: async () => ({
+      id: USER_ID,
+      avatarUrl: 'https://t.me/photo.jpg',
+      avatarAsset: null,
+    }),
+  });
 
   const uploaded = await withAsset.findProfile(USER_ID);
   const provider = await withoutAsset.findProfile(USER_ID);
 
-  assert.equal(uploaded.avatarUrl, 'signed:users/user/avatar/one.webp');
+  assert.equal(uploaded.avatarUrl, `/v1/users/me/avatar/${ASSET_ID}`);
   assert.equal('avatarAsset' in uploaded, false);
   assert.equal(provider.avatarUrl, 'https://t.me/photo.jpg');
 });

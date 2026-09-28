@@ -1,35 +1,49 @@
 'use server';
 
+import {
+  websiteTemplateVariantContent,
+  WEBSITE_NAVIGATION_MAX_LINKS,
+  WEBSITE_TEMPLATES,
+  type WebsiteTemplateId,
+} from '@churchflow/shared';
 import { getCurrentUser } from '@/auth/session';
 import { getMessages } from '@/i18n/messages';
 import {
+  applyWebsiteTemplateAction,
   createWebsitePageAction,
   createWebsiteSectionAction,
   deleteWebsiteSectionAction,
+  duplicateWebsiteSectionAction,
   publishWebsiteAction,
   publishWebsitePageAction,
+  readWebsiteAction,
   reorderWebsiteSectionsAction,
+  setWebsiteSectionHiddenAction,
   updateWebsitePageAction,
   updateWebsiteSectionAction,
   updateWebsiteSettingsAction,
 } from './actions';
 import type { DashboardPage, DashboardSection, DashboardWebsite } from './types';
-import { pageInput, sectionInput, websiteSettingsInput } from './website-form-utils';
-import { sectionVariant } from './website-section-presets';
+import {
+  navigationAppendInput,
+  pageInput,
+  sectionInput,
+  websiteSettingsInput,
+} from './website-form-utils';
 
 export type WebsiteFormResult =
   | { ok: false; error: string }
   | { ok: true; message: string; mutation: WebsiteMutation };
 
-type WebsiteMutation =
+export type WebsiteMutation =
   | { type: 'website'; website: DashboardWebsite }
   | { type: 'page'; page: DashboardPage }
-  | { type: 'page-created'; page: DashboardPage }
+  | { type: 'page-created'; page: DashboardPage; website?: DashboardWebsite }
   | { type: 'section-created'; pageId: string; section: DashboardSection }
   | { type: 'section-updated'; section: DashboardSection }
   | { type: 'section-deleted'; sectionId: string }
   | { type: 'sections-reordered'; pageId: string; sections: DashboardSection[] }
-  | { type: 'starter-home'; page?: DashboardPage; pageId: string; sections: DashboardSection[] };
+  | { type: 'template-applied'; website: DashboardWebsite; page: DashboardPage | null };
 
 export async function updateSettings(formData: FormData) {
   const messages = await currentWebsiteMessages();
@@ -57,6 +71,26 @@ export async function setWebsitePublished(formData: FormData) {
   }));
 }
 
+export async function applyTemplate(formData: FormData) {
+  const messages = await currentWebsiteMessages();
+  const organizationId = readOrganizationId(formData);
+  const result = await applyWebsiteTemplateAction({
+    organizationId,
+    template: {
+      templateId: templateId(String(formData.get('templateId') ?? '')),
+      addMissingSections: formData.get('addMissingSections') === 'true',
+      resetTheme: formData.get('resetTheme') === 'true',
+    },
+  });
+  return actionResult(result, messages.messages.templateApplied, (success) => ({
+    type: 'template-applied',
+    website: success.website,
+    page: success.page,
+  }));
+}
+
+// The new page is created first; only then can its link be appended to the stored menu, so the
+// menu is patched with a second request and never blocks the page from being created.
 export async function createPage(formData: FormData) {
   const messages = await currentWebsiteMessages();
   const organizationId = readOrganizationId(formData);
@@ -64,70 +98,36 @@ export async function createPage(formData: FormData) {
     organizationId,
     page: pageInput(formData),
   });
-  return actionResult(result, messages.messages.pageCreated, (success) => ({
-    type: 'page-created',
-    page: success.page,
-  }));
-}
+  if (!result.ok) return actionError(result.error);
 
-export async function createStarterHome(formData: FormData) {
-  const messages = await currentWebsiteMessages();
-  const organizationId = readOrganizationId(formData);
-  let pageId = String(formData.get('pageId') ?? '');
-  let createdPage: DashboardPage | undefined;
-  const existingVariants = new Set(
-    String(formData.get('existingVariants') ?? '')
-      .split(',')
-      .filter(Boolean),
-  );
-
-  if (!pageId) {
-    const pageResult = await createWebsitePageAction({
-      organizationId,
-      page: {
-        slug: 'home',
-        title: messages.starterContent.homeTitle,
-        status: 'PUBLISHED',
-        seo: {},
-      },
-    });
-    if (!pageResult.ok) {
-      return actionError(pageResult.error);
-    }
-    pageId = pageResult.page.id;
-    createdPage = pageResult.page;
+  const created = (mutation: WebsiteMutation, message: string): WebsiteFormResult => ({
+    ok: true,
+    message,
+    mutation,
+  });
+  const pageCreated = { type: 'page-created' as const, page: result.page };
+  if (formData.get('addToMenu') !== 'true') {
+    return created(pageCreated, messages.messages.pageCreated);
   }
 
-  const createdSectionItems: DashboardSection[] = [];
-  for (const section of starterHomeSections(messages)) {
-    if (existingVariants.has(sectionVariant(section))) {
-      continue;
-    }
+  // The stored website answers for the menu, not the editor that submitted the form.
+  const current = await readWebsiteAction({ organizationId });
+  if (!current.ok) return created(pageCreated, messages.messages.pageCreatedMenuFailed);
 
-    const result = await createWebsiteSectionAction({
-      organizationId,
-      pageId,
-      section,
-    });
-    if (!result.ok) {
-      return actionError(result.error);
-    }
-    createdSectionItems.push(result.section);
+  const menu = navigationAppendInput(current.website, result.page);
+  if (menu.status === 'menu-full') {
+    return created(
+      pageCreated,
+      messages.messages.pageCreatedMenuFull.replace('{max}', String(WEBSITE_NAVIGATION_MAX_LINKS)),
+    );
   }
+  if (menu.status === 'skipped') return created(pageCreated, messages.messages.pageCreated);
 
-  return {
-    ok: true as const,
-    message:
-      createdSectionItems.length > 0
-        ? messages.messages.starterHomeAdded
-        : messages.messages.starterHomeComplete,
-    mutation: {
-      type: 'starter-home' as const,
-      ...(createdPage ? { page: createdPage } : {}),
-      pageId,
-      sections: createdSectionItems,
-    },
-  };
+  const updated = await updateWebsiteSettingsAction({ organizationId, settings: menu.settings });
+
+  return updated.ok
+    ? created({ ...pageCreated, website: updated.website }, messages.messages.pageCreated)
+    : created(pageCreated, messages.messages.pageCreatedMenuFailed);
 }
 
 export async function updatePage(formData: FormData) {
@@ -161,10 +161,17 @@ export async function setPagePublished(formData: FormData) {
 export async function createSection(formData: FormData) {
   const messages = await currentWebsiteMessages();
   const organizationId = readOrganizationId(formData);
+  const section = sectionInput(formData);
+  const content = section.content ?? {};
+  const defaults = websiteTemplateVariantContent(
+    templateId(String(formData.get('templateId') ?? '')),
+    section.type,
+    String(content['variant'] ?? ''),
+  );
   const result = await createWebsiteSectionAction({
     organizationId,
     pageId: String(formData.get('pageId')),
-    section: sectionInput(formData),
+    section: { ...section, content: { ...defaults, ...content } },
   });
   return actionResult(result, messages.messages.sectionAdded, (success) => ({
     type: 'section-created',
@@ -183,6 +190,36 @@ export async function updateSection(formData: FormData) {
   });
   return actionResult(result, messages.messages.sectionSaved, (success) => ({
     type: 'section-updated',
+    section: success.section,
+  }));
+}
+
+export async function setSectionHidden(formData: FormData) {
+  const messages = await currentWebsiteMessages();
+  const organizationId = readOrganizationId(formData);
+  const hidden = formData.get('hidden') === 'true';
+  const result = await setWebsiteSectionHiddenAction({
+    organizationId,
+    sectionId: String(formData.get('sectionId')),
+    hidden,
+  });
+  return actionResult(
+    result,
+    hidden ? messages.messages.sectionHidden : messages.messages.sectionShown,
+    (success) => ({ type: 'section-updated', section: success.section }),
+  );
+}
+
+export async function duplicateSection(formData: FormData) {
+  const messages = await currentWebsiteMessages();
+  const organizationId = readOrganizationId(formData);
+  const result = await duplicateWebsiteSectionAction({
+    organizationId,
+    sectionId: String(formData.get('sectionId')),
+  });
+  return actionResult(result, messages.messages.sectionDuplicated, (success) => ({
+    type: 'section-created',
+    pageId: String(formData.get('pageId')),
     section: success.section,
   }));
 }
@@ -228,53 +265,13 @@ function readOrganizationId(formData: FormData): string {
   return String(formData.get('organizationId') ?? '');
 }
 
+function templateId(value: string): WebsiteTemplateId {
+  return WEBSITE_TEMPLATES.find((template) => template === value) ?? 'default';
+}
+
 async function currentWebsiteMessages() {
   const user = await getCurrentUser();
   return getMessages(user?.locale ?? 'en').website;
-}
-
-function starterHomeSections(messages: Awaited<ReturnType<typeof currentWebsiteMessages>>) {
-  return [
-    {
-      type: 'hero',
-      order: 0,
-      content: {
-        variant: 'hero',
-        headline: messages.starterContent.heroHeadline,
-        subheading: messages.starterContent.heroSubheading,
-        primaryLabel: messages.starterContent.planVisit,
-        primaryHref: '#visit',
-        secondaryLabel: messages.starterContent.watchOnline,
-        secondaryHref: '#',
-      },
-    },
-    {
-      type: 'contact',
-      order: 1,
-      content: {
-        variant: 'contact',
-        title: messages.starterContent.contactTitle,
-        body: messages.starterContent.contactBody,
-        email: 'hello@example.com',
-        phone: '(555) 000-0000',
-        address: messages.starterContent.address,
-      },
-    },
-    {
-      type: 'contact',
-      order: 2,
-      content: {
-        variant: 'footer',
-        title: messages.starterContent.footerTitle,
-        address: messages.starterContent.address,
-        email: 'hello@example.com',
-        phone: '(555) 000-0000',
-        copyright: messages.starterContent.copyright,
-        primaryLabel: messages.starterContent.give,
-        primaryHref: '#give',
-      },
-    },
-  ] as const;
 }
 
 function actionResult<TResult extends { ok: true } | { ok: false; error: string }>(

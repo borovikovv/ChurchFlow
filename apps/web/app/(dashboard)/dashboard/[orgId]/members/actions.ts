@@ -70,16 +70,6 @@ export async function loadMembersAction(input: {
   const payload = result.data;
   payload.groups = payload.groups ?? [];
   payload.memberCandidates = payload.memberCandidates ?? [];
-  await Promise.all(
-    payload.members.map(async (member) => {
-      if (!member.profile.profilePhotoAssetId) return;
-      const photo = await apiFetch<{ url: string }>(
-        `/organizations/${input.organizationId}/media/${member.profile.profilePhotoAssetId}/read-url`,
-      );
-      if (photo.ok) member.profile.photoUrl = photo.data.url;
-    }),
-  );
-
   const canManage = payload.actorRole === 'OWNER' || payload.actorRole === 'ADMIN';
   await Promise.all(
     payload.members.map(async (member) => {
