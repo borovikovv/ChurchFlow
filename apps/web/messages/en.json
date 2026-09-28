@@ -955,6 +955,8 @@
         "CANCELED": "Canceled"
       },
       "complimentary": "Complimentary access",
+      "complimentaryBadge": "Complimentary",
+      "complimentaryDescription": "Editing access for this organization is granted free of charge.",
       "complimentaryGranted": "Granted by a platform administrator",
       "complimentaryNotice": "This organization has complimentary access and is not charged. Only a platform administrator can change that.",
       "amount": "Price",

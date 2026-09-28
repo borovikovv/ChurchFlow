@@ -110,20 +110,26 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
     <section className="grid gap-4">
       <div className="grid gap-1">
         <h2 className="m-0 text-xl">{t('billing.title')}</h2>
-        <p className="m-0 text-[var(--muted)]">{t('billing.description')}</p>
+        <p className="m-0 text-[var(--muted)]">
+          {t(current.isExempt ? 'billing.complimentaryDescription' : 'billing.description')}
+        </p>
       </div>
 
       <dl className="details">
         <dt>{t('billing.status')}</dt>
         <dd>
-          <StatusBadge
-            label={
-              current.cancelRequestedAt && current.status !== 'CANCELED'
-                ? t('billing.renewalCanceled')
-                : t(`billing.statuses.${current.status}`)
-            }
-            status={current.status}
-          />
+          {current.isExempt ? (
+            <StatusBadge label={t('billing.complimentaryBadge')} status="ACTIVE" />
+          ) : (
+            <StatusBadge
+              label={
+                current.cancelRequestedAt && current.status !== 'CANCELED'
+                  ? t('billing.renewalCanceled')
+                  : t(`billing.statuses.${current.status}`)
+              }
+              status={current.status}
+            />
+          )}
         </dd>
 
         {current.isExempt ? (
@@ -156,19 +162,23 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
           </>
         ) : null}
 
-        {restrictAfter && current.status === 'PENDING' ? (
+        {restrictAfter && current.status === 'PENDING' && !current.isExempt ? (
           <>
             <dt>{t('billing.windowEnds')}</dt>
             <dd>{restrictAfter}</dd>
           </>
         ) : null}
 
-        <dt>{t('billing.card')}</dt>
-        <dd>
-          {current.card?.mask
-            ? [current.card.brand, current.card.mask].filter(Boolean).join(' ')
-            : t('billing.noCard')}
-        </dd>
+        {current.card?.mask || !current.isExempt ? (
+          <>
+            <dt>{t('billing.card')}</dt>
+            <dd>
+              {current.card?.mask
+                ? [current.card.brand, current.card.mask].filter(Boolean).join(' ')
+                : t('billing.noCard')}
+            </dd>
+          </>
+        ) : null}
       </dl>
 
       {current.previousCancellationPending ? (
