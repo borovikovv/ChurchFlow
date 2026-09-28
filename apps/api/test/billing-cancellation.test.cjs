@@ -163,8 +163,11 @@ test('a provider unsubscribe uses the same paid access deadline as a manual canc
 
 test('cancellation is durable before the provider call and repeat requests do not rewrite it', async () => {
   const events = [];
+  // The service reads the real clock, so the paid period has to end after it.
+  const paidUntil = new Date(Date.now() + 12 * 24 * 60 * 60 * 1000);
   let row = {
     ...ACTIVE,
+    currentPeriodEndsAt: paidUntil,
     liqpayOrderId: 'order',
     organization: { id: 'org', name: 'Test' },
     unsubscribeRequests: [],
@@ -178,7 +181,7 @@ test('cancellation is durable before the provider call and repeat requests do no
         // The deadline is decided by the service, so the repository writes it rather than
         // recomputing it from a row it read again inside its own transaction.
         assert.equal(input.data.status, 'ACTIVE');
-        assert.deepEqual(input.data.currentPeriodEndsAt, PAID_UNTIL);
+        assert.deepEqual(input.data.currentPeriodEndsAt, paidUntil);
         assert.ok(input.data.cancelRequestedAt instanceof Date);
         events.push('persist');
         row = { ...row, ...cancellationTransition(row, NOW) };
