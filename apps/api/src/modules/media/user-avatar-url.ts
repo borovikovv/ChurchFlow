@@ -1,24 +1,27 @@
+import { organizationMediaContentUrl } from './private-media-url';
+
 export interface StoredObject {
   bucket: string;
   objectKey: string;
 }
 
-export type ReadUrlLookup = (object: StoredObject | null | undefined) => string | null;
-
 export const userAvatarSelect = {
   avatarUrl: true,
-  avatarAsset: { select: { bucket: true, objectKey: true } },
+  avatarAsset: { select: { id: true } },
 } as const;
 
 export interface UserAvatarSource {
   avatarUrl: string | null;
-  avatarAsset: StoredObject | null;
+  avatarAsset: { id: string } | null;
 }
 
+/** The avatar of a user as another member of `organizationId` may load it. */
 export function userAvatarUrl(
   user: UserAvatarSource | null | undefined,
-  readUrl: ReadUrlLookup,
+  organizationId: string,
 ): string | null {
   if (!user) return null;
-  return user.avatarAsset ? readUrl(user.avatarAsset) : user.avatarUrl;
+  return user.avatarAsset
+    ? organizationMediaContentUrl(organizationId, user.avatarAsset.id)
+    : user.avatarUrl;
 }

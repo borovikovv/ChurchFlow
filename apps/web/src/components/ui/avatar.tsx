@@ -24,6 +24,13 @@ const avatarSizeClasses: Record<AvatarSize, string> = {
   lg: 'h-20 w-20 sm:h-24 sm:w-24',
 };
 
+/** The largest box each size renders at, so the browser reserves space before the photo decodes. */
+const avatarPixelSizes: Record<AvatarSize, number> = {
+  sm: 40,
+  md: 56,
+  lg: 96,
+};
+
 const initialsSizeClasses: Record<AvatarSize, string> = {
   sm: 'text-sm',
   md: 'text-lg',
@@ -83,8 +90,12 @@ export function Avatar({
         <img
           alt={displayName}
           className="absolute inset-0 h-full w-full object-cover"
+          decoding="async"
+          height={avatarPixelSizes[size]}
+          loading="lazy"
           ref={imageRef}
           src={url}
+          width={avatarPixelSizes[size]}
           onError={() => setFailedUrl(url)}
           onLoad={(event) => {
             if (isMissingPhoto(event.currentTarget)) setFailedUrl(url);

@@ -18,6 +18,10 @@
       "dependsOn": ["^build"],
       "passThroughEnv": ["DATABASE_URL"]
     },
+    "@churchflow/db#typecheck": {
+      "dependsOn": ["@churchflow/db#build"],
+      "passThroughEnv": ["DATABASE_URL"]
+    },
     "db:generate": {
       "cache": false
     },

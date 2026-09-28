@@ -158,6 +158,36 @@ export class MediaRepository {
     });
   }
 
+  findOrganizationVisibleImage(assetId: string, organizationId: string) {
+    return this.prisma.mediaAsset.findFirst({
+      where: {
+        id: assetId,
+        deletedAt: null,
+        mimeType: { startsWith: 'image/' },
+        OR: [
+          { organizationId },
+          {
+            organizationId: null,
+            userAvatar: {
+              is: {
+                deletedAt: null,
+                memberships: { some: { organizationId, removedAt: null } },
+              },
+            },
+          },
+        ],
+      },
+      select: { bucket: true, objectKey: true, mimeType: true },
+    });
+  }
+
+  findCurrentUserAvatar(assetId: string, userId: string) {
+    return this.prisma.mediaAsset.findFirst({
+      where: { id: assetId, deletedAt: null, userAvatar: { is: { id: userId } } },
+      select: { bucket: true, objectKey: true, mimeType: true },
+    });
+  }
+
   findUserAsset(assetId: string) {
     return this.prisma.mediaAsset.findFirst({
       where: { id: assetId, organizationId: null, deletedAt: null },
