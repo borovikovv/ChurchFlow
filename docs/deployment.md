@@ -8,6 +8,8 @@ The deployment flow is intentionally manual and runs from one GitHub Actions wor
 2. Run `Deploy` with the target GitHub Environment.
 3. The workflow builds, publishes, migrates, deploys, and health-checks the exact `github.sha` selected by GitHub.
 
+Both `stage` and `prod` deploys are gated on CI. The first job, `Require green CI`, looks up runs of the `CI` workflow for the selected `github.sha` from any event (push or pull request) and continues only if at least one of them completed successfully. It does not wait: the deploy fails if there is no CI run for the commit, if CI is still running, or if CI failed or was cancelled. A failed or cancelled CI run must be re-run green before deploying; then run `Deploy` again.
+
 Images are always deployed by immutable commit SHA tags. Do not deploy `latest`.
 
 ## Runtime Shape
