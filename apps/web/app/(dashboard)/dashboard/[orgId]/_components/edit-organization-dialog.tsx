@@ -10,7 +10,7 @@ import { toast } from 'react-toastify';
 import { FormInput } from '@/components/forms/form-input';
 import { FormTextarea } from '@/components/forms/form-textarea';
 import { Button } from '@/components/ui/button';
-import { validatePhotoFile } from '@/lib/validate-photo-file';
+import { validateLogoFile } from '@/lib/validate-photo-file';
 import { uploadToSignedUrl } from '@/lib/upload-to-signed-url';
 import {
   confirmOrganizationLogoAction,
@@ -53,7 +53,7 @@ export function EditOrganizationDialog({
   });
 
   const submit = handleSubmit(async (values) => {
-    const currentLogoError = validatePhotoFile(logo);
+    const currentLogoError = validateLogoFile(logo);
     setLogoError(currentLogoError);
     if (currentLogoError) return;
 

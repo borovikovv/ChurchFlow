@@ -49,6 +49,7 @@ import type {
   updateCurrentUserProfileSchema,
   createOrganizationMemberRelationshipSchema,
   createMemberPhotoUploadSchema,
+  createOrganizationLogoUploadSchema,
   confirmMemberPhotoUploadSchema,
   confirmUserAvatarUploadSchema,
   calendarEventTypeSchema,
@@ -175,6 +176,7 @@ export type CreateOrganizationMemberRelationshipInput = z.infer<
   typeof createOrganizationMemberRelationshipSchema
 >;
 export type CreateMemberPhotoUploadInput = z.infer<typeof createMemberPhotoUploadSchema>;
+export type CreateOrganizationLogoUploadInput = z.infer<typeof createOrganizationLogoUploadSchema>;
 export type ConfirmMemberPhotoUploadInput = z.infer<typeof confirmMemberPhotoUploadSchema>;
 export type ConfirmUserAvatarUploadInput = z.infer<typeof confirmUserAvatarUploadSchema>;
 export type CalendarEventType = z.infer<typeof calendarEventTypeSchema>;

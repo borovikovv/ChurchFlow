@@ -29,6 +29,7 @@ import {
   ORGANIZATION_GROUPS_VIEWS,
   PHOTO_UPLOAD_MAX_BYTES,
   PHOTO_UPLOAD_MIME_TYPES,
+  LOGO_UPLOAD_MIME_TYPES,
   MEMBER_ACCESS_METHODS,
   MEMBER_TABS,
   MEMBER_PAGE_SIZE_OPTIONS,
@@ -616,6 +617,10 @@ export const createMemberPhotoUploadSchema = z.object({
   filename: z.string().trim().min(1).max(255),
   mimeType: z.enum(PHOTO_UPLOAD_MIME_TYPES),
   byteSize: z.number().int().positive().max(PHOTO_UPLOAD_MAX_BYTES),
+});
+
+export const createOrganizationLogoUploadSchema = createMemberPhotoUploadSchema.extend({
+  mimeType: z.enum(LOGO_UPLOAD_MIME_TYPES),
 });
 
 export const confirmMemberPhotoUploadSchema = z.object({ assetId: uuidSchema });

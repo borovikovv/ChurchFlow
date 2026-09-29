@@ -27,8 +27,6 @@ export function CityLive({
   const watchHref = cityPrimaryHref(content, streamUrl, website);
   const nextService = live?.nextService ?? null;
 
-  if (!watchHref && !nextService) return null;
-
   // Being on air is a fact about the stream, so only a configured stream can claim it. A section
   // link of its own points somewhere useful, but it is not a broadcast.
   const isLive = Boolean(live?.isLive && streamUrl);

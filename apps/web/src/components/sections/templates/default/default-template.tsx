@@ -1,6 +1,12 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { montserrat } from '../../fonts';
-import { readText, readTheme, type PublicSection, type PublicWebsiteSummary } from '../../types';
+import {
+  readText,
+  readTheme,
+  sectionTitle,
+  type PublicSection,
+  type PublicWebsiteSummary,
+} from '../../types';
 
 const socialLinks = [
   { key: 'socialMetaHref', label: 'Meta', icon: '/icons/socials/meta.svg' },
@@ -125,30 +131,48 @@ function HeroSection({
   );
 }
 
-function AboutSection({ content }: { content: Record<string, unknown> }) {
+function AboutSection({
+  content,
+  website,
+}: {
+  content: Record<string, unknown>;
+  website?: PublicWebsiteSummary | undefined;
+}) {
   return (
     <PublicSectionShell content={content}>
-      <SectionHeading title={readText(content, 'title', 'About')} />
+      <SectionHeading title={sectionTitle(content, 'about', website)} />
       <PublicParagraph>{readText(content, 'body')}</PublicParagraph>
       <ButtonRow content={content} />
     </PublicSectionShell>
   );
 }
 
-function ScheduleSection({ content }: { content: Record<string, unknown> }) {
+function ScheduleSection({
+  content,
+  website,
+}: {
+  content: Record<string, unknown>;
+  website?: PublicWebsiteSummary | undefined;
+}) {
   return (
     <PublicSectionShell content={content} tone="muted">
-      <SectionHeading title={readText(content, 'title', 'Schedule')} />
+      <SectionHeading title={sectionTitle(content, 'schedule', website)} />
       <PublicParagraph>{readText(content, 'body')}</PublicParagraph>
       <ButtonRow content={content} />
     </PublicSectionShell>
   );
 }
 
-function GallerySection({ content }: { content: Record<string, unknown> }) {
+function GallerySection({
+  content,
+  website,
+}: {
+  content: Record<string, unknown>;
+  website?: PublicWebsiteSummary | undefined;
+}) {
   return (
     <PublicSectionShell content={content}>
-      <SectionHeading title={readText(content, 'title', 'Gallery')} />
+      <SectionHeading title={sectionTitle(content, 'gallery', website)} />
       <PublicParagraph>{readText(content, 'body')}</PublicParagraph>
       <CardGrid items={readItems(content)} />
       <ButtonRow content={content} />
@@ -156,10 +180,16 @@ function GallerySection({ content }: { content: Record<string, unknown> }) {
   );
 }
 
-function ContactSection({ content }: { content: Record<string, unknown> }) {
+function ContactSection({
+  content,
+  website,
+}: {
+  content: Record<string, unknown>;
+  website?: PublicWebsiteSummary | undefined;
+}) {
   return (
     <PublicSectionShell content={content} tone="muted">
-      <SectionHeading title={readText(content, 'title', 'Contact')} />
+      <SectionHeading title={sectionTitle(content, 'contact', website)} />
       <div className="grid gap-2 text-lg">
         <PublicParagraph>{readText(content, 'body')}</PublicParagraph>
         {readText(content, 'address') ? (
@@ -418,13 +448,13 @@ export function DefaultTemplate({
           case 'hero':
             return <HeroSection key={section.id} {...props} website={website} />;
           case 'about':
-            return <AboutSection key={section.id} {...props} />;
+            return <AboutSection key={section.id} {...props} website={website} />;
           case 'schedule':
-            return <ScheduleSection key={section.id} {...props} />;
+            return <ScheduleSection key={section.id} {...props} website={website} />;
           case 'gallery':
-            return <GallerySection key={section.id} {...props} />;
+            return <GallerySection key={section.id} {...props} website={website} />;
           case 'contact':
-            return <ContactSection key={section.id} {...props} />;
+            return <ContactSection key={section.id} {...props} website={website} />;
         }
       })}
     </div>

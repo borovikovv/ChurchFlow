@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { displayNameInitials } from '@/lib/initials';
-import { validatePhotoFile } from '@/lib/validate-photo-file';
+import { validateLogoFile } from '@/lib/validate-photo-file';
 
 export function OrganizationLogo({
   name,
@@ -19,7 +19,7 @@ export function OrganizationLogo({
   if (url) {
     return (
       <Image
-        className={`${className} rounded-lg object-cover`}
+        className={`${className} rounded-lg object-contain`}
         src={url}
         alt={`${name} logo`}
         width={80}
@@ -71,16 +71,16 @@ export function OrganizationLogoField({
       <OrganizationLogo name={organizationName} url={previewUrl ?? currentUrl} size="small" />
       <input
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/jpeg,image/png,image/webp,image/svg+xml"
         aria-invalid={Boolean(error)}
-        onBlur={() => onChange(file, validatePhotoFile(file))}
+        onBlur={() => onChange(file, validateLogoFile(file))}
         onChange={(event) => {
           const selected = event.currentTarget.files?.[0] ?? null;
-          onChange(selected, validatePhotoFile(selected));
+          onChange(selected, validateLogoFile(selected));
         }}
       />
       <div className="grid gap-1">
-        <small>JPEG, PNG, or WebP. Maximum 5 MB. Uploaded when you save.</small>
+        <small>JPEG, PNG, WebP, or SVG. Maximum 5 MB. Uploaded when you save.</small>
         {error ? <p className="form-error m-0 text-xs">{error}</p> : null}
       </div>
     </div>

@@ -36,7 +36,6 @@ const CITY_MESSAGES = {
   en: {
     menu: 'Menu',
     address: 'Address',
-    contact: 'Contact',
     email: 'Email',
     phone: 'Phone',
     services: 'Services',
@@ -49,7 +48,6 @@ const CITY_MESSAGES = {
   uk: {
     menu: 'Меню',
     address: 'Адреса',
-    contact: 'Контакти',
     email: 'Пошта',
     phone: 'Телефон',
     services: 'Служіння',
