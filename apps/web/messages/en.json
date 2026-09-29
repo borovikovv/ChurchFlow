@@ -1036,6 +1036,78 @@
       "ARCHIVED": "Archived",
       "DRAFT": "Draft",
       "PUBLISHED": "Published"
+    },
+    "tabs": {
+      "label": "Website sections",
+      "editor": "Editor",
+      "analytics": "Analytics"
+    },
+    "analytics": {
+      "title": "Analytics",
+      "description": "Visitors to your public website, from Google Analytics.",
+      "connection": "Google Analytics",
+      "notConnectedTitle": "Google Analytics is not connected",
+      "notConnectedDescription": "Connect the Google account that has access to your GA4 property to see visitors here and track your public website.",
+      "connectGoogle": "Connect Google",
+      "oauthUnavailable": "Google sign-in is not configured on this server. You can still add a Measurement ID to track visits.",
+      "useMeasurementId": "Use a Measurement ID",
+      "changeMeasurementId": "Change Measurement ID",
+      "measurementIdTitle": "Measurement ID",
+      "measurementIdHint": "Find it in Google Analytics under Admin → Data streams → your web stream. It looks like G-ABC123XYZ9. Tracking only: statistics need a connected Google account.",
+      "measurementIdInvalid": "Enter a GA4 Measurement ID such as G-ABC123XYZ9.",
+      "save": "Save",
+      "manualModeDescription": "Your public website is tracked with {measurementId}. Connect Google to see visitor statistics here.",
+      "connectedAs": "Connected as {email}",
+      "connectedAccountUnknown": "Connected Google account",
+      "property": "Property",
+      "account": "Account",
+      "dataStream": "Web data stream",
+      "chooseProperty": "Choose property",
+      "changeProperty": "Change property",
+      "choosePropertyTitle": "Choose a Google Analytics property",
+      "choosePropertyDescription": "Pick the GA4 property and web data stream for this website. ChurchFlow only reads data and never changes your Google Analytics settings.",
+      "noProperties": "This Google account has no GA4 properties. Create one in Google Analytics, then try again.",
+      "noDataStreams": "This property has no web data stream. Add one for your website address in Google Analytics.",
+      "loadingProperties": "Loading properties…",
+      "loadingDataStreams": "Loading data streams…",
+      "propertyRequired": "Choose a property to see statistics and start tracking.",
+      "trackingWith": "Tracking with {measurementId}",
+      "reconnectTitle": "Google access was revoked",
+      "reconnectDescription": "Google no longer accepts ChurchFlow's access to this account. Reconnect to see statistics again; tracking on your website continues.",
+      "reconnect": "Reconnect Google",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect Google Analytics?",
+      "disconnectDescription": "Your public website stops loading the Google tag and ChurchFlow forgets its access to your Google account. Data already in Google Analytics is kept.",
+      "disconnecting": "Disconnecting…",
+      "disconnected": "Google Analytics disconnected.",
+      "propertySaved": "Google Analytics property saved.",
+      "measurementIdSaved": "Measurement ID saved.",
+      "connected": "Google account connected. Choose a property next.",
+      "connectErrors": {
+        "denied": "Google access was not granted.",
+        "expired": "The Google sign-in expired. Try connecting again.",
+        "scope": "ChurchFlow needs permission to read Google Analytics. Allow Analytics access on the Google consent screen.",
+        "exchange": "Google did not complete the connection. Try again.",
+        "unavailable": "Google sign-in is not configured on this server."
+      },
+      "range": "Period",
+      "ranges": {
+        "7d": "Last 7 days",
+        "28d": "Last 28 days",
+        "90d": "Last 90 days"
+      },
+      "users": "Visitors",
+      "pageViews": "Page views",
+      "sessions": "Visits",
+      "trend": "Visitors per day",
+      "topPages": "Top pages",
+      "trafficSources": "Traffic sources",
+      "countries": "Countries",
+      "noData": "No visits recorded in this period yet.",
+      "reportFailed": "Unable to load statistics.",
+      "retry": "Try again",
+      "loadingReport": "Loading statistics…",
+      "consentNote": "Visitors see a cookie banner, and Google Analytics stores cookies only after they accept, so counts can be lower than actual visits."
     }
   },
   "prayerRequests": {
@@ -1209,7 +1281,11 @@
       "CREATE_BUDGET_EXCHANGE": "Currency exchange recorded",
       "UPDATE_BUDGET_EXCHANGE": "Currency exchange updated",
       "DELETE_BUDGET_EXCHANGE": "Currency exchange deleted",
-      "SYNC_MEMBER_MILESTONE_EVENT": "{type, select, BIRTHDAY {Birthday} ANNIVERSARY {Anniversary} other {Milestone}} event {change, select, created {created} updated {updated} deleted {deleted} other {synced}}"
+      "SYNC_MEMBER_MILESTONE_EVENT": "{type, select, BIRTHDAY {Birthday} ANNIVERSARY {Anniversary} other {Milestone}} event {change, select, created {created} updated {updated} deleted {deleted} other {synced}}",
+      "CONNECT_GOOGLE_ANALYTICS": "Google Analytics connected",
+      "DISCONNECT_GOOGLE_ANALYTICS": "Google Analytics disconnected",
+      "UPDATE_GOOGLE_ANALYTICS_PROPERTY": "Google Analytics property changed",
+      "SET_GOOGLE_ANALYTICS_MEASUREMENT_ID": "Google Analytics Measurement ID set"
     },
     "auditEntityActions": {
       "OrganizationWebsite": {
@@ -1246,7 +1322,8 @@
       "WebsiteSection": "Website sections",
       "PrayerRequest": "Prayer requests",
       "Subscription": "Subscription",
-      "User": "Users"
+      "User": "Users",
+      "WebsiteAnalyticsIntegration": "Website analytics"
     }
   },
   "pagination": {

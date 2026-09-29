@@ -1036,6 +1036,78 @@
       "ARCHIVED": "Архівовано",
       "DRAFT": "Чернетка",
       "PUBLISHED": "Опубліковано"
+    },
+    "tabs": {
+      "label": "Розділи сайту",
+      "editor": "Редактор",
+      "analytics": "Аналітика"
+    },
+    "analytics": {
+      "title": "Аналітика",
+      "description": "Відвідувачі вашого публічного сайту за даними Google Analytics.",
+      "connection": "Google Analytics",
+      "notConnectedTitle": "Google Analytics не підключено",
+      "notConnectedDescription": "Підключіть обліковий запис Google з доступом до вашого ресурсу GA4, щоб бачити відвідувачів тут і відстежувати публічний сайт.",
+      "connectGoogle": "Підключити Google",
+      "oauthUnavailable": "Вхід через Google не налаштовано на цьому сервері. Ви все одно можете додати Measurement ID для відстеження відвідувань.",
+      "useMeasurementId": "Використати Measurement ID",
+      "changeMeasurementId": "Змінити Measurement ID",
+      "measurementIdTitle": "Measurement ID",
+      "measurementIdHint": "Його можна знайти в Google Analytics: Адміністрування → Потоки даних → ваш вебпотік. Має вигляд G-ABC123XYZ9. Лише відстеження: для статистики потрібен підключений обліковий запис Google.",
+      "measurementIdInvalid": "Введіть Measurement ID GA4, наприклад G-ABC123XYZ9.",
+      "save": "Зберегти",
+      "manualModeDescription": "Публічний сайт відстежується з {measurementId}. Підключіть Google, щоб бачити статистику відвідувань тут.",
+      "connectedAs": "Підключено як {email}",
+      "connectedAccountUnknown": "Підключений обліковий запис Google",
+      "property": "Ресурс",
+      "account": "Обліковий запис",
+      "dataStream": "Вебпотік даних",
+      "chooseProperty": "Вибрати ресурс",
+      "changeProperty": "Змінити ресурс",
+      "choosePropertyTitle": "Виберіть ресурс Google Analytics",
+      "choosePropertyDescription": "Виберіть ресурс GA4 і вебпотік для цього сайту. ChurchFlow лише читає дані й ніколи не змінює налаштування Google Analytics.",
+      "noProperties": "У цьому обліковому записі Google немає ресурсів GA4. Створіть ресурс у Google Analytics і спробуйте ще раз.",
+      "noDataStreams": "У цього ресурсу немає вебпотоку даних. Додайте його для адреси вашого сайту в Google Analytics.",
+      "loadingProperties": "Завантаження ресурсів…",
+      "loadingDataStreams": "Завантаження потоків даних…",
+      "propertyRequired": "Виберіть ресурс, щоб бачити статистику й почати відстеження.",
+      "trackingWith": "Відстеження з {measurementId}",
+      "reconnectTitle": "Доступ Google відкликано",
+      "reconnectDescription": "Google більше не приймає доступ ChurchFlow до цього облікового запису. Підключіться знову, щоб бачити статистику; відстеження на сайті триває.",
+      "reconnect": "Підключити Google знову",
+      "disconnect": "Відключити",
+      "disconnectTitle": "Відключити Google Analytics?",
+      "disconnectDescription": "Публічний сайт перестане завантажувати тег Google, а ChurchFlow забуде доступ до вашого облікового запису Google. Дані, що вже є в Google Analytics, збережуться.",
+      "disconnecting": "Відключення…",
+      "disconnected": "Google Analytics відключено.",
+      "propertySaved": "Ресурс Google Analytics збережено.",
+      "measurementIdSaved": "Measurement ID збережено.",
+      "connected": "Обліковий запис Google підключено. Тепер виберіть ресурс.",
+      "connectErrors": {
+        "denied": "Доступ Google не надано.",
+        "expired": "Час входу через Google минув. Спробуйте підключитися ще раз.",
+        "scope": "ChurchFlow потрібен дозвіл на читання Google Analytics. Дозвольте доступ до Analytics на екрані згоди Google.",
+        "exchange": "Google не завершив підключення. Спробуйте ще раз.",
+        "unavailable": "Вхід через Google не налаштовано на цьому сервері."
+      },
+      "range": "Період",
+      "ranges": {
+        "7d": "Останні 7 днів",
+        "28d": "Останні 28 днів",
+        "90d": "Останні 90 днів"
+      },
+      "users": "Відвідувачі",
+      "pageViews": "Перегляди сторінок",
+      "sessions": "Відвідування",
+      "trend": "Відвідувачі за днями",
+      "topPages": "Популярні сторінки",
+      "trafficSources": "Джерела трафіку",
+      "countries": "Країни",
+      "noData": "За цей період відвідувань ще немає.",
+      "reportFailed": "Не вдалося завантажити статистику.",
+      "retry": "Спробувати ще раз",
+      "loadingReport": "Завантаження статистики…",
+      "consentNote": "Відвідувачі бачать банер cookie, а Google Analytics зберігає cookie лише після їхньої згоди, тому показники можуть бути нижчими за реальні відвідування."
     }
   },
   "prayerRequests": {
@@ -1209,7 +1281,11 @@
       "CREATE_BUDGET_EXCHANGE": "Обмін валюти записано",
       "UPDATE_BUDGET_EXCHANGE": "Обмін валюти оновлено",
       "DELETE_BUDGET_EXCHANGE": "Обмін валюти видалено",
-      "SYNC_MEMBER_MILESTONE_EVENT": "Подію {type, select, BIRTHDAY {дня народження} ANNIVERSARY {річниці} other {памʼятної дати}} {change, select, created {створено} updated {оновлено} deleted {видалено} other {синхронізовано}}"
+      "SYNC_MEMBER_MILESTONE_EVENT": "Подію {type, select, BIRTHDAY {дня народження} ANNIVERSARY {річниці} other {памʼятної дати}} {change, select, created {створено} updated {оновлено} deleted {видалено} other {синхронізовано}}",
+      "CONNECT_GOOGLE_ANALYTICS": "Google Analytics підключено",
+      "DISCONNECT_GOOGLE_ANALYTICS": "Google Analytics відключено",
+      "UPDATE_GOOGLE_ANALYTICS_PROPERTY": "Ресурс Google Analytics змінено",
+      "SET_GOOGLE_ANALYTICS_MEASUREMENT_ID": "Measurement ID Google Analytics встановлено"
     },
     "auditEntityActions": {
       "OrganizationWebsite": {
@@ -1246,7 +1322,8 @@
       "WebsiteSection": "Секції сайту",
       "PrayerRequest": "Молитовні потреби",
       "Subscription": "Підписка",
-      "User": "Користувачі"
+      "User": "Користувачі",
+      "WebsiteAnalyticsIntegration": "Аналітика сайту"
     }
   },
   "pagination": {

@@ -95,6 +95,22 @@ export const apiEnvSchema = z
       z.string().url().optional(),
     ),
     BILLING_ENFORCEMENT_ENABLED: optionalBooleanFlag(false),
+    GOOGLE_OAUTH_CLIENT_ID: optionalNonEmptyString,
+    GOOGLE_OAUTH_CLIENT_SECRET: optionalNonEmptyString,
+    GOOGLE_ANALYTICS_REDIRECT_URI: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().url().optional(),
+    ),
+    // Base64 of 32 random bytes; encrypts third-party refresh tokens at rest.
+    INTEGRATION_ENCRYPTION_KEY: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z
+        .string()
+        .refine((value) => Buffer.from(value, 'base64').length === 32, {
+          message: 'INTEGRATION_ENCRYPTION_KEY must be base64 of 32 bytes',
+        })
+        .optional(),
+    ),
   })
   .superRefine((env, context) => {
     for (const key of ['LIQPAY_PUBLIC_KEY', 'LIQPAY_PRIVATE_KEY'] as const) {
@@ -147,6 +163,26 @@ export const apiEnvSchema = z
             code: z.ZodIssueCode.custom,
             path: [key],
             message: `${key} is required when BILLING_ENFORCEMENT_ENABLED=true`,
+          });
+        }
+      }
+    }
+
+    // Google Analytics OAuth is optional, but half a configuration would send owners to Google and
+    // fail on the way back, or store a refresh token with nothing to encrypt it.
+    const googleAnalyticsKeys = [
+      'GOOGLE_OAUTH_CLIENT_ID',
+      'GOOGLE_OAUTH_CLIENT_SECRET',
+      'GOOGLE_ANALYTICS_REDIRECT_URI',
+      'INTEGRATION_ENCRYPTION_KEY',
+    ] as const;
+    if (googleAnalyticsKeys.some((key) => env[key])) {
+      for (const key of googleAnalyticsKeys) {
+        if (!env[key]) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required when Google Analytics OAuth is configured`,
           });
         }
       }

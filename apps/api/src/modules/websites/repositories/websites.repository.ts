@@ -9,6 +9,10 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { templateSectionContent } from '../template-sections';
 
 const websiteInclude = { organization: true } satisfies Prisma.OrganizationWebsiteInclude;
+// The public site reads the analytics measurement id and nothing else of the integration.
+export const publicWebsiteInclude = {
+  organization: { include: { websiteAnalytics: { select: { measurementId: true } } } },
+} satisfies Prisma.OrganizationWebsiteInclude;
 const homeSectionsInclude = {
   sections: { where: { deletedAt: null }, orderBy: { order: 'asc' } },
 } satisfies Prisma.WebsitePageInclude;
@@ -29,7 +33,7 @@ export class WebsitesRepository {
         deletedAt: null,
         organization: { slug: orgSlug, status: 'ACTIVE', deletedAt: null },
       },
-      include: websiteInclude,
+      include: publicWebsiteInclude,
     });
   }
 

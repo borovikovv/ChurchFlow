@@ -151,6 +151,42 @@ test('the public website exposes the live state, not the live switch or unknown 
   assert.deepEqual(website.theme, { accent: '#ffffff', background: '#ffffff' });
   assert.equal(website.settings.seo.noindex, false);
   assert.equal(website.settings.seo.ogImageUrl, null);
+  assert.equal(website.analytics, null);
+});
+
+test('the public website exposes the analytics measurement id and nothing else of it', () => {
+  const stored = {
+    id: 'website-1',
+    title: 'Grace Church',
+    description: null,
+    publishedAt: new Date('2026-09-01T00:00:00Z'),
+    theme: {},
+    settings: {},
+  };
+  const withAnalytics = toPublicWebsite({
+    ...stored,
+    organization: {
+      name: 'Grace',
+      slug: 'grace',
+      websiteAnalytics: { measurementId: 'G-ABC1234', encryptedRefreshToken: 'v1:secret' },
+    },
+  });
+
+  assert.deepEqual(withAnalytics.analytics, { measurementId: 'G-ABC1234' });
+  assert.equal(JSON.stringify(withAnalytics).includes('v1:secret'), false);
+  assert.equal('websiteAnalytics' in withAnalytics.organization, false);
+  assert.equal(
+    toPublicWebsite({
+      ...stored,
+      organization: { name: 'Grace', slug: 'grace', websiteAnalytics: { measurementId: null } },
+    }).analytics,
+    null,
+  );
+  // Preview and dashboard reads do not load the integration, so they never emit a tag.
+  assert.equal(
+    toPublicWebsite({ ...stored, organization: { name: 'Grace', slug: 'grace' } }).analytics,
+    null,
+  );
 });
 
 test('the public website links its media to the api instead of publishing a signed url', async () => {

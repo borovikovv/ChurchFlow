@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { WEBSITE_ANALYTICS_MODES, WEBSITE_ANALYTICS_STATUSES } from './constants.js';
 import type {
   acceptInvitationSchema,
   approveOrganizationRequestSchema,
@@ -37,6 +38,10 @@ import type {
   reorderWebsiteSectionsSchema,
   setWebsiteSectionHiddenSchema,
   applyWebsiteTemplateSchema,
+  selectWebsiteAnalyticsPropertySchema,
+  setWebsiteAnalyticsMeasurementIdSchema,
+  websiteAnalyticsReportQuerySchema,
+  websiteAnalyticsReportRangeSchema,
   websiteThemeSchema,
   websiteSettingsSchema,
   websiteSeoSchema,
@@ -126,6 +131,14 @@ export type PublishWebsitePageInput = z.infer<typeof publishWebsitePageSchema>;
 export type ReorderWebsiteSectionsInput = z.infer<typeof reorderWebsiteSectionsSchema>;
 export type SetWebsiteSectionHiddenInput = z.infer<typeof setWebsiteSectionHiddenSchema>;
 export type ApplyWebsiteTemplateInput = z.infer<typeof applyWebsiteTemplateSchema>;
+export type SelectWebsiteAnalyticsPropertyInput = z.infer<
+  typeof selectWebsiteAnalyticsPropertySchema
+>;
+export type SetWebsiteAnalyticsMeasurementIdInput = z.infer<
+  typeof setWebsiteAnalyticsMeasurementIdSchema
+>;
+export type WebsiteAnalyticsReportQuery = z.infer<typeof websiteAnalyticsReportQuerySchema>;
+export type WebsiteAnalyticsReportRange = z.infer<typeof websiteAnalyticsReportRangeSchema>;
 export type WebsiteTheme = z.infer<typeof websiteThemeSchema>;
 export type WebsiteSettings = z.infer<typeof websiteSettingsSchema>;
 export type WebsiteSeo = z.infer<typeof websiteSeoSchema>;
@@ -485,6 +498,69 @@ export interface MembershipClaimMutationResult {
   claimUrl: string;
   expiresAt: string;
   emailSent: boolean;
+}
+
+export interface WebsiteAnalyticsIntegrationStatus {
+  /** Whether this deployment has Google OAuth configured; without it only a manual id works. */
+  oauthAvailable: boolean;
+  integration: {
+    mode: (typeof WEBSITE_ANALYTICS_MODES)[number];
+    status: (typeof WEBSITE_ANALYTICS_STATUSES)[number];
+    measurementId: string | null;
+    googleAccountEmail: string | null;
+    propertyId: string | null;
+    propertyDisplayName: string | null;
+    streamId: string | null;
+    updatedAt: string;
+  } | null;
+}
+
+export interface WebsiteAnalyticsDataStream {
+  id: string;
+  displayName: string;
+  measurementId: string;
+  defaultUri: string | null;
+}
+
+export interface WebsiteAnalyticsDataStreamList {
+  dataStreams: WebsiteAnalyticsDataStream[];
+}
+
+export interface WebsiteAnalyticsProperty {
+  id: string;
+  displayName: string;
+}
+
+export interface WebsiteAnalyticsAccount {
+  id: string;
+  displayName: string;
+  properties: WebsiteAnalyticsProperty[];
+}
+
+export interface WebsiteAnalyticsPropertyTree {
+  accounts: WebsiteAnalyticsAccount[];
+}
+
+export interface WebsiteAnalyticsRankedRow {
+  label: string;
+  value: number;
+}
+
+export interface WebsiteAnalyticsTrendPoint {
+  /** Calendar day in the GA property's time zone, as YYYY-MM-DD. */
+  date: string;
+  users: number;
+  pageViews: number;
+}
+
+export interface WebsiteAnalyticsReport {
+  range: WebsiteAnalyticsReportRange;
+  totals: { users: number; pageViews: number; sessions: number };
+  trend: WebsiteAnalyticsTrendPoint[];
+  topPages: WebsiteAnalyticsRankedRow[];
+  trafficSources: WebsiteAnalyticsRankedRow[];
+  countries: WebsiteAnalyticsRankedRow[];
+  generatedAt: string;
 }
 
 export type ApiResult<T> =

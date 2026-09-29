@@ -14,6 +14,7 @@ import { OrganizationRequestsModule } from './modules/organization-requests/orga
 import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
 import { GroupsModule } from './modules/groups/groups.module';
+import { WebsiteAnalyticsModule } from './modules/website-analytics/website-analytics.module';
 import { WebsitesModule } from './modules/websites/websites.module';
 import { PagesModule } from './modules/pages/pages.module';
 import { MediaModule } from './modules/media/media.module';
@@ -72,6 +73,7 @@ import { BillingModule } from './modules/billing/billing.module';
     NotificationsModule,
     TelegramBotModule,
     WebsitesModule,
+    WebsiteAnalyticsModule,
     PagesModule,
     MediaModule,
     HealthModule,

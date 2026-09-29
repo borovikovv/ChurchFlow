@@ -41,6 +41,43 @@ export const WEBSITE_NAVIGATION_MAX_LINKS = 10;
 
 export const WEBSITE_LIVE_MODES = ['schedule', 'manual'] as const;
 
+export const WEBSITE_ANALYTICS_MODES = ['OAUTH', 'MANUAL'] as const;
+export const WEBSITE_ANALYTICS_STATUSES = ['CONNECTED', 'NEEDS_REAUTH'] as const;
+export const WEBSITE_ANALYTICS_REPORT_RANGES = ['7d', '28d', '90d'] as const;
+export const DEFAULT_WEBSITE_ANALYTICS_REPORT_RANGE = '28d';
+
+/** Audit actions recorded for the website analytics integration. */
+export const WEBSITE_ANALYTICS_AUDIT_ACTIONS = {
+  connect: 'CONNECT_GOOGLE_ANALYTICS',
+  disconnect: 'DISCONNECT_GOOGLE_ANALYTICS',
+  selectProperty: 'UPDATE_GOOGLE_ANALYTICS_PROPERTY',
+  setMeasurementId: 'SET_GOOGLE_ANALYTICS_MEASUREMENT_ID',
+} as const;
+
+/**
+ * Query parameters the API appends when it sends the owner back from Google. The reason is one of
+ * WEBSITE_ANALYTICS_CONNECT_FAILURES and is present only when the result is an error.
+ */
+export const WEBSITE_ANALYTICS_CONNECT_PARAMS = { result: 'ga', reason: 'gaReason' } as const;
+export const WEBSITE_ANALYTICS_CONNECT_RESULTS = ['connected', 'error'] as const;
+export const WEBSITE_ANALYTICS_CONNECT_FAILURES = [
+  'denied',
+  'expired',
+  'scope',
+  'exchange',
+  'unavailable',
+] as const;
+
+/** Error codes the analytics dashboard branches on. */
+export const WEBSITE_ANALYTICS_ERROR_CODES = {
+  notConnected: 'GA_NOT_CONNECTED',
+  reauthRequired: 'GA_REAUTH_REQUIRED',
+  propertyNotSelected: 'GA_PROPERTY_NOT_SELECTED',
+  propertyForbidden: 'GA_PROPERTY_FORBIDDEN',
+  oauthUnavailable: 'GA_OAUTH_UNAVAILABLE',
+  upstreamFailed: 'GA_UPSTREAM_FAILED',
+} as const;
+
 /**
  * ChurchFlow modules a section can read live data from. A section keeps manual content until the
  * module has a resolver, so this list may name modules that nothing resolves yet.
@@ -168,6 +205,7 @@ export const AUDIT_ENTITY_TYPES = [
   'PrayerRequest',
   'Subscription',
   'User',
+  'WebsiteAnalyticsIntegration',
   'WebsitePage',
   'WebsiteSection',
 ] as const;

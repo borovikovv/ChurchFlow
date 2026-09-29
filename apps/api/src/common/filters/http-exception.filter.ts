@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { loggableUrl } from '../http/loggable-url';
 
 const SERVER_ERROR_STATUS: number = HttpStatus.INTERNAL_SERVER_ERROR;
 
@@ -49,7 +50,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         {
           event: 'Unhandled request error',
           method: request.method,
-          path: request.originalUrl,
+          path: loggableUrl(request.originalUrl),
           message,
         },
         error instanceof Error ? error.stack : undefined,

@@ -6,6 +6,12 @@ const { BudgetsController } = require('../dist/modules/budgets/budgets.controlle
 const { MembershipsController } = require('../dist/modules/memberships/memberships.controller.js');
 const { PagesController } = require('../dist/modules/pages/pages.controller.js');
 const { WebsitesController } = require('../dist/modules/websites/websites.controller.js');
+const {
+  WebsiteAnalyticsController,
+} = require('../dist/modules/website-analytics/website-analytics.controller.js');
+const {
+  GoogleAnalyticsCallbackController,
+} = require('../dist/modules/website-analytics/google-analytics-callback.controller.js');
 
 const OWNER_KEY = 'organizationOwner';
 const reflector = new Reflector();
@@ -49,6 +55,15 @@ test('website and page dashboard routes are owner-only, public ones are not', ()
   // published website already advertises, to callers that carry no session.
   assertCoverage(WebsitesController, 'WebsitesController', ['publicWebsite', 'publicWebsiteMedia']);
   assertCoverage(PagesController, 'PagesController', ['publicPage', 'publicPagesForSitemap']);
+});
+
+test('website analytics routes are owner-only, the google callback checks ownership itself', () => {
+  assertCoverage(WebsiteAnalyticsController, 'WebsiteAnalyticsController', []);
+  // Google returns to one registered url with no organization in it, so the service repeats the
+  // owner check against the organization recorded when the flow started.
+  assertCoverage(GoogleAnalyticsCallbackController, 'GoogleAnalyticsCallbackController', [
+    'callback',
+  ]);
 });
 
 test('only the role change is owner-only among membership routes', () => {

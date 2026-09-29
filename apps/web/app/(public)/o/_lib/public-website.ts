@@ -23,6 +23,7 @@ export interface PublicWebsiteResponse extends PublicWebsiteSummary {
     slug: string;
     logoUrl: string | null;
   };
+  analytics: { measurementId: string } | null;
 }
 
 export interface PublicPageResponse {
