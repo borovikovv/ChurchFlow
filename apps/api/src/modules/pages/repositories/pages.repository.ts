@@ -7,6 +7,7 @@ import {
 } from '@churchflow/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { normalizeWebsiteSettings } from '../../websites/public-website';
+import { publicWebsiteInclude } from '../../websites/repositories/websites.repository';
 import { templateSectionContent } from '../../websites/template-sections';
 
 const pageSectionsInclude = {
@@ -31,7 +32,7 @@ export class PagesRepository {
         },
       },
       include: {
-        website: { include: { organization: true } },
+        website: { include: publicWebsiteInclude },
         sections: {
           where: { deletedAt: null, hidden: false },
           orderBy: { order: 'asc' },

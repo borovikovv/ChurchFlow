@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'react-toastify';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -27,12 +27,14 @@ export function WebsiteEditor({
   organizationId,
   pages,
   publicUrl,
+  tabs,
   website,
 }: {
   feedback: WebsiteFeedback;
   organizationId: string;
   pages: DashboardPage[];
   publicUrl: string;
+  tabs: ReactNode;
   website: DashboardWebsite;
 }) {
   const t = useTranslations('website');
@@ -146,6 +148,7 @@ export function WebsiteEditor({
           </div>
         }
       />
+      {tabs}
 
       {feedbackState.error ? <p className="form-error">{feedbackState.error}</p> : null}
 

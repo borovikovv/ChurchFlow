@@ -1,11 +1,13 @@
 import { apiFetch } from '@/api/client';
 import { getCurrentUser } from '@/auth/session';
 import { PageHeader } from '@/components/ui/page-header';
+import { Tabs } from '@/components/ui/tabs';
 import { serverEnv } from '@/env/server';
 import { requireOrganizationOwnerAccess } from '@/features/organizations/server/owner-access';
 import { getMessages } from '@/i18n/messages';
 import { WebsiteEditor } from './_components/website-editor';
 import type { DashboardPage, DashboardWebsite, WebsiteFeedback } from './types';
+import { websiteTabItems } from './website-tabs';
 
 export default async function WebsiteDashboardPage({
   params,
@@ -54,6 +56,7 @@ export default async function WebsiteDashboardPage({
       organizationId={orgId}
       pages={pagesResult.data}
       publicUrl={publicUrl}
+      tabs={<Tabs label={messages.tabs.label} items={websiteTabItems(orgId, messages)} />}
       website={website}
     />
   );

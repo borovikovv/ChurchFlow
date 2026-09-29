@@ -41,6 +41,8 @@ import {
   RICH_TEXT_MAX_LENGTH,
   DEFAULT_APP_LOCALE,
   DEFAULT_WEBSITE_TEMPLATE,
+  WEBSITE_ANALYTICS_REPORT_RANGES,
+  DEFAULT_WEBSITE_ANALYTICS_REPORT_RANGE,
   WEBSITE_LIVE_MODES,
   WEBSITE_NAVIGATION_MAX_LINKS,
   WEBSITE_PAGE_PRESETS,
@@ -1085,6 +1087,30 @@ export const applyWebsiteTemplateSchema = z.object({
   templateId: websiteTemplateIdSchema,
   addMissingSections: z.boolean().default(true),
   resetTheme: z.boolean().default(false),
+});
+
+/** A GA4 web stream measurement id, e.g. G-ABC123XYZ9. Lowercase input is accepted. */
+export const websiteAnalyticsMeasurementIdSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^G-[A-Z0-9]{4,20}$/, 'Enter a GA4 measurement id such as G-ABC123XYZ9');
+
+export const googleAnalyticsResourceIdSchema = z.string().regex(/^\d{1,20}$/);
+
+export const setWebsiteAnalyticsMeasurementIdSchema = z.object({
+  measurementId: websiteAnalyticsMeasurementIdSchema,
+});
+
+export const selectWebsiteAnalyticsPropertySchema = z.object({
+  propertyId: googleAnalyticsResourceIdSchema,
+  streamId: googleAnalyticsResourceIdSchema,
+});
+
+export const websiteAnalyticsReportRangeSchema = z.enum(WEBSITE_ANALYTICS_REPORT_RANGES);
+
+export const websiteAnalyticsReportQuerySchema = z.object({
+  range: websiteAnalyticsReportRangeSchema.default(DEFAULT_WEBSITE_ANALYTICS_REPORT_RANGE),
 });
 
 export const pageStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']);

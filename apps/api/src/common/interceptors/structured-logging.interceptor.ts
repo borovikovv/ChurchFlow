@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 import type { Observable } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
+import { loggableUrl } from '../http/loggable-url';
 
 @Injectable()
 export class StructuredLoggingInterceptor implements NestInterceptor {
@@ -69,7 +70,7 @@ export class StructuredLoggingInterceptor implements NestInterceptor {
     const payload = {
       requestId: input.requestId,
       method: input.request.method,
-      path: input.request.originalUrl,
+      path: loggableUrl(input.request.originalUrl),
       statusCode: input.statusCode,
       durationMs: input.durationMs,
       userAgent: input.request.headers['user-agent'],

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { apiFetch } from '@/api/client';
 import { SectionRenderer } from '@/components/sections/section-renderer';
+import { WebsiteAnalytics } from '../_components/website-analytics';
 import { WebsiteJsonLd } from '../_components/website-json-ld';
 import {
   publicPageMetadata,
@@ -40,6 +41,11 @@ export default async function OrganizationLandingPage({
     <main>
       <WebsiteJsonLd orgSlug={orgSlug} page={page} />
       <SectionRenderer sections={page.sections} website={page.website} />
+      <WebsiteAnalytics
+        analytics={page.website.analytics}
+        locale={page.website.settings.locale}
+        orgSlug={orgSlug}
+      />
     </main>
   );
 }

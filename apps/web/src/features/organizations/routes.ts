@@ -64,6 +64,10 @@ export function organizationWebsiteRoute(organizationId: string): Route {
   return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.website}` as Route;
 }
 
+export function organizationWebsiteAnalyticsRoute(organizationId: string): Route {
+  return `${organizationWebsiteRoute(organizationId)}/analytics` as Route;
+}
+
 export function publicOrganizationRoute(slug: string): Route {
   return `/${ORGANIZATION_ROUTE_SEGMENTS.publicOrganization}/${slug}` as Route;
 }

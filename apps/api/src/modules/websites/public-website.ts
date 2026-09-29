@@ -15,7 +15,12 @@ interface StoredWebsite {
   theme: unknown;
   settings: unknown;
   publishedAt: Date | null;
-  organization: { name: string; slug: string };
+  organization: {
+    name: string;
+    slug: string;
+    // Loaded only by the public reads, so a preview or dashboard read never carries it.
+    websiteAnalytics?: { measurementId: string | null } | null;
+  };
 }
 
 export interface PublicWebsiteSettings {
@@ -49,6 +54,7 @@ export interface PublicWebsite {
   theme: PublicWebsiteTheme;
   settings: PublicWebsiteSettings;
   organization: { name: string; slug: string; logoUrl: string | null };
+  analytics: { measurementId: string } | null;
 }
 
 export function normalizeWebsiteSettings(settings: unknown): WebsiteSettings {
@@ -95,7 +101,14 @@ export function toPublicWebsite(website: StoredWebsite, now = new Date()): Publi
       slug: website.organization.slug,
       logoUrl: null,
     },
+    analytics: toPublicAnalytics(website.organization.websiteAnalytics),
   };
+}
+
+function toPublicAnalytics(
+  integration: { measurementId: string | null } | null | undefined,
+): PublicWebsite['analytics'] {
+  return integration?.measurementId ? { measurementId: integration.measurementId } : null;
 }
 
 export type ReadAssetUrl = (

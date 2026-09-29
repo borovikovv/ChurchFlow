@@ -15,7 +15,7 @@ export function hashOpaqueToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function parseCookies(cookieHeader?: string): Record<string, string> {
+export function parseCookies(cookieHeader?: string): Record<string, string> {
   if (!cookieHeader) {
     return {};
   }

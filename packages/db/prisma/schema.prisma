@@ -130,6 +130,20 @@ enum WebsiteSectionType {
   footer
 }
 
+enum WebsiteAnalyticsProvider {
+  GOOGLE_ANALYTICS
+}
+
+enum WebsiteAnalyticsMode {
+  OAUTH
+  MANUAL
+}
+
+enum WebsiteAnalyticsStatus {
+  CONNECTED
+  NEEDS_REAUTH
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -450,6 +464,7 @@ model Organization {
   members                 OrganizationMember[]
   invitations             OrganizationInvitation[]
   website                 OrganizationWebsite?
+  websiteAnalytics        WebsiteAnalyticsIntegration?
   mediaAssets             MediaAsset[]
   auditLogs               AuditLog[]
   featureFlags            FeatureFlag[]
@@ -832,6 +847,30 @@ model WebsiteDomain {
   @@index([websiteId])
   @@index([websiteId, organizationId])
   @@map("website_domains")
+}
+
+// Kept apart from OrganizationWebsite on purpose: the website row is returned whole to the
+// dashboard and its settings json is writable through the settings form, while this row holds an
+// encrypted Google refresh token and must only change through the analytics connect flow.
+model WebsiteAnalyticsIntegration {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  organizationId        String                   @unique @map("organization_id") @db.Uuid
+  provider              WebsiteAnalyticsProvider @default(GOOGLE_ANALYTICS)
+  mode                  WebsiteAnalyticsMode
+  status                WebsiteAnalyticsStatus   @default(CONNECTED)
+  measurementId         String?                  @map("measurement_id")
+  googleAccountEmail    String?                  @map("google_account_email")
+  gaAccountId           String?                  @map("ga_account_id")
+  propertyId            String?                  @map("property_id")
+  propertyDisplayName   String?                  @map("property_display_name")
+  streamId              String?                  @map("stream_id")
+  encryptedRefreshToken String?                  @map("encrypted_refresh_token")
+  createdAt             DateTime                 @default(now()) @map("created_at")
+  updatedAt             DateTime                 @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("website_analytics_integrations")
 }
 
 model MediaAsset {
