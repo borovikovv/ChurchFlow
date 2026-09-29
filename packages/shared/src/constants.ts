@@ -309,6 +309,19 @@ export const ORGANIZATION_GROUP_DESCRIPTION_MAX_LENGTH = 500;
 export const ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH = 200;
 export const ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD = 200;
 
+export const ORGANIZATION_GROUPS_VIEWS = ['list', 'board'] as const;
+
+/** Board nodes that are computed by the API rather than stored as groups. */
+export const ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEYS = ['unassigned', 'visitors'] as const;
+
+export const ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEY = {
+  unassigned: 'unassigned',
+  visitors: 'visitors',
+} as const;
+
+export const ORGANIZATION_GROUP_BOARD_LAYOUT_MAX_NODES = 500;
+export const ORGANIZATION_GROUP_BOARD_COORDINATE_LIMIT = 1_000_000;
+
 export const MEMBER_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 export const DEFAULT_MEMBER_PAGE_SIZE = 25;
 export const MEMBER_TABS = ['active', 'archived'] as const;
