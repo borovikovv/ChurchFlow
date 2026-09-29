@@ -7,6 +7,7 @@ import type {
   createManualOrganizationMemberSchema,
   importOrganizationMembersCsvResultSchema,
   createOrganizationRequestSchema,
+  createOrganizationSchema,
   auditLogListItemSchema,
   auditLogsPageSchema,
   listAuditLogsQuerySchema,
@@ -66,6 +67,12 @@ import type {
   updateOrganizationGroupSchema,
   addOrganizationGroupMembersSchema,
   updateOrganizationGroupMemberSchema,
+  moveOrganizationGroupMemberSchema,
+  organizationGroupsViewSchema,
+  organizationGroupBoardComputedNodeKeySchema,
+  organizationGroupBoardNodeKeySchema,
+  organizationGroupBoardNodePositionSchema,
+  saveOrganizationGroupBoardLayoutSchema,
   memberAccessMethodSchema,
   listCalendarEventsQuerySchema,
   createCalendarEventSchema,
@@ -109,6 +116,7 @@ export type UUID = string;
 export type UserSession = z.infer<typeof userSessionSchema>;
 export type Organization = z.infer<typeof organizationSchema>;
 export type OrganizationWebsite = z.infer<typeof organizationWebsiteSchema>;
+export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 export type GrantBillingExemptionInput = z.infer<typeof grantBillingExemptionSchema>;
 export type SubscriptionSummary = z.infer<typeof subscriptionSummarySchema>;
@@ -194,6 +202,18 @@ export type UpdateOrganizationGroupInput = z.infer<typeof updateOrganizationGrou
 export type AddOrganizationGroupMembersInput = z.infer<typeof addOrganizationGroupMembersSchema>;
 export type UpdateOrganizationGroupMemberInput = z.infer<
   typeof updateOrganizationGroupMemberSchema
+>;
+export type MoveOrganizationGroupMemberInput = z.infer<typeof moveOrganizationGroupMemberSchema>;
+export type OrganizationGroupsView = z.infer<typeof organizationGroupsViewSchema>;
+export type OrganizationGroupBoardComputedNodeKey = z.infer<
+  typeof organizationGroupBoardComputedNodeKeySchema
+>;
+export type OrganizationGroupBoardNodeKey = z.infer<typeof organizationGroupBoardNodeKeySchema>;
+export type OrganizationGroupBoardNodePosition = z.infer<
+  typeof organizationGroupBoardNodePositionSchema
+>;
+export type SaveOrganizationGroupBoardLayoutInput = z.infer<
+  typeof saveOrganizationGroupBoardLayoutSchema
 >;
 export type MemberAccessMethod = z.infer<typeof memberAccessMethodSchema>;
 export type ListCalendarEventsQuery = z.infer<typeof listCalendarEventsQuerySchema>;
@@ -326,6 +346,29 @@ export interface OrganizationGroupDetail extends OrganizationGroupBadge {
 export interface OrganizationGroupsPayload {
   canManage: boolean;
   groups: OrganizationGroupListItem[];
+}
+
+/** A person on the groups board who is not in any group. */
+export interface OrganizationGroupBoardPerson {
+  membershipId: string;
+  displayName: string;
+  photoUrl: string | null;
+}
+
+export interface OrganizationGroupBoardPayload {
+  canManage: boolean;
+  /** Each group lists its leaders first. */
+  groups: OrganizationGroupDetail[];
+  /** Assignable non-visitor memberships that belong to no group. */
+  unassignedMembers: OrganizationGroupBoardPerson[];
+  /** Visitor memberships that belong to no group. */
+  visitors: OrganizationGroupBoardPerson[];
+  layout: OrganizationGroupBoardNodePosition[];
+}
+
+export interface MoveOrganizationGroupMemberResult {
+  sourceGroup: OrganizationGroupDetail;
+  targetGroup: OrganizationGroupDetail;
 }
 
 export interface OrganizationGroupDetailPayload {

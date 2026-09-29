@@ -1,13 +1,17 @@
 import {
   addOrganizationGroupMembersSchema,
   createOrganizationGroupSchema,
+  moveOrganizationGroupMemberSchema,
+  saveOrganizationGroupBoardLayoutSchema,
   updateOrganizationGroupMemberSchema,
   updateOrganizationGroupSchema,
 } from '@churchflow/shared';
 import type {
   AddOrganizationGroupMembersInput,
   CreateOrganizationGroupInput,
+  MoveOrganizationGroupMemberInput,
   OrganizationGroupIcon,
+  SaveOrganizationGroupBoardLayoutInput,
   UpdateOrganizationGroupInput,
   UpdateOrganizationGroupMemberInput,
 } from '@churchflow/shared';
@@ -41,4 +45,17 @@ export class UpdateOrganizationGroupMemberDto implements UpdateOrganizationGroup
 
   role?: UpdateOrganizationGroupMemberInput['role'];
   responsibility?: string | null;
+}
+
+export class MoveOrganizationGroupMemberDto implements MoveOrganizationGroupMemberInput {
+  static readonly schema = moveOrganizationGroupMemberSchema;
+
+  targetGroupId!: string;
+  role!: MoveOrganizationGroupMemberInput['role'];
+}
+
+export class SaveOrganizationGroupBoardLayoutDto implements SaveOrganizationGroupBoardLayoutInput {
+  static readonly schema = saveOrganizationGroupBoardLayoutSchema;
+
+  nodes!: SaveOrganizationGroupBoardLayoutInput['nodes'];
 }

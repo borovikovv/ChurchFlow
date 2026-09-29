@@ -5,9 +5,13 @@ import { apiFetch } from '@/api/client';
 import type {
   AddOrganizationGroupMembersInput,
   CreateOrganizationGroupInput,
+  MoveOrganizationGroupMemberInput,
+  MoveOrganizationGroupMemberResult,
+  OrganizationGroupBoardPayload,
   OrganizationGroupDetail,
   OrganizationGroupDetailPayload,
   OrganizationGroupsPayload,
+  SaveOrganizationGroupBoardLayoutInput,
   UpdateOrganizationGroupInput,
   UpdateOrganizationGroupMemberInput,
 } from '@churchflow/shared';
@@ -43,6 +47,32 @@ export async function loadGroupAction(input: { organizationId: string; groupId: 
   return result.ok
     ? { ok: true as const, payload: result.data }
     : { ok: false as const, error: result.error.message };
+}
+
+export async function loadGroupBoardAction(input: { organizationId: string }) {
+  const result = await apiFetch<OrganizationGroupBoardPayload>(
+    `/organizations/${input.organizationId}/groups/board`,
+  );
+
+  return result.ok
+    ? { ok: true as const, payload: result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
+export async function saveGroupBoardLayoutAction(input: {
+  organizationId: string;
+  layout: SaveOrganizationGroupBoardLayoutInput;
+}) {
+  const result = await apiFetch<{ saved: number }>(
+    `/organizations/${input.organizationId}/groups/board/layout`,
+    {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input.layout),
+    },
+  );
+
+  return result.ok ? { ok: true as const } : { ok: false as const, error: result.error.message };
 }
 
 export async function loadGroupDetailsAction(input: { organizationId: string }) {
@@ -161,4 +191,24 @@ export async function removeGroupMemberAction(input: {
   return result.ok
     ? { ok: true as const, group: result.data }
     : { ok: false as const, error: result.error.message };
+}
+
+export async function moveGroupMemberAction(input: {
+  organizationId: string;
+  groupId: string;
+  membershipId: string;
+  move: MoveOrganizationGroupMemberInput;
+}) {
+  const result = await apiFetch<MoveOrganizationGroupMemberResult>(
+    `/organizations/${input.organizationId}/groups/${input.groupId}/members/${input.membershipId}/move`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input.move),
+    },
+  );
+  if (!result.ok) return { ok: false as const, error: result.error.message };
+
+  revalidateGroup(input.organizationId, input.groupId);
+  return { ok: true as const, result: result.data };
 }

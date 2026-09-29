@@ -16,6 +16,9 @@ import {
   BUDGET_ENTRY_FIELDS,
   BUDGET_GROUPS,
   DEFAULT_MEMBER_PAGE_SIZE,
+  ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEYS,
+  ORGANIZATION_GROUP_BOARD_COORDINATE_LIMIT,
+  ORGANIZATION_GROUP_BOARD_LAYOUT_MAX_NODES,
   ORGANIZATION_GROUP_COLOR_PATTERN,
   ORGANIZATION_GROUP_DESCRIPTION_MAX_LENGTH,
   ORGANIZATION_GROUP_ICONS,
@@ -23,6 +26,7 @@ import {
   ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD,
   ORGANIZATION_GROUP_NAME_MAX_LENGTH,
   ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH,
+  ORGANIZATION_GROUPS_VIEWS,
   PHOTO_UPLOAD_MAX_BYTES,
   PHOTO_UPLOAD_MIME_TYPES,
   MEMBER_ACCESS_METHODS,
@@ -115,6 +119,14 @@ export const organizationGroupColorSchema = z
   .regex(ORGANIZATION_GROUP_COLOR_PATTERN, 'Color must be a hex value such as #2563EB')
   .transform((value) => value.toUpperCase());
 export const organizationGroupIdsSchema = z.array(uuidSchema);
+export const organizationGroupsViewSchema = z.enum(ORGANIZATION_GROUPS_VIEWS);
+export const organizationGroupBoardComputedNodeKeySchema = z.enum(
+  ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEYS,
+);
+export const organizationGroupBoardNodeKeySchema = z.union([
+  uuidSchema,
+  organizationGroupBoardComputedNodeKeySchema,
+]);
 export const memberAccessMethodSchema = z.enum(MEMBER_ACCESS_METHODS);
 
 const organizationGroupIdsQuerySchema = z.preprocess((value) => {
@@ -661,6 +673,33 @@ export const updateOrganizationGroupMemberSchema = z
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: 'At least one membership field is required',
   });
+
+export const moveOrganizationGroupMemberSchema = z.object({
+  targetGroupId: uuidSchema,
+  role: organizationGroupMemberRoleSchema.default('MEMBER'),
+});
+
+const organizationGroupBoardCoordinateSchema = z
+  .number()
+  .finite()
+  .min(-ORGANIZATION_GROUP_BOARD_COORDINATE_LIMIT)
+  .max(ORGANIZATION_GROUP_BOARD_COORDINATE_LIMIT);
+
+export const organizationGroupBoardNodePositionSchema = z.object({
+  nodeKey: organizationGroupBoardNodeKeySchema,
+  x: organizationGroupBoardCoordinateSchema,
+  y: organizationGroupBoardCoordinateSchema,
+});
+
+export const saveOrganizationGroupBoardLayoutSchema = z.object({
+  nodes: z
+    .array(organizationGroupBoardNodePositionSchema)
+    .min(1)
+    .max(ORGANIZATION_GROUP_BOARD_LAYOUT_MAX_NODES)
+    .refine((nodes) => new Set(nodes.map((node) => node.nodeKey)).size === nodes.length, {
+      message: 'Each board node may appear only once',
+    }),
+});
 
 export const createManualOrganizationMemberSchema = z.object({
   displayName: z.string().trim().min(2).max(160),
