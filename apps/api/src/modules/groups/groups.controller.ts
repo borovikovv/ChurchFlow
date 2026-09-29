@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ORG_PERMISSIONS } from '@churchflow/shared';
 import {
   SessionAuthGuard,
@@ -11,6 +22,8 @@ import {
 import {
   AddOrganizationGroupMembersDto,
   CreateOrganizationGroupDto,
+  MoveOrganizationGroupMemberDto,
+  SaveOrganizationGroupBoardLayoutDto,
   UpdateOrganizationGroupDto,
   UpdateOrganizationGroupMemberDto,
 } from './dto/organization-group.dto';
@@ -28,10 +41,24 @@ export class GroupsController {
 
   /** Declared before the :groupId route so the literal segment wins. */
   @Get('details')
-  listDetails(
-    @Param('organizationId') organizationId: string,
-  ) {
+  listDetails(@Param('organizationId') organizationId: string) {
     return this.groupsService.listDetailsForOrganization(organizationId);
+  }
+
+  /** Declared before the :groupId route so the literal segment wins. */
+  @Get('board')
+  board(@Param('organizationId') organizationId: string, @Req() request: AuthenticatedRequest) {
+    return this.groupsService.getBoard(organizationId, this.actorUserId(request));
+  }
+
+  @Put('board/layout')
+  @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  saveBoardLayout(
+    @Param('organizationId') organizationId: string,
+    @Body() body: SaveOrganizationGroupBoardLayoutDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.groupsService.saveBoardLayout(organizationId, body, this.actorUserId(request));
   }
 
   @Get(':groupId')
@@ -95,6 +122,24 @@ export class GroupsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.updateMember(
+      organizationId,
+      groupId,
+      membershipId,
+      body,
+      this.actorUserId(request),
+    );
+  }
+
+  @Post(':groupId/members/:membershipId/move')
+  @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  moveMember(
+    @Param('organizationId') organizationId: string,
+    @Param('groupId') groupId: string,
+    @Param('membershipId') membershipId: string,
+    @Body() body: MoveOrganizationGroupMemberDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.groupsService.moveMember(
       organizationId,
       groupId,
       membershipId,

@@ -11,17 +11,24 @@ import { ORG_PERMISSIONS } from '@churchflow/shared';
 import type {
   AddOrganizationGroupMembersInput,
   CreateOrganizationGroupInput,
+  MoveOrganizationGroupMemberInput,
+  MoveOrganizationGroupMemberResult,
+  OrganizationGroupBoardPayload,
+  OrganizationGroupBoardPerson,
   OrganizationGroupDetail,
   OrganizationGroupDetailPayload,
   OrganizationGroupListItem,
   OrganizationGroupsPayload,
+  SaveOrganizationGroupBoardLayoutInput,
   UpdateOrganizationGroupInput,
   UpdateOrganizationGroupMemberInput,
 } from '@churchflow/shared';
 import {
   GroupsRepository,
+  UnknownGroupBoardNodesError,
   UnknownGroupMembershipsError,
   type OrganizationGroupActor,
+  type OrganizationGroupBoardPersonRecord,
   type OrganizationGroupDetailRecord,
   type OrganizationGroupListRecord,
 } from './repositories/groups.repository';
@@ -76,6 +83,76 @@ export class GroupsService {
     const groups = await this.groupsRepository.listDetailsForOrganization(organizationId);
 
     return groups.map((group) => groupToDetail(group));
+  }
+
+  async getBoard(
+    organizationId: string,
+    actorUserId: string,
+  ): Promise<OrganizationGroupBoardPayload> {
+    const [groups, unassignedMembers, visitors, layout, actor] = await Promise.all([
+      this.groupsRepository.listDetailsForOrganization(organizationId),
+      this.groupsRepository.listUngroupedPeople(organizationId, 'members'),
+      this.groupsRepository.listUngroupedPeople(organizationId, 'visitors'),
+      this.groupsRepository.listBoardLayout(organizationId),
+      this.groupsRepository.findActiveMembership(organizationId, actorUserId),
+    ]);
+
+    return {
+      canManage: canManageGroups(actor),
+      groups: groups.map((group) => leadersFirst(groupToDetail(group))),
+      unassignedMembers: unassignedMembers.map((person) => boardPerson(person, organizationId)),
+      visitors: visitors.map((person) => boardPerson(person, organizationId)),
+      layout,
+    };
+  }
+
+  async saveBoardLayout(
+    organizationId: string,
+    input: SaveOrganizationGroupBoardLayoutInput,
+    actorUserId: string,
+  ): Promise<{ saved: number }> {
+    try {
+      await this.groupsRepository.saveBoardLayout({
+        organizationId,
+        actorUserId,
+        nodes: input.nodes,
+      });
+    } catch (error) {
+      if (error instanceof UnknownGroupBoardNodesError) {
+        throw new BadRequestException('Some board nodes do not belong to this organization');
+      }
+
+      throw error;
+    }
+
+    return { saved: input.nodes.length };
+  }
+
+  async moveMember(
+    organizationId: string,
+    sourceGroupId: string,
+    membershipId: string,
+    input: MoveOrganizationGroupMemberInput,
+    actorUserId: string,
+  ): Promise<MoveOrganizationGroupMemberResult> {
+    if (sourceGroupId === input.targetGroupId) {
+      throw new BadRequestException('The target group must differ from the source group');
+    }
+
+    const moved = await this.groupsRepository.moveMember({
+      organizationId,
+      sourceGroupId,
+      targetGroupId: input.targetGroupId,
+      membershipId,
+      role: input.role,
+      actorUserId,
+    });
+    if (!moved) throw new NotFoundException('Group member was not found');
+
+    return {
+      sourceGroup: leadersFirst(groupToDetail(moved.sourceGroup)),
+      targetGroup: leadersFirst(groupToDetail(moved.targetGroup)),
+    };
   }
 
   async create(
@@ -221,16 +298,41 @@ function groupToDetail(group: OrganizationGroupDetailRecord): OrganizationGroupD
     members: group.members.map((member) => ({
       membershipId: member.membershipId,
       displayName: membershipDisplayName(member.membership),
-      photoUrl: member.membership.profile?.profilePhotoAsset
-        ? organizationMediaContentUrl(
-            group.organizationId,
-            member.membership.profile.profilePhotoAsset.id,
-          )
-        : userAvatarUrl(member.membership.user, group.organizationId),
+      photoUrl: membershipPhotoUrl(member.membership, group.organizationId),
       role: member.role,
       responsibility: member.responsibility,
     })),
   };
+}
+
+function leadersFirst(group: OrganizationGroupDetail): OrganizationGroupDetail {
+  return {
+    ...group,
+    members: [
+      ...group.members.filter((member) => member.role === 'LEADER'),
+      ...group.members.filter((member) => member.role !== 'LEADER'),
+    ],
+  };
+}
+
+function boardPerson(
+  person: OrganizationGroupBoardPersonRecord,
+  organizationId: string,
+): OrganizationGroupBoardPerson {
+  return {
+    membershipId: person.id,
+    displayName: membershipDisplayName(person),
+    photoUrl: membershipPhotoUrl(person, organizationId),
+  };
+}
+
+function membershipPhotoUrl(
+  membership: OrganizationGroupBoardPersonRecord,
+  organizationId: string,
+): string | null {
+  return membership.profile?.profilePhotoAsset
+    ? organizationMediaContentUrl(organizationId, membership.profile.profilePhotoAsset.id)
+    : userAvatarUrl(membership.user, organizationId);
 }
 
 function membershipDisplayName(membership: {

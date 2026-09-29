@@ -1,4 +1,4 @@
-import { readText, type PublicWebsiteSummary } from '../../types';
+import { readText, sectionTitle, type PublicWebsiteSummary } from '../../types';
 import {
   CITY_COVER_CLASS,
   CityBackgroundImage,
@@ -23,15 +23,6 @@ export function CityGiving(props: CityGivingProps) {
   const { content } = props;
   const ways = readWays(content);
 
-  if (
-    !readText(content, 'title') &&
-    !readText(content, 'body') &&
-    !readText(content, 'primaryLabel') &&
-    ways.length === 0
-  ) {
-    return null;
-  }
-
   return readText(content, 'variant') === 'ways' ? (
     <CityGivingWays {...props} ways={ways} />
   ) : (
@@ -45,7 +36,7 @@ function CityGivingCover({
   ways,
   website,
 }: CityGivingProps & { ways: GivingWay[] }) {
-  const title = readText(content, 'title');
+  const title = sectionTitle(content, 'giving', website);
   const body = readText(content, 'body');
 
   return (
@@ -57,9 +48,7 @@ function CityGivingCover({
       <div className="mx-auto flex w-full max-w-[1240px] flex-col justify-between gap-10 px-5 py-14 lg:py-[88px]">
         <div className="flex max-w-[720px] flex-col gap-5 sm:gap-6">
           <CityEyebrow className="text-white/70">{readText(content, 'eyebrow')}</CityEyebrow>
-          {title ? (
-            <CityHeading className="text-white text-balance sm:text-[64px]">{title}</CityHeading>
-          ) : null}
+          <CityHeading className="text-white text-balance sm:text-[64px]">{title}</CityHeading>
           {body ? (
             <p className="m-0 max-w-[560px] text-[16px] leading-[1.6] text-white/85 sm:text-[18px]">
               {body}
@@ -94,7 +83,7 @@ function CityGivingWays({
   ways,
   website,
 }: CityGivingProps & { ways: GivingWay[] }) {
-  const title = readText(content, 'title');
+  const title = sectionTitle(content, 'giving', website);
   const body = readText(content, 'body');
 
   return (
@@ -104,7 +93,7 @@ function CityGivingWays({
           <CityEyebrow style={{ color: theme.accentInk }}>
             {readText(content, 'eyebrow')}
           </CityEyebrow>
-          {title ? <CityHeading className="text-balance">{title}</CityHeading> : null}
+          <CityHeading className="text-balance">{title}</CityHeading>
           {body ? (
             <p className="m-0 max-w-[560px] text-[16px] leading-[1.7] text-[#3d3d3d] sm:text-[18px]">
               {body}

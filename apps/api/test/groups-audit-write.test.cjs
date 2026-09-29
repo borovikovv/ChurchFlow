@@ -32,6 +32,9 @@ function auditingTransaction() {
       update: async () => ({}),
       delete: async () => ({}),
     },
+    organizationGroupBoardNode: {
+      deleteMany: async () => ({ count: 0 }),
+    },
     auditLog: {
       create: async ({ data }) => {
         auditRows.push(data);

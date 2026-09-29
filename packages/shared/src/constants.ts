@@ -19,6 +19,7 @@ export const BUDGET_AUDIT_ENTITY_TYPE = 'Budget';
 
 export const PHOTO_UPLOAD_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const PHOTO_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+export const LOGO_UPLOAD_MIME_TYPES = [...PHOTO_UPLOAD_MIME_TYPES, 'image/svg+xml'] as const;
 
 export const PUBLIC_SECTION_TYPES = [
   'hero',
@@ -308,6 +309,19 @@ export const ORGANIZATION_GROUP_NAME_MAX_LENGTH = 80;
 export const ORGANIZATION_GROUP_DESCRIPTION_MAX_LENGTH = 500;
 export const ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH = 200;
 export const ORGANIZATION_GROUP_MEMBERS_MAX_PER_ADD = 200;
+
+export const ORGANIZATION_GROUPS_VIEWS = ['list', 'board'] as const;
+
+/** Board nodes that are computed by the API rather than stored as groups. */
+export const ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEYS = ['unassigned', 'visitors'] as const;
+
+export const ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEY = {
+  unassigned: 'unassigned',
+  visitors: 'visitors',
+} as const;
+
+export const ORGANIZATION_GROUP_BOARD_LAYOUT_MAX_NODES = 500;
+export const ORGANIZATION_GROUP_BOARD_COORDINATE_LIMIT = 1_000_000;
 
 export const MEMBER_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 export const DEFAULT_MEMBER_PAGE_SIZE = 25;
