@@ -1,4 +1,4 @@
-import { readText, type PublicWebsiteSummary } from '../../types';
+import { readText, sectionTitle, type PublicWebsiteSummary } from '../../types';
 import {
   CITY_COVER_CLASS,
   CityBackgroundImage,
@@ -20,12 +20,10 @@ export function CityAbout({
   website: PublicWebsiteSummary | undefined;
 }) {
   const variant = readText(content, 'variant') || 'text';
-  const title = readText(content, 'title');
+  const title = sectionTitle(content, 'about', website);
   const body = readText(content, 'body');
   const eyebrow = readText(content, 'eyebrow');
   const items = variant === 'columns' ? readCityItems(content) : [];
-
-  if (!title && !body && items.length === 0) return null;
 
   // A background image turns the section dark, the same way the giving cover reads.
   const onDark = Boolean(readText(content, 'backgroundImageUrl'));
@@ -49,11 +47,9 @@ export function CityAbout({
               {eyebrow}
             </CityEyebrow>
           ) : null}
-          {title ? (
-            <CityHeading className={onDark ? 'text-white text-balance' : 'text-balance'}>
-              {title}
-            </CityHeading>
-          ) : null}
+          <CityHeading className={onDark ? 'text-white text-balance' : 'text-balance'}>
+            {title}
+          </CityHeading>
           {body ? (
             <p
               className={`m-0 text-[16px] leading-[1.7] sm:text-[18px] ${

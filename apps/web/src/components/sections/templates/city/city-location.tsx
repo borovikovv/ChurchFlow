@@ -1,4 +1,4 @@
-import { readText, type PublicWebsiteSummary } from '../../types';
+import { readText, sectionTitle, type PublicWebsiteSummary } from '../../types';
 import {
   CITY_IMAGE_PLATE_CLASS,
   CityBackgroundImage,
@@ -29,8 +29,6 @@ export function CityLocation({
   const serviceTimes = settings?.serviceTimes ?? [];
   const imageUrl = readText(content, 'backgroundImageUrl');
 
-  if (!address && serviceTimes.length === 0) return null;
-
   const body = readText(content, 'body');
   const primaryLabel = readText(content, 'primaryLabel');
   const primaryHref = cityPrimaryHref(content, settings?.location?.directionsUrl, website);
@@ -43,7 +41,7 @@ export function CityLocation({
           <CityEyebrow style={{ color: theme.accentInk }}>
             {readText(content, 'eyebrow')}
           </CityEyebrow>
-          <CityHeading>{readText(content, 'title', messages.address)}</CityHeading>
+          <CityHeading>{sectionTitle(content, 'schedule', website)}</CityHeading>
           {body ? (
             <p className="m-0 max-w-[620px] text-[16px] leading-[1.7] text-[#3d3d3d] sm:text-[18px]">
               {body}

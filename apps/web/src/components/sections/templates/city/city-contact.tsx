@@ -1,4 +1,4 @@
-import { readText, type PublicWebsiteSummary } from '../../types';
+import { readText, sectionTitle, type PublicWebsiteSummary } from '../../types';
 import {
   CityButton,
   CityEyebrow,
@@ -20,7 +20,6 @@ export function CityContact({
 }) {
   const messages = cityMessages(website);
   const settings = website?.settings;
-  const title = readText(content, 'title');
   const body = readText(content, 'body');
   // The section may carry its own details; otherwise the website settings answer for it.
   const address = readText(content, 'address') || settings?.location?.address || '';
@@ -32,15 +31,13 @@ export function CityContact({
   const primaryHref = cityPrimaryHref(content, settings?.location?.directionsUrl, website);
   const secondaryLabel = readText(content, 'secondaryLabel');
 
-  if (!title && !body && !address && !email && !phone) return null;
-
   return (
     <section className="px-5 py-14 lg:py-[104px]" id="contact">
       <div className="mx-auto grid w-full max-w-[1240px] gap-8 lg:grid-cols-2 lg:gap-16">
         <div className="flex flex-col gap-5 sm:gap-6">
           {eyebrow ? <CityEyebrow style={{ color: theme.accentInk }}>{eyebrow}</CityEyebrow> : null}
           <CityHeading className="text-balance">
-            {readText(content, 'title', messages.contact)}
+            {sectionTitle(content, 'contact', website)}
           </CityHeading>
           {body ? (
             <p className="m-0 max-w-[520px] text-[16px] leading-[1.7] text-[#3d3d3d] sm:text-[18px]">
