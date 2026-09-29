@@ -6,6 +6,7 @@ import type {
   createManualOrganizationMemberSchema,
   importOrganizationMembersCsvResultSchema,
   createOrganizationRequestSchema,
+  createOrganizationSchema,
   auditLogListItemSchema,
   auditLogsPageSchema,
   listAuditLogsQuerySchema,
@@ -104,6 +105,7 @@ export type UUID = string;
 export type UserSession = z.infer<typeof userSessionSchema>;
 export type Organization = z.infer<typeof organizationSchema>;
 export type OrganizationWebsite = z.infer<typeof organizationWebsiteSchema>;
+export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 export type GrantBillingExemptionInput = z.infer<typeof grantBillingExemptionSchema>;
 export type SubscriptionSummary = z.infer<typeof subscriptionSummarySchema>;
