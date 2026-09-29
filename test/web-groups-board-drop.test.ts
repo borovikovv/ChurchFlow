@@ -184,6 +184,37 @@ test('copying someone already in the target only changes their role there', () =
   );
 });
 
+test('a leader of the target keeps leading it when moved into its members zone from elsewhere', () => {
+  assert.deepEqual(
+    resolveBoardDrop({
+      source: fromGroup('a'),
+      target: onGroup('b', 'members'),
+      copy: false,
+      targetRole: 'LEADER',
+    }),
+    {
+      kind: 'mutate',
+      confirmPromotion: false,
+      mutation: {
+        kind: 'move',
+        sourceGroupId: 'a',
+        targetGroupId: 'b',
+        membershipId: MEMBERSHIP_ID,
+        role: 'LEADER',
+      },
+    },
+  );
+  assert.deepEqual(
+    resolveBoardDrop({
+      source: fromGroup('a'),
+      target: onGroup('b', 'members'),
+      copy: true,
+      targetRole: 'LEADER',
+    }),
+    { kind: 'noop' },
+  );
+});
+
 test('moving onto the leaders of a group someone already leads needs no confirmation', () => {
   const intent = resolveBoardDrop({
     source: fromGroup('a'),

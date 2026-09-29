@@ -93,6 +93,10 @@ const COMPUTED_BOARD_NODE_KEYS: ReadonlySet<string> = new Set(
   ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEYS,
 );
 
+// A reset saves every node at once, one upsert each, which can outlast Prisma's 5s default
+// for the largest layout the schema accepts.
+const BOARD_LAYOUT_TRANSACTION_TIMEOUT_MS = 30_000;
+
 @Injectable()
 export class GroupsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -168,36 +172,42 @@ export class GroupsRepository {
     actorUserId: string;
     nodes: OrganizationGroupBoardNodePosition[];
   }): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const groupIds = input.nodes
-        .map((node) => node.nodeKey)
-        .filter((nodeKey) => !COMPUTED_BOARD_NODE_KEYS.has(nodeKey));
-      const known = groupIds.length
-        ? await tx.organizationGroup.findMany({
-            where: { id: { in: groupIds }, organizationId: input.organizationId },
-            select: { id: true },
-          })
-        : [];
-      const knownIds = new Set(known.map((group) => group.id));
-      const unknownKeys = groupIds.filter((groupId) => !knownIds.has(groupId));
-      if (unknownKeys.length > 0) throw new UnknownGroupBoardNodesError(unknownKeys);
+    await this.prisma.$transaction(
+      async (tx) => {
+        const groupIds = input.nodes
+          .map((node) => node.nodeKey)
+          .filter((nodeKey) => !COMPUTED_BOARD_NODE_KEYS.has(nodeKey));
+        const known = groupIds.length
+          ? await tx.organizationGroup.findMany({
+              where: { id: { in: groupIds }, organizationId: input.organizationId },
+              select: { id: true },
+            })
+          : [];
+        const knownIds = new Set(known.map((group) => group.id));
+        const unknownKeys = groupIds.filter((groupId) => !knownIds.has(groupId));
+        if (unknownKeys.length > 0) throw new UnknownGroupBoardNodesError(unknownKeys);
 
-      for (const node of input.nodes) {
-        await tx.organizationGroupBoardNode.upsert({
-          where: {
-            organizationId_nodeKey: { organizationId: input.organizationId, nodeKey: node.nodeKey },
-          },
-          create: {
-            organizationId: input.organizationId,
-            nodeKey: node.nodeKey,
-            x: node.x,
-            y: node.y,
-            updatedByUserId: input.actorUserId,
-          },
-          update: { x: node.x, y: node.y, updatedByUserId: input.actorUserId },
-        });
-      }
-    });
+        for (const node of input.nodes) {
+          await tx.organizationGroupBoardNode.upsert({
+            where: {
+              organizationId_nodeKey: {
+                organizationId: input.organizationId,
+                nodeKey: node.nodeKey,
+              },
+            },
+            create: {
+              organizationId: input.organizationId,
+              nodeKey: node.nodeKey,
+              x: node.x,
+              y: node.y,
+              updatedByUserId: input.actorUserId,
+            },
+            update: { x: node.x, y: node.y, updatedByUserId: input.actorUserId },
+          });
+        }
+      },
+      { timeout: BOARD_LAYOUT_TRANSACTION_TIMEOUT_MS },
+    );
   }
 
   listMemberCandidates(organizationId: string) {
@@ -453,22 +463,22 @@ export class GroupsRepository {
       });
       if (groups.length !== 2) return null;
 
+      const sourceRow: Prisma.OrganizationGroupMemberWhereInput = {
+        groupId: input.sourceGroupId,
+        membershipId: input.membershipId,
+        organizationId: input.organizationId,
+        membership: { organizationId: input.organizationId, ...ASSIGNABLE_MEMBERSHIP },
+      };
       const existing = await tx.organizationGroupMember.findFirst({
-        where: {
-          groupId: input.sourceGroupId,
-          membershipId: input.membershipId,
-          organizationId: input.organizationId,
-          membership: { organizationId: input.organizationId, ...ASSIGNABLE_MEMBERSHIP },
-        },
-        select: { groupId: true },
+        where: sourceRow,
+        select: { responsibility: true },
       });
       if (!existing) return null;
 
-      await tx.organizationGroupMember.delete({
-        where: {
-          groupId_membershipId: { groupId: input.sourceGroupId, membershipId: input.membershipId },
-        },
-      });
+      // A concurrent move of the same person may already have taken the row.
+      const removed = await tx.organizationGroupMember.deleteMany({ where: sourceRow });
+      if (removed.count === 0) return null;
+
       await tx.organizationGroupMember.upsert({
         where: {
           groupId_membershipId: { groupId: input.targetGroupId, membershipId: input.membershipId },
@@ -478,6 +488,7 @@ export class GroupsRepository {
           groupId: input.targetGroupId,
           membershipId: input.membershipId,
           role: input.role,
+          responsibility: existing.responsibility,
         },
         update: { role: input.role },
       });

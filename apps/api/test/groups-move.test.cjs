@@ -31,6 +31,7 @@ function moveTransaction(options = {}) {
     targetOrganizationId = ORGANIZATION_ID,
     membershipStatus = 'ACTIVE',
     membershipRemovedAt = null,
+    takenBeforeDelete = null,
     groupMemberRows = [
       {
         groupId: SOURCE_GROUP_ID,
@@ -49,6 +50,13 @@ function moveTransaction(options = {}) {
   ];
   const membership = { status: membershipStatus, removedAt: membershipRemovedAt };
   const rows = groupMemberRows.map((row) => ({ ...row }));
+  const findRow = (where) => {
+    const { membership: membershipWhere, ...rowWhere } = where;
+    const present =
+      !membershipWhere ||
+      (membership.removedAt === null && ['ACTIVE', 'SUSPENDED'].includes(membership.status));
+    return present ? (rows.find((row) => matches(row, rowWhere)) ?? null) : null;
+  };
 
   const tx = {
     organizationGroup: {
@@ -70,20 +78,16 @@ function moveTransaction(options = {}) {
     },
     organizationGroupMember: {
       findFirst: async ({ where }) => {
-        const { membership: membershipWhere, ...rowWhere } = where;
-        const present =
-          !membershipWhere ||
-          (membership.removedAt === null && ['ACTIVE', 'SUSPENDED'].includes(membership.status));
-        return present ? (rows.find((row) => matches(row, rowWhere)) ?? null) : null;
+        const found = findRow(where);
+        if (found) takenBeforeDelete?.(rows, found);
+        return found ? { responsibility: found.responsibility ?? null } : null;
       },
-      delete: async ({ where }) => {
-        writes.push({ operation: 'delete', where: where.groupId_membershipId });
-        const { groupId, membershipId } = where.groupId_membershipId;
-        const index = rows.findIndex(
-          (row) => row.groupId === groupId && row.membershipId === membershipId,
-        );
-        rows.splice(index, 1);
-        return {};
+      deleteMany: async ({ where }) => {
+        const found = findRow(where);
+        if (!found) return { count: 0 };
+        writes.push({ operation: 'delete', where: { groupId: found.groupId } });
+        rows.splice(rows.indexOf(found), 1);
+        return { count: 1 };
       },
       upsert: async ({ where, create, update }) => {
         writes.push({ operation: 'upsert', where: where.groupId_membershipId });
@@ -197,6 +201,75 @@ test('a person already in the target keeps one row and takes the requested role'
     rows.map((row) => [row.groupId, row.role]),
     [[TARGET_GROUP_ID, 'LEADER']],
   );
+});
+
+test('a move carries the responsibility into the new group', async () => {
+  const { prisma, rows } = moveTransaction({
+    groupMemberRows: [
+      {
+        groupId: SOURCE_GROUP_ID,
+        membershipId: MEMBERSHIP_ID,
+        organizationId: ORGANIZATION_ID,
+        role: 'MEMBER',
+        responsibility: 'Sound desk',
+      },
+    ],
+  });
+
+  await move(new GroupsRepository(prisma));
+
+  assert.deepEqual(
+    rows.map((row) => [row.groupId, row.responsibility]),
+    [[TARGET_GROUP_ID, 'Sound desk']],
+  );
+});
+
+test('a person already in the target keeps the responsibility they hold there', async () => {
+  const { prisma, rows } = moveTransaction({
+    groupMemberRows: [
+      {
+        groupId: SOURCE_GROUP_ID,
+        membershipId: MEMBERSHIP_ID,
+        organizationId: ORGANIZATION_ID,
+        role: 'MEMBER',
+        responsibility: 'Sound desk',
+      },
+      {
+        groupId: TARGET_GROUP_ID,
+        membershipId: MEMBERSHIP_ID,
+        organizationId: ORGANIZATION_ID,
+        role: 'MEMBER',
+        responsibility: 'Youth mentor',
+      },
+    ],
+  });
+
+  await move(new GroupsRepository(prisma));
+
+  assert.deepEqual(
+    rows.map((row) => [row.groupId, row.responsibility]),
+    [[TARGET_GROUP_ID, 'Youth mentor']],
+  );
+});
+
+test('a concurrent move that already took the row is reported as not found', async () => {
+  const { prisma, writes, auditRows } = moveTransaction({
+    takenBeforeDelete: (rows, row) => rows.splice(rows.indexOf(row), 1),
+  });
+  const service = new GroupsService(new GroupsRepository(prisma));
+
+  await assert.rejects(
+    service.moveMember(
+      ORGANIZATION_ID,
+      SOURCE_GROUP_ID,
+      MEMBERSHIP_ID,
+      { targetGroupId: TARGET_GROUP_ID, role: 'MEMBER' },
+      ACTOR_USER_ID,
+    ),
+    (error) => error instanceof NotFoundException,
+  );
+  assert.deepEqual(writes, []);
+  assert.deepEqual(auditRows, []);
 });
 
 test('a move into a group of another organization writes nothing', async () => {

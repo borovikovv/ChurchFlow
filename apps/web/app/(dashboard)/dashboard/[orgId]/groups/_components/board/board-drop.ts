@@ -32,17 +32,28 @@ export function resolveBoardDrop(input: {
     return mutate({ kind: 'remove', sourceGroupId: source.groupId, membershipId }, false);
   }
 
-  const role: OrganizationGroupMemberRole = target.zone === 'leaders' ? 'LEADER' : 'MEMBER';
-  const promotes = role === 'LEADER' && targetRole !== 'LEADER';
-
   if (source.kind === 'people') {
-    return mutate({ kind: 'add', targetGroupId: target.groupId, membershipId, role }, promotes);
+    const role = target.zone === 'leaders' ? 'LEADER' : 'MEMBER';
+    return mutate(
+      { kind: 'add', targetGroupId: target.groupId, membershipId, role },
+      role === 'LEADER',
+    );
   }
 
   if (source.groupId === target.groupId) {
+    const role = target.zone === 'leaders' ? 'LEADER' : 'MEMBER';
     if (source.role === role) return NOOP;
-    return mutate({ kind: 'set-role', groupId: target.groupId, membershipId, role }, promotes);
+    return mutate(
+      { kind: 'set-role', groupId: target.groupId, membershipId, role },
+      role === 'LEADER',
+    );
   }
+
+  // Only a drop inside the same group demotes. Someone who already leads the target group stays
+  // a leader when they arrive in its members zone from elsewhere.
+  const role: OrganizationGroupMemberRole =
+    target.zone === 'leaders' ? 'LEADER' : (targetRole ?? 'MEMBER');
+  const promotes = role === 'LEADER' && targetRole !== 'LEADER';
 
   if (!copy) {
     return mutate(

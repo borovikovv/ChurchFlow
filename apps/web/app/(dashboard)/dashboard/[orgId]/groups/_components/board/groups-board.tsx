@@ -93,13 +93,12 @@ function GroupsBoardCanvas({ initialPayload, organizationId }: GroupsBoardProps)
           </ReactFlow>
         </div>
       </div>
-      {board.promotion ? (
-        <PromoteLeaderDialog
-          promotion={board.promotion}
-          onCancel={board.cancelPromotion}
-          onConfirm={board.confirmPromotion}
-        />
-      ) : null}
+      <PromoteLeaderDialog
+        dialogRef={board.promotionDialogRef}
+        promotion={board.promotion}
+        onCancel={board.cancelPromotion}
+        onConfirm={board.confirmPromotion}
+      />
     </GroupsBoardContext.Provider>
   );
 }

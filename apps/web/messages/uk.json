@@ -413,7 +413,8 @@
       "loading": "Завантаження дошки…",
       "promoteTitle": "Зробити лідером",
       "promoteDescription": "Зробити {name} лідером групи «{group}»?",
-      "promoteConfirm": "Зробити лідером"
+      "promoteConfirm": "Зробити лідером",
+      "unexpectedError": "Щось пішло не так. Спробуйте ще раз."
     },
     "cancel": "Скасувати",
     "colorLabel": "Колір",

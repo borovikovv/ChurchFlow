@@ -150,11 +150,22 @@ function layoutTransaction(groupRows) {
     },
   };
 
-  return { prisma: { $transaction: async (callback) => callback(tx) }, upserts };
+  const transactionOptions = [];
+
+  return {
+    prisma: {
+      $transaction: async (callback, options) => {
+        transactionOptions.push(options);
+        return callback(tx);
+      },
+    },
+    upserts,
+    transactionOptions,
+  };
 }
 
 test('saving the layout stores every node against the organization', async () => {
-  const { prisma, upserts } = layoutTransaction([
+  const { prisma, upserts, transactionOptions } = layoutTransaction([
     { id: GROUP_ID, organizationId: ORGANIZATION_ID },
   ]);
   const service = new GroupsService(new GroupsRepository(prisma));
@@ -181,6 +192,8 @@ test('saving the layout stores every node against the organization', async () =>
   );
   assert.ok(upserts.every((args) => args.create.organizationId === ORGANIZATION_ID));
   assert.ok(upserts.every((args) => args.update.updatedByUserId === ACTOR_USER_ID));
+  // Longer than Prisma's 5s default, so a full reset of a large board is not cut off.
+  assert.ok(transactionOptions[0].timeout > 5_000);
 });
 
 test('saving the layout of a group of another organization is refused', async () => {

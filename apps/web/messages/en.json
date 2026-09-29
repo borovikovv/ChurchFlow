@@ -413,7 +413,8 @@
       "loading": "Loading board…",
       "promoteTitle": "Make a leader",
       "promoteDescription": "Make {name} a leader of {group}?",
-      "promoteConfirm": "Make leader"
+      "promoteConfirm": "Make leader",
+      "unexpectedError": "Something went wrong. Please try again."
     },
     "cancel": "Cancel",
     "colorLabel": "Color",

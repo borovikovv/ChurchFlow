@@ -1,7 +1,8 @@
 'use client';
 
 import { applyNodeChanges, type NodeChange } from '@xyflow/react';
-import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { useRef, useState } from 'react';
 import type {
   OrganizationGroupBoardNodePosition,
   OrganizationGroupBoardPayload,
@@ -29,6 +30,7 @@ import type {
   BoardNode,
   PendingPromotion,
 } from './board.types';
+import { createLatestRequest, type LatestRequest } from './latest-request';
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -66,6 +68,9 @@ export function useGroupsBoard({
   );
   const [promotion, setPromotion] = useState<PendingPromotion | null>(null);
   const [draggedSource, setDraggedSource] = useState<BoardDragSource | null>(null);
+  const boardRequestsRef = useRef<LatestRequest>(createLatestRequest());
+  const promotionDialogRef = useRef<HTMLDialogElement>(null);
+  const t = useTranslations('groups.board');
   const canManage = payload.canManage;
 
   const onNodesChange = (changes: NodeChange<BoardNode>[]) => {
@@ -75,11 +80,15 @@ export function useGroupsBoard({
   const saveLayout = async (positions: OrganizationGroupBoardNodePosition[]) => {
     if (!canManage || positions.length === 0) return;
 
-    const result = await saveGroupBoardLayoutAction({
-      organizationId,
-      layout: { nodes: positions },
-    });
-    setError(result.ok ? null : result.error);
+    try {
+      const result = await saveGroupBoardLayoutAction({
+        organizationId,
+        layout: { nodes: positions },
+      });
+      setError(result.ok ? null : result.error);
+    } catch {
+      setError(t('unexpectedError'));
+    }
   };
 
   const saveDraggedNodes = (draggedNodes: readonly BoardNode[]) => {
@@ -95,7 +104,10 @@ export function useGroupsBoard({
   };
 
   const refresh = async () => {
+    const boardRequests = boardRequestsRef.current;
+    const requestId = boardRequests.begin();
     const result = await loadGroupBoardAction({ organizationId });
+    if (!boardRequests.isLatest(requestId)) return;
     if (!result.ok) {
       setError(result.error);
       return;
@@ -141,19 +153,23 @@ export function useGroupsBoard({
     const { membershipId } = mutation;
     setPendingMembershipIds((current) => new Set(current).add(membershipId));
 
-    const result = await runMutation(mutation);
-    if (result.ok) {
-      setError(null);
-      await refresh();
-    } else {
-      setError(result.error);
+    try {
+      const result = await runMutation(mutation);
+      if (result.ok) {
+        setError(null);
+        await refresh();
+      } else {
+        setError(result.error);
+      }
+    } catch {
+      setError(t('unexpectedError'));
+    } finally {
+      setPendingMembershipIds((current) => {
+        const next = new Set(current);
+        next.delete(membershipId);
+        return next;
+      });
     }
-
-    setPendingMembershipIds((current) => {
-      const next = new Set(current);
-      next.delete(membershipId);
-      return next;
-    });
   };
 
   const dropOn = (target: BoardDropTarget, copy: boolean) => {
@@ -176,6 +192,7 @@ export function useGroupsBoard({
         displayName: source.displayName,
         groupName: groupName(payload, target.groupId),
       });
+      promotionDialogRef.current?.showModal();
       return;
     }
 
@@ -195,6 +212,7 @@ export function useGroupsBoard({
     error,
     pendingMembershipIds,
     promotion,
+    promotionDialogRef,
     isDragging: draggedSource !== null,
     onNodesChange,
     saveDraggedNodes,
@@ -206,5 +224,3 @@ export function useGroupsBoard({
     cancelPromotion: () => setPromotion(null),
   };
 }
-
-export type GroupsBoardController = ReturnType<typeof useGroupsBoard>;

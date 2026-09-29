@@ -207,10 +207,8 @@ export async function moveGroupMemberAction(input: {
       body: JSON.stringify(input.move),
     },
   );
-  revalidateGroup(input.organizationId, input.groupId);
-  revalidatePath(groupPath(input.organizationId, input.move.targetGroupId));
+  if (!result.ok) return { ok: false as const, error: result.error.message };
 
-  return result.ok
-    ? { ok: true as const, result: result.data }
-    : { ok: false as const, error: result.error.message };
+  revalidateGroup(input.organizationId, input.groupId);
+  return { ok: true as const, result: result.data };
 }
