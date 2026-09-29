@@ -19,6 +19,7 @@ import { ENTITLEMENTS, uuidSchema } from '@churchflow/shared';
 import type {
   ConfirmUserAvatarUploadInput,
   CreateMemberPhotoUploadInput,
+  CreateOrganizationLogoUploadInput,
 } from '@churchflow/shared';
 import { EntitlementsService } from '../billing/entitlements.service';
 import { currentUserAvatarContentUrl } from './private-media-url';
@@ -160,16 +161,19 @@ export class MediaService {
 
   async createOrganizationLogoUpload(
     organizationId: string,
-    input: CreateMemberPhotoUploadInput,
+    input: CreateOrganizationLogoUploadInput,
     actorUserId: string,
   ) {
     if (!(await this.mediaRepository.findManageableOrganization(organizationId, actorUserId)))
       throw new ForbiddenException(
         'Only organization owners and admins can update organization logos',
       );
-    const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[
-      input.mimeType
-    ];
+    const extension = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/svg+xml': 'svg',
+    }[input.mimeType];
     const objectKey = `organizations/${organizationId}/logo/${randomUUID()}.${extension}`;
     const asset = await this.mediaRepository.createPendingOrganizationLogoAsset({
       organizationId,

@@ -24,6 +24,7 @@ import {
 import { MediaService } from './media.service';
 import { privateMediaFile } from './private-media-file';
 import { ConfirmMemberPhotoUploadDto, CreateMemberPhotoUploadDto } from './dto/member-photo.dto';
+import { CreateOrganizationLogoUploadDto } from './dto/organization-logo.dto';
 
 @Controller('organizations/:organizationId/media')
 @UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
@@ -99,7 +100,7 @@ export class MediaController {
   @RequireEntitlement(ENTITLEMENTS.filesUpload)
   createOrganizationLogoUpload(
     @Param('organizationId') organizationId: string,
-    @Body() body: CreateMemberPhotoUploadDto,
+    @Body() body: CreateOrganizationLogoUploadDto,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.mediaService.createOrganizationLogoUpload(
