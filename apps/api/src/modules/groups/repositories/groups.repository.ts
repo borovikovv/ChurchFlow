@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { OrganizationRole, Prisma } from '@churchflow/db';
+import { ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEYS } from '@churchflow/shared';
 import type {
   AddOrganizationGroupMembersInput,
   CreateOrganizationGroupInput,
+  OrganizationGroupBoardNodePosition,
+  OrganizationGroupMemberRole,
   UpdateOrganizationGroupInput,
   UpdateOrganizationGroupMemberInput,
 } from '@churchflow/shared';
@@ -15,19 +18,19 @@ const ASSIGNABLE_MEMBERSHIP: Prisma.OrganizationMemberWhereInput = {
   removedAt: null,
 };
 
-const groupMemberInclude = {
-  membership: {
+const boardPersonSelect = {
+  id: true,
+  profile: {
     select: {
-      id: true,
-      profile: {
-        select: {
-          displayName: true,
-          profilePhotoAsset: { select: { id: true } },
-        },
-      },
-      user: { select: { displayName: true, email: true, ...userAvatarSelect } },
+      displayName: true,
+      profilePhotoAsset: { select: { id: true } },
     },
   },
+  user: { select: { displayName: true, email: true, ...userAvatarSelect } },
+} as const;
+
+const groupMemberInclude = {
+  membership: { select: boardPersonSelect },
 } as const;
 
 // Membership removal is a soft delete, so group rows outlive it. Every read filters the
@@ -59,6 +62,15 @@ export type OrganizationGroupDetailRecord = Prisma.OrganizationGroupGetPayload<{
   include: typeof groupDetailInclude;
 }>;
 
+export type OrganizationGroupBoardPersonRecord = Prisma.OrganizationMemberGetPayload<{
+  select: typeof boardPersonSelect;
+}>;
+
+export interface OrganizationGroupMoveRecord {
+  sourceGroup: OrganizationGroupDetailRecord;
+  targetGroup: OrganizationGroupDetailRecord;
+}
+
 export interface OrganizationGroupActor {
   id: string;
   role: OrganizationRole;
@@ -70,6 +82,16 @@ export class UnknownGroupMembershipsError extends Error {
     super('UNKNOWN_GROUP_MEMBERSHIPS');
   }
 }
+
+export class UnknownGroupBoardNodesError extends Error {
+  constructor(readonly nodeKeys: string[]) {
+    super('UNKNOWN_GROUP_BOARD_NODES');
+  }
+}
+
+const COMPUTED_BOARD_NODE_KEYS: ReadonlySet<string> = new Set(
+  ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEYS,
+);
 
 @Injectable()
 export class GroupsRepository {
@@ -111,6 +133,70 @@ export class GroupsRepository {
       where: { organizationId },
       include: groupDetailInclude,
       orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * People who belong to no group, split by visitor status. Uses the same membership filter the
+   * add path accepts, so everyone listed here can be dropped into a group.
+   */
+  listUngroupedPeople(
+    organizationId: string,
+    kind: 'members' | 'visitors',
+  ): Promise<OrganizationGroupBoardPersonRecord[]> {
+    return this.prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        ...ASSIGNABLE_MEMBERSHIP,
+        role: kind === 'visitors' ? 'VIEWER' : { not: 'VIEWER' },
+        groups: { none: {} },
+      },
+      select: boardPersonSelect,
+      orderBy: { joinedAt: 'asc' },
+    });
+  }
+
+  listBoardLayout(organizationId: string): Promise<OrganizationGroupBoardNodePosition[]> {
+    return this.prisma.organizationGroupBoardNode.findMany({
+      where: { organizationId },
+      select: { nodeKey: true, x: true, y: true },
+    });
+  }
+
+  async saveBoardLayout(input: {
+    organizationId: string;
+    actorUserId: string;
+    nodes: OrganizationGroupBoardNodePosition[];
+  }): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const groupIds = input.nodes
+        .map((node) => node.nodeKey)
+        .filter((nodeKey) => !COMPUTED_BOARD_NODE_KEYS.has(nodeKey));
+      const known = groupIds.length
+        ? await tx.organizationGroup.findMany({
+            where: { id: { in: groupIds }, organizationId: input.organizationId },
+            select: { id: true },
+          })
+        : [];
+      const knownIds = new Set(known.map((group) => group.id));
+      const unknownKeys = groupIds.filter((groupId) => !knownIds.has(groupId));
+      if (unknownKeys.length > 0) throw new UnknownGroupBoardNodesError(unknownKeys);
+
+      for (const node of input.nodes) {
+        await tx.organizationGroupBoardNode.upsert({
+          where: {
+            organizationId_nodeKey: { organizationId: input.organizationId, nodeKey: node.nodeKey },
+          },
+          create: {
+            organizationId: input.organizationId,
+            nodeKey: node.nodeKey,
+            x: node.x,
+            y: node.y,
+            updatedByUserId: input.actorUserId,
+          },
+          update: { x: node.x, y: node.y, updatedByUserId: input.actorUserId },
+        });
+      }
     });
   }
 
@@ -213,6 +299,9 @@ export class GroupsRepository {
       if (!group) return false;
 
       await tx.organizationGroup.delete({ where: { id: group.id } });
+      await tx.organizationGroupBoardNode.deleteMany({
+        where: { organizationId: input.organizationId, nodeKey: group.id },
+      });
       await tx.auditLog.create({
         data: {
           organizationId: input.organizationId,
@@ -339,6 +428,95 @@ export class GroupsRepository {
         where: { id: input.groupId, organizationId: input.organizationId },
         include: groupDetailInclude,
       });
+    });
+  }
+
+  /**
+   * Moves one person from a group to another in a single transaction. A person already in the
+   * target keeps that row and takes the requested role, so a move never duplicates a membership.
+   */
+  async moveMember(input: {
+    organizationId: string;
+    sourceGroupId: string;
+    targetGroupId: string;
+    membershipId: string;
+    role: OrganizationGroupMemberRole;
+    actorUserId: string;
+  }): Promise<OrganizationGroupMoveRecord | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const groups = await tx.organizationGroup.findMany({
+        where: {
+          id: { in: [input.sourceGroupId, input.targetGroupId] },
+          organizationId: input.organizationId,
+        },
+        select: { id: true },
+      });
+      if (groups.length !== 2) return null;
+
+      const existing = await tx.organizationGroupMember.findFirst({
+        where: {
+          groupId: input.sourceGroupId,
+          membershipId: input.membershipId,
+          organizationId: input.organizationId,
+          membership: { organizationId: input.organizationId, ...ASSIGNABLE_MEMBERSHIP },
+        },
+        select: { groupId: true },
+      });
+      if (!existing) return null;
+
+      await tx.organizationGroupMember.delete({
+        where: {
+          groupId_membershipId: { groupId: input.sourceGroupId, membershipId: input.membershipId },
+        },
+      });
+      await tx.organizationGroupMember.upsert({
+        where: {
+          groupId_membershipId: { groupId: input.targetGroupId, membershipId: input.membershipId },
+        },
+        create: {
+          organizationId: input.organizationId,
+          groupId: input.targetGroupId,
+          membershipId: input.membershipId,
+          role: input.role,
+        },
+        update: { role: input.role },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: 'UPDATE',
+          entityType: 'OrganizationGroup',
+          entityId: input.sourceGroupId,
+          metadata: { movedMembershipId: input.membershipId, toGroupId: input.targetGroupId },
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: 'UPDATE',
+          entityType: 'OrganizationGroup',
+          entityId: input.targetGroupId,
+          metadata: {
+            movedMembershipId: input.membershipId,
+            fromGroupId: input.sourceGroupId,
+            role: input.role,
+          },
+        },
+      });
+
+      const sourceGroup = await tx.organizationGroup.findFirstOrThrow({
+        where: { id: input.sourceGroupId, organizationId: input.organizationId },
+        include: groupDetailInclude,
+      });
+      const targetGroup = await tx.organizationGroup.findFirstOrThrow({
+        where: { id: input.targetGroupId, organizationId: input.organizationId },
+        include: groupDetailInclude,
+      });
+
+      return { sourceGroup, targetGroup };
     });
   }
 
