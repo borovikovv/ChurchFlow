@@ -318,6 +318,7 @@ model User {
   featureFlags                    FeatureFlag[]
   createdCalendarEvents           CalendarEvent[]                 @relation("CalendarEventCreator")
   createdOrganizationGroups       OrganizationGroup[]             @relation("OrganizationGroupCreator")
+  updatedGroupBoardNodes          OrganizationGroupBoardNode[]    @relation("OrganizationGroupBoardNodeUpdater")
   calendarPreferences             CalendarPreference[]
   authoredPrayerRequests          PrayerRequest[]                 @relation("PrayerRequestAuthor")
   archivedPrayerRequests          PrayerRequest[]                 @relation("PrayerRequestArchiver")
@@ -458,6 +459,7 @@ model Organization {
   calendarPreferences     CalendarPreference[]
   memberMinistries        OrganizationMemberMinistry[]
   groups                  OrganizationGroup[]
+  groupBoardNodes         OrganizationGroupBoardNode[]
   preacherQueue           PreacherQueueEntry[]
   calendarServices        CalendarServiceDetails[]
   serviceParticipants     CalendarServiceParticipant[]
@@ -621,6 +623,25 @@ model OrganizationGroupMember {
   @@index([organizationId, membershipId], map: "organization_group_members_organization_id_membership_id_idx")
   @@index([membershipId])
   @@map("organization_group_members")
+}
+
+/// Shared, organization-wide position of one node on the groups board. The key is a group id or
+/// one of the computed node keys, so there is no foreign key to the group; deleting a group
+/// removes its row in the same transaction.
+model OrganizationGroupBoardNode {
+  organizationId  String   @map("organization_id") @db.Uuid
+  nodeKey         String   @map("node_key") @db.VarChar(64)
+  x               Float
+  y               Float
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedBy    User?        @relation("OrganizationGroupBoardNodeUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@id([organizationId, nodeKey])
+  @@index([updatedByUserId])
+  @@map("organization_group_board_nodes")
 }
 
 model MembershipClaim {
