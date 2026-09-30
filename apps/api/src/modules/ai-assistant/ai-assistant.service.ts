@@ -493,9 +493,9 @@ export class AiAssistantService {
         blockNewProposals: state.blockNewProposals,
         confirmedToolCallIds: confirmedToolCallIds(messages),
       }),
-      activeTools: toolsInGroups(initialGroups),
+      activeTools: toolsInGroups(initialGroups, access.role),
       prepareStep: ({ steps }) => ({
-        activeTools: toolsInGroups([...initialGroups, ...enabledToolGroups(steps)]),
+        activeTools: toolsInGroups([...initialGroups, ...enabledToolGroups(steps)], access.role),
       }),
       stopWhen: isStepCount(
         request.message

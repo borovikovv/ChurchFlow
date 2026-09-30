@@ -253,6 +253,8 @@ function createHarness(options = {}) {
     createEvent: [],
     updateEvent: [],
     budgetReads: [],
+    offeredTools: [],
+    instructions: [],
     memberSearches: [],
     audit: [],
     modelCalls: 0,
@@ -293,8 +295,15 @@ function createHarness(options = {}) {
   const auditService = { record: async (input) => calls.audit.push(input) };
   const model = new MockLanguageModelV4({
     modelId: options.modelId ?? 'deepseek/deepseek-v4.1-flash',
-    doStream: async () => {
+    doStream: async (callOptions) => {
       calls.modelCalls += 1;
+      calls.offeredTools.push((callOptions.tools ?? []).map((offered) => offered.name));
+      calls.instructions.push(
+        callOptions.prompt
+          .filter((message) => message.role === 'system')
+          .map((message) => message.content)
+          .join('\n'),
+      );
       if (calls.modelCalls <= failingCalls) throw new Error('provider down');
       if (calls.failAfter !== undefined && calls.modelCalls > calls.failAfter) {
         throw new Error('provider down mid-request');
@@ -1157,15 +1166,49 @@ test('only the owner may read the budget, as in the app', async () => {
   for (const role of ['ADMIN', 'MEMBER', 'VIEWER']) {
     const harness = createHarness({
       role,
-      turns: [toolCallTurn('budgetSummary', { year: 2026 }), textTurn('Not allowed.')],
+      turns: [
+        toolCallTurn('budgetSummary', { year: 2026 }),
+        textTurn('Only the owner can see it.'),
+      ],
     });
 
     const chunks = await runChat(harness, messageRequest('Show the budget'));
 
-    const output = chunks.find((chunk) => chunk.type === 'tool-output-available').output;
-    assert.equal(output.ok, false, role);
-    assert.match(output.error, /owner/i, role);
     assert.equal(harness.calls.budgetReads.length, 0, role);
+    assert.ok(
+      !chunks.some((chunk) => chunk.type === 'tool-output-available' && chunk.output.ok),
+      role,
+    );
+  }
+});
+
+test('the budget tool is never offered to anyone but the owner', async () => {
+  const offered = async (role) => {
+    const harness = createHarness({
+      role,
+      turns: [toolCallTurn('enableToolGroups', { groups: ['budget'] }), textTurn('Here it is.')],
+    });
+    await runChat(harness, messageRequest('How much did we spend on rent this year?'));
+    return harness.calls;
+  };
+
+  const owner = await offered('OWNER');
+  assert.ok(owner.offeredTools.every((tools) => tools.includes('budgetSummary')));
+  assert.doesNotMatch(owner.instructions[0], /cannot see the church budget/);
+
+  for (const role of ['ADMIN', 'MEMBER', 'VIEWER']) {
+    const calls = await offered(role);
+    // Not on the first step, and not after the model asks for the budget group either.
+    assert.equal(calls.offeredTools.length, 2, role);
+    assert.ok(
+      calls.offeredTools.every((tools) => !tools.includes('budgetSummary')),
+      role,
+    );
+    assert.match(
+      calls.instructions[0],
+      /cannot see the church budget: only the organization owner can/,
+      role,
+    );
   }
 });
 

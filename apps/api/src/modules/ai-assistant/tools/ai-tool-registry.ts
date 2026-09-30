@@ -1,4 +1,5 @@
 import type { ToolApprovalStatus } from 'ai';
+import type { OrganizationRole } from '@churchflow/db';
 import type { AiAssistantToolName } from '@churchflow/shared';
 import type { BudgetsService } from '../../budgets/budgets.service';
 import type { CalendarEventsService } from '../../calendar-events/calendar-events.service';
@@ -89,11 +90,22 @@ export function buildToolApproval(
   } satisfies Partial<Record<AiAssistantToolName, unknown>>;
 }
 
-export function toolsInGroups(groups: readonly AiToolGroup[]): (keyof AiToolSet)[] {
+/**
+ * Owner-only tools are not offered to anyone else at all. Their calls are refused anyway, but a
+ * model that never sees the tool cannot be talked into trying it, and does not spend a step on it.
+ */
+export function isToolOfferedTo(meta: AiToolMeta, role: OrganizationRole | null): boolean {
+  return !meta.policy.ownerRequired || role === 'OWNER';
+}
+
+export function toolsInGroups(
+  groups: readonly AiToolGroup[],
+  role: OrganizationRole | null,
+): (keyof AiToolSet)[] {
   const active = new Set<AiToolGroup>(['core', ...groups]);
 
   return Object.values(AI_TOOL_META)
-    .filter((meta) => active.has(meta.group))
+    .filter((meta) => active.has(meta.group) && isToolOfferedTo(meta, role))
     .map((meta) => meta.name);
 }
 
