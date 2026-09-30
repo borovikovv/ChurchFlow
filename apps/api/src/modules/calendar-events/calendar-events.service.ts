@@ -73,8 +73,7 @@ export class CalendarEventsService {
     const visibleEventTypes = preferences?.visibleEventTypes ?? [
       ...DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES,
     ];
-    const requestedTypes = query.types ?? visibleEventTypes;
-    const types = requestedTypes.filter((type) => visibleEventTypes.includes(type));
+    const types = query.types ?? visibleEventTypes;
     const rangeStart = new Date(query.rangeStart);
     const rangeEnd = new Date(query.rangeEnd);
     const events = await this.calendarEventsRepository.listForRange(
