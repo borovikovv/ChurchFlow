@@ -145,24 +145,105 @@
   padding: 8px;
 }
 
-.calendarRoot :global(.fc .fc-timegrid-slot) {
-  height: 40px;
+.calendarRoot :global(.fc .fc-list) {
+  border-color: var(--line-muted);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
-.calendarRoot :global(.fc .fc-timegrid-slot-label-cushion),
-.calendarRoot :global(.fc .fc-timegrid-axis-cushion) {
+.calendarRoot :global(.fc .fc-list-day-cushion) {
+  background: var(--surface-subtle);
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.calendarRoot :global(.fc .fc-list-day-text::first-letter) {
+  text-transform: uppercase;
+}
+
+.calendarRoot :global(.fc .fc-list-event-time) {
+  width: 3.5rem;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
+  vertical-align: top;
+  white-space: normal;
 }
 
-.calendarRoot :global(.fc .fc-timegrid-now-indicator-line),
-.calendarRoot :global(.fc .fc-timegrid-now-indicator-arrow) {
-  border-color: var(--danger);
+.calendarRoot :global(.fc .fc-list-event-graphic) {
+  display: none;
 }
 
-.calendarRoot :global(.fc .fc-timegrid-event) {
-  border: 0;
+.calendarRoot :global(.fc .fc-list-event-title) {
+  padding-left: 0;
+}
+
+.calendarRoot :global(.fc .fc-list-event:hover td) {
   background: transparent;
-  box-shadow: none;
+}
+
+@media (max-width: 767.98px) {
+  .calendarRoot :global(.fc .fc-toolbar.fc-header-toolbar) {
+    gap: 8px;
+  }
+
+  .calendarRoot :global(.fc .fc-toolbar-title) {
+    font-size: 16px;
+  }
+
+  .calendarRoot :global(.fc .fc-button) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .calendarRoot :global(.fc-theme-standard .fc-daygrid td),
+  .calendarRoot :global(.fc-theme-standard .fc-daygrid th),
+  .calendarRoot :global(.fc-theme-standard .fc-daygrid .fc-scrollgrid) {
+    border-color: transparent;
+  }
+
+  .calendarRoot :global(.fc .fc-daygrid-day-frame) {
+    min-height: 52px;
+    padding: 2px;
+    cursor: pointer;
+  }
+
+  .calendarRoot :global(.fc .fc-daygrid-day-top) {
+    justify-content: center;
+  }
+
+  .calendarRoot :global(.fc .fc-daygrid-day-number) {
+    display: flex;
+    min-width: 36px;
+    min-height: 36px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 999px;
+  }
+
+  .calendarRoot :global(.fc .fc-daygrid-day-events) {
+    display: none;
+  }
+
+  .calendarRoot :global(.fc .fc-day-today),
+  .calendarRoot :global(.fc .fc-daygrid-day.fc-day-other) {
+    background: transparent;
+  }
+
+  .calendarRoot :global(.fc .fc-day-today .fc-daygrid-day-number) {
+    color: var(--accent-strong);
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+
+  .calendarRoot :global(.fc) .selectedDay :global(.fc-daygrid-day-number) {
+    background: var(--accent-strong);
+    color: #fff;
+  }
+
+  .calendarRoot :global(.fc .fc-list-event td) {
+    border-color: transparent;
+    padding: 6px 8px;
+  }
 }

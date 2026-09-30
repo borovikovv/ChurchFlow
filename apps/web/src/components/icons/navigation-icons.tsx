@@ -48,6 +48,15 @@ export function MoreIcon({ className }: IconProps) {
   );
 }
 
+export function AssistantIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M12 3.5 13.9 9a1.6 1.6 0 0 0 1.1 1.1l5.5 1.9-5.5 1.9a1.6 1.6 0 0 0-1.1 1.1L12 20.5 10.1 15a1.6 1.6 0 0 0-1.1-1.1L3.5 12 9 10.1A1.6 1.6 0 0 0 10.1 9z" />
+      <path d="M19 3v4M17 5h4" />
+    </Icon>
+  );
+}
+
 export function PrayerIcon({ className }: IconProps) {
   return (
     <Icon className={className}>

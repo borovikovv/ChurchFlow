@@ -2,9 +2,15 @@
 
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin, { type DateClickArg } from '@fullcalendar/interaction';
+import listPlugin from '@fullcalendar/list';
 import FullCalendar from '@fullcalendar/react';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import type { DatesSetArg, EventClickArg, EventContentArg, EventInput } from '@fullcalendar/core';
+import type {
+  DatesSetArg,
+  DayCellContentArg,
+  EventClickArg,
+  EventContentArg,
+  EventInput,
+} from '@fullcalendar/core';
 import ukLocale from '@fullcalendar/core/locales/uk';
 import { toPng } from 'html-to-image';
 import { useLocale, useTranslations } from 'next-intl';
@@ -22,8 +28,11 @@ import {
   TRANSPARENT_IMAGE_PLACEHOLDER,
   type CalendarView,
 } from './calendar-constants';
+import { CalendarDayAgenda } from './calendar-day-agenda';
+import { eventTypesByDate } from './calendar-day-events';
 import { eventForm, newEventForm, toDateInputValue } from './calendar-date-utils';
-import { renderEventContent } from './calendar-event-content';
+import { isTaskToggleTarget, renderEventContent } from './calendar-event-content';
+import { CalendarMobileActions } from './calendar-mobile-actions';
 import { CalendarViewSwitch } from './calendar-view-switch';
 import { formPayload } from './calendar-form-utils';
 import { CalendarPreviewModal } from './calendar-preview-modal';
@@ -90,6 +99,7 @@ export function CalendarManager({
     [events, selectedDate],
   );
   const selectedDateTasks = selectedDateEvents.filter((event) => event.type === CALENDAR_TYPE.task);
+  const typesByDate = useMemo(() => eventTypesByDate(events), [events]);
 
   async function refreshEvents(nextRange = range, nextTypes = visibleTypes) {
     const result = await loadEvents({
@@ -261,10 +271,12 @@ export function CalendarManager({
   function handleDateClick(arg: DateClickArg) {
     const date = toDateInputValue(arg.date);
     setSelectedDate(date);
-    openCreate(date);
+    // On mobile a tap only picks the day for the agenda; the new event button creates.
+    if (!isMobile) openCreate(date);
   }
 
   function handleEventClick(arg: EventClickArg) {
+    if (isTaskToggleTarget(arg.jsEvent.target)) return;
     const item = arg.event.extendedProps['item'] as CalendarEventItem | undefined;
     if (item) openEdit(item);
   }
@@ -278,13 +290,41 @@ export function CalendarManager({
       canManage,
       markCompleteLabel: t('markComplete'),
       markIncompleteLabel: t('markIncomplete'),
+      typeLabel: (type) => t(`eventTypes.${type}`),
       onTaskToggle: handleTaskToggle,
     });
   }
 
+  function handleDayCellContent(arg: DayCellContentArg) {
+    const types =
+      arg.view.type === FULL_CALENDAR_VIEW.month
+        ? typesByDate.get(toDateInputValue(arg.date))
+        : undefined;
+
+    return (
+      <>
+        {arg.dayNumberText}
+        {types ? (
+          <span aria-hidden="true" className="flex gap-0.5 md:hidden">
+            {types.map((type) => (
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${EVENT_TYPE_DOT_STYLES[type]}`}
+                key={type}
+              />
+            ))}
+          </span>
+        ) : null}
+      </>
+    );
+  }
+
+  function handleDayCellClassNames(arg: DayCellContentArg) {
+    return toDateInputValue(arg.date) === selectedDate ? [styles['selectedDay'] ?? ''] : [];
+  }
+
   return (
     <div className="grid min-h-[680px] gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
-      <div className="order-2 min-w-0 xl:order-none">
+      <div className="order-2 min-w-0 max-md:hidden xl:order-none">
         <CalendarSidebar
           canManage={canManage}
           selectedDate={selectedDate}
@@ -301,7 +341,9 @@ export function CalendarManager({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             {canManage ? (
-              <Button onClick={() => openCreate(selectedDate)}>{t('newEvent')}</Button>
+              <Button className="max-md:hidden" onClick={() => openCreate(selectedDate)}>
+                {t('newEvent')}
+              </Button>
             ) : null}
             <Button type="button" variant="secondary" onClick={() => setPreviewOpen(true)}>
               {t('previewPng')}
@@ -310,7 +352,7 @@ export function CalendarManager({
           <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
             {EVENT_TYPES.map((type) => (
               <span
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--muted)]"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--muted)] max-md:hidden"
                 key={type.value}
               >
                 <span
@@ -323,6 +365,12 @@ export function CalendarManager({
             {isPending ? (
               <span className="text-sm text-[var(--muted)]">{t('updatingCalendar')}</span>
             ) : null}
+            <CalendarMobileActions
+              canManage={canManage}
+              visibleTypes={visibleTypes}
+              onCreate={() => openCreate(selectedDate)}
+              onFilterToggle={(type) => void toggleFilter(type)}
+            />
           </div>
         </div>
         {error ? <p className="form-error mb-3">{error}</p> : null}
@@ -331,6 +379,8 @@ export function CalendarManager({
           <FullCalendar
             datesSet={handleDatesSet}
             dateClick={handleDateClick}
+            dayCellClassNames={handleDayCellClassNames}
+            dayCellContent={handleDayCellContent}
             eventClick={handleEventClick}
             eventContent={handleEventContent}
             events={calendarEvents}
@@ -346,12 +396,25 @@ export function CalendarManager({
             initialView="dayGridMonth"
             {...(fullCalendarLocale ? { locale: fullCalendarLocale } : {})}
             moreLinkClick="popover"
-            nowIndicator
-            plugins={[dayGridPlugin, interactionPlugin, timeGridPlugin]}
+            plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
             ref={calendarRef}
-            scrollTime="08:00:00"
+            views={{
+              listWeek: {
+                listDayFormat: { weekday: 'long', day: 'numeric', month: 'long' },
+                listDaySideFormat: false,
+              },
+            }}
           />
         </div>
+        {view === 'month' ? (
+          <CalendarDayAgenda
+            canManage={canManage}
+            selectedDate={selectedDate}
+            selectedDateEvents={selectedDateEvents}
+            onEventOpen={openEdit}
+            onTaskToggle={(event, completed) => void toggleTask(event, completed)}
+          />
+        ) : null}
       </section>
 
       {modalMode ? (

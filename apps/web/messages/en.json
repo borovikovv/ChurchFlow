@@ -87,6 +87,7 @@
     "createOrganization": "Create organization",
     "descriptions": {
       "budget": "Organization finances and expenses",
+      "groups": "Ministries, teams and small groups",
       "prayerRequests": "Prayer requests and answers",
       "profile": "View and edit personal details",
       "website": "Manage the organization website"
@@ -106,6 +107,77 @@
     "signedInAs": "Signed in as",
     "signingOut": "Signing out…",
     "website": "Website"
+  },
+  "aiAssistant": {
+    "title": "ChurchFlow AI",
+    "tabLabel": "AI",
+    "open": "Open ChurchFlow AI",
+    "newChat": "New chat",
+    "history": "Recent chats",
+    "backToChat": "Back to chat",
+    "historyLoading": "Loading…",
+    "historyEmpty": "No conversations yet.",
+    "historyLoadFailed": "Could not load recent chats.",
+    "conversationLoadFailed": "Could not open this conversation.",
+    "loadingConversation": "Opening conversation…",
+    "untitledConversation": "Untitled chat",
+    "emptyTitle": "How can I help?",
+    "emptyDescription": "Ask about members, groups, the calendar or prayer requests. I will ask before changing anything.",
+    "examples": {
+      "summary": "Give me a quick overview of our church",
+      "upcomingServices": "What services are coming up this week?",
+      "findMember": "Find members named Anna",
+      "prayerRequest": "Add a prayer request for the youth camp"
+    },
+    "composerLabel": "Message ChurchFlow AI",
+    "composerPlaceholder": "Ask ChurchFlow AI…",
+    "composerHint": "Enter to send, Shift+Enter for a new line",
+    "send": "Send",
+    "stop": "Stop",
+    "thinking": "Thinking…",
+    "confirmTitle": "Confirm action",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "linksLabel": "Related records",
+    "toolStatus": {
+      "running": "In progress",
+      "done": "Done",
+      "error": "Failed",
+      "denied": "Cancelled"
+    },
+    "tools": {
+      "organizationSummary": "Reviewing the church overview",
+      "searchMembers": "Searching members",
+      "getMember": "Opening member profile",
+      "listGroups": "Looking through groups",
+      "getGroup": "Opening group",
+      "addGroupMember": "Adding to group",
+      "setGroupMemberRole": "Changing group role",
+      "moveGroupMember": "Moving to another group",
+      "removeGroupMember": "Removing from group",
+      "listCalendarEvents": "Checking the calendar",
+      "upcomingServices": "Checking upcoming services",
+      "createCalendarEvent": "Creating event",
+      "updateCalendarEvent": "Updating event",
+      "deleteCalendarEvent": "Deleting event",
+      "listPrayerRequests": "Reading prayer requests",
+      "createPrayerRequest": "Creating prayer request",
+      "budgetSummary": "Reading the budget",
+      "unknown": "Working"
+    },
+    "usage": {
+      "counter": "{used} of {limit} actions used",
+      "warning": "{remaining, plural, one {# action} other {# actions}} left in this period",
+      "exhausted": "You have used all ChurchFlow AI actions for this period. They renew on {date}."
+    },
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "unavailable": "ChurchFlow AI is available with an active subscription.",
+      "duplicate": "This message was already received. Refresh the conversation to see the reply.",
+      "confirmationLimit": "This request has used all its confirmations. Send a new message to continue."
+    },
+    "retry": "Try again",
+    "refresh": "Refresh conversation"
   },
   "profile": {
     "addPhoto": "Add photo",
@@ -501,6 +573,8 @@
     "nextUp": "Next Up",
     "selectedDayAgenda": "Agenda for the selected day",
     "noEventsForDay": "No events for this day.",
+    "filters": "Event filters",
+    "eventsCount": "{count, plural, one {# event} other {# events}}",
     "tasksForDay": "Tasks for this day",
     "markComplete": "Mark complete",
     "markIncomplete": "Mark incomplete",
@@ -1228,6 +1302,7 @@
       "CREATE_BUDGET_EXCHANGE": "Currency exchange recorded",
       "UPDATE_BUDGET_EXCHANGE": "Currency exchange updated",
       "DELETE_BUDGET_EXCHANGE": "Currency exchange deleted",
+      "AI_TOOL_EXECUTED": "ChurchFlow AI action",
       "SYNC_MEMBER_MILESTONE_EVENT": "{type, select, BIRTHDAY {Birthday} ANNIVERSARY {Anniversary} other {Milestone}} event {change, select, created {created} updated {updated} deleted {deleted} other {synced}}"
     },
     "auditEntityActions": {
@@ -1249,6 +1324,7 @@
     "auditEntityTypeFilter": "Record type",
     "auditEntityTypes": {
       "ALL": "All types",
+      "AiToolExecution": "ChurchFlow AI",
       "BirthdayDigest": "Birthdays",
       "Budget": "Budget",
       "CalendarEvent": "Calendar",

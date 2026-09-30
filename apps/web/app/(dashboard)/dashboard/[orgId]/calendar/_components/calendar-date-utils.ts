@@ -103,6 +103,20 @@ export function formatDateLabel(value: string, locale = 'en-US'): string {
   }).format(new Date(`${value}T12:00`));
 }
 
+export function formatAgendaDateLabel(value: string, locale = 'en-US'): string {
+  return new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date(`${value}T12:00`));
+}
+
+export function formatTimeLabel(value: string, locale = 'en-US'): string {
+  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(
+    new Date(value),
+  );
+}
+
 export function formatMonthLabel(value: string, locale = 'en-US'): string {
   return new Intl.DateTimeFormat(locale, {
     month: 'long',

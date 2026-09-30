@@ -113,6 +113,13 @@ export class CalendarEventsRepository {
     });
   }
 
+  async findById(organizationId: string, eventId: string): Promise<CalendarEventRecord | null> {
+    return this.prisma.calendarEvent.findFirst({
+      where: { id: eventId, organizationId, deletedAt: null },
+      include: calendarEventInclude,
+    });
+  }
+
   async getPreferences(organizationId: string, userId: string) {
     return this.prisma.calendarPreference.findUnique({
       where: { organizationId_userId: { organizationId, userId } },

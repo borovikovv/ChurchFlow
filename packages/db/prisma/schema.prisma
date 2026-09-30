@@ -327,6 +327,11 @@ model User {
   telegramNotificationBinding     TelegramNotificationBinding?
   telegramNotificationLinkTokens  TelegramNotificationLinkToken[]
   grantedBillingExemptions        Subscription[]
+  aiConversations                 AiConversation[]
+  aiRequests                      AiRequest[]
+  aiToolExecutions                AiToolExecution[]               @relation("AiToolExecutionRequester")
+  aiModelUsage                    AiModelUsage[]
+  decidedAiToolExecutions         AiToolExecution[]               @relation("AiToolExecutionDecider")
   avatarAsset                     MediaAsset?                     @relation(fields: [avatarAssetId], references: [id], onDelete: SetNull)
 
   @@map("users")
@@ -472,6 +477,11 @@ model Organization {
   budgetOpeningBalances   BudgetOpeningBalance[]
   prayerRequests          PrayerRequest[]
   subscription            Subscription?
+  aiConversations         AiConversation[]
+  aiRequests              AiRequest[]
+  aiToolExecutions        AiToolExecution[]
+  aiUsageCounters         AiUsageCounter[]
+  aiModelUsage            AiModelUsage[]
 
   @@index([status])
   @@index([slug])
@@ -1449,4 +1459,202 @@ model BillingUnsubscribeRequest {
   @@index([subscriptionId])
   @@index([resolvedAt])
   @@map("billing_unsubscribe_requests")
+}
+
+enum AiRequestKind {
+  MESSAGE
+  APPROVAL
+}
+
+enum AiRequestStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum AiCostSource {
+  PROVIDER_REPORTED
+  PRICE_TABLE
+  UNKNOWN
+}
+
+enum AiToolRisk {
+  READ
+  WRITE
+  DESTRUCTIVE
+}
+
+enum AiToolExecutionStatus {
+  PENDING_APPROVAL
+  REJECTED
+  EXECUTING
+  SUCCEEDED
+  FAILED
+}
+
+// A conversation with ChurchFlow AI. The id is chosen by the client so a new chat can stream its
+// first answer before the server has replied; ownership is checked on every request.
+model AiConversation {
+  id             String   @id @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  channel        String   @default("web") @db.VarChar(20)
+  title          String   @db.VarChar(120)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages       AiMessage[]
+  requests       AiRequest[]
+  toolExecutions AiToolExecution[]
+
+  @@index([organizationId, userId, updatedAt])
+  @@index([userId])
+  @@index([updatedAt])
+  @@map("ai_conversations")
+}
+
+// One chat message in the UI message format, so a conversation reloads exactly as it streamed.
+model AiMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  clientId       String   @map("client_id") @db.VarChar(128)
+  role           String   @db.VarChar(16)
+  position       Int
+  parts          Json
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, clientId])
+  @@index([conversationId, position])
+  @@map("ai_messages")
+}
+
+// One call of the agent: a user message, or the confirmations that continue one. The message
+// is the AI action the monthly allowance counts; the model calls it took, with their tokens and
+// cost, are AiModelUsage rows. Outlives the conversation so the economics of the allowance can be
+// judged after message content has been purged.
+model AiRequest {
+  id                  String          @id @default(uuid()) @db.Uuid
+  organizationId      String          @map("organization_id") @db.Uuid
+  userId              String          @map("user_id") @db.Uuid
+  conversationId      String?         @map("conversation_id") @db.Uuid
+  // A confirmation continues the message that proposed the change; both belong to one action.
+  actionRequestId     String?         @map("action_request_id") @db.Uuid
+  clientMessageId     String?         @map("client_message_id") @db.VarChar(128)
+  kind                AiRequestKind
+  channel             String          @db.VarChar(20)
+  provider            String          @db.VarChar(40)
+  model               String          @db.VarChar(120)
+  status              AiRequestStatus @default(RUNNING)
+  countedAgainstQuota Boolean         @default(false) @map("counted_against_quota")
+  billingPeriodStart  DateTime        @map("billing_period_start")
+  toolCallCount       Int             @default(0) @map("tool_call_count")
+  toolNames           String[]        @default([]) @map("tool_names")
+  latencyMs           Int?            @map("latency_ms")
+  errorCode           String?         @map("error_code") @db.VarChar(80)
+  startedAt           DateTime        @default(now()) @map("started_at")
+  finishedAt          DateTime?       @map("finished_at")
+
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   AiConversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  actionRequest  AiRequest?        @relation("AiRequestAction", fields: [actionRequestId], references: [id], onDelete: SetNull)
+  continuations  AiRequest[]       @relation("AiRequestAction")
+  toolExecutions AiToolExecution[]
+  modelUsage     AiModelUsage[]
+
+  @@unique([conversationId, clientMessageId])
+  @@index([organizationId, billingPeriodStart])
+  @@index([organizationId, startedAt])
+  @@index([actionRequestId])
+  @@index([userId])
+  @@map("ai_requests")
+}
+
+// One model call: provider-reported tokens and the cost worked out when it happened. The cost is
+// stored rather than recomputed so a later price change never rewrites what a month cost.
+model AiModelUsage {
+  id                 String       @id @default(uuid()) @db.Uuid
+  requestId          String       @map("request_id") @db.Uuid
+  organizationId     String       @map("organization_id") @db.Uuid
+  userId             String       @map("user_id") @db.Uuid
+  stepIndex          Int          @map("step_index")
+  provider           String       @db.VarChar(40)
+  model              String       @db.VarChar(120)
+  billingPeriodStart DateTime     @map("billing_period_start")
+  inputTokens        Int?         @map("input_tokens")
+  cachedInputTokens  Int?         @map("cached_input_tokens")
+  outputTokens       Int?         @map("output_tokens")
+  reasoningTokens    Int?         @map("reasoning_tokens")
+  totalTokens        Int?         @map("total_tokens")
+  costUsd            Decimal?     @map("cost_usd") @db.Decimal(14, 8)
+  costSource         AiCostSource @map("cost_source")
+  pricingVersion     String?      @map("pricing_version") @db.VarChar(40)
+  createdAt          DateTime     @default(now()) @map("created_at")
+
+  request      AiRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, stepIndex])
+  @@index([organizationId, billingPeriodStart])
+  @@index([billingPeriodStart])
+  @@index([userId])
+  @@map("ai_model_usage")
+}
+
+// Every tool the agent ran or proposed. Mutations wait here as PENDING_APPROVAL until the user
+// confirms them, and the status transition out of it is what makes a double confirm run once.
+model AiToolExecution {
+  id              String                @id @default(uuid()) @db.Uuid
+  organizationId  String                @map("organization_id") @db.Uuid
+  userId          String                @map("user_id") @db.Uuid
+  conversationId  String?               @map("conversation_id") @db.Uuid
+  requestId       String?               @map("request_id") @db.Uuid
+  toolCallId      String                @map("tool_call_id") @db.VarChar(128)
+  toolName        String                @map("tool_name") @db.VarChar(64)
+  risk            AiToolRisk
+  input           Json
+  status          AiToolExecutionStatus
+  approvalId      String?               @map("approval_id") @db.VarChar(128)
+  decidedByUserId String?               @map("decided_by_user_id") @db.Uuid
+  decidedAt       DateTime?             @map("decided_at")
+  resultSummary   String?               @map("result_summary") @db.VarChar(500)
+  errorMessage    String?               @map("error_message") @db.VarChar(500)
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User            @relation("AiToolExecutionRequester", fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy    User?           @relation("AiToolExecutionDecider", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  conversation AiConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  request      AiRequest?      @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  // Some models reuse tool-call ids across turns, so a proposal is identified by the approval id
+  // the SDK generates for it; the call id only finds the pending proposal it belongs to.
+  @@unique([conversationId, approvalId])
+  @@index([conversationId, toolCallId])
+  @@index([organizationId, createdAt])
+  @@index([userId])
+  @@index([decidedByUserId])
+  @@index([requestId])
+  @@map("ai_tool_executions")
+}
+
+// The monthly allowance, one row per organization and billing period. Reserved with a single
+// conditional upsert so concurrent messages can never push an organization past its limit.
+model AiUsageCounter {
+  organizationId String   @map("organization_id") @db.Uuid
+  periodStart    DateTime @map("period_start")
+  used           Int      @default(0)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, periodStart])
+  @@map("ai_usage_counters")
 }

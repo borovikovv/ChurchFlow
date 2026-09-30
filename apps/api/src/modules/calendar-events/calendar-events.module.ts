@@ -19,5 +19,6 @@ import { CalendarEventsRepository } from './repositories/calendar-events.reposit
     CalendarEventsRepository,
     CalendarEventRemindersScheduler,
   ],
+  exports: [CalendarEventsService],
 })
 export class CalendarEventsModule {}

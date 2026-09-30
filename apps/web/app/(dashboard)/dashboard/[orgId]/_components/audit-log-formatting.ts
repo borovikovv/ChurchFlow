@@ -17,6 +17,7 @@ const BUDGET_AMOUNT_CURRENCIES: Record<string, string> = {
 export const AUDIT_ACTION_KEYS = [
   'ACCEPT',
   'ADD_BUDGET_ROW',
+  'AI_TOOL_EXECUTED',
   'APPROVE',
   'APPROVE_MEMBERSHIP_CLAIM',
   'ARCHIVE',
@@ -83,6 +84,7 @@ export const AUDIT_ACTION_KEYS = [
 const auditActionLabels: Record<(typeof AUDIT_ACTION_KEYS)[number], string> = {
   ACCEPT: 'Invitation accepted',
   ADD_BUDGET_ROW: 'Budget row added',
+  AI_TOOL_EXECUTED: 'ChurchFlow AI action',
   APPROVE: 'Request approved',
   APPROVE_MEMBERSHIP_CLAIM: 'Membership claim approved',
   ARCHIVE: 'Organization archived',
