@@ -39,6 +39,7 @@ export function FormDatePicker<
               calendarClassName={styles['calendar'] ?? ''}
               calendarStartDay={1}
               className={styles['input'] ?? ''}
+              customInput={<input type="text" inputMode="none" />}
               dateFormat="MM/dd/yyyy"
               disabled={disabled}
               placeholderText="MM/DD/YYYY"

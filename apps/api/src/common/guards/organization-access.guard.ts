@@ -78,7 +78,10 @@ export interface OrganizationAccessRequirement {
 }
 
 export interface OrganizationAccess {
-  /** Platform admins pass without a membership: no role, no permissions. */
+  /**
+   * Platform admins pass without a membership; when they have one, its role and permissions
+   * are still reported so owner-only features follow the membership, not the platform role.
+   */
   platformAdmin: boolean;
   role: OrganizationRole | null;
   permissions: string[];
@@ -131,7 +134,12 @@ export async function assertOrganizationAccess(
       throw new ForbiddenException('Organization access is required');
     }
 
-    return { platformAdmin: true, role: null, permissions: [] };
+    const adminMembership = user.memberships[0];
+    return {
+      platformAdmin: true,
+      role: adminMembership?.role ?? null,
+      permissions: adminMembership?.permissions ?? [],
+    };
   }
 
   const membership = user.memberships[0];

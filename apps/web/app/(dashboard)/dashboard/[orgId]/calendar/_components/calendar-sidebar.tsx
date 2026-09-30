@@ -5,10 +5,12 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EVENT_TYPE_STYLES } from './calendar-constants';
 import { formatDateLabel } from './calendar-date-utils';
+import { CalendarEventsSkeleton } from './calendar-events-skeleton';
 import { CalendarTypeFilters } from './calendar-type-filters';
 
 export function CalendarSidebar({
   canManage,
+  loading,
   selectedDate,
   selectedDateEvents,
   selectedDateTasks,
@@ -18,6 +20,7 @@ export function CalendarSidebar({
   onTaskToggle,
 }: {
   canManage: boolean;
+  loading: boolean;
   selectedDate: string;
   selectedDateEvents: CalendarEventItem[];
   selectedDateTasks: CalendarEventItem[];
@@ -43,24 +46,28 @@ export function CalendarSidebar({
         <span className="h-px bg-[var(--line-muted)]" />
       </div>
 
-      <div className="grid gap-2">
-        {selectedDateEvents.slice(0, 5).map((event) => (
-          <button
-            key={event.occurrenceId}
-            className={`min-w-0 rounded-md border-l-4 px-2.5 py-2 text-left text-sm ${EVENT_TYPE_STYLES[event.type]}`}
-            type="button"
-            onClick={() => onEventOpen(event)}
-          >
-            <span className="block truncate font-semibold">{event.title}</span>
-            <span className="block truncate text-xs">{t(`eventTypes.${event.type}`)}</span>
-          </button>
-        ))}
-        {selectedDateEvents.length === 0 ? (
-          <p className="mb-0 text-sm">{t('noEventsForDay')}</p>
-        ) : null}
-      </div>
+      {loading ? (
+        <CalendarEventsSkeleton rows={2} />
+      ) : (
+        <div className="grid gap-2">
+          {selectedDateEvents.slice(0, 5).map((event) => (
+            <button
+              key={event.occurrenceId}
+              className={`min-w-0 rounded-md border-l-4 px-2.5 py-2 text-left text-sm ${EVENT_TYPE_STYLES[event.type]}`}
+              type="button"
+              onClick={() => onEventOpen(event)}
+            >
+              <span className="block truncate font-semibold">{event.title}</span>
+              <span className="block truncate text-xs">{t(`eventTypes.${event.type}`)}</span>
+            </button>
+          ))}
+          {selectedDateEvents.length === 0 ? (
+            <p className="mb-0 text-sm">{t('noEventsForDay')}</p>
+          ) : null}
+        </div>
+      )}
 
-      {selectedDateTasks.length > 0 ? (
+      {!loading && selectedDateTasks.length > 0 ? (
         <div className="mt-5 border-t border-[var(--line-muted)] pt-4">
           <strong className="text-sm">{t('tasksForDay')}</strong>
           <div className="mt-2 grid gap-1.5">
