@@ -5,15 +5,18 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CALENDAR_TYPE, EVENT_TYPE_STYLES } from './calendar-constants';
 import { formatAgendaDateLabel, formatTimeLabel } from './calendar-date-utils';
+import { CalendarEventsSkeleton } from './calendar-events-skeleton';
 
 export function CalendarDayAgenda({
   canManage,
+  loading,
   selectedDate,
   selectedDateEvents,
   onEventOpen,
   onTaskToggle,
 }: {
   canManage: boolean;
+  loading: boolean;
   selectedDate: string;
   selectedDateEvents: CalendarEventItem[];
   onEventOpen: (event: CalendarEventItem) => void;
@@ -29,11 +32,13 @@ export function CalendarDayAgenda({
           {formatAgendaDateLabel(selectedDate, locale)}
         </h2>
         <span className="shrink-0 text-sm text-[var(--muted)]">
-          {t('eventsCount', { count: selectedDateEvents.length })}
+          {loading ? null : t('eventsCount', { count: selectedDateEvents.length })}
         </span>
       </header>
 
-      {selectedDateEvents.length === 0 ? (
+      {loading ? (
+        <CalendarEventsSkeleton />
+      ) : selectedDateEvents.length === 0 ? (
         <p className="mb-0 text-sm text-[var(--muted)]">{t('noEventsForDay')}</p>
       ) : (
         <ul className="m-0 grid list-none gap-2 p-0">

@@ -29,6 +29,7 @@ import {
   type CalendarView,
 } from './calendar-constants';
 import { CalendarDayAgenda } from './calendar-day-agenda';
+import { CalendarEventsSkeleton } from './calendar-events-skeleton';
 import { eventTypesByDate } from './calendar-day-events';
 import { eventForm, newEventForm, toDateInputValue } from './calendar-date-utils';
 import { isTaskToggleTarget, renderEventContent } from './calendar-event-content';
@@ -40,6 +41,20 @@ import { CalendarSidebar } from './calendar-sidebar';
 import { EventModal } from './event-modal';
 import type { CalendarFormState, CalendarManagerActions } from './calendar-types';
 import styles from './calendar-manager.module.css';
+
+type CalendarRange = { rangeStart: string; rangeEnd: string };
+type LoadedCalendarEvents = Pick<CalendarEventsPayload, 'events' | 'members'>;
+
+function rangeKey(range: CalendarRange, types: readonly string[]) {
+  return `${range.rangeStart}:${range.rangeEnd}:${types.join(',')}`;
+}
+
+function coversRange(outer: CalendarRange, inner: CalendarRange) {
+  return (
+    new Date(outer.rangeStart) <= new Date(inner.rangeStart) &&
+    new Date(outer.rangeEnd) >= new Date(inner.rangeEnd)
+  );
+}
 
 export function CalendarManager({
   organizationId,
@@ -57,7 +72,7 @@ export function CalendarManager({
 }: {
   organizationId: string;
   initialPayload: CalendarEventsPayload;
-  initialRange: { rangeStart: string; rangeEnd: string };
+  initialRange: CalendarRange;
   initialSelectedDate: string;
 } & CalendarManagerActions) {
   const t = useTranslations('calendar');
@@ -76,10 +91,15 @@ export function CalendarManager({
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<CalendarView>('month');
   const [isPending, startTransition] = useTransition();
+  const [loadingRange, setLoadingRange] = useState(false);
   const calendarRef = useRef<FullCalendar>(null);
   const appliedViewport = useRef<boolean | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const lastRangeKey = useRef('');
+  const latestRequest = useRef(0);
+  const loadedRange = useRef<CalendarRange>(initialRange);
+  // Ranges already seen render instantly on revisit and refresh in the background.
+  const rangeCache = useRef(new Map<string, LoadedCalendarEvents>());
   const canManage = initialPayload.canManage;
 
   const calendarEvents = useMemo<EventInput[]>(
@@ -102,17 +122,26 @@ export function CalendarManager({
   const typesByDate = useMemo(() => eventTypesByDate(events), [events]);
 
   async function refreshEvents(nextRange = range, nextTypes = visibleTypes) {
+    const requestId = ++latestRequest.current;
     const result = await loadEvents({
       organizationId,
       rangeStart: nextRange.rangeStart,
       rangeEnd: nextRange.rangeEnd,
       types: nextTypes,
     });
+    // A newer navigation superseded this request; its response must not overwrite the view.
+    if (requestId !== latestRequest.current) return result.ok;
+    setLoadingRange(false);
     if (!result.ok) {
       setError(result.error);
       return false;
     }
 
+    rangeCache.current.set(rangeKey(nextRange, nextTypes), {
+      events: result.payload.events,
+      members: result.payload.members,
+    });
+    loadedRange.current = nextRange;
     startTransition(() => {
       setError(null);
       setEvents(result.payload.events);
@@ -152,6 +181,7 @@ export function CalendarManager({
     if (!result.ok) return result;
     setModalMode(null);
     setError(null);
+    rangeCache.current.clear();
     await refreshEvents();
     return { ok: true as const };
   }
@@ -164,6 +194,7 @@ export function CalendarManager({
       return;
     }
     setModalMode(null);
+    rangeCache.current.clear();
     void refreshEvents();
   }
 
@@ -214,6 +245,7 @@ export function CalendarManager({
       setError(result.error);
       return;
     }
+    rangeCache.current.clear();
     setEvents((current) =>
       current.map((item) =>
         item.baseEventId === event.baseEventId ? { ...item, taskCompleted: completed } : item,
@@ -246,10 +278,20 @@ export function CalendarManager({
       rangeStart: arg.start.toISOString(),
       rangeEnd: arg.end.toISOString(),
     };
-    const key = `${nextRange.rangeStart}:${nextRange.rangeEnd}:${visibleTypes.join(',')}`;
+    const key = rangeKey(nextRange, visibleTypes);
     setRange(nextRange);
     if (lastRangeKey.current === key) return;
+    const isInitialRange = lastRangeKey.current === '';
     lastRangeKey.current = key;
+
+    const cached = rangeCache.current.get(key);
+    if (cached) {
+      setEvents(cached.events);
+      setMembers(cached.members);
+      setLoadingRange(false);
+    } else if (!isInitialRange && !coversRange(loadedRange.current, nextRange)) {
+      setLoadingRange(true);
+    }
     void refreshEvents(nextRange);
   }
 
@@ -327,6 +369,7 @@ export function CalendarManager({
       <div className="order-2 min-w-0 max-md:hidden xl:order-none">
         <CalendarSidebar
           canManage={canManage}
+          loading={loadingRange}
           selectedDate={selectedDate}
           selectedDateEvents={selectedDateEvents}
           selectedDateTasks={selectedDateTasks}
@@ -362,9 +405,6 @@ export function CalendarManager({
                 {t(`eventTypes.${type.value}`)}
               </span>
             ))}
-            {isPending ? (
-              <span className="text-sm text-[var(--muted)]">{t('updatingCalendar')}</span>
-            ) : null}
             <CalendarMobileActions
               canManage={canManage}
               visibleTypes={visibleTypes}
@@ -375,7 +415,14 @@ export function CalendarManager({
         </div>
         {error ? <p className="form-error mb-3">{error}</p> : null}
         <CalendarViewSwitch value={view} onChange={handleViewChange} />
-        <div className={styles['calendarRoot']}>
+        <span aria-live="polite" className="sr-only">
+          {loadingRange ? t('updatingCalendar') : ''}
+        </span>
+        <div
+          aria-busy={loadingRange}
+          className={styles['calendarRoot']}
+          data-loading={loadingRange}
+        >
           <FullCalendar
             datesSet={handleDatesSet}
             dateClick={handleDateClick}
@@ -396,6 +443,9 @@ export function CalendarManager({
             initialView="dayGridMonth"
             {...(fullCalendarLocale ? { locale: fullCalendarLocale } : {})}
             moreLinkClick="popover"
+            {...(loadingRange
+              ? { noEventsContent: () => <CalendarEventsSkeleton rows={4} /> }
+              : {})}
             plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
             ref={calendarRef}
             views={{
@@ -409,6 +459,7 @@ export function CalendarManager({
         {view === 'month' ? (
           <CalendarDayAgenda
             canManage={canManage}
+            loading={loadingRange}
             selectedDate={selectedDate}
             selectedDateEvents={selectedDateEvents}
             onEventOpen={openEdit}
