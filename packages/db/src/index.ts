@@ -1,5 +1,10 @@
 export { PrismaClient, Prisma } from '@prisma/client';
 export type {
+  AiCostSource,
+  AiRequestKind,
+  AiRequestStatus,
+  AiToolExecutionStatus,
+  AiToolRisk,
   AuthProvider,
   AuditAction,
   BudgetCategoryType,

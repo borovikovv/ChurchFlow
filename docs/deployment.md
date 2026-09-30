@@ -192,6 +192,22 @@ The payment-validation migration marks historical paid callbacks as already cred
 old deliveries from adding another month after deployment. It also adds a unique constraint for
 payment credit and a deadline index for the nightly cancellation scan.
 
+Optional variables for ChurchFlow AI. Leave them blank to keep the assistant switched off; nothing
+else changes.
+
+- `AI_ASSISTANT_ENABLED=false` — set to `true` to show the assistant and open its API. It is passed to
+  both the API and the web app, so the two always agree. The deploy fails when it is `true` and the
+  key of the chosen provider is missing, because the API refuses to boot without it.
+- `AI_PROVIDER=openrouter` — `openrouter` or `deepseek`. OpenRouter reports the actual cost of every
+  call and can switch to other vendors' models by changing `AI_MODEL`; DeepSeek's own API is cheaper
+  (no OpenRouter fee, and half price outside its weekday peak hours) and is costed from the price
+  table in `apps/api/src/modules/ai-assistant/ai-pricing.ts`.
+- `AI_MODEL=` — blank uses DeepSeek V4.1 Flash under the provider's id: `deepseek/deepseek-v4.1-flash`
+  on OpenRouter, `deepseek-flash` on DeepSeek. Change it only to a model that supports tool calling;
+  costs of models missing from the price table are recorded as unknown unless the provider reports
+  them.
+- `AI_MONTHLY_ACTION_LIMIT=250` — AI actions each organization gets per billing period.
+
 Optional variables with defaults, used by the nightly notification retention job:
 
 - `NOTIFICATIONS_RETENTION_DAYS=365` — deletes every notification older than this.
@@ -246,6 +262,14 @@ the same pair in the LiqPay dashboard; stage uses the test pair, whose keys are 
 
 - `LIQPAY_PUBLIC_KEY`
 - `LIQPAY_PRIVATE_KEY`
+
+Required when `AI_ASSISTANT_ENABLED=true`: the key of the provider set in `AI_PROVIDER`. Use one key
+per environment.
+
+- `OPENROUTER_API_KEY` — for `AI_PROVIDER=openrouter`. Create it at https://openrouter.ai/settings/keys
+  with a credit limit on the key, so a runaway loop cannot spend the whole balance.
+- `DEEPSEEK_API_KEY` — for `AI_PROVIDER=deepseek`. Create it at https://platform.deepseek.com/api_keys;
+  DeepSeek has no per-key limit, so keep the account balance small and top it up as needed.
 
 Required when `EMAIL_PROVIDER=resend`:
 

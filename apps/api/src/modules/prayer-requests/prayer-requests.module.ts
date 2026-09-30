@@ -16,5 +16,6 @@ import { PrayerRequestsRepository } from './repositories/prayer-requests.reposit
     PrayerRequestsService,
     PrayerRequestsRepository,
   ],
+  exports: [PrayerRequestsService],
 })
 export class PrayerRequestsModule {}

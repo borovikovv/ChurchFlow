@@ -45,12 +45,15 @@ export interface DashboardNavigationLabels {
 
 export interface DashboardNavigationDescriptions {
   budget: string;
+  groups: string;
   prayerRequests: string;
   profile: string;
   website: string;
 }
 
 export interface DashboardNavigationAccess {
+  /** The assistant takes Groups' slot in the mobile tab bar; without it Groups keeps its slot. */
+  assistantEnabled: boolean;
   canOpenBudget: boolean;
   canOpenWebsite: boolean;
   descriptions: DashboardNavigationDescriptions;
@@ -85,8 +88,9 @@ export function dashboardNavigationItems(
     {
       href: organizationGroupsRoute(organizationId),
       label: access.labels.groups,
+      description: access.descriptions.groups,
       icon: GroupsIcon,
-      group: 'primary',
+      group: access.assistantEnabled ? 'more' : 'primary',
     },
     {
       href: organizationCalendarRoute(organizationId),

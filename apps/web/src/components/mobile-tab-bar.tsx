@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import type { AppNavItem } from '@/components/app-navigation';
-import { MoreIcon } from '@/components/icons/navigation-icons';
+import { AssistantIcon, MoreIcon } from '@/components/icons/navigation-icons';
 import { MoreNavigationSheet } from '@/components/more-navigation-sheet';
 import { isNavPathActive } from '@/lib/nav-active';
 import { navItemsInGroup } from '@/lib/nav-groups';
@@ -18,11 +18,20 @@ const TAB_CLASS_NAME =
 
 const TAB_ICON_CLASS_NAME = 'h-6 w-6';
 
+// The assistant takes the middle slot: Home · Members · AI · Calendar · More.
+const ASSISTANT_TAB_INDEX = 2;
+
 function tabClassName(active: boolean): string {
   return `${TAB_CLASS_NAME} ${active ? 'text-[var(--accent-mobile)]' : 'text-[var(--muted)]'}`;
 }
 
-export function MobileTabBar({ items }: { items: AppNavItem[] }) {
+export function MobileTabBar({
+  items,
+  onOpenAssistant,
+}: {
+  items: AppNavItem[];
+  onOpenAssistant?: (() => void) | undefined;
+}) {
   const pathname = usePathname();
   const t = useTranslations('navigation');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -36,22 +45,13 @@ export function MobileTabBar({ items }: { items: AppNavItem[] }) {
   return (
     <>
       <nav aria-label={t('main')} className={NAV_CLASS_NAME}>
-        {primaryItems.map((item) => {
-          const ItemIcon = item.icon;
-          const active = isNavPathActive(pathname, item.href, item.exact);
-
-          return (
-            <Link
-              aria-current={active ? 'page' : undefined}
-              className={tabClassName(active)}
-              href={item.href}
-              key={item.href}
-            >
-              <ItemIcon className={TAB_ICON_CLASS_NAME} />
-              <span className="truncate">{item.label}</span>
-            </Link>
-          );
-        })}
+        {primaryItems.slice(0, ASSISTANT_TAB_INDEX).map((item) => (
+          <PrimaryTab item={item} key={item.href} pathname={pathname} />
+        ))}
+        {onOpenAssistant ? <AssistantTab onOpen={onOpenAssistant} /> : null}
+        {primaryItems.slice(ASSISTANT_TAB_INDEX).map((item) => (
+          <PrimaryTab item={item} key={item.href} pathname={pathname} />
+        ))}
 
         {moreItems.length > 0 ? (
           <button
@@ -69,5 +69,32 @@ export function MobileTabBar({ items }: { items: AppNavItem[] }) {
 
       <MoreNavigationSheet items={moreItems} open={moreOpen} onClose={() => setMoreOpen(false)} />
     </>
+  );
+}
+
+function PrimaryTab({ item, pathname }: { item: AppNavItem; pathname: string }) {
+  const ItemIcon = item.icon;
+  const active = isNavPathActive(pathname, item.href, item.exact);
+
+  return (
+    <Link
+      aria-current={active ? 'page' : undefined}
+      className={tabClassName(active)}
+      href={item.href}
+    >
+      <ItemIcon className={TAB_ICON_CLASS_NAME} />
+      <span className="truncate">{item.label}</span>
+    </Link>
+  );
+}
+
+function AssistantTab({ onOpen }: { onOpen: () => void }) {
+  const t = useTranslations('aiAssistant');
+
+  return (
+    <button aria-haspopup="dialog" className={tabClassName(false)} type="button" onClick={onOpen}>
+      <AssistantIcon className={TAB_ICON_CLASS_NAME} />
+      <span className="truncate">{t('tabLabel')}</span>
+    </button>
   );
 }

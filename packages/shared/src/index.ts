@@ -1,3 +1,4 @@
+export * from './ai-assistant.js';
 export * from './budget-currency.js';
 export * from './budget-totals.js';
 export * from './constants.js';
