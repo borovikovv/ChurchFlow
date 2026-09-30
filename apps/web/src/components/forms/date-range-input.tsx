@@ -40,6 +40,7 @@ export function DateRangeInput({
           calendarClassName={styles['calendar'] ?? ''}
           calendarStartDay={1}
           className={styles['input'] ?? ''}
+          customInput={<input type="text" inputMode="none" />}
           dateFormat="MM/dd/yyyy"
           disabled={disabled}
           endDate={endDate}
