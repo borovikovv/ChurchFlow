@@ -192,6 +192,17 @@ The payment-validation migration marks historical paid callbacks as already cred
 old deliveries from adding another month after deployment. It also adds a unique constraint for
 payment credit and a deadline index for the nightly cancellation scan.
 
+Optional variables for ChurchFlow AI. Leave them blank to keep the assistant switched off; nothing
+else changes.
+
+- `AI_ASSISTANT_ENABLED=false` — set to `true` to show the assistant and open its API. It is passed to
+  both the API and the web app, so the two always agree. The deploy fails when it is `true` and the
+  `OPENROUTER_API_KEY` secret is missing, because the API refuses to boot without it.
+- `AI_MODEL=deepseek/deepseek-v4.1-flash` — the OpenRouter model id. Change it only to a model that
+  supports tool calling; costs for models missing from the price table are recorded as unknown unless
+  OpenRouter reports them.
+- `AI_MONTHLY_ACTION_LIMIT=250` — AI actions each organization gets per billing period.
+
 Optional variables with defaults, used by the nightly notification retention job:
 
 - `NOTIFICATIONS_RETENTION_DAYS=365` — deletes every notification older than this.
@@ -246,6 +257,11 @@ the same pair in the LiqPay dashboard; stage uses the test pair, whose keys are 
 
 - `LIQPAY_PUBLIC_KEY`
 - `LIQPAY_PRIVATE_KEY`
+
+Required when `AI_ASSISTANT_ENABLED=true`. Create it at https://openrouter.ai/settings/keys, one key
+per environment, with a credit limit on the key so a runaway loop cannot spend the whole balance:
+
+- `OPENROUTER_API_KEY`
 
 Required when `EMAIL_PROVIDER=resend`:
 
