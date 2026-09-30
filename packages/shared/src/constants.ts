@@ -154,6 +154,7 @@ export const NOTIFICATION_TYPES = [
 ] as const;
 
 export const AUDIT_ENTITY_TYPES = [
+  'AiToolExecution',
   'BirthdayDigest',
   'Budget',
   'CalendarEvent',

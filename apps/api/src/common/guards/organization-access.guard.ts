@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import type { OrganizationRole } from '@churchflow/db';
 import { ORG_PERMISSIONS } from '@churchflow/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthenticatedRequest } from './session-auth.guard';
@@ -49,73 +50,112 @@ export class OrganizationAccessGuard implements CanActivate {
       throw new BadRequestException('Missing organization id');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        platformRole: true,
-        deletedAt: true,
-        memberships: {
-          where: {
-            organizationId,
-            status: 'ACTIVE',
-            removedAt: null,
-            organization: {
-              status: 'ACTIVE',
-              deletedAt: null,
-            },
-          },
-          select: {
-            role: true,
-            permissions: true,
-          },
-          take: 1,
-        },
-      },
-    });
-
-    if (!user || user.deletedAt !== null) {
-      throw new UnauthorizedException('Authenticated user was not found');
-    }
-
-    if (user.platformRole === 'ADMIN' || user.platformRole === 'SUPER_ADMIN') {
-      const organization = await this.prisma.organization.findFirst({
-        where: { id: organizationId, status: 'ACTIVE', deletedAt: null },
-        select: { id: true },
-      });
-      if (!organization) {
-        throw new ForbiddenException('Organization access is required');
-      }
-
-      return true;
-    }
-
-    const membership = user.memberships[0];
-    if (!membership) {
-      throw new ForbiddenException('Organization access is required');
-    }
-
     const ownerRequired = this.reflector.getAllAndOverride<boolean | undefined>(
       ORGANIZATION_OWNER_KEY,
       [context.getHandler(), context.getClass()],
     );
-
-    if (ownerRequired && membership.role !== 'OWNER') {
-      throw new ForbiddenException('Organization owner role is required');
-    }
-
     const requiredPermission = this.reflector.getAllAndOverride<OrganizationPermission | undefined>(
       ORGANIZATION_PERMISSION_KEY,
       [context.getHandler(), context.getClass()],
     );
 
-    if (!requiredPermission || membership.role === 'OWNER' || membership.role === 'ADMIN') {
-      return true;
-    }
-
-    if (!membership.permissions.includes(requiredPermission)) {
-      throw new ForbiddenException('Organization permission is required');
-    }
+    await assertOrganizationAccess(this.prisma, {
+      userId,
+      organizationId,
+      ownerRequired: ownerRequired === true,
+      ...(requiredPermission ? { permission: requiredPermission } : {}),
+    });
 
     return true;
   }
+}
+
+export interface OrganizationAccessRequirement {
+  userId: string;
+  organizationId: string;
+  ownerRequired?: boolean;
+  permission?: OrganizationPermission;
+}
+
+export interface OrganizationAccess {
+  /** Platform admins pass without a membership: no role, no permissions. */
+  platformAdmin: boolean;
+  role: OrganizationRole | null;
+  permissions: string[];
+}
+
+/**
+ * The organization boundary every route enforces, shared with callers that act on a user's
+ * behalf outside a route - the AI assistant runs one check per tool call instead of one per
+ * request, and must refuse exactly what the route would.
+ */
+export async function assertOrganizationAccess(
+  prisma: PrismaService,
+  requirement: OrganizationAccessRequirement,
+): Promise<OrganizationAccess> {
+  const { userId, organizationId } = requirement;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      platformRole: true,
+      deletedAt: true,
+      memberships: {
+        where: {
+          organizationId,
+          status: 'ACTIVE',
+          removedAt: null,
+          organization: {
+            status: 'ACTIVE',
+            deletedAt: null,
+          },
+        },
+        select: {
+          role: true,
+          permissions: true,
+        },
+        take: 1,
+      },
+    },
+  });
+
+  if (!user || user.deletedAt !== null) {
+    throw new UnauthorizedException('Authenticated user was not found');
+  }
+
+  if (user.platformRole === 'ADMIN' || user.platformRole === 'SUPER_ADMIN') {
+    const organization = await prisma.organization.findFirst({
+      where: { id: organizationId, status: 'ACTIVE', deletedAt: null },
+      select: { id: true },
+    });
+    if (!organization) {
+      throw new ForbiddenException('Organization access is required');
+    }
+
+    return { platformAdmin: true, role: null, permissions: [] };
+  }
+
+  const membership = user.memberships[0];
+  if (!membership) {
+    throw new ForbiddenException('Organization access is required');
+  }
+
+  const access: OrganizationAccess = {
+    platformAdmin: false,
+    role: membership.role,
+    permissions: membership.permissions,
+  };
+
+  if (requirement.ownerRequired && membership.role !== 'OWNER') {
+    throw new ForbiddenException('Organization owner role is required');
+  }
+
+  if (!requirement.permission || membership.role === 'OWNER' || membership.role === 'ADMIN') {
+    return access;
+  }
+
+  if (!membership.permissions.includes(requirement.permission)) {
+    throw new ForbiddenException('Organization permission is required');
+  }
+
+  return access;
 }

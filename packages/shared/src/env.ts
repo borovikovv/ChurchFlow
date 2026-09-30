@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AI_ASSISTANT_DEFAULT_MONTHLY_ACTION_LIMIT } from './ai-assistant.js';
 
 export const nodeEnvSchema = z.enum(['development', 'test', 'production']).default('development');
 
@@ -95,6 +96,16 @@ export const apiEnvSchema = z
       z.string().url().optional(),
     ),
     BILLING_ENFORCEMENT_ENABLED: optionalBooleanFlag(false),
+    AI_ASSISTANT_ENABLED: optionalBooleanFlag(false),
+    AI_PROVIDER: z.enum(['openrouter']).default('openrouter'),
+    AI_MODEL: z.preprocess(
+      (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+      z.string().trim().min(1).default('deepseek/deepseek-v4.1-flash'),
+    ),
+    OPENROUTER_API_KEY: optionalNonEmptyString,
+    AI_MONTHLY_ACTION_LIMIT: optionalPositiveInt(AI_ASSISTANT_DEFAULT_MONTHLY_ACTION_LIMIT),
+    AI_MAX_STEPS: optionalPositiveInt(8),
+    AI_REQUEST_TIMEOUT_MS: optionalPositiveInt(60_000),
   })
   .superRefine((env, context) => {
     for (const key of ['LIQPAY_PUBLIC_KEY', 'LIQPAY_PRIVATE_KEY'] as const) {
@@ -152,6 +163,14 @@ export const apiEnvSchema = z
       }
     }
 
+    if (env.AI_ASSISTANT_ENABLED && !env.OPENROUTER_API_KEY) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['OPENROUTER_API_KEY'],
+        message: 'OPENROUTER_API_KEY is required when AI_ASSISTANT_ENABLED=true',
+      });
+    }
+
     if (env.EMAIL_PROVIDER === 'resend') {
       for (const key of ['EMAIL_FROM', 'RESEND_API_KEY'] as const) {
         if (!env[key]) {
@@ -184,6 +203,7 @@ export const webEnvSchema = z
     API_INTERNAL_URL: z.string().url().optional(),
     NEXT_PUBLIC_API_URL: z.string().url().optional(),
     COOKIE_DOMAIN: optionalTrimmedNonEmptyString,
+    AI_ASSISTANT_ENABLED: optionalBooleanFlag(false),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== 'production') {
@@ -206,6 +226,7 @@ export const webEnvSchema = z
     API_INTERNAL_URL: env.API_INTERNAL_URL ?? 'http://localhost:4000/v1',
     NEXT_PUBLIC_API_URL: env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1',
     COOKIE_DOMAIN: env.COOKIE_DOMAIN,
+    AI_ASSISTANT_ENABLED: env.AI_ASSISTANT_ENABLED,
   }));
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

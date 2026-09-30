@@ -115,6 +115,13 @@ export class CalendarEventsService {
     return { visibleEventTypes: preferences.visibleEventTypes };
   }
 
+  async findItem(organizationId: string, eventId: string): Promise<CalendarEventItem> {
+    const event = await this.calendarEventsRepository.findById(organizationId, eventId);
+    if (!event) throw new NotFoundException('Event was not found');
+
+    return this.eventItem(event);
+  }
+
   async create(organizationId: string, input: CreateCalendarEventInput, actorUserId: string) {
     try {
       const event = await this.calendarEventsRepository.create(

@@ -6,4 +6,5 @@ export const serverEnv = parseEnv('Web runtime', webEnvSchema, {
   NEXT_PUBLIC_API_URL: process.env['NEXT_PUBLIC_API_URL'],
   API_INTERNAL_URL: process.env['API_INTERNAL_URL'],
   COOKIE_DOMAIN: process.env['COOKIE_DOMAIN'],
+  AI_ASSISTANT_ENABLED: process.env['AI_ASSISTANT_ENABLED'],
 });

@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { headers } from 'next/headers';
 import { getCurrentUser, type CurrentUser } from '@/auth/session';
 import { AppShell } from '@/components/app-shell';
+import { serverEnv } from '@/env/server';
 import {
   getOrganizationAccessState,
   isOrganizationOwnerRole,
@@ -53,6 +54,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <QueryProvider>
             {user ? (
               <AppShell
+                aiAssistantEnabled={serverEnv.AI_ASSISTANT_ENABLED}
                 avatarUrl={user.avatarUrl}
                 canOpenAdmin={access?.canOpenAdmin ?? false}
                 budgetOrganizationIds={ownerOrganizationIds}

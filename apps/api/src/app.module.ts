@@ -28,6 +28,7 @@ import { TelegramBotModule } from './modules/telegram-bot/telegram-bot.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { BillingModule } from './modules/billing/billing.module';
     ScheduledJobsModule,
     NotificationsModule,
     TelegramBotModule,
+    AiAssistantModule,
     WebsitesModule,
     PagesModule,
     MediaModule,

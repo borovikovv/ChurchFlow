@@ -16,5 +16,6 @@ import { BudgetsRepository } from './repositories/budgets.repository';
     BudgetsService,
     BudgetsRepository,
   ],
+  exports: [BudgetsService],
 })
 export class BudgetsModule {}

@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "admin:bootstrap": "node scripts/create-platform-admin-bootstrap.mjs",
+    "ai:benchmark": "node scripts/ai-benchmark.mjs",
     "budget:migrate-exchanges": "node scripts/migrate-budget-currency-exchanges.mjs",
     "members:backfill-milestone-events": "node scripts/backfill-member-milestone-events.mjs"
   },
@@ -24,8 +25,10 @@
     "@nestjs/platform-express": "^10.4.15",
     "@nestjs/schedule": "^6.1.3",
     "@nestjs/throttler": "^6.3.0",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@simplewebauthn/server": "^13.3.3",
+    "ai": "^7.0.122",
     "helmet": "^8.0.0",
     "pg": "^8.21.0",
     "pino": "^9.5.0",

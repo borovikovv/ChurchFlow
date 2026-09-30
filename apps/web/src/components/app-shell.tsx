@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Suspense, type ReactNode } from 'react';
+import { Suspense, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { dashboardNavigationItems, type AppNavItem } from '@/components/app-navigation';
 import { PlusIcon } from '@/components/icons/action-icons';
@@ -12,6 +12,8 @@ import { LogoutButton } from '@/components/logout-button';
 import { MobileTabBar } from '@/components/mobile-tab-bar';
 import { SidebarNavLink } from '@/components/sidebar-nav-link';
 import { UserMenu } from '@/components/user-menu';
+import { AiAssistantHeaderButton } from '@/features/ai-assistant/components/ai-assistant-header-button';
+import { AiAssistantPanelLoader } from '@/features/ai-assistant/components/ai-assistant-panel-loader';
 import { NotificationBell } from '@/features/notifications/components/notification-bell';
 import { NotificationDetailModal } from '@/features/notifications/components/notification-detail-modal';
 import { PasskeyPromptDialog } from '@/features/passkeys/components/passkey-prompt-dialog';
@@ -21,6 +23,7 @@ import { ORGANIZATION_ROUTE_SEGMENTS } from '@/features/organizations/routes';
 
 interface AppShellProps {
   children: ReactNode;
+  aiAssistantEnabled: boolean;
   avatarUrl: string | null;
   canOpenAdmin: boolean;
   budgetOrganizationIds: string[];
@@ -40,6 +43,7 @@ function usesPlainShell(pathname: string): boolean {
 
 export function AppShell({
   children,
+  aiAssistantEnabled,
   avatarUrl,
   canOpenAdmin,
   budgetOrganizationIds,
@@ -49,6 +53,9 @@ export function AppShell({
   const pathname = usePathname();
   const t = useTranslations('navigation');
   const commonT = useTranslations('common');
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  // Mounted on first open and kept afterwards, so closing the panel keeps the conversation.
+  const [assistantMounted, setAssistantMounted] = useState(false);
   if (usesPlainShell(pathname)) {
     return <>{children}</>;
   }
@@ -57,12 +64,19 @@ export function AppShell({
   const showAccountNavigation = canOpenAdmin || Boolean(dashboardOrgId);
   const canOpenWebsite = dashboardOrgId ? websiteOrganizationIds.includes(dashboardOrgId) : false;
   const canOpenBudget = dashboardOrgId ? budgetOrganizationIds.includes(dashboardOrgId) : false;
+  const assistantOrgId = aiAssistantEnabled ? dashboardOrgId : null;
+  const openAssistant = () => {
+    setAssistantMounted(true);
+    setAssistantOpen(true);
+  };
   const navItems: AppNavItem[] = dashboardOrgId
     ? dashboardNavigationItems(dashboardOrgId, {
+        assistantEnabled: Boolean(assistantOrgId),
         canOpenBudget,
         canOpenWebsite,
         descriptions: {
           budget: t('descriptions.budget'),
+          groups: t('descriptions.groups'),
           prayerRequests: t('descriptions.prayerRequests'),
           profile: t('descriptions.profile'),
           website: t('descriptions.website'),
@@ -112,6 +126,7 @@ export function AppShell({
           </Link>
           {showAccountNavigation ? (
             <nav className="site-nav" aria-label={t('accountNavigation')}>
+              {assistantOrgId ? <AiAssistantHeaderButton onOpen={openAssistant} /> : null}
               {dashboardOrgId ? <NotificationBell organizationId={dashboardOrgId} /> : null}
               {canOpenAdmin ? (
                 <div className="desktop-site-nav">
@@ -153,7 +168,20 @@ export function AppShell({
         </aside>
         <div className={dashboardOrgId ? 'app-main with-tab-bar' : 'app-main'}>{children}</div>
       </div>
-      {dashboardOrgId ? <MobileTabBar items={navItems} /> : null}
+      {dashboardOrgId ? (
+        <MobileTabBar
+          items={navItems}
+          onOpenAssistant={assistantOrgId ? openAssistant : undefined}
+        />
+      ) : null}
+      {assistantOrgId && assistantMounted ? (
+        <AiAssistantPanelLoader
+          key={assistantOrgId}
+          open={assistantOpen}
+          organizationId={assistantOrgId}
+          onClose={() => setAssistantOpen(false)}
+        />
+      ) : null}
       {dashboardOrgId ? (
         <Suspense fallback={null}>
           <NotificationDetailModal organizationId={dashboardOrgId} />

@@ -87,6 +87,7 @@
     "createOrganization": "Створити організацію",
     "descriptions": {
       "budget": "Фінанси та витрати організації",
+      "groups": "Служіння, команди та малі групи",
       "prayerRequests": "Молитовні запити та відповіді",
       "profile": "Перегляд та редагування особистих даних",
       "website": "Керування сайтом організації"
@@ -106,6 +107,77 @@
     "signedInAs": "Ви увійшли як",
     "signingOut": "Вихід…",
     "website": "Сайт"
+  },
+  "aiAssistant": {
+    "title": "ChurchFlow AI",
+    "tabLabel": "ШІ",
+    "open": "Відкрити ChurchFlow AI",
+    "newChat": "Новий чат",
+    "history": "Останні чати",
+    "backToChat": "Назад до чату",
+    "historyLoading": "Завантаження…",
+    "historyEmpty": "Розмов ще немає.",
+    "historyLoadFailed": "Не вдалося завантажити останні чати.",
+    "conversationLoadFailed": "Не вдалося відкрити цю розмову.",
+    "loadingConversation": "Відкриваємо розмову…",
+    "untitledConversation": "Чат без назви",
+    "emptyTitle": "Чим можу допомогти?",
+    "emptyDescription": "Запитайте про учасників, групи, календар чи молитовні потреби. Перш ніж щось змінити, я попрошу підтвердження.",
+    "examples": {
+      "summary": "Коротко розкажи про нашу церкву",
+      "upcomingServices": "Які служіння заплановані на цей тиждень?",
+      "findMember": "Знайди учасників на імʼя Анна",
+      "prayerRequest": "Додай молитовну потребу за молодіжний табір"
+    },
+    "composerLabel": "Повідомлення для ChurchFlow AI",
+    "composerPlaceholder": "Запитайте ChurchFlow AI…",
+    "composerHint": "Enter — надіслати, Shift+Enter — новий рядок",
+    "send": "Надіслати",
+    "stop": "Зупинити",
+    "thinking": "Думаю…",
+    "confirmTitle": "Підтвердіть дію",
+    "confirm": "Підтвердити",
+    "cancel": "Скасувати",
+    "linksLabel": "Повʼязані записи",
+    "toolStatus": {
+      "running": "Виконується",
+      "done": "Готово",
+      "error": "Помилка",
+      "denied": "Скасовано"
+    },
+    "tools": {
+      "organizationSummary": "Переглядаю огляд церкви",
+      "searchMembers": "Шукаю учасників",
+      "getMember": "Відкриваю профіль учасника",
+      "listGroups": "Переглядаю групи",
+      "getGroup": "Відкриваю групу",
+      "addGroupMember": "Додаю до групи",
+      "setGroupMemberRole": "Змінюю роль у групі",
+      "moveGroupMember": "Переводжу до іншої групи",
+      "removeGroupMember": "Вилучаю з групи",
+      "listCalendarEvents": "Переглядаю календар",
+      "upcomingServices": "Перевіряю найближчі служіння",
+      "createCalendarEvent": "Створюю подію",
+      "updateCalendarEvent": "Оновлюю подію",
+      "deleteCalendarEvent": "Видаляю подію",
+      "listPrayerRequests": "Переглядаю молитовні потреби",
+      "createPrayerRequest": "Створюю молитовну потребу",
+      "budgetSummary": "Переглядаю бюджет",
+      "unknown": "Працюю"
+    },
+    "usage": {
+      "counter": "Використано {used} з {limit} дій",
+      "warning": "{remaining, plural, one {Залишилася # дія} few {Залишилося # дії} many {Залишилося # дій} other {Залишилося # дії}} у цьому періоді",
+      "exhausted": "Ви використали всі дії ChurchFlow AI на цей період. Ліміт оновиться {date}."
+    },
+    "errors": {
+      "generic": "Щось пішло не так. Спробуйте ще раз.",
+      "unavailable": "ChurchFlow AI доступний з активною підпискою.",
+      "duplicate": "Це повідомлення вже отримано. Оновіть розмову, щоб побачити відповідь.",
+      "confirmationLimit": "У цьому запиті вичерпано підтвердження. Надішліть нове повідомлення, щоб продовжити."
+    },
+    "retry": "Спробувати ще раз",
+    "refresh": "Оновити розмову"
   },
   "profile": {
     "addPhoto": "Додати фото",
@@ -1228,6 +1300,7 @@
       "CREATE_BUDGET_EXCHANGE": "Обмін валюти записано",
       "UPDATE_BUDGET_EXCHANGE": "Обмін валюти оновлено",
       "DELETE_BUDGET_EXCHANGE": "Обмін валюти видалено",
+      "AI_TOOL_EXECUTED": "Дія ChurchFlow AI",
       "SYNC_MEMBER_MILESTONE_EVENT": "Подію {type, select, BIRTHDAY {дня народження} ANNIVERSARY {річниці} other {памʼятної дати}} {change, select, created {створено} updated {оновлено} deleted {видалено} other {синхронізовано}}"
     },
     "auditEntityActions": {
@@ -1249,6 +1322,7 @@
     "auditEntityTypeFilter": "Тип запису",
     "auditEntityTypes": {
       "ALL": "Усі типи",
+      "AiToolExecution": "ChurchFlow AI",
       "BirthdayDigest": "Дні народження",
       "Budget": "Бюджет",
       "CalendarEvent": "Календар",
