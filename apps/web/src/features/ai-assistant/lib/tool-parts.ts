@@ -3,7 +3,14 @@ import {
   AI_ASSISTANT_TOOL_NAMES,
   type AiAssistantToolName,
 } from '@churchflow/shared';
-import { isToolUIPart, type DynamicToolUIPart, type ToolUIPart, type UIMessage } from 'ai';
+import {
+  getToolName,
+  isToolUIPart,
+  type ChatStatus,
+  type DynamicToolUIPart,
+  type ToolUIPart,
+  type UIMessage,
+} from 'ai';
 import { z } from 'zod';
 import type { AiAssistantToolResult, AiAssistantToolStatus } from '../types/ai-assistant-view';
 
@@ -65,4 +72,28 @@ export function hasPendingAiAssistantApproval(messages: UIMessage[]): boolean {
     lastMessage?.role === 'assistant' &&
     lastMessage.parts.some((part) => isToolUIPart(part) && part.state === 'approval-requested')
   );
+}
+
+/**
+ * Whether the assistant is working with nothing on screen moving: before the first word, between
+ * a finished tool and the next step, or during hidden work such as loading more tools or
+ * reasoning. A streaming sentence or a running tool chip already shows progress on its own.
+ */
+export function isAiAssistantAwaitingReply(status: ChatStatus, messages: UIMessage[]): boolean {
+  if (status === 'submitted') return true;
+  if (status !== 'streaming') return false;
+
+  const lastMessage = messages.at(-1);
+  const lastPart = lastMessage?.role === 'assistant' ? lastMessage.parts.at(-1) : undefined;
+  if (!lastPart) return true;
+  if (lastPart.type === 'text') return lastPart.state !== 'streaming';
+  if (isToolUIPart(lastPart)) {
+    const visibleAndRunning =
+      isVisibleAiAssistantTool(getToolName(lastPart)) &&
+      aiAssistantToolStatus(lastPart) === 'running';
+
+    return !visibleAndRunning;
+  }
+
+  return true;
 }

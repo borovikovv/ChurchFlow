@@ -40,7 +40,7 @@ export function AiAssistantConversationList({
       ) : null}
       {failed ? (
         <div className={aiAssistantNoticeClassName({ tone: 'danger' })} role="alert">
-          <p className="m-0">{t('historyLoadFailed')}</p>
+          <p className="m-0 text-inherit">{t('historyLoadFailed')}</p>
           <Button
             className="justify-self-start"
             type="button"

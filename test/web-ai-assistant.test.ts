@@ -16,8 +16,12 @@ const { aiAssistantUsageDisplay } =
   await import('../apps/web/src/features/ai-assistant/lib/usage-display.ts');
 const { aiAssistantEntityLinkRoute } =
   await import('../apps/web/src/features/ai-assistant/lib/entity-links.ts');
-const { aiAssistantToolResult, aiAssistantToolStatus, isVisibleAiAssistantTool } =
-  await import('../apps/web/src/features/ai-assistant/lib/tool-parts.ts');
+const {
+  aiAssistantToolResult,
+  aiAssistantToolStatus,
+  isAiAssistantAwaitingReply,
+  isVisibleAiAssistantTool,
+} = await import('../apps/web/src/features/ai-assistant/lib/tool-parts.ts');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const ENTITY = '22222222-2222-4222-8222-222222222222';
@@ -267,4 +271,64 @@ test('a reply whose confirmed action already ran is reloaded rather than resent'
   assert.equal(isAiAssistantSettledApprovalReply(settled), true);
   assert.equal(isAiAssistantApprovalContinuation(settled), false);
   assert.equal(isAiAssistantSettledApprovalReply(plainReply), false);
+});
+
+test('the waiting indicator shows whenever the assistant works with nothing moving on screen', () => {
+  const user: UIMessage = { id: 'u', role: 'user', parts: [{ type: 'text', text: 'Hi' }] };
+  const reply = (parts: UIMessage['parts']): UIMessage[] => [
+    user,
+    { id: 'a', role: 'assistant', parts },
+  ];
+  const doneTool = {
+    type: 'tool-listCalendarEvents' as const,
+    toolCallId: 'c1',
+    state: 'output-available' as const,
+    input: {},
+    output: { ok: true, summary: '3 events.', links: [] },
+  };
+
+  assert.equal(isAiAssistantAwaitingReply('submitted', [user]), true);
+  assert.equal(isAiAssistantAwaitingReply('streaming', reply([])), true);
+  assert.equal(isAiAssistantAwaitingReply('streaming', reply([doneTool])), true);
+  assert.equal(
+    isAiAssistantAwaitingReply(
+      'streaming',
+      reply([
+        { type: 'tool-enableToolGroups', toolCallId: 'c0', state: 'input-available', input: {} },
+      ]),
+    ),
+    true,
+  );
+  assert.equal(
+    isAiAssistantAwaitingReply(
+      'streaming',
+      reply([{ type: 'reasoning', text: '…', state: 'streaming' }]),
+    ),
+    true,
+  );
+  assert.equal(
+    isAiAssistantAwaitingReply(
+      'streaming',
+      reply([
+        { type: 'tool-upcomingServices', toolCallId: 'c2', state: 'input-available', input: {} },
+      ]),
+    ),
+    false,
+  );
+  assert.equal(
+    isAiAssistantAwaitingReply(
+      'streaming',
+      reply([{ type: 'text', text: 'On Sunday', state: 'streaming' }]),
+    ),
+    false,
+  );
+  assert.equal(
+    isAiAssistantAwaitingReply(
+      'streaming',
+      reply([{ type: 'text', text: 'Done.', state: 'done' }]),
+    ),
+    true,
+  );
+  assert.equal(isAiAssistantAwaitingReply('ready', reply([doneTool])), false);
+  assert.equal(isAiAssistantAwaitingReply('error', [user]), false);
 });

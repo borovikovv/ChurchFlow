@@ -2,7 +2,12 @@
 
 import { useTranslations } from 'next-intl';
 import { isToolUIPart, type UIMessage } from 'ai';
-import { aiAssistantMessageClassName } from './ai-assistant-message-list.styles';
+import {
+  AI_ASSISTANT_MESSAGE_TEXT_CLASS_NAME,
+  AI_ASSISTANT_THINKING_CLASS_NAME,
+  AI_ASSISTANT_THINKING_DOT_CLASS_NAMES,
+  aiAssistantMessageClassName,
+} from './ai-assistant-message-list.styles';
 import { AiAssistantToolPart } from './ai-assistant-tool-part';
 
 export function AiAssistantMessageList({
@@ -36,7 +41,7 @@ export function AiAssistantMessageList({
 
               if (part.type === 'text') {
                 return (
-                  <p className="m-0 whitespace-pre-wrap break-words" key={key}>
+                  <p className={AI_ASSISTANT_MESSAGE_TEXT_CLASS_NAME} key={key}>
                     {part.text}
                   </p>
                 );
@@ -59,7 +64,14 @@ export function AiAssistantMessageList({
           </li>
         ))}
         {thinking ? (
-          <li className="animate-pulse text-sm text-[var(--muted)]">{t('thinking')}</li>
+          <li className={AI_ASSISTANT_THINKING_CLASS_NAME} role="status">
+            <span aria-hidden="true" className="flex gap-1">
+              {AI_ASSISTANT_THINKING_DOT_CLASS_NAMES.map((className) => (
+                <span className={className} key={className} />
+              ))}
+            </span>
+            {t('thinking')}
+          </li>
         ) : null}
       </ol>
     </div>

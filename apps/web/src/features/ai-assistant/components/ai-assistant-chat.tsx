@@ -11,7 +11,7 @@ import {
   isAiAssistantSettledApprovalReply,
 } from '../lib/chat-request';
 import { aiAssistantPageContext } from '../lib/page-context';
-import { hasPendingAiAssistantApproval } from '../lib/tool-parts';
+import { hasPendingAiAssistantApproval, isAiAssistantAwaitingReply } from '../lib/tool-parts';
 import type { AiAssistantErrorKind, AiAssistantUsageDisplay } from '../types/ai-assistant-view';
 import type {
   AiAssistantChatNotice as Notice,
@@ -127,7 +127,7 @@ export function AiAssistantChat({
         <AiAssistantMessageList
           messages={messages}
           organizationId={organizationId}
-          thinking={status === 'submitted'}
+          thinking={isAiAssistantAwaitingReply(status, messages)}
           onApprovalResponse={(response) => void addToolApprovalResponse(response)}
           onNavigate={onNavigate}
         />

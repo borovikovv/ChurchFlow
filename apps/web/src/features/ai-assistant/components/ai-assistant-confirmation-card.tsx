@@ -21,7 +21,7 @@ export function AiAssistantConfirmationCard({
         <strong className="text-xs tracking-wide text-[var(--muted)] uppercase">
           {t('confirmTitle')}
         </strong>
-        <p className="m-0 text-sm whitespace-pre-wrap">{reason}</p>
+        <p className="m-0 text-sm whitespace-pre-wrap text-[var(--foreground)]">{reason}</p>
       </div>
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="secondary" onClick={() => onRespond(false)}>

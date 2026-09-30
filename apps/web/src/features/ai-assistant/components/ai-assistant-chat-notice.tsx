@@ -33,7 +33,7 @@ export function AiAssistantChatNotice({
     case 'duplicate':
       return (
         <div className={aiAssistantNoticeClassName({ tone: 'muted' })} role="alert">
-          <p className="m-0">{t('errors.duplicate')}</p>
+          <p className="m-0 text-inherit">{t('errors.duplicate')}</p>
           <Button
             className="justify-self-start"
             type="button"
@@ -53,7 +53,7 @@ export function AiAssistantChatNotice({
     case 'generic':
       return (
         <div className={aiAssistantNoticeClassName({ tone: 'danger' })} role="alert">
-          <p className="m-0">{t('errors.generic')}</p>
+          <p className="m-0 text-inherit">{t('errors.generic')}</p>
           <Button
             className="justify-self-start"
             type="button"
