@@ -230,6 +230,7 @@ function createHarness(options = {}) {
   const {
     role = 'OWNER',
     permissions = [],
+    platformRole = 'USER',
     subscription = {
       status: 'ACTIVE',
       isExempt: false,
@@ -262,7 +263,7 @@ function createHarness(options = {}) {
   const prisma = {
     user: {
       findUnique: async () => ({
-        platformRole: 'USER',
+        platformRole,
         deletedAt: null,
         memberships: role ? [{ role, permissions }] : [],
       }),
@@ -1210,6 +1211,31 @@ test('the budget tool is never offered to anyone but the owner', async () => {
       role,
     );
   }
+});
+
+test('a platform admin who owns the organization is offered the budget like any owner', async () => {
+  const harness = createHarness({
+    platformRole: 'SUPER_ADMIN',
+    turns: [toolCallTurn('budgetSummary', { year: 2026, month: 9 }), textTurn('Income 12000 UAH.')],
+  });
+
+  const chunks = await runChat(harness, messageRequest('How much did we receive in September?'));
+
+  assert.ok(harness.calls.offeredTools.every((tools) => tools.includes('budgetSummary')));
+  assert.doesNotMatch(harness.calls.instructions[0], /cannot see the church budget/);
+  assert.equal(chunks.find((chunk) => chunk.type === 'tool-output-available').output.ok, true);
+});
+
+test('a platform admin without a membership is not offered the budget', async () => {
+  const harness = createHarness({
+    platformRole: 'SUPER_ADMIN',
+    role: null,
+    turns: [toolCallTurn('enableToolGroups', { groups: ['budget'] }), textTurn('Here it is.')],
+  });
+
+  await runChat(harness, messageRequest('How much did we spend on rent this year?'));
+
+  assert.ok(harness.calls.offeredTools.every((tools) => !tools.includes('budgetSummary')));
 });
 
 test('a reply writes only the messages it added or changed', async () => {
