@@ -573,6 +573,8 @@
     "nextUp": "Next Up",
     "selectedDayAgenda": "Agenda for the selected day",
     "noEventsForDay": "No events for this day.",
+    "filters": "Event filters",
+    "eventsCount": "{count, plural, one {# event} other {# events}}",
     "tasksForDay": "Tasks for this day",
     "markComplete": "Mark complete",
     "markIncomplete": "Mark incomplete",

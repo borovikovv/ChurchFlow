@@ -573,6 +573,8 @@
     "nextUp": "Найближче",
     "selectedDayAgenda": "Порядок дня для вибраної дати",
     "noEventsForDay": "На цей день подій немає.",
+    "filters": "Фільтри подій",
+    "eventsCount": "{count, plural, one {# подія} few {# події} many {# подій} other {# події}}",
     "tasksForDay": "Завдання на цей день",
     "markComplete": "Позначити виконаним",
     "markIncomplete": "Позначити невиконаним",

@@ -3,8 +3,9 @@
 import type { CalendarEventItem, CalendarEventType } from '@churchflow/shared';
 import { useLocale, useTranslations } from 'next-intl';
 import { Checkbox } from '@/components/ui/checkbox';
-import { EVENT_TYPES, EVENT_TYPE_STYLES } from './calendar-constants';
+import { EVENT_TYPE_STYLES } from './calendar-constants';
 import { formatDateLabel } from './calendar-date-utils';
+import { CalendarTypeFilters } from './calendar-type-filters';
 
 export function CalendarSidebar({
   canManage,
@@ -33,14 +34,7 @@ export function CalendarSidebar({
       <h2>{t('nextUp')}</h2>
       <p className="mb-3 text-sm">{t('selectedDayAgenda')}</p>
       <div className="grid gap-1.5">
-        {EVENT_TYPES.map((type) => (
-          <Checkbox
-            checked={visibleTypes.includes(type.value)}
-            key={type.value}
-            label={t(`eventTypeGroups.${type.value}`)}
-            onChange={() => onFilterToggle(type.value)}
-          />
-        ))}
+        <CalendarTypeFilters visibleTypes={visibleTypes} onFilterToggle={onFilterToggle} />
       </div>
 
       <div className="my-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-xs text-[var(--muted)]">
