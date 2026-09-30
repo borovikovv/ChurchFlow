@@ -10,7 +10,7 @@ export type CalendarView = (typeof CALENDAR_VIEWS)[number];
 
 export const FULL_CALENDAR_VIEW: Record<CalendarView, string> = {
   month: 'dayGridMonth',
-  week: 'timeGridWeek',
+  week: 'listWeek',
 };
 
 export const EVENT_TYPES: Array<{ value: CalendarEventType }> = [

@@ -1,18 +1,28 @@
 import type { EventContentArg } from '@fullcalendar/core';
 import type { ChangeEvent, KeyboardEvent, MouseEvent, PointerEvent } from 'react';
-import type { CalendarEventItem } from '@churchflow/shared';
-import { CALENDAR_TYPE, EVENT_TYPE_STYLES } from './calendar-constants';
+import type { CalendarEventItem, CalendarEventType } from '@churchflow/shared';
+import { CALENDAR_TYPE, EVENT_TYPE_STYLES, FULL_CALENDAR_VIEW } from './calendar-constants';
+import { taskCheckboxClassName, type TaskCheckboxPlacement } from './calendar-event-content.styles';
 
 type CalendarEventContentOptions = {
   canManage: boolean;
   markCompleteLabel: string;
   markIncompleteLabel: string;
+  typeLabel: (type: CalendarEventType) => string;
   onTaskToggle: (event: CalendarEventItem, completed: boolean) => void;
 };
+
+// FullCalendar handles event clicks with a native listener that React's stopPropagation cannot reach.
+const TASK_TOGGLE_SELECTOR = '[data-calendar-task-toggle]';
+
+export function isTaskToggleTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(TASK_TOGGLE_SELECTOR) !== null;
+}
 
 export function renderEventContent(arg: EventContentArg, options: CalendarEventContentOptions) {
   const item = arg.event.extendedProps['item'] as CalendarEventItem | undefined;
   if (!item) return arg.event.title;
+  if (arg.view.type === FULL_CALENDAR_VIEW.week) return renderListEventContent(item, options);
   const isTask = item.type === CALENDAR_TYPE.task;
   const titleClassName = [
     'block min-w-0 truncate transition-[padding]',
@@ -26,8 +36,30 @@ export function renderEventContent(arg: EventContentArg, options: CalendarEventC
     <div
       className={`group relative min-w-0 rounded border-l-4 px-1.5 py-0.75 text-[12px] leading-tight ${EVENT_TYPE_STYLES[item.type]}`}
     >
-      {isTask ? <TaskCompletionCheckbox event={item} options={options} /> : null}
+      {isTask ? (
+        <TaskCompletionCheckbox event={item} options={options} placement="overlay" />
+      ) : null}
       <span className={titleClassName}>{item.title}</span>
+    </div>
+  );
+}
+
+function renderListEventContent(item: CalendarEventItem, options: CalendarEventContentOptions) {
+  const isTask = item.type === CALENDAR_TYPE.task;
+
+  return (
+    <div
+      className={`flex min-w-0 items-start gap-2 rounded-md border-l-4 px-2.5 py-2 text-sm ${EVENT_TYPE_STYLES[item.type]}`}
+    >
+      {isTask ? <TaskCompletionCheckbox event={item} options={options} placement="inline" /> : null}
+      <span className="min-w-0">
+        <span
+          className={`block font-semibold break-words ${item.taskCompleted && isTask ? 'line-through' : ''}`}
+        >
+          {item.title}
+        </span>
+        <span className="block text-xs">{options.typeLabel(item.type)}</span>
+      </span>
     </div>
   );
 }
@@ -35,9 +67,11 @@ export function renderEventContent(arg: EventContentArg, options: CalendarEventC
 function TaskCompletionCheckbox({
   event,
   options,
+  placement,
 }: {
   event: CalendarEventItem;
   options: CalendarEventContentOptions;
+  placement: TaskCheckboxPlacement;
 }) {
   function stopEventPropagation(
     interactionEvent:
@@ -56,7 +90,8 @@ function TaskCompletionCheckbox({
 
   return (
     <label
-      className={`absolute left-1.5 top-1/2 grid h-4 w-4 -translate-y-1/2 place-items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${options.canManage ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+      className={taskCheckboxClassName({ placement, canManage: options.canManage })}
+      data-calendar-task-toggle=""
       onClick={stopEventPropagation}
       onPointerDown={stopEventPropagation}
     >

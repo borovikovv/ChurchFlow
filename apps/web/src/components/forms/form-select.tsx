@@ -274,12 +274,20 @@ export function FormSelect({
               id={id}
               required={Boolean(required)}
               value={selectedValue}
-              onBlur={onBlur}
+              onBlur={() => {
+                onBlur?.(
+                  createSelectEvent('blur', name, selectedValue) as FocusEvent<HTMLSelectElement>,
+                );
+              }}
               onChange={(event) => {
+                const nextValue = event.currentTarget.value;
                 if (value === undefined) {
-                  setInternalValue(event.currentTarget.value);
+                  setInternalValue(nextValue);
                 }
-                onChange?.(event);
+                // The select carries no name, so the event names the field for form libraries.
+                onChange?.(
+                  createSelectEvent('change', name, nextValue) as ChangeEvent<HTMLSelectElement>,
+                );
               }}
             >
               {clearable && !options.some((option) => option.value === '') ? (
@@ -313,14 +321,18 @@ export function FormSelect({
               value={selectedOption}
               {...(selectClassName ? { className: selectClassName } : {})}
               onBlur={() => {
-                onBlur?.(createSelectEvent(name, selectedValue) as FocusEvent<HTMLSelectElement>);
+                onBlur?.(
+                  createSelectEvent('blur', name, selectedValue) as FocusEvent<HTMLSelectElement>,
+                );
               }}
               onChange={(nextOption: SingleValue<SelectOption>) => {
                 const nextValue = nextOption?.value ?? '';
                 if (value === undefined) {
                   setInternalValue(nextValue);
                 }
-                onChange?.(createSelectEvent(name, nextValue) as ChangeEvent<HTMLSelectElement>);
+                onChange?.(
+                  createSelectEvent('change', name, nextValue) as ChangeEvent<HTMLSelectElement>,
+                );
               }}
             />
           </>
@@ -370,12 +382,15 @@ function nodeToText(node: ReactNode): string {
   return Children.toArray(node).map(nodeToText).join('');
 }
 
-function createSelectEvent(name: string | undefined, value: string) {
-  const target = { name, type: 'select-one', value };
+// A form library reads the value from the target only when the target has no input type, and
+// tells blur from change by the event type.
+function createSelectEvent(type: 'blur' | 'change', name: string | undefined, value: string) {
+  const target = { name, value };
 
   return {
     currentTarget: target,
     target,
+    type,
   };
 }
 
