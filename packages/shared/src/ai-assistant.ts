@@ -1,5 +1,16 @@
 import { z } from 'zod';
 
+/** Where the model runs: through OpenRouter, or on DeepSeek's own API. */
+export const AI_ASSISTANT_PROVIDERS = ['openrouter', 'deepseek'] as const;
+
+export type AiAssistantProvider = (typeof AI_ASSISTANT_PROVIDERS)[number];
+
+/** DeepSeek V4.1 Flash under the id each provider knows it by. */
+export const AI_ASSISTANT_DEFAULT_MODELS: Record<AiAssistantProvider, string> = {
+  openrouter: 'deepseek/deepseek-v4.1-flash',
+  deepseek: 'deepseek-flash',
+};
+
 /** One user message is one action, however many tools the agent calls to answer it. */
 export const AI_ASSISTANT_DEFAULT_MONTHLY_ACTION_LIMIT = 250;
 

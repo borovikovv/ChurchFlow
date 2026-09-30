@@ -792,6 +792,7 @@ export class AiAssistantService {
             usage: call.usage,
             reportedCostUsd: call.reportedCostUsd,
             price: findModelPrice(AI_MODEL_PRICES, provider, call.model, startedAt),
+            at: startedAt,
           }),
         })),
       );

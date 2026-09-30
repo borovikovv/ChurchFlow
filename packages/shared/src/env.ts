@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { AI_ASSISTANT_DEFAULT_MONTHLY_ACTION_LIMIT } from './ai-assistant.js';
+import {
+  AI_ASSISTANT_DEFAULT_MONTHLY_ACTION_LIMIT,
+  AI_ASSISTANT_PROVIDERS,
+} from './ai-assistant.js';
 
 export const nodeEnvSchema = z.enum(['development', 'test', 'production']).default('development');
 
@@ -97,12 +100,11 @@ export const apiEnvSchema = z
     ),
     BILLING_ENFORCEMENT_ENABLED: optionalBooleanFlag(false),
     AI_ASSISTANT_ENABLED: optionalBooleanFlag(false),
-    AI_PROVIDER: z.enum(['openrouter']).default('openrouter'),
-    AI_MODEL: z.preprocess(
-      (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
-      z.string().trim().min(1).default('deepseek/deepseek-v4.1-flash'),
-    ),
+    AI_PROVIDER: z.enum(AI_ASSISTANT_PROVIDERS).default('openrouter'),
+    // Blank means the provider's id for DeepSeek V4.1 Flash; see AI_ASSISTANT_DEFAULT_MODELS.
+    AI_MODEL: optionalTrimmedNonEmptyString,
     OPENROUTER_API_KEY: optionalNonEmptyString,
+    DEEPSEEK_API_KEY: optionalNonEmptyString,
     AI_MONTHLY_ACTION_LIMIT: optionalPositiveInt(AI_ASSISTANT_DEFAULT_MONTHLY_ACTION_LIMIT),
     AI_MAX_STEPS: optionalPositiveInt(8),
     AI_REQUEST_TIMEOUT_MS: optionalPositiveInt(60_000),
@@ -163,12 +165,15 @@ export const apiEnvSchema = z
       }
     }
 
-    if (env.AI_ASSISTANT_ENABLED && !env.OPENROUTER_API_KEY) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['OPENROUTER_API_KEY'],
-        message: 'OPENROUTER_API_KEY is required when AI_ASSISTANT_ENABLED=true',
-      });
+    if (env.AI_ASSISTANT_ENABLED) {
+      const key = env.AI_PROVIDER === 'deepseek' ? 'DEEPSEEK_API_KEY' : 'OPENROUTER_API_KEY';
+      if (!env[key]) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} is required when AI_ASSISTANT_ENABLED=true and AI_PROVIDER=${env.AI_PROVIDER}`,
+        });
+      }
     }
 
     if (env.EMAIL_PROVIDER === 'resend') {

@@ -7,17 +7,31 @@ const TOKENS_PER_PRICE_UNIT = 1_000_000;
  * new price is a new row with a later effectiveFrom, and every usage record stores the version
  * it was costed with, so past months keep the cost they were charged at.
  */
-export interface AiModelPrice {
-  provider: string;
-  model: string;
-  version: string;
-  effectiveFrom: Date;
+export interface AiTokenRates {
   inputUsdPerMillion: string;
   /** Null when the provider bills cached input like any other input. */
   cachedInputUsdPerMillion: string | null;
   /** Reasoning tokens are part of the output tokens and are billed at this price too. */
   outputUsdPerMillion: string;
 }
+
+/** Hours [startHourUtc, endHourUtc) on the given UTC weekdays, 0 being Sunday. */
+export interface AiPeakWindow {
+  weekdaysUtc: readonly number[];
+  startHourUtc: number;
+  endHourUtc: number;
+}
+
+export interface AiModelPrice extends AiTokenRates {
+  provider: string;
+  model: string;
+  version: string;
+  effectiveFrom: Date;
+  /** Cheaper rates outside the peak windows; the rates above are the peak ones. */
+  offPeak?: { rates: AiTokenRates; peakWindows: readonly AiPeakWindow[] };
+}
+
+const WEEKDAYS_UTC = [1, 2, 3, 4, 5] as const;
 
 export const AI_MODEL_PRICES: readonly AiModelPrice[] = [
   {
@@ -29,6 +43,29 @@ export const AI_MODEL_PRICES: readonly AiModelPrice[] = [
     inputUsdPerMillion: '0.30',
     cachedInputUsdPerMillion: '0.006',
     outputUsdPerMillion: '1.20',
+  },
+  {
+    // https://api-docs.deepseek.com/quick_start/pricing, read on 2026-09-30. Off-peak is half the
+    // peak rate. DeepSeek also treats Chinese public holidays as off-peak; they are not modelled,
+    // so a call on such a day is costed at the higher peak rate.
+    provider: 'deepseek',
+    model: 'deepseek-flash',
+    version: 'deepseek-2026-09-30',
+    effectiveFrom: new Date('2026-09-30T00:00:00.000Z'),
+    inputUsdPerMillion: '0.30',
+    cachedInputUsdPerMillion: '0.006',
+    outputUsdPerMillion: '1.20',
+    offPeak: {
+      rates: {
+        inputUsdPerMillion: '0.15',
+        cachedInputUsdPerMillion: '0.003',
+        outputUsdPerMillion: '0.60',
+      },
+      peakWindows: [
+        { weekdaysUtc: WEEKDAYS_UTC, startHourUtc: 1, endHourUtc: 4 },
+        { weekdaysUtc: WEEKDAYS_UTC, startHourUtc: 6, endHourUtc: 10 },
+      ],
+    },
   },
 ];
 
@@ -72,12 +109,26 @@ export function findModelPrice(
  * valid at the time of the call; otherwise the cost stays unknown rather than guessed. Token
  * counts are never estimated from text.
  */
+export function isPeakTime(windows: readonly AiPeakWindow[], at: Date): boolean {
+  const weekday = at.getUTCDay();
+  const hour = at.getUTCHours();
+
+  return windows.some(
+    (window) =>
+      window.weekdaysUtc.includes(weekday) &&
+      hour >= window.startHourUtc &&
+      hour < window.endHourUtc,
+  );
+}
+
 export function modelCallCost(input: {
   usage: AiModelCallUsage;
   reportedCostUsd: number | null;
   price: AiModelPrice | null;
+  /** When the call was made; decides peak or off-peak rates. */
+  at: Date;
 }): AiModelCallCost {
-  const { usage, reportedCostUsd, price } = input;
+  const { usage, reportedCostUsd, price, at } = input;
 
   if (reportedCostUsd !== null) {
     return {
@@ -91,14 +142,20 @@ export function modelCallCost(input: {
     return { costUsd: null, costSource: 'UNKNOWN', pricingVersion: null };
   }
 
+  const offPeak = price.offPeak && !isPeakTime(price.offPeak.peakWindows, at);
+  const rates: AiTokenRates = offPeak && price.offPeak ? price.offPeak.rates : price;
   const inputTokens = usage.inputTokens ?? 0;
   const cached = Math.min(usage.cachedInputTokens ?? 0, inputTokens);
-  const cachedPrice = price.cachedInputUsdPerMillion ?? price.inputUsdPerMillion;
+  const cachedPrice = rates.cachedInputUsdPerMillion ?? rates.inputUsdPerMillion;
   const cost = new Prisma.Decimal(inputTokens - cached)
-    .times(price.inputUsdPerMillion)
+    .times(rates.inputUsdPerMillion)
     .plus(new Prisma.Decimal(cached).times(cachedPrice))
-    .plus(new Prisma.Decimal(usage.outputTokens ?? 0).times(price.outputUsdPerMillion))
+    .plus(new Prisma.Decimal(usage.outputTokens ?? 0).times(rates.outputUsdPerMillion))
     .dividedBy(TOKENS_PER_PRICE_UNIT);
 
-  return { costUsd: cost, costSource: 'PRICE_TABLE', pricingVersion: price.version };
+  return {
+    costUsd: cost,
+    costSource: 'PRICE_TABLE',
+    pricingVersion: offPeak ? `${price.version}/off-peak` : price.version,
+  };
 }

@@ -5,15 +5,19 @@
 // anywhere, but every prompt is a real, paid model call.
 //
 //   OPENROUTER_API_KEY=... pnpm --filter @churchflow/api ai:benchmark
+//   AI_PROVIDER=deepseek DEEPSEEK_API_KEY=... pnpm --filter @churchflow/api ai:benchmark
 //   AI_MODEL=openai/gpt-5-mini pnpm --filter @churchflow/api ai:benchmark -- --only=preacher-en
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { loadEnvFile } from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
 const require = createRequire(import.meta.url);
 const { AiAssistantService } = require('../dist/modules/ai-assistant/ai-assistant.service.js');
+const {
+  aiModelIdFor,
+  createLanguageModel,
+} = require('../dist/modules/ai-assistant/ai-model.provider.js');
 
 const localEnvPath = fileURLToPath(new URL('../.env', import.meta.url));
 if (existsSync(localEnvPath)) loadEnvFile(localEnvPath);
@@ -361,7 +365,7 @@ function createRepository() {
   };
 }
 
-function createService(repository, model, modelId) {
+function createService(repository, model, modelId, provider) {
   const config = new Map([
     ['AI_ASSISTANT_ENABLED', true],
     ['AI_MAX_STEPS', 8],
@@ -384,7 +388,7 @@ function createService(repository, model, modelId) {
     { isEnforcementEnabled: () => true, assert: async () => {} },
     { record: async () => {} },
     {
-      providerName: 'openrouter',
+      providerName: provider,
       modelId,
       pricing: { inputUsdPerMillionTokens: null, outputUsdPerMillionTokens: null },
       languageModel: () => model,
@@ -451,9 +455,9 @@ function sumOf(rows, value) {
   return (rows ?? []).reduce((sum, row) => sum + value(row), 0);
 }
 
-async function runPrompt(item, model, modelId) {
+async function runPrompt(item, model, modelId, provider) {
   const repository = createRepository();
-  const service = createService(repository, model, modelId);
+  const service = createService(repository, model, modelId, provider);
   const conversationId = crypto.randomUUID();
   const startedAt = Date.now();
   const stream = await service.chat({
@@ -497,12 +501,17 @@ async function runPrompt(item, model, modelId) {
 }
 
 async function main() {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY is required');
-  const modelId = process.env.AI_MODEL || 'deepseek/deepseek-v4.1-flash';
+  const provider = process.env.AI_PROVIDER || 'openrouter';
+  if (provider !== 'openrouter' && provider !== 'deepseek') {
+    throw new Error('AI_PROVIDER must be openrouter or deepseek');
+  }
+  const keyName = provider === 'deepseek' ? 'DEEPSEEK_API_KEY' : 'OPENROUTER_API_KEY';
+  const apiKey = process.env[keyName];
+  if (!apiKey) throw new Error(`${keyName} is required`);
+  const modelId = aiModelIdFor(provider, process.env.AI_MODEL || undefined);
   const only = process.argv.find((argument) => argument.startsWith('--only='))?.split('=')[1];
   const outPath = process.argv.find((argument) => argument.startsWith('--out='))?.split('=')[1];
-  const model = createOpenRouter({ apiKey })(modelId, { usage: { include: true } });
+  const model = createLanguageModel({ provider, modelId, apiKey });
   const { prompts } = JSON.parse(readFileSync(promptsPath, 'utf8'));
   const selected = only ? prompts.filter((item) => only.split(',').includes(item.id)) : prompts;
 
@@ -510,7 +519,7 @@ async function main() {
   for (const item of selected) {
     let result;
     try {
-      const run = await runPrompt(item, model, modelId);
+      const run = await runPrompt(item, model, modelId, provider);
       const failures =
         run.status === 'SUCCEEDED' ? judge(item.expect, run) : [`request ${run.status}`];
       result = { id: item.id, passed: failures.length === 0, failures, ...run };
@@ -535,6 +544,7 @@ async function main() {
   const passed = results.filter((result) => result.passed).length;
   const total = (key) => results.reduce((sum, result) => sum + (result[key] ?? 0), 0);
   const summary = {
+    provider,
     model: modelId,
     passed,
     total: results.length,

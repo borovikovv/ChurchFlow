@@ -352,9 +352,11 @@ jobs:
           LIQPAY_RESULT_URL: ${{ vars.LIQPAY_RESULT_URL }}
           BILLING_ENFORCEMENT_ENABLED: ${{ vars.BILLING_ENFORCEMENT_ENABLED }}
           AI_ASSISTANT_ENABLED: ${{ vars.AI_ASSISTANT_ENABLED }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER }}
           AI_MODEL: ${{ vars.AI_MODEL }}
           AI_MONTHLY_ACTION_LIMIT: ${{ vars.AI_MONTHLY_ACTION_LIMIT }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           NEXT_PUBLIC_WEB_URL: ${{ vars.NEXT_PUBLIC_WEB_URL }}
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
           API_INTERNAL_URL: ${{ vars.API_INTERNAL_URL }}
@@ -422,10 +424,17 @@ jobs:
             require_url LIQPAY_CALLBACK_URL
           fi
 
-          # Same rule as the API's env schema: an enabled assistant with no provider key would
-          # stop the API from booting.
+          # Same rule as the API's env schema: an enabled assistant with no key for its provider
+          # would stop the API from booting.
           if [ "${AI_ASSISTANT_ENABLED:-}" = "true" ]; then
-            require_value OPENROUTER_API_KEY
+            case "${AI_PROVIDER:-openrouter}" in
+              openrouter) require_value OPENROUTER_API_KEY ;;
+              deepseek) require_value DEEPSEEK_API_KEY ;;
+              *)
+                echo "AI_PROVIDER must be one of openrouter or deepseek."
+                invalid=1
+                ;;
+            esac
           fi
 
           for key in LIQPAY_PUBLIC_KEY LIQPAY_PRIVATE_KEY; do
@@ -504,9 +513,11 @@ jobs:
           LIQPAY_RESULT_URL: ${{ vars.LIQPAY_RESULT_URL }}
           BILLING_ENFORCEMENT_ENABLED: ${{ vars.BILLING_ENFORCEMENT_ENABLED }}
           AI_ASSISTANT_ENABLED: ${{ vars.AI_ASSISTANT_ENABLED }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER }}
           AI_MODEL: ${{ vars.AI_MODEL }}
           AI_MONTHLY_ACTION_LIMIT: ${{ vars.AI_MONTHLY_ACTION_LIMIT }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           NEXT_PUBLIC_WEB_URL: ${{ vars.NEXT_PUBLIC_WEB_URL }}
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
           API_INTERNAL_URL: ${{ vars.API_INTERNAL_URL }}
@@ -581,7 +592,8 @@ jobs:
             RESEND_API_KEY SMTP_HOST SMTP_PORT \
             LIQPAY_PUBLIC_KEY LIQPAY_PRIVATE_KEY LIQPAY_MODE LIQPAY_CALLBACK_URL LIQPAY_RESULT_URL \
             BILLING_ENFORCEMENT_ENABLED \
-            AI_ASSISTANT_ENABLED AI_MODEL AI_MONTHLY_ACTION_LIMIT OPENROUTER_API_KEY; do
+            AI_ASSISTANT_ENABLED AI_PROVIDER AI_MODEL AI_MONTHLY_ACTION_LIMIT \
+            OPENROUTER_API_KEY DEEPSEEK_API_KEY; do
             append_optional_env "$api_env_file" "$key"
           done
 

@@ -5,8 +5,14 @@ const { Reflector } = require('@nestjs/core');
 const {
   AI_MODEL_PRICES,
   findModelPrice,
+  isPeakTime,
   modelCallCost,
 } = require('../dist/modules/ai-assistant/ai-pricing.js');
+const {
+  AiModelProvider,
+  aiModelIdFor,
+  createLanguageModel,
+} = require('../dist/modules/ai-assistant/ai-model.provider.js');
 const {
   AiAssistantAdminController,
 } = require('../dist/modules/ai-assistant/ai-assistant-admin.controller.js');
@@ -14,6 +20,9 @@ const { AiAssistantService } = require('../dist/modules/ai-assistant/ai-assistan
 const { PlatformAdminGuard } = require('../dist/common/guards/platform-admin.guard.js');
 const { SessionAuthGuard } = require('../dist/common/guards/session-auth.guard.js');
 const { Prisma } = require('@churchflow/db');
+
+// A Thursday, 12:00 UTC: outside DeepSeek's peak windows.
+const AT = new Date('2026-10-01T12:00:00.000Z');
 
 const PRICES = [
   {
@@ -67,6 +76,7 @@ test('different models are priced differently for the same tokens', () => {
   const at = new Date('2026-03-01T00:00:00.000Z');
   const cost = (model) =>
     modelCallCost({
+      at: AT,
       usage: tokens,
       reportedCostUsd: null,
       price: findModelPrice(PRICES, 'openrouter', model, at),
@@ -78,11 +88,13 @@ test('different models are priced differently for the same tokens', () => {
 
 test('cached input is billed at the cache price, or as input when there is none', () => {
   const withCachePrice = modelCallCost({
+    at: AT,
     usage: usage(1_000_000, 800_000, 0),
     reportedCostUsd: null,
     price: PRICES[0],
   });
   const withoutCachePrice = modelCallCost({
+    at: AT,
     usage: usage(1_000_000, 800_000, 0),
     reportedCostUsd: null,
     price: PRICES[1],
@@ -94,6 +106,7 @@ test('cached input is billed at the cache price, or as input when there is none'
 
 test('a cache count above the input count cannot make the cost negative', () => {
   const cost = modelCallCost({
+    at: AT,
     usage: usage(100, 500, 0),
     reportedCostUsd: null,
     price: PRICES[0],
@@ -104,6 +117,7 @@ test('a cache count above the input count cannot make the cost negative', () => 
 
 test('costs are decimal, not floating point', () => {
   const cost = modelCallCost({
+    at: AT,
     usage: usage(100_000, 0, 200_000),
     reportedCostUsd: null,
     price: PRICES[2],
@@ -115,6 +129,7 @@ test('costs are decimal, not floating point', () => {
 
 test('what the provider charged wins over the price list', () => {
   const cost = modelCallCost({
+    at: AT,
     usage: usage(10, 0, 10),
     reportedCostUsd: 0.000123,
     price: PRICES[0],
@@ -129,17 +144,21 @@ test('what the provider charged wins over the price list', () => {
 test('no usage and no reported cost leave the cost unknown instead of guessing it', () => {
   assert.deepEqual(
     modelCallCost({
+      at: AT,
       usage: usage(undefined, undefined, undefined),
       reportedCostUsd: null,
       price: PRICES[0],
     }),
     { costUsd: null, costSource: 'UNKNOWN', pricingVersion: null },
   );
-  assert.deepEqual(modelCallCost({ usage: usage(10, 0, 10), reportedCostUsd: null, price: null }), {
-    costUsd: null,
-    costSource: 'UNKNOWN',
-    pricingVersion: null,
-  });
+  assert.deepEqual(
+    modelCallCost({ at: AT, usage: usage(10, 0, 10), reportedCostUsd: null, price: null }),
+    {
+      costUsd: null,
+      costSource: 'UNKNOWN',
+      pricingVersion: null,
+    },
+  );
 });
 
 test('every price row is well formed and versions are unique', () => {
@@ -293,4 +312,102 @@ test('an unknown organization is not found', async () => {
     () => service.adminUsageReport('org-2', {}),
     (error) => error.getStatus() === 404,
   );
+});
+
+const deepSeekPrice = () =>
+  findModelPrice(
+    AI_MODEL_PRICES,
+    'deepseek',
+    'deepseek-flash',
+    new Date('2026-10-01T00:00:00.000Z'),
+  );
+
+test('DeepSeek direct is billed at the peak rate on weekday peak hours and half of it otherwise', () => {
+  const tokens = usage(1_000_000, 0, 1_000_000);
+  const costAt = (iso) =>
+    modelCallCost({
+      usage: tokens,
+      reportedCostUsd: null,
+      price: deepSeekPrice(),
+      at: new Date(iso),
+    });
+
+  // Thursday 02:00 and 09:59 UTC are peak; 04:00, 12:00 and a Saturday are not.
+  assert.deepEqual(
+    [
+      '2026-10-01T02:00:00.000Z',
+      '2026-10-01T09:59:00.000Z',
+      '2026-10-01T04:00:00.000Z',
+      '2026-10-01T12:00:00.000Z',
+      '2026-10-03T02:00:00.000Z',
+    ].map((iso) => [costAt(iso).costUsd.toString(), costAt(iso).pricingVersion]),
+    [
+      ['1.5', 'deepseek-2026-09-30'],
+      ['1.5', 'deepseek-2026-09-30'],
+      ['0.75', 'deepseek-2026-09-30/off-peak'],
+      ['0.75', 'deepseek-2026-09-30/off-peak'],
+      ['0.75', 'deepseek-2026-09-30/off-peak'],
+    ],
+  );
+});
+
+test('DeepSeek cache hits are billed at the cache rate of the hour', () => {
+  const tokens = usage(1_000_000, 1_000_000, 0);
+  const cost = modelCallCost({
+    usage: tokens,
+    reportedCostUsd: null,
+    price: deepSeekPrice(),
+    at: new Date('2026-10-01T02:00:00.000Z'),
+  });
+
+  assert.equal(cost.costUsd.toString(), '0.006');
+});
+
+test('peak windows are matched in UTC on the listed weekdays only', () => {
+  const windows = [{ weekdaysUtc: [1, 2, 3, 4, 5], startHourUtc: 6, endHourUtc: 10 }];
+
+  assert.equal(isPeakTime(windows, new Date('2026-10-05T06:00:00.000Z')), true);
+  assert.equal(isPeakTime(windows, new Date('2026-10-05T10:00:00.000Z')), false);
+  assert.equal(isPeakTime(windows, new Date('2026-10-04T07:00:00.000Z')), false);
+});
+
+test('each provider has its own id for DeepSeek V4.1 Flash unless one is configured', () => {
+  assert.equal(aiModelIdFor('openrouter', undefined), 'deepseek/deepseek-v4.1-flash');
+  assert.equal(aiModelIdFor('deepseek', undefined), 'deepseek-flash');
+  assert.equal(aiModelIdFor('deepseek', 'deepseek-v4-pro'), 'deepseek-v4-pro');
+  for (const provider of ['openrouter', 'deepseek']) {
+    assert.ok(
+      findModelPrice(AI_MODEL_PRICES, provider, aiModelIdFor(provider, undefined), AT),
+      provider,
+    );
+  }
+});
+
+test('the configured provider decides the model and the key it is called with', () => {
+  const modelFor = (config) => {
+    const values = new Map(Object.entries(config));
+    const provider = new AiModelProvider({
+      get: (key) => values.get(key),
+      getOrThrow: (key) => {
+        if (!values.has(key)) throw new Error(`Missing ${key}`);
+        return values.get(key);
+      },
+    });
+    return { provider, model: provider.languageModel() };
+  };
+
+  const direct = modelFor({ AI_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'sk-deepseek' });
+  assert.equal(direct.provider.modelId, 'deepseek-flash');
+  assert.equal(direct.model.modelId, 'deepseek-flash');
+  assert.match(direct.model.provider, /deepseek/);
+
+  const routed = modelFor({ AI_PROVIDER: 'openrouter', OPENROUTER_API_KEY: 'sk-or' });
+  assert.equal(routed.model.modelId, 'deepseek/deepseek-v4.1-flash');
+  assert.match(routed.model.provider, /openrouter/);
+
+  assert.throws(
+    () => modelFor({ AI_PROVIDER: 'deepseek', OPENROUTER_API_KEY: 'sk-or' }),
+    /DEEPSEEK_API_KEY/,
+  );
+  assert.ok(createLanguageModel({ provider: 'deepseek', modelId: 'deepseek-flash', apiKey: 'k' }));
 });

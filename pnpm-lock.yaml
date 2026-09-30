@@ -23,6 +23,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@ai-sdk/deepseek':
+        specifier: ^3.0.57
+        version: 3.0.57(zod@3.25.76)
       '@aws-sdk/client-s3':
         specifier: ^3.1078.0
         version: 3.1078.0
@@ -305,6 +308,12 @@ importers:
 
 packages:
 
+  '@ai-sdk/deepseek@3.0.57':
+    resolution: {integrity: sha512-bosHjVt+ej7KhGcRiOqX3xQEuFgh4yH67yKhcP1ca12IPzX3PhZ5gIcQ6u8WkvfxgLKp4LIkc+1l3M51HwxjxQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/gateway@4.0.100':
     resolution: {integrity: sha512-diJXVW2D1/NUW2JSg99b8yTpN8eW9AK5ntXSW4B7NrsW5STqwcGJAAOFlfOrQBzYHJlWReyy11WefWetdx4Qsw==}
     engines: {node: '>=22'}
@@ -323,8 +332,18 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.52':
+    resolution: {integrity: sha512-PWWa14kVJlBj/G4E85D+IMM28H9W9SC3cQ/yyRHTMzRmtLkNgmDOLhSYBJ9ZT+w83a+DQ9+QIcCaY36iuD89mw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@4.0.19':
     resolution: {integrity: sha512-ryVZSSfmpEsr4bM8rbt9cSBWal+KGYRrm57C+k/hiPQHMiMahaqg2bPF0MpxSUWY8mGpt7s/ajM6PAqNTMKqPQ==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/provider@4.0.20':
+    resolution: {integrity: sha512-daWW1Jxnvcn6+VhUuPqR7i5DtbdontcPCC5pH3QYU2r/x0hl31AIGiejWThGU499pJYA9DzwnBm+tc3EMKQeLQ==}
     engines: {node: '>=22'}
 
   '@ai-sdk/react@4.0.125':
@@ -4981,6 +5000,12 @@ packages:
 
 snapshots:
 
+  '@ai-sdk/deepseek@3.0.57(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.20
+      '@ai-sdk/provider-utils': 5.0.52(zod@3.25.76)
+      zod: 3.25.76
+
   '@ai-sdk/gateway@4.0.100(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 4.0.19
@@ -5005,7 +5030,20 @@ snapshots:
       undici: 7.30.0
       zod: 3.25.76
 
+  '@ai-sdk/provider-utils@5.0.52(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.20
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.1
+      undici: 7.30.0
+      zod: 3.25.76
+
   '@ai-sdk/provider@4.0.19':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@4.0.20':
     dependencies:
       json-schema: 0.4.0
 
