@@ -16,6 +16,7 @@ import {
   type Entitlement,
   type SubscriptionSummary,
 } from '@churchflow/shared';
+import { lateRenewalUsageCarryOver } from '../ai-assistant/ai-assistant-access';
 import { CurrencyRatesService } from '../currency-rates/currency-rates.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EntitlementsService } from './entitlements.service';
@@ -458,12 +459,60 @@ export class BillingService {
         dedupeKey: `cancellation-confirmed:${orderId}`,
       });
     }
+    if (
+      outcome === 'paid' &&
+      transition?.status === 'ACTIVE' &&
+      transition.currentPeriodEndsAt &&
+      !isNewSubscription &&
+      !subscription.isExempt
+    ) {
+      await this.carryOverAiUsage({
+        organizationId: subscription.organizationId,
+        previousPeriodEndsAt: subscription.currentPeriodEndsAt,
+        nextPeriodEndsAt: transition.currentPeriodEndsAt,
+        now,
+      });
+    }
     if (transition) {
       await this.notifyTransition(subscription, transition);
     }
     if (unsubscribeOrderId) await this.stopOrder(unsubscribeOrderId);
 
     return { ok: true as const };
+  }
+
+  /**
+   * Best effort, after the payment is stored: an allowance left uncarried costs some model calls,
+   * while a credited payment that fails over it would cost the organization its access.
+   */
+  private async carryOverAiUsage(input: {
+    organizationId: string;
+    previousPeriodEndsAt: Date | null;
+    nextPeriodEndsAt: Date;
+    now: Date;
+  }): Promise<void> {
+    const carryOver = lateRenewalUsageCarryOver(input);
+    if (!carryOver) return;
+
+    try {
+      const actions = await this.subscriptionsRepository.carryOverAiUsage({
+        organizationId: input.organizationId,
+        ...carryOver,
+      });
+      if (actions > 0) {
+        this.logger.log({
+          event: 'AI usage carried over to the renewed billing period',
+          organizationId: input.organizationId,
+          actions,
+        });
+      }
+    } catch (error) {
+      this.logger.error({
+        event: 'AI usage could not be carried over to the renewed billing period',
+        organizationId: input.organizationId,
+        message: error instanceof Error ? error.message : null,
+      });
+    }
   }
 
   private buildCallbackUpdate(input: {

@@ -245,8 +245,13 @@ function billingService({
   // whether the payment being reported is already recorded as failed.
   lastEventAt = null,
   paymentAlreadyFailed = false,
+  // AI actions counted in the window a late renewal moves away from.
+  aiActionsToCarry = 0,
+  carryOverFails = false,
 } = {}) {
   const applied = [];
+  const carriedOver = [];
+  const logged = [];
   const notified = [];
   const unsubscribed = [];
   const cleared = [];
@@ -294,6 +299,11 @@ function billingService({
       return { count: 1 };
     },
     listAdminMembershipIds: async () => [{ id: 'membership' }],
+    carryOverAiUsage: async (input) => {
+      if (carryOverFails) throw new Error('database unavailable');
+      carriedOver.push(input);
+      return aiActionsToCarry;
+    },
   };
 
   const liqPayService = liqPay();
@@ -318,10 +328,21 @@ function billingService({
   service.logger = {
     error: (entry) => warned.push(entry),
     warn: (entry) => warned.push(entry),
-    log: () => {},
+    log: (entry) => logged.push(entry),
   };
 
-  return { service, applied, notified, unsubscribed, cleared, orders, rates, warned };
+  return {
+    service,
+    applied,
+    notified,
+    unsubscribed,
+    cleared,
+    orders,
+    rates,
+    warned,
+    carriedOver,
+    logged,
+  };
 }
 
 function checkoutOrderRow(overrides = {}) {
@@ -508,6 +529,116 @@ test('a renewal of the running subscription does not disturb its order ids', asy
   assert.equal('liqpayOrderId' in applied[0].update, false);
   assert.equal('amountMinor' in applied[0].update, false);
   assert.equal(applied[0].checkout, null);
+});
+
+// The period ran out at 08:00 the day before; the renewal lands at NOW and its month starts there.
+const LAPSED_SUBSCRIPTION = {
+  ...ACTIVE_SUBSCRIPTION,
+  currentPeriodEndsAt: new Date('2026-08-31T08:00:00.000Z'),
+};
+
+function renewalCallback(paymentId) {
+  return signedCallback({ status: 'success', order_id: 'order-1', payment_id: paymentId });
+}
+
+test('a renewal paid late carries the AI actions used since the period ended into its month', async () => {
+  const { service, applied, carriedOver, logged } = billingService({
+    subscription: LAPSED_SUBSCRIPTION,
+    aiActionsToCarry: 200,
+  });
+  const { data, signature } = renewalCallback(60);
+
+  await service.handleCallback(data, signature, NOW);
+
+  assert.equal(applied[0].update.currentPeriodEndsAt.toISOString(), '2026-10-01T12:00:00.000Z');
+  assert.deepEqual(carriedOver, [
+    {
+      organizationId: 'organization',
+      from: new Date('2026-08-31T08:00:00.000Z'),
+      to: new Date('2026-09-01T12:00:00.000Z'),
+    },
+  ]);
+  assert.equal(logged[0].actions, 200);
+});
+
+test('a renewal paid inside its period leaves the AI allowance where it is', async () => {
+  const { service, carriedOver } = billingService({
+    subscription: {
+      ...ACTIVE_SUBSCRIPTION,
+      currentPeriodEndsAt: new Date('2026-09-02T08:00:00.000Z'),
+    },
+  });
+  const { data, signature } = renewalCallback(61);
+
+  await service.handleCallback(data, signature, NOW);
+
+  assert.deepEqual(carriedOver, []);
+});
+
+test('only a credited renewal of a paying subscription moves the AI allowance', async () => {
+  const cases = [
+    { subscription: { ...LAPSED_SUBSCRIPTION, isExempt: true }, status: 'success' },
+    { subscription: LAPSED_SUBSCRIPTION, status: 'failure' },
+    { subscription: LAPSED_SUBSCRIPTION, status: 'success', duplicate: true },
+  ];
+
+  for (const [index, { subscription, status, duplicate }] of cases.entries()) {
+    const { service, carriedOver } = billingService({ subscription, duplicate });
+    const { data, signature } = signedCallback({
+      status,
+      order_id: 'order-1',
+      payment_id: 70 + index,
+    });
+
+    await service.handleCallback(data, signature, NOW);
+
+    assert.deepEqual(carriedOver, [], `case ${index}`);
+  }
+});
+
+test('a new checkout does not move the AI allowance of the subscription it replaces', async () => {
+  const { service, carriedOver } = billingService({
+    subscription: LAPSED_SUBSCRIPTION,
+    checkoutOrder: checkoutOrderRow(),
+  });
+  const { data, signature } = signedCallback({
+    status: 'success',
+    order_id: 'new-order',
+    payment_id: 62,
+  });
+
+  await service.handleCallback(data, signature, NOW);
+
+  assert.deepEqual(carriedOver, []);
+});
+
+test('a renewal redone after a stale write carries the AI allowance over once', async () => {
+  const { service, applied, carriedOver } = billingService({
+    subscription: LAPSED_SUBSCRIPTION,
+    staleAttempts: 1,
+  });
+  const { data, signature } = renewalCallback(64);
+
+  await service.handleCallback(data, signature, NOW);
+
+  assert.equal(applied.length, 2);
+  assert.equal(carriedOver.length, 1);
+});
+
+test('a renewal is credited even when the AI allowance cannot be carried over', async () => {
+  const { service, applied, notified, warned } = billingService({
+    subscription: LAPSED_SUBSCRIPTION,
+    carryOverFails: true,
+  });
+  const { data, signature } = renewalCallback(63);
+
+  assert.deepEqual(await service.handleCallback(data, signature, NOW), { ok: true });
+  assert.equal(applied[0].update.status, 'ACTIVE');
+  assert.equal(notified[0].type, 'SUBSCRIPTION_RENEWED');
+  assert.equal(
+    warned.at(-1).event,
+    'AI usage could not be carried over to the renewed billing period',
+  );
 });
 
 test('a failed payment notifies with the grace deadline', async () => {
