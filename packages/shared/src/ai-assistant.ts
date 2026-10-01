@@ -70,6 +70,7 @@ export const AI_ASSISTANT_TOOL_NAMES = [
   'searchKnowledge',
   'getKnowledge',
   'listImportantDates',
+  'getPlanningContext',
   'createKnowledge',
   'createImportantDate',
 ] as const;

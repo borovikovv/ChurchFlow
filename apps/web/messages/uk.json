@@ -168,6 +168,7 @@
       "searchKnowledge": "Шукаю в базі знань",
       "getKnowledge": "Читаю нотатку",
       "listImportantDates": "Переглядаю важливі дати",
+      "getPlanningContext": "Збираю дані для планування",
       "createKnowledge": "Зберігаю нотатку",
       "createImportantDate": "Зберігаю важливу дату",
       "unknown": "Працюю"

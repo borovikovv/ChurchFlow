@@ -498,12 +498,14 @@ function createHarness(options = {}) {
     },
   };
   const knowledgeEntriesService = {
+    list: async () => ({ canManage: false, assignableVisibilities: [], tags: [], items: [] }),
     create: async (organizationId, input, actorUserId) => {
       calls.createKnowledge.push({ organizationId, input, actorUserId });
       return { id: 'note-1', title: input.title };
     },
   };
   const importantDatesService = {
+    list: async () => ({ canManage: false, assignableVisibilities: [], items: [] }),
     create: async (organizationId, input, actorUserId) => {
       calls.createImportantDate.push({ organizationId, input, actorUserId });
       return { id: 'date-1', title: input.title };
@@ -1822,4 +1824,57 @@ test('an important date with an impossible rule is refused before any confirmati
   assert.equal(pendingApproval(harness), undefined);
   assert.equal(executionFor(harness, 'call-1'), undefined);
   assert.equal(harness.calls.createImportantDate.length, 0);
+});
+
+const PLANNED_SERVICE = {
+  id: EVENT,
+  occurrenceId: EVENT,
+  baseEventId: EVENT,
+  type: 'SERVICE',
+  title: 'Sunday service',
+  startsAt: '2026-11-01T08:00:00.000Z',
+  endsAt: null,
+  allDay: false,
+  serviceDetails: {
+    hasCommunion: false,
+    biblePassage: null,
+    preacher: null,
+    serviceHost: null,
+    worshipLead: null,
+    communionLead: null,
+    songs: [],
+  },
+};
+
+test('a request to draft a preaching rota loads the planning tools without mentioning knowledge', async () => {
+  const harness = createHarness({
+    role: 'MEMBER',
+    locale: 'uk',
+    calendarList: [PLANNED_SERVICE],
+    turns: [
+      toolCallTurn('getPlanningContext', {
+        role: 'PREACHER',
+        from: '2026-11-01',
+        to: '2026-11-30',
+      }),
+      textTurn('Ось пропозиція графіка.'),
+    ],
+  });
+
+  await runChat(harness, {
+    conversationId: CONVERSATION,
+    message: { id: 'message-1', text: 'Склади графік проповідників на листопад' },
+    uiContext: { module: 'home', timeZone: 'Europe/Kyiv' },
+  });
+
+  const offered = harness.calls.offeredTools[0];
+  for (const name of ['getPlanningContext', 'searchKnowledge', 'getMember', 'listCalendarEvents']) {
+    assert.ok(offered.includes(name), name);
+  }
+  const execution = executionFor(harness, 'call-1');
+  assert.equal(execution.status, 'SUCCEEDED');
+  assert.equal(
+    execution.resultSummary,
+    'Кандидатів: 0, служінь: 1, нещодавніх призначень: 0, важливих дат: 0, нотаток: 0.',
+  );
 });

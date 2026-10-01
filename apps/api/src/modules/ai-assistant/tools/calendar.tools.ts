@@ -187,14 +187,14 @@ function servicePayload(service: ServiceDetailsInput) {
   return mergeServiceDetails(null, service);
 }
 
-function localDateTime(date: string, time: string, timeZone: string): string {
+export function localDateTime(date: string, time: string, timeZone: string): string {
   const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
   const [hour = 0, minute = 0] = time.split(':').map(Number);
 
   return zonedDateTimeToUtc({ year, month, day, hour, minute, second: 0 }, timeZone).toISOString();
 }
 
-function localParts(value: string, timeZone: string): { date: string; time: string } {
+export function localParts(value: string, timeZone: string): { date: string; time: string } {
   const parts = zonedDateParts(new Date(value), timeZone);
   const pad = (part: number) => String(part).padStart(2, '0');
 

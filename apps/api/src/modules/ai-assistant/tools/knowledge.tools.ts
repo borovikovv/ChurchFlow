@@ -1,6 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import {
+  CALENDAR_SERVICE_ROLES,
   IMPORTANT_DATE_RULE_KINDS,
   KNOWLEDGE_CATEGORIES,
   KNOWLEDGE_SEARCH_MAX_LENGTH,
@@ -16,24 +17,85 @@ import {
   refineImportantDateRule,
   resolveImportantDate,
   type AppLocale,
+  type CalendarEventItem,
+  type CalendarServiceDetails,
+  type CalendarServicePerson,
+  type CalendarServiceRole,
   type ImportantDateRule,
   type KnowledgeCategory,
+  type KnowledgeEntryItem,
   type KnowledgeVisibility,
+  type ListKnowledgeEntriesQuery,
+  type OrganizationGroupIcon,
 } from '@churchflow/shared';
+import type { CalendarEventsService } from '../../calendar-events/calendar-events.service';
 import { zonedDateParts } from '../../calendar-events/recurrence/calendar-recurrence';
+import type { GroupsService } from '../../groups/groups.service';
 import { ImportantDatesController } from '../../knowledge/important-dates.controller';
 import type { ImportantDatesService } from '../../knowledge/important-dates.service';
 import { KnowledgeEntriesController } from '../../knowledge/knowledge-entries.controller';
 import type { KnowledgeEntriesService } from '../../knowledge/knowledge-entries.service';
+import type { MembershipsService } from '../../memberships/memberships.service';
 import { richTextToPlainText } from '../../telegram-bot/rich-text-telegram';
 import { jsonInput, localized, type AiToolMeta } from './ai-tool';
 import type { AiToolRunner } from './ai-tool-runner';
-import { plainTextToRichText } from './calendar.tools';
+import { localDateTime, localParts, plainTextToRichText } from './calendar.tools';
 
 const SEARCH_RESULT_LIMIT = 20;
 const EXCERPT_LENGTH = 200;
 const CONTENT_MAX_LENGTH = 4000;
 const DATE_RANGE_MAX_YEARS = 2;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const PLANNING_RANGE_MAX_DAYS = 93;
+const PLANNING_LOOKBACK_DAYS = 56;
+const PLANNING_MEMBERS_LIMIT = 50;
+const PLANNING_SERVICES_LIMIT = 60;
+const PLANNING_RECENT_LIMIT = 30;
+const PLANNING_NOTES_LIMIT = 10;
+const PLANNING_EXCERPT_LENGTH = 160;
+
+/**
+ * How a service role is planned. Ministries are organization groups now, so a role finds its
+ * people through the groups carrying the icon the ministry migration gave them.
+ */
+const PLANNING_ROLES: Record<
+  CalendarServiceRole,
+  {
+    detailsKey: keyof Pick<
+      CalendarServiceDetails,
+      'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead'
+    >;
+    groupIcon: OrganizationGroupIcon;
+    noteTag: string;
+    noteTerms: readonly string[];
+  }
+> = {
+  PREACHER: {
+    detailsKey: 'preacher',
+    groupIcon: 'preaching',
+    noteTag: 'preaching',
+    noteTerms: ['preach', 'пропові'],
+  },
+  WORSHIP_LEAD: {
+    detailsKey: 'worshipLead',
+    groupIcon: 'worship',
+    noteTag: 'worship',
+    noteTerms: ['worship', 'прославл'],
+  },
+  COMMUNION_LEAD: {
+    detailsKey: 'communionLead',
+    groupIcon: 'deacons',
+    noteTag: 'communion',
+    noteTerms: ['communion', 'причаст'],
+  },
+  // Services are hosted by the church's teachers.
+  SERVICE_HOST: {
+    detailsKey: 'serviceHost',
+    groupIcon: 'teaching',
+    noteTag: 'host',
+    noteTerms: ['host', 'ведуч'],
+  },
+};
 
 export const KNOWLEDGE_TOOL_META = {
   searchKnowledge: {
@@ -42,6 +104,13 @@ export const KNOWLEDGE_TOOL_META = {
     risk: 'READ',
     policy: {},
     route: { controller: KnowledgeEntriesController, handler: 'list' },
+  },
+  getPlanningContext: {
+    name: 'getPlanningContext',
+    group: 'knowledge',
+    risk: 'READ',
+    policy: {},
+    route: null,
   },
   getKnowledge: {
     name: 'getKnowledge',
@@ -113,10 +182,19 @@ export function knowledgeTools(
   services: {
     knowledgeEntriesService: KnowledgeEntriesService;
     importantDatesService: ImportantDatesService;
+    membershipsService: MembershipsService;
+    groupsService: GroupsService;
+    calendarEventsService: CalendarEventsService;
   },
 ) {
   const { organizationId, userId, locale, timeZone, now } = runner.context;
-  const { knowledgeEntriesService, importantDatesService } = services;
+  const {
+    knowledgeEntriesService,
+    importantDatesService,
+    membershipsService,
+    groupsService,
+    calendarEventsService,
+  } = services;
   const knowledgeLink = {
     kind: 'knowledge' as const,
     id: null,
@@ -241,6 +319,129 @@ export function knowledgeTools(
           },
         ),
     }),
+    getPlanningContext: tool({
+      description: `Everything needed to plan who serves in a service role over a period, e.g. "make a preaching schedule for November" or "склади графік проповідників на листопад": the people in the ministry group, the services in the period and who is already assigned, the assignments of the previous 8 weeks for a fair rotation, the important dates in the period and the church's notes on this ministry (its rules, rotations and preferences). Call it before proposing a rota or saying who should serve; the user does not have to mention the knowledge base. role: PREACHER (preachers group), WORSHIP_LEAD (worship group), COMMUNION_LEAD (deacons group), SERVICE_HOST (the host, from the teachers group). Pass groupId from listGroups to take the candidates from another group. Local dates, at most ${String(PLANNING_RANGE_MAX_DAYS)} days. It only reads; changes to services go through updateCalendarEvent.`,
+      inputSchema: z.object({
+        role: z.enum(CALENDAR_SERVICE_ROLES),
+        from: isoDate,
+        to: isoDate,
+        groupId: z
+          .string()
+          .uuid()
+          .optional()
+          .describe('A group whose members are the candidates, from listGroups.'),
+      }),
+      execute: (input, { toolCallId }) =>
+        runner.read(
+          KNOWLEDGE_TOOL_META.getPlanningContext,
+          toolCallId,
+          jsonInput(input),
+          async () => {
+            const days = daysBetween(input.from, input.to);
+            if (days === null || days < 0 || days >= PLANNING_RANGE_MAX_DAYS) {
+              return {
+                ok: false,
+                error: localized(locale, {
+                  en: `Use real dates where the end is not before the start, at most ${String(PLANNING_RANGE_MAX_DAYS)} days in all.`,
+                  uk: `Вкажіть справжні дати: кінець не раніше початку, загалом не більше ${String(PLANNING_RANGE_MAX_DAYS)} днів.`,
+                }),
+              };
+            }
+
+            const plan = PLANNING_ROLES[input.role];
+            const groupsPayload = await groupsService.listForOrganization(organizationId, userId);
+            const groups = groupsPayload.groups.filter((group) =>
+              input.groupId ? group.id === input.groupId : group.icon === plan.groupIcon,
+            );
+            const lookbackFrom = shiftDate(input.from, -PLANNING_LOOKBACK_DAYS);
+            const [members, calendar, dates, notes] = await Promise.all([
+              groups.length > 0
+                ? membershipsService.listForOrganization(
+                    organizationId,
+                    userId,
+                    'all',
+                    'active',
+                    'all',
+                    '',
+                    groups.map((group) => group.id),
+                    1,
+                    PLANNING_MEMBERS_LIMIT,
+                  )
+                : null,
+              calendarEventsService.listForOrganization(organizationId, userId, {
+                rangeStart: localDateTime(lookbackFrom, '00:00', timeZone),
+                rangeEnd: new Date(
+                  new Date(localDateTime(input.to, '00:00', timeZone)).getTime() + DAY_MS,
+                ).toISOString(),
+                types: ['SERVICE'],
+              }),
+              importantDatesService.list(organizationId, userId, {}, today),
+              Promise.all(
+                planningNoteQueries(plan).map((query) =>
+                  knowledgeEntriesService.list(organizationId, userId, query),
+                ),
+              ),
+            ]);
+
+            const candidates = (members?.members ?? [])
+              .filter((member) => member.status === 'ACTIVE')
+              .map((member) => ({ membershipId: member.id, name: member.profile.displayName }));
+            const services = [...calendar.events]
+              .sort(
+                (left, right) =>
+                  new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
+              )
+              .map((event) => serviceAssignment(event, plan.detailsKey, timeZone));
+            const inRange = services.filter((service) => service.date >= input.from);
+            const recent = services.filter(
+              (service) => service.date < input.from && service.assignee !== null,
+            );
+            const importantDates = dates.items.flatMap((item) => {
+              const rule = importantDateRuleOf(item);
+              const occurrences = rule
+                ? importantDateOccurrencesBetween(rule, input.from, input.to)
+                : [];
+
+              return occurrences.length > 0
+                ? [{ id: item.id, title: item.title, dates: occurrences }]
+                : [];
+            });
+            const relevantNotes = uniqueEntries(notes.flatMap((payload) => payload.items))
+              .slice(0, PLANNING_NOTES_LIMIT)
+              .map((entry) => ({
+                id: entry.id,
+                title: entry.title,
+                excerpt: excerpt(richTextToPlainText(entry.content), PLANNING_EXCERPT_LENGTH),
+              }));
+
+            return {
+              ok: true,
+              summary: localized(locale, {
+                en: `${String(candidates.length)} candidates, ${String(inRange.length)} services, ${String(recent.length)} recent assignments, ${String(importantDates.length)} important dates, ${String(relevantNotes.length)} notes.`,
+                uk: `Кандидатів: ${String(candidates.length)}, служінь: ${String(inRange.length)}, нещодавніх призначень: ${String(recent.length)}, важливих дат: ${String(importantDates.length)}, нотаток: ${String(relevantNotes.length)}.`,
+              }),
+              links: [knowledgeLink],
+              data: {
+                role: input.role,
+                from: input.from,
+                to: input.to,
+                groups: groups.map((group) => ({ groupId: group.id, name: group.name })),
+                candidates,
+                candidatesTruncated: (members?.pagination.total ?? 0) > PLANNING_MEMBERS_LIMIT,
+                hint:
+                  groups.length === 0
+                    ? 'No group serves in this role. Ask the user which group does and call again with its groupId from listGroups.'
+                    : null,
+                services: inRange.slice(0, PLANNING_SERVICES_LIMIT),
+                servicesTruncated: inRange.length > PLANNING_SERVICES_LIMIT,
+                recentAssignments: recent.slice(-PLANNING_RECENT_LIMIT),
+                importantDates,
+                notes: relevantNotes,
+              },
+            };
+          },
+        ),
+    }),
     createKnowledge: tool({
       description:
         'Save a note to the church knowledge base. Only when the user explicitly asks to remember, save or write something down - never on your own initiative. Requires confirmation by the user before it runs.',
@@ -321,6 +522,67 @@ function occurrencesFor(
   }
 
   return { ok: true, resolve: (rule) => [nextImportantDateOccurrence(rule, today)] };
+}
+
+/**
+ * The notes a plan for this role should respect: the ones about the role itself first, then the
+ * church's ministry notes and what it pinned. Each search applies the viewer's visibility.
+ */
+function planningNoteQueries(
+  plan: (typeof PLANNING_ROLES)[CalendarServiceRole],
+): ListKnowledgeEntriesQuery[] {
+  const none = { q: undefined, category: undefined, tag: undefined, pinned: undefined };
+
+  return [
+    { ...none, tag: plan.noteTag },
+    ...plan.noteTerms.map((term) => ({ ...none, q: term })),
+    { ...none, category: 'MINISTRY' },
+    { ...none, pinned: true },
+  ];
+}
+
+function serviceAssignment(
+  event: CalendarEventItem,
+  detailsKey: (typeof PLANNING_ROLES)[CalendarServiceRole]['detailsKey'],
+  timeZone: string,
+) {
+  const person: CalendarServicePerson | null = event.serviceDetails?.[detailsKey] ?? null;
+
+  return {
+    date: localParts(event.startsAt, timeZone).date,
+    eventId: event.baseEventId,
+    title: event.title,
+    assignee: person ? { membershipId: person.membershipId, name: person.displayName } : null,
+  };
+}
+
+/** Notes found by several searches appear once, where the first search found them. */
+function uniqueEntries(entries: KnowledgeEntryItem[]): KnowledgeEntryItem[] {
+  const seen = new Set<string>();
+
+  return entries.filter((entry) => {
+    if (seen.has(entry.id)) return false;
+    seen.add(entry.id);
+    return true;
+  });
+}
+
+function dateValue(date: string): number | null {
+  const value = Date.parse(`${date}T00:00:00.000Z`);
+
+  return Number.isNaN(value) || new Date(value).toISOString().slice(0, 10) !== date ? null : value;
+}
+
+/** Whole days from one YYYY-MM-DD date to another, or null when either is not a real date. */
+function daysBetween(from: string, to: string): number | null {
+  const start = dateValue(from);
+  const end = dateValue(to);
+
+  return start === null || end === null ? null : Math.round((end - start) / DAY_MS);
+}
+
+function shiftDate(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00.000Z`) + days * DAY_MS).toISOString().slice(0, 10);
 }
 
 function excerpt(value: string, length: number): string {

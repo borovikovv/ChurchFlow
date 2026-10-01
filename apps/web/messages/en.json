@@ -168,6 +168,7 @@
       "searchKnowledge": "Searching the knowledge base",
       "getKnowledge": "Reading a note",
       "listImportantDates": "Checking important dates",
+      "getPlanningContext": "Gathering planning context",
       "createKnowledge": "Saving a note",
       "createImportantDate": "Saving an important date",
       "unknown": "Working"
