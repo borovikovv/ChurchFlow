@@ -71,8 +71,7 @@ function EditDateAction({
       triggerLabel={t('edit')}
       onClose={closeMenu}
       onSubmit={(updates, closeDialog) => {
-        onUpdate(date.id, updates);
-        closeDialog();
+        onUpdate(date.id, updates, closeDialog);
       }}
     />
   );

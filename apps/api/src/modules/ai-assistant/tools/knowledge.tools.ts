@@ -13,6 +13,7 @@ import {
   importantDateOccurrencesBetween,
   importantDateRuleOf,
   nextImportantDateOccurrence,
+  refineImportantDateRule,
   resolveImportantDate,
   type AppLocale,
   type ImportantDateRule,
@@ -88,22 +89,24 @@ export const createKnowledgeInputSchema = z.object({
     .describe('MEMBERS (default), ADMINS (owners and admins) or OWNER (owner only).'),
 });
 
-export const createImportantDateInputSchema = z.object({
-  title: z.string().trim().min(2).max(160),
-  notes: z.string().trim().max(2000).optional(),
-  ruleKind: z
-    .enum(IMPORTANT_DATE_RULE_KINDS)
-    .describe('FIXED: the same month and day every year. NTH_WEEKDAY: e.g. the first Sunday.'),
-  month: z.number().int().min(1).max(12),
-  day: z.number().int().min(1).max(31).optional().describe('FIXED only.'),
-  weekday: z.number().int().min(0).max(6).optional().describe('NTH_WEEKDAY only; 0 is Sunday.'),
-  nth: z
-    .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(-1)])
-    .optional()
-    .describe('NTH_WEEKDAY only: 1-4, or -1 for the last one in the month.'),
-  reminderLeadDays: z.number().int().min(0).max(60).optional(),
-  visibility: z.enum(KNOWLEDGE_VISIBILITIES).optional(),
-});
+export const createImportantDateInputSchema = z
+  .object({
+    title: z.string().trim().min(2).max(160),
+    notes: z.string().trim().max(2000).optional(),
+    ruleKind: z
+      .enum(IMPORTANT_DATE_RULE_KINDS)
+      .describe('FIXED: the same month and day every year. NTH_WEEKDAY: e.g. the first Sunday.'),
+    month: z.number().int().min(1).max(12),
+    day: z.number().int().min(1).max(31).optional().describe('FIXED only.'),
+    weekday: z.number().int().min(0).max(6).optional().describe('NTH_WEEKDAY only; 0 is Sunday.'),
+    nth: z
+      .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(-1)])
+      .optional()
+      .describe('NTH_WEEKDAY only: 1-4, or -1 for the last one in the month.'),
+    reminderLeadDays: z.number().int().min(0).max(60).optional(),
+    visibility: z.enum(KNOWLEDGE_VISIBILITIES).optional(),
+  })
+  .superRefine(refineImportantDateRule);
 
 export function knowledgeTools(
   runner: AiToolRunner,
@@ -177,8 +180,8 @@ export function knowledgeTools(
           return {
             ok: true,
             summary: localized(locale, {
-              en: `Read the note "${entry.title}".`,
-              uk: `Прочитано нотатку «${entry.title}».`,
+              en: 'Read one knowledge note.',
+              uk: 'Прочитано одну нотатку.',
             }),
             links: [{ ...knowledgeLink, label: entry.title }],
             data: {
@@ -244,7 +247,7 @@ export function knowledgeTools(
       inputSchema: createKnowledgeInputSchema,
       execute: (input, { toolCallId }) =>
         runner.mutate(KNOWLEDGE_TOOL_META.createKnowledge, toolCallId, async () => {
-          const entry = await knowledgeEntriesService.create(
+          await knowledgeEntriesService.create(
             organizationId,
             createKnowledgeEntrySchema.parse({
               ...input,
@@ -256,8 +259,8 @@ export function knowledgeTools(
           return {
             ok: true,
             summary: localized(locale, {
-              en: `The note "${entry.title}" was saved.`,
-              uk: `Нотатку «${entry.title}» збережено.`,
+              en: 'The note was saved.',
+              uk: 'Нотатку збережено.',
             }),
             links: [knowledgeLink],
           };
@@ -269,7 +272,7 @@ export function knowledgeTools(
       inputSchema: createImportantDateInputSchema,
       execute: (input, { toolCallId }) =>
         runner.mutate(KNOWLEDGE_TOOL_META.createImportantDate, toolCallId, async () => {
-          const date = await importantDatesService.create(
+          await importantDatesService.create(
             organizationId,
             createImportantDateSchema.parse(input),
             userId,
@@ -278,8 +281,8 @@ export function knowledgeTools(
           return {
             ok: true,
             summary: localized(locale, {
-              en: `The important date "${date.title}" was saved.`,
-              uk: `Важливу дату «${date.title}» збережено.`,
+              en: 'The important date was saved.',
+              uk: 'Важливу дату збережено.',
             }),
             links: [datesLink],
           };

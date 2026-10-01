@@ -100,8 +100,12 @@ export function KnowledgeManager({
     disabled: isPending,
     filtered,
     payload,
-    onUpdate: (entryId, entry) =>
-      mutate('notes', () => updateKnowledgeEntryAction({ organizationId, entryId, entry })),
+    onUpdate: (entryId, entry, onSuccess) =>
+      mutate(
+        'notes',
+        () => updateKnowledgeEntryAction({ organizationId, entryId, entry }),
+        onSuccess,
+      ),
     onDelete: (entry) =>
       remove(() => deleteKnowledgeEntryAction({ organizationId, entryId: entry.id })),
   });
@@ -110,8 +114,8 @@ export function KnowledgeManager({
   ): ImportantDatesListProps => ({
     filtered,
     payload,
-    onUpdate: (dateId, date) =>
-      mutate('dates', () => updateImportantDateAction({ organizationId, dateId, date })),
+    onUpdate: (dateId, date, onSuccess) =>
+      mutate('dates', () => updateImportantDateAction({ organizationId, dateId, date }), onSuccess),
     onDelete: (date) =>
       remove(() => deleteImportantDateAction({ organizationId, dateId: date.id })),
   });

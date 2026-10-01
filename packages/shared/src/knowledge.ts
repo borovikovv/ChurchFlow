@@ -143,7 +143,8 @@ interface ImportantDateRuleFields {
 
 const RULE_FIELD_NAMES = ['month', 'day', 'weekday', 'nth'] as const;
 
-function refineImportantDateRule(value: ImportantDateRuleFields, context: z.RefinementCtx) {
+/** Shared by the schemas here and by any caller that builds its own input shape for a rule. */
+export function refineImportantDateRule(value: ImportantDateRuleFields, context: z.RefinementCtx) {
   if (value.ruleKind === undefined) {
     // An update that leaves the rule alone may skip it; one that changes it sends all of it.
     for (const field of RULE_FIELD_NAMES) {

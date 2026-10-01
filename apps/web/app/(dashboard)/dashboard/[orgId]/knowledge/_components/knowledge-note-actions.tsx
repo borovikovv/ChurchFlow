@@ -79,8 +79,7 @@ function EditNoteAction({
       triggerLabel={t('edit')}
       onClose={closeMenu}
       onSubmit={(updates, closeDialog) => {
-        onUpdate(entry.id, updates);
-        closeDialog();
+        onUpdate(entry.id, updates, closeDialog);
       }}
     />
   );

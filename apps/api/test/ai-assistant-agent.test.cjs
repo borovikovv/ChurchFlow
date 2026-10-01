@@ -1779,3 +1779,47 @@ test('a member with knowledge.manage may save an important date', async () => {
   assert.equal(harness.calls.createImportantDate.length, 1);
   assert.equal(harness.calls.createImportantDate[0].input.day, 12);
 });
+
+test('the audit row of a saved owner-only note or date does not carry its title', async () => {
+  for (const [toolName, input] of [
+    ['createKnowledge', { title: 'Pastor salary terms', content: 'Private.', visibility: 'OWNER' }],
+    [
+      'createImportantDate',
+      { title: 'Board review', ruleKind: 'FIXED', month: 3, day: 1, visibility: 'OWNER' },
+    ],
+  ]) {
+    const harness = createHarness({
+      turns: [toolCallTurn(toolName, input), textTurn('Saved.')],
+    });
+    await runChat(harness, messageRequest('Remember this for me only'));
+    await confirmPending(harness, 'home');
+
+    assert.equal(harness.calls.audit.length, 1, toolName);
+    assert.equal(harness.calls.audit[0].metadata.toolName, toolName);
+    assert.equal(JSON.stringify(harness.calls.audit[0].metadata).includes(input.title), false);
+    assert.equal(
+      (executionFor(harness, 'call-1').resultSummary ?? '').includes(input.title),
+      false,
+    );
+  }
+});
+
+test('an important date with an impossible rule is refused before any confirmation card', async () => {
+  const harness = createHarness({
+    turns: [
+      toolCallTurn('createImportantDate', {
+        title: 'Not a day',
+        ruleKind: 'FIXED',
+        month: 2,
+        day: 30,
+      }),
+      textTurn('That date does not exist.'),
+    ],
+  });
+
+  await runChat(harness, messageRequest('Remember 30 February'));
+
+  assert.equal(pendingApproval(harness), undefined);
+  assert.equal(executionFor(harness, 'call-1'), undefined);
+  assert.equal(harness.calls.createImportantDate.length, 0);
+});
