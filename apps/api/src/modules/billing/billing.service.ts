@@ -463,7 +463,6 @@ export class BillingService {
       outcome === 'paid' &&
       transition?.status === 'ACTIVE' &&
       transition.currentPeriodEndsAt &&
-      !isNewSubscription &&
       !subscription.isExempt
     ) {
       await this.carryOverAiUsage({

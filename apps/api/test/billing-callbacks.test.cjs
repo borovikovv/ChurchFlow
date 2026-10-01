@@ -596,7 +596,7 @@ test('only a credited renewal of a paying subscription moves the AI allowance', 
   }
 });
 
-test('a new checkout does not move the AI allowance of the subscription it replaces', async () => {
+test('paying again through a checkout after the period lapsed carries the AI allowance too', async () => {
   const { service, carriedOver } = billingService({
     subscription: LAPSED_SUBSCRIPTION,
     checkoutOrder: checkoutOrderRow(),
@@ -605,6 +605,31 @@ test('a new checkout does not move the AI allowance of the subscription it repla
     status: 'success',
     order_id: 'new-order',
     payment_id: 62,
+  });
+
+  await service.handleCallback(data, signature, NOW);
+
+  assert.deepEqual(carriedOver, [
+    {
+      organizationId: 'organization',
+      from: new Date('2026-08-31T08:00:00.000Z'),
+      to: new Date('2026-09-01T12:00:00.000Z'),
+    },
+  ]);
+});
+
+test('replacing the card inside the paid period leaves the AI allowance where it is', async () => {
+  const { service, carriedOver } = billingService({
+    subscription: {
+      ...ACTIVE_SUBSCRIPTION,
+      currentPeriodEndsAt: new Date('2026-09-10T08:00:00.000Z'),
+    },
+    checkoutOrder: checkoutOrderRow(),
+  });
+  const { data, signature } = signedCallback({
+    status: 'success',
+    order_id: 'new-order',
+    payment_id: 65,
   });
 
   await service.handleCallback(data, signature, NOW);

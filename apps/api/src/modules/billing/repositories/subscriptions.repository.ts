@@ -367,8 +367,9 @@ export class SubscriptionsRepository {
 
   /**
    * Moves the AI actions counted in one billing window into another and returns how many moved.
-   * The counters are locked first, so an action reserved or refunded there while this runs waits
-   * for the move and lands on what is left, instead of being counted twice or lost.
+   * The counters are locked first, so an action reserved there while this runs waits for the move
+   * and is counted on what is left. One refunded there afterwards finds nothing to take back, and
+   * stays spent.
    */
   carryOverAiUsage(input: { organizationId: string; from: Date; to: Date }): Promise<number> {
     const { organizationId, from, to } = input;
