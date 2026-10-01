@@ -11,6 +11,7 @@ const {
   resolveAiAssistantAccess,
   billingPeriodContaining,
   calendarMonthPeriod,
+  lateRenewalUsageCarryOver,
 } = require('../dist/modules/ai-assistant/ai-assistant-access.js');
 const {
   buildAssistantInstructions,
@@ -163,6 +164,72 @@ test('the period starts exactly when the previous one ends', () => {
     billingPeriodContaining(end, new Date(end.getTime() - 1)).end.toISOString(),
     end.toISOString(),
   );
+});
+
+test('a renewal paid late carries the usage counted since the period ended into its month', () => {
+  const carryOver = lateRenewalUsageCarryOver({
+    previousPeriodEndsAt: new Date('2026-10-15T08:00:00.000Z'),
+    nextPeriodEndsAt: new Date('2026-11-16T09:00:00.000Z'),
+    now: new Date('2026-10-16T09:00:00.000Z'),
+  });
+
+  assert.equal(carryOver.from.toISOString(), '2026-10-15T08:00:00.000Z');
+  assert.equal(carryOver.to.toISOString(), '2026-10-16T09:00:00.000Z');
+});
+
+test('a renewal that keeps the counting window carries nothing over', () => {
+  const end = new Date('2026-10-15T08:00:00.000Z');
+
+  // Paid ahead of time: the month is added to the old end, so the window does not move.
+  assert.equal(
+    lateRenewalUsageCarryOver({
+      previousPeriodEndsAt: end,
+      nextPeriodEndsAt: new Date('2026-11-15T08:00:00.000Z'),
+      now: new Date('2026-10-14T08:00:00.000Z'),
+    }),
+    null,
+  );
+  // Paid at the very moment the period ends.
+  assert.equal(
+    lateRenewalUsageCarryOver({
+      previousPeriodEndsAt: end,
+      nextPeriodEndsAt: new Date('2026-11-15T08:00:00.000Z'),
+      now: end,
+    }),
+    null,
+  );
+  // A subscription that never had a paid period counted nothing in one.
+  assert.equal(
+    lateRenewalUsageCarryOver({
+      previousPeriodEndsAt: null,
+      nextPeriodEndsAt: new Date('2026-11-16T09:00:00.000Z'),
+      now: new Date('2026-10-16T09:00:00.000Z'),
+    }),
+    null,
+  );
+});
+
+test('a renewal paid more than a month late carries over only the window that contains now', () => {
+  const carryOver = lateRenewalUsageCarryOver({
+    previousPeriodEndsAt: new Date('2026-08-15T08:00:00.000Z'),
+    nextPeriodEndsAt: new Date('2026-11-16T09:00:00.000Z'),
+    now: new Date('2026-10-16T09:00:00.000Z'),
+  });
+
+  assert.equal(carryOver.from.toISOString(), '2026-10-15T08:00:00.000Z');
+  assert.equal(carryOver.to.toISOString(), '2026-10-16T09:00:00.000Z');
+});
+
+test('a late renewal at the end of a long month carries over into the clamped window', () => {
+  // 31 Jan + 1 month is 28 Feb, and 28 Feb - 1 month is 28 Jan: the new window starts earlier.
+  const carryOver = lateRenewalUsageCarryOver({
+    previousPeriodEndsAt: new Date('2027-01-30T08:00:00.000Z'),
+    nextPeriodEndsAt: new Date('2027-02-28T09:00:00.000Z'),
+    now: new Date('2027-01-31T09:00:00.000Z'),
+  });
+
+  assert.equal(carryOver.from.toISOString(), '2027-01-30T08:00:00.000Z');
+  assert.equal(carryOver.to.toISOString(), '2027-01-28T09:00:00.000Z');
 });
 
 test('complimentary access counts by the calendar month in Kyiv', () => {
