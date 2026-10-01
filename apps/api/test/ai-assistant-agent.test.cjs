@@ -84,7 +84,7 @@ function member(id, displayName) {
   };
 }
 
-function createRepository({ usedActions = 0, conversation = null, subscription }) {
+function createRepository({ usedActions = 0, conversation = null, subscription, locale = 'en' }) {
   const state = {
     conversations: new Map(conversation ? [[conversation.id, conversation]] : []),
     messages: new Map(),
@@ -103,7 +103,7 @@ function createRepository({ usedActions = 0, conversation = null, subscription }
   const repository = {
     state,
     findSubscriptionState: async () => subscription,
-    findUserLocale: async () => 'en',
+    findUserLocale: async () => locale,
     findOrganizationName: async () => 'Grace Church',
     findUsage: async () => state.usedActions,
     reserveAction: async (_organizationId, _periodStart, limit) => {
@@ -251,6 +251,8 @@ function createHarness(options = {}) {
     addMembers: [],
     moveMember: [],
     createPrayer: [],
+    createKnowledge: [],
+    createImportantDate: [],
     createEvent: [],
     updateEvent: [],
     budgetReads: [],
@@ -495,7 +497,24 @@ function createHarness(options = {}) {
       };
     },
   };
-  const repository = createRepository({ usedActions, conversation, subscription });
+  const knowledgeEntriesService = {
+    create: async (organizationId, input, actorUserId) => {
+      calls.createKnowledge.push({ organizationId, input, actorUserId });
+      return { id: 'note-1', title: input.title };
+    },
+  };
+  const importantDatesService = {
+    create: async (organizationId, input, actorUserId) => {
+      calls.createImportantDate.push({ organizationId, input, actorUserId });
+      return { id: 'date-1', title: input.title };
+    },
+  };
+  const repository = createRepository({
+    usedActions,
+    conversation,
+    subscription,
+    locale: options.locale,
+  });
   const service = new AiAssistantService(
     configService,
     prisma,
@@ -508,6 +527,8 @@ function createHarness(options = {}) {
     calendarEventsService,
     prayerRequestsService,
     budgetsService,
+    knowledgeEntriesService,
+    importantDatesService,
   );
 
   return { service, repository, calls };
@@ -1635,4 +1656,126 @@ test('a client that leaves mid-reply still gets the whole turn saved', async () 
   const text = lastAssistant(harness).parts.find((part) => part.type === 'text').text;
   assert.match(text, /part19 $/);
   assert.equal(onlyRequest(harness).status, 'SUCCEEDED');
+});
+
+test('asking to remember a yearly date proposes it for confirmation and saves it only once confirmed', async () => {
+  const thanksgiving = {
+    title: 'День подяки',
+    ruleKind: 'NTH_WEEKDAY',
+    month: 10,
+    weekday: 0,
+    nth: 1,
+  };
+  const harness = createHarness({
+    role: 'ADMIN',
+    locale: 'uk',
+    turns: [toolCallTurn('createImportantDate', thanksgiving), textTurn('Збережено.')],
+  });
+
+  await runChat(
+    harness,
+    messageRequest("Запам'ятай, що День подяки у нас завжди в першу неділю жовтня"),
+  );
+
+  assert.ok(harness.calls.offeredTools[0].includes('createImportantDate'));
+  assert.equal(harness.calls.createImportantDate.length, 0);
+  assert.equal(
+    pendingApproval(harness).approval.requestReason,
+    'Зберегти важливу дату «День подяки»: щороку в першу неділю жовтня (наступна: 2026-10-04). Бачать: усі учасники. До календаря її не буде додано.',
+  );
+
+  await confirmPending(harness, 'home');
+
+  assert.equal(harness.calls.createImportantDate.length, 1);
+  assert.deepEqual(harness.calls.createImportantDate[0], {
+    organizationId: ORG,
+    actorUserId: USER,
+    input: {
+      ...thanksgiving,
+      notes: null,
+      day: null,
+      reminderLeadDays: null,
+      visibility: 'MEMBERS',
+    },
+  });
+  assert.equal(harness.calls.audit[0].metadata.toolName, 'createImportantDate');
+});
+
+test('a note is saved as rich text only after confirmation', async () => {
+  const harness = createHarness({
+    turns: [
+      toolCallTurn('createKnowledge', {
+        title: 'Communion',
+        content: 'First Sunday of the month.\n\nBread & wine.',
+        category: 'TRADITION',
+        tags: ['Communion'],
+      }),
+      textTurn('Saved.'),
+    ],
+  });
+  await runChat(harness, messageRequest('Remember how we hold communion'));
+
+  assert.equal(harness.calls.createKnowledge.length, 0);
+  assert.equal(
+    pendingApproval(harness).approval.requestReason,
+    'Save the note "Communion" to the knowledge base (tradition, visible to all members).\nFirst Sunday of the month.\n\nBread & wine.',
+  );
+
+  await confirmPending(harness, 'home');
+
+  assert.equal(harness.calls.createKnowledge.length, 1);
+  assert.equal(harness.calls.createKnowledge[0].organizationId, ORG);
+  assert.deepEqual(harness.calls.createKnowledge[0].input, {
+    title: 'Communion',
+    content: '<p>First Sunday of the month.</p><p>Bread &amp; wine.</p>',
+    category: 'TRADITION',
+    tags: ['communion'],
+    pinned: false,
+    visibility: 'MEMBERS',
+  });
+});
+
+test('a member without knowledge.manage cannot save knowledge even after confirming', async () => {
+  const harness = createHarness({
+    role: 'MEMBER',
+    permissions: [],
+    turns: [
+      toolCallTurn('createKnowledge', { title: 'Communion', content: 'First Sunday.' }),
+      textTurn('You are not allowed to do that.'),
+    ],
+  });
+  await runChat(harness, messageRequest('Remember how we hold communion'));
+  const approvalId = pendingApproval(harness).approval.id;
+
+  const chunks = await runChat(harness, {
+    conversationId: CONVERSATION,
+    approvals: [{ approvalId, approved: true }],
+    uiContext: { module: 'home' },
+  });
+
+  assert.equal(harness.calls.createKnowledge.length, 0);
+  const output = chunks.find((chunk) => chunk.type === 'tool-output-available');
+  assert.equal(output.output.ok, false);
+  assert.match(output.output.error, /permission/i);
+});
+
+test('a member with knowledge.manage may save an important date', async () => {
+  const harness = createHarness({
+    role: 'MEMBER',
+    permissions: ['knowledge.manage'],
+    turns: [
+      toolCallTurn('createImportantDate', {
+        title: 'Church anniversary',
+        ruleKind: 'FIXED',
+        month: 5,
+        day: 12,
+      }),
+      textTurn('Saved.'),
+    ],
+  });
+  await runChat(harness, messageRequest('Remember our church anniversary on 12 May'));
+  await confirmPending(harness, 'home');
+
+  assert.equal(harness.calls.createImportantDate.length, 1);
+  assert.equal(harness.calls.createImportantDate[0].input.day, 12);
 });

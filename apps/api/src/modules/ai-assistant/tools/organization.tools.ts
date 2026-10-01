@@ -45,7 +45,7 @@ export function organizationTools(
 
   return {
     enableToolGroups: tool({
-      description: `Load more tools when the current ones cannot answer the request. Groups: members (profiles), groups (groups and their members), calendar (events, services, preachers), prayers (prayer requests), budget (read-only church budget, owner only). Tool names: ${AI_ASSISTANT_TOOL_NAMES.join(', ')}.`,
+      description: `Load more tools when the current ones cannot answer the request. Groups: members (profiles), groups (groups and their members), calendar (events, services, preachers), prayers (prayer requests), budget (read-only church budget, owner only), knowledge (the church knowledge base: notes on its traditions, instructions and agreements, and its yearly important dates). Tool names: ${AI_ASSISTANT_TOOL_NAMES.join(', ')}.`,
       inputSchema: enableToolGroupsInputSchema,
       execute: (input) => ({
         ok: true as const,

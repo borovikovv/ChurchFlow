@@ -7,6 +7,7 @@ import {
   CalendarIcon,
   GroupsIcon,
   HomeIcon,
+  KnowledgeIcon,
   MembersIcon,
   PrayerIcon,
   ProfileIcon,
@@ -17,6 +18,7 @@ import {
   organizationCalendarRoute,
   organizationGroupsRoute,
   organizationHomeRoute,
+  organizationKnowledgeRoute,
   organizationMembersRoute,
   organizationPrayerRequestsRoute,
   organizationProfileRoute,
@@ -37,6 +39,7 @@ export interface DashboardNavigationLabels {
   calendar: string;
   groups: string;
   home: string;
+  knowledge: string;
   members: string;
   prayerRequests: string;
   profile: string;
@@ -46,6 +49,7 @@ export interface DashboardNavigationLabels {
 export interface DashboardNavigationDescriptions {
   budget: string;
   groups: string;
+  knowledge: string;
   prayerRequests: string;
   profile: string;
   website: string;
@@ -103,6 +107,13 @@ export function dashboardNavigationItems(
       label: access.labels.prayerRequests,
       description: access.descriptions.prayerRequests,
       icon: PrayerIcon,
+      group: 'more',
+    },
+    {
+      href: organizationKnowledgeRoute(organizationId),
+      label: access.labels.knowledge,
+      description: access.descriptions.knowledge,
+      icon: KnowledgeIcon,
       group: 'more',
     },
     ...(access.canOpenBudget

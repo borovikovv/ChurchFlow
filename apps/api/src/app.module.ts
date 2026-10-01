@@ -27,6 +27,7 @@ import { ScheduledJobsModule } from './modules/scheduled-jobs/scheduled-jobs.mod
 import { TelegramBotModule } from './modules/telegram-bot/telegram-bot.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { PrayerRequestsModule } from './modules/prayer-requests/prayer-requests.module';
+import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module';
 
@@ -67,6 +68,7 @@ import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module';
     MembershipClaimsModule,
     CalendarEventsModule,
     PrayerRequestsModule,
+    KnowledgeModule,
     BudgetsModule,
     BillingModule,
     ScheduledJobsModule,

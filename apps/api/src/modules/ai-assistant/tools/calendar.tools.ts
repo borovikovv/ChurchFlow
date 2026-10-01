@@ -131,7 +131,7 @@ interface ServicePersonPayload {
   customName?: string;
 }
 
-function plainTextToRichText(value: string): string {
+export function plainTextToRichText(value: string): string {
   const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   return escaped

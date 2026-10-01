@@ -4,6 +4,8 @@ import type { AiAssistantToolName } from '@churchflow/shared';
 import type { BudgetsService } from '../../budgets/budgets.service';
 import type { CalendarEventsService } from '../../calendar-events/calendar-events.service';
 import type { GroupsService } from '../../groups/groups.service';
+import type { ImportantDatesService } from '../../knowledge/important-dates.service';
+import type { KnowledgeEntriesService } from '../../knowledge/knowledge-entries.service';
 import type { MembershipsService } from '../../memberships/memberships.service';
 import type { PrayerRequestsService } from '../../prayer-requests/prayer-requests.service';
 import { localized, type AiToolGroup, type AiToolMeta } from './ai-tool';
@@ -12,6 +14,7 @@ import type { AiToolRunner } from './ai-tool-runner';
 import { BUDGET_TOOL_META, budgetTools } from './budget.tools';
 import { CALENDAR_TOOL_META, calendarApprovalReasons, calendarTools } from './calendar.tools';
 import { GROUPS_TOOL_META, groupsApprovalReasons, groupsTools } from './groups.tools';
+import { KNOWLEDGE_TOOL_META, knowledgeApprovalReasons, knowledgeTools } from './knowledge.tools';
 import { MEMBERS_TOOL_META, membersTools } from './members.tools';
 import { ORGANIZATION_TOOL_META, organizationTools } from './organization.tools';
 import { PRAYERS_TOOL_META, prayersApprovalReasons, prayersTools } from './prayers.tools';
@@ -23,6 +26,7 @@ export const AI_TOOL_META = {
   ...CALENDAR_TOOL_META,
   ...PRAYERS_TOOL_META,
   ...BUDGET_TOOL_META,
+  ...KNOWLEDGE_TOOL_META,
 } satisfies Record<AiAssistantToolName, AiToolMeta>;
 
 export interface AiDomainServices {
@@ -31,6 +35,8 @@ export interface AiDomainServices {
   calendarEventsService: CalendarEventsService;
   prayerRequestsService: PrayerRequestsService;
   budgetsService: BudgetsService;
+  knowledgeEntriesService: KnowledgeEntriesService;
+  importantDatesService: ImportantDatesService;
 }
 
 export function buildAiToolSet(runner: AiToolRunner, services: AiDomainServices) {
@@ -41,6 +47,7 @@ export function buildAiToolSet(runner: AiToolRunner, services: AiDomainServices)
     ...calendarTools(runner, services.calendarEventsService),
     ...prayersTools(runner, services.prayerRequestsService),
     ...budgetTools(runner, services.budgetsService),
+    ...knowledgeTools(runner, services),
   };
 }
 
@@ -63,6 +70,7 @@ export function buildToolApproval(
   const groups = groupsApprovalReasons(runner, names);
   const calendar = calendarApprovalReasons(runner, names);
   const prayers = prayersApprovalReasons(runner);
+  const knowledge = knowledgeApprovalReasons(runner);
   const blockedReason = localized(runner.context.locale, {
     en: 'No more changes can be confirmed in this action. Ask the user to send a new message.',
     uk: 'У цій дії більше не можна підтверджувати зміни. Попросіть користувача надіслати нове повідомлення.',
@@ -87,6 +95,8 @@ export function buildToolApproval(
     updateCalendarEvent: confirmWith(calendar.updateCalendarEvent),
     deleteCalendarEvent: confirmWith(calendar.deleteCalendarEvent),
     createPrayerRequest: confirmWith(prayers.createPrayerRequest),
+    createKnowledge: confirmWith(knowledge.createKnowledge),
+    createImportantDate: confirmWith(knowledge.createImportantDate),
   } satisfies Partial<Record<AiAssistantToolName, unknown>>;
 }
 

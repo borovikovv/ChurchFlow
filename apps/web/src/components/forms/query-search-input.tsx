@@ -9,7 +9,7 @@ import { SearchIcon } from '@/components/icons/action-icons';
 const SEARCH_INPUT_CLASS_NAME =
   'h-12 w-full rounded-full pl-11 md:h-8 md:rounded-[var(--radius)] md:pl-3';
 
-export function MemberSearchInput({
+export function QuerySearchInput({
   className,
   label,
   placeholder,
