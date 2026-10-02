@@ -2,41 +2,22 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
-import type { ImportantDateItem, KnowledgeAuthor } from '@churchflow/shared';
+import type { ImportantDateItem } from '@churchflow/shared';
 import { formatCalendarDay, importantDateRuleParts } from '../important-date-format';
 
-export function KnowledgeAuthorMeta({
-  createdAt,
-  createdBy,
-  updatedAt,
-  updatedBy,
-}: {
-  createdAt: string;
-  createdBy: KnowledgeAuthor | null;
-  updatedAt: string;
-  updatedBy: KnowledgeAuthor | null;
-}) {
-  const t = useTranslations('knowledge');
+export function KnowledgeDate({ value }: { value: string }) {
   const locale = useLocale();
-  const formatter = useMemo(
-    () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }),
-    [locale],
-  );
-  const date = (value: string) => formatter.format(new Date(value));
-  const unknown = t('unknownAuthor');
+  const label = useMemo(() => {
+    const date = new Date(value);
+    const thisYear = date.getFullYear() === new Date().getFullYear();
 
-  return (
-    <span className="grid gap-0.5 text-xs text-[var(--muted)]">
-      <span>
-        {t('createdMeta', { name: createdBy?.displayName ?? unknown, date: date(createdAt) })}
-      </span>
-      {updatedAt !== createdAt ? (
-        <span>
-          {t('updatedMeta', { name: updatedBy?.displayName ?? unknown, date: date(updatedAt) })}
-        </span>
-      ) : null}
-    </span>
-  );
+    return new Intl.DateTimeFormat(
+      locale,
+      thisYear ? { day: 'numeric', month: 'long' } : { dateStyle: 'medium' },
+    ).format(date);
+  }, [locale, value]);
+
+  return <time dateTime={value}>{label}</time>;
 }
 
 export function ImportantDateRuleLabel({

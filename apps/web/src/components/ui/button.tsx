@@ -1,19 +1,20 @@
 import Link from 'next/link';
 import type { Route } from 'next';
+import type { VariantProps } from 'class-variance-authority';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { buttonClassName } from './button.styles';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+export type ButtonVariant = NonNullable<VariantProps<typeof buttonClassName>['variant']>;
 
-function buttonClassName(variant: ButtonVariant, className?: string): string {
-  return ['ui-button', `ui-button-${variant}`, className].filter(Boolean).join(' ');
-}
+export type ButtonSize = NonNullable<VariantProps<typeof buttonClassName>['size']>;
 
 export function Button({
   variant = 'primary',
+  size,
   className,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
-  return <button className={buttonClassName(variant, className)} {...props} />;
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize }) {
+  return <button className={buttonClassName({ variant, size, className })} {...props} />;
 }
 
 export function ButtonLink({
@@ -28,7 +29,7 @@ export function ButtonLink({
   className?: string;
 }) {
   return (
-    <Link className={buttonClassName(variant, className)} href={href as Route}>
+    <Link className={buttonClassName({ variant, className })} href={href as Route}>
       {children}
     </Link>
   );

@@ -6,6 +6,7 @@ import type {
   UpdateImportantDateInput,
   UpdateKnowledgeEntryInput,
 } from '@churchflow/shared';
+import type { KnowledgePageQuery } from '../knowledge-page-query';
 
 export interface KnowledgeNotesListProps {
   disabled: boolean;
@@ -15,6 +16,10 @@ export interface KnowledgeNotesListProps {
   /** `onSuccess` runs only once the server accepted the change, so a dialog can stay open on error. */
   onUpdate: (entryId: string, entry: UpdateKnowledgeEntryInput, onSuccess?: () => void) => void;
   onDelete: (entry: KnowledgeEntryItem) => Promise<void>;
+}
+
+export interface KnowledgeNotesBrowserProps extends KnowledgeNotesListProps {
+  query: KnowledgePageQuery;
 }
 
 export interface ImportantDatesListProps {

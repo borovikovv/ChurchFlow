@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useId, useRef, type RefObject } from 'react';
+import { useId, useRef, type ReactNode, type RefObject } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   KNOWLEDGE_CATEGORIES,
@@ -15,7 +15,7 @@ import { FormCheckbox } from '@/components/forms/form-checkbox';
 import { FormInput } from '@/components/forms/form-input';
 import { FormRichTextEditor } from '@/components/forms/form-rich-text-editor';
 import { FormSelect } from '@/components/forms/form-select';
-import { Button } from '@/components/ui/button';
+import { Button, type ButtonVariant } from '@/components/ui/button';
 import { FormDialog } from '@/components/ui/form-dialog';
 import {
   knowledgeNoteFormSchema,
@@ -30,6 +30,7 @@ export function KnowledgeNoteFormDialog({
   title,
   triggerClassName,
   triggerLabel,
+  triggerVariant = 'ghost',
   onClose,
   onSubmit,
 }: {
@@ -38,7 +39,8 @@ export function KnowledgeNoteFormDialog({
   entry?: KnowledgeEntryItem;
   title: string;
   triggerClassName?: string;
-  triggerLabel?: string;
+  triggerLabel?: ReactNode;
+  triggerVariant?: ButtonVariant;
   onClose?: () => void;
   onSubmit: (entry: CreateKnowledgeEntryInput, closeDialog: () => void) => void;
 }) {
@@ -71,7 +73,7 @@ export function KnowledgeNoteFormDialog({
       fullScreenOnMobile
       size="lg"
       title={title}
-      triggerVariant="ghost"
+      triggerVariant={triggerVariant}
       onOpen={resetForm}
       onClose={() => {
         // A dialog opened from the add menu has no trigger to reset it, so it resets on close.

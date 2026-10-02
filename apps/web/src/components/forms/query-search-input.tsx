@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { FormInput } from '@/components/forms/form-input';
 import { SearchIcon } from '@/components/icons/action-icons';
+import { queryHref } from '@/lib/query-href';
 
 const SEARCH_INPUT_CLASS_NAME =
   'h-12 w-full rounded-full pl-11 md:h-8 md:rounded-[var(--radius)] md:pl-3';
@@ -28,22 +29,10 @@ export function QuerySearchInput({
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      const params = new URLSearchParams();
-      Object.entries(preserveParams).forEach(([paramName, paramValue]) => {
-        if (paramValue) {
-          params.set(paramName, paramValue);
-        }
-      });
-
       const nextSearch = value.trim();
-      if (nextSearch) {
-        params.set('search', nextSearch);
-      }
-
       if (nextSearch === search) return;
 
-      const query = params.toString();
-      router.replace((query ? `${pathname}?${query}` : pathname) as Route);
+      router.replace(queryHref(pathname, preserveParams, 'search', nextSearch) as Route);
     }, 500);
 
     return () => window.clearTimeout(timeout);

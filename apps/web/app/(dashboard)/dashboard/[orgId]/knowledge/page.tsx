@@ -1,6 +1,4 @@
 import { apiFetch } from '@/api/client';
-import { getCurrentUser } from '@/auth/session';
-import { getMessages } from '@/i18n/messages';
 import type { ImportantDatesPayload, KnowledgeEntriesPayload } from '@churchflow/shared';
 import { KnowledgeManager } from './_components/knowledge-manager';
 import type { KnowledgeViewData } from './_components/knowledge-manager.types';
@@ -49,13 +47,10 @@ export default async function KnowledgePage({
 }) {
   const { orgId } = await params;
   const query = parseKnowledgePageQuery(await searchParams);
-  const user = await getCurrentUser();
-  const messages = getMessages(user?.locale ?? 'en');
   const { data, error } = await loadView(orgId, query);
 
   return (
     <div className="stack">
-      <h1>{messages.knowledge.title}</h1>
       {error ? <p className="form-error">{error}</p> : null}
       <KnowledgeManager
         key={JSON.stringify(query)}

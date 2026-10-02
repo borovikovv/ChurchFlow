@@ -4,8 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useRef, useState, useTransition } from 'react';
 import type { KnowledgeView } from '@churchflow/shared';
-import { PlusIcon } from '@/components/icons/action-icons';
+import { DocumentIcon, PlusIcon } from '@/components/icons/action-icons';
+import { CalendarIcon } from '@/components/icons/navigation-icons';
 import { ActionMenuButton } from '@/components/ui/action-menu-button';
+import { PageHeader } from '@/components/ui/page-header';
 import { Tabs } from '@/components/ui/tabs';
 import {
   organizationImportantDatesRoute,
@@ -29,8 +31,7 @@ import { KnowledgeFilters } from './knowledge-filters';
 import type { ImportantDatesListProps, KnowledgeNotesListProps } from './knowledge-lists.types';
 import type { KnowledgeMutationResult, KnowledgeViewData } from './knowledge-manager.types';
 import { KnowledgeNoteFormDialog } from './knowledge-note-form-dialog';
-import { KnowledgeNotesCardList } from './knowledge-notes-card-list';
-import { KnowledgeNotesTable } from './knowledge-notes-table';
+import { KnowledgeNotesBrowser } from './knowledge-notes-browser';
 
 export function KnowledgeManager({
   initialData,
@@ -123,42 +124,50 @@ export function KnowledgeManager({
 
   return (
     <section className="stack min-w-0">
-      <div className="flex min-w-0 flex-col justify-between gap-3 md:flex-row md:items-start">
-        <Tabs
-          label={t('viewsLabel')}
-          items={[
-            { label: t('notesTab'), href: notesHref, active: data.view === 'notes' },
-            { label: t('datesTab'), href: datesHref, active: data.view === 'dates' },
-          ]}
-        />
-        {canManage ? (
-          <ActionMenuButton
-            icon={<PlusIcon />}
-            label={t('add')}
-            size="medium"
-            items={[
-              { label: t('addNote'), onSelect: () => noteDialogRef.current?.showModal() },
-              { label: t('addDate'), onSelect: () => dateDialogRef.current?.showModal() },
-            ]}
-          />
-        ) : null}
-      </div>
+      <PageHeader
+        title={t('title')}
+        description={t('description')}
+        divider={false}
+        actions={
+          canManage ? (
+            <ActionMenuButton
+              icon={<PlusIcon className="h-5 w-5" />}
+              label={t('add')}
+              items={[
+                { label: t('addNote'), onSelect: () => noteDialogRef.current?.showModal() },
+                { label: t('addDate'), onSelect: () => dateDialogRef.current?.showModal() },
+              ]}
+            />
+          ) : undefined
+        }
+      />
 
-      <KnowledgeFilters query={query} tags={data.view === 'notes' ? data.payload.tags : []} />
+      <Tabs
+        intent="accent"
+        label={t('viewsLabel')}
+        items={[
+          {
+            label: t('notesTab'),
+            href: notesHref,
+            active: data.view === 'notes',
+            icon: <DocumentIcon className="h-5 w-5" />,
+          },
+          {
+            label: t('datesTab'),
+            href: datesHref,
+            active: data.view === 'dates',
+            icon: <CalendarIcon className="h-5 w-5" />,
+          },
+        ]}
+      />
 
       {error ? <p className="form-error">{error}</p> : null}
 
       {data.view === 'notes' ? (
-        <>
-          <div className="md:hidden">
-            <KnowledgeNotesCardList {...notesListProps(data.payload)} />
-          </div>
-          <div className="hidden md:block">
-            <KnowledgeNotesTable {...notesListProps(data.payload)} />
-          </div>
-        </>
+        <KnowledgeNotesBrowser query={query} {...notesListProps(data.payload)} />
       ) : (
         <>
+          <KnowledgeFilters query={query} />
           <div className="md:hidden">
             <ImportantDatesCardList {...datesListProps(data.payload)} />
           </div>
