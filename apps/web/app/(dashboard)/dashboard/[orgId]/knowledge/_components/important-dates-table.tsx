@@ -12,6 +12,7 @@ import {
   ImportantDateRuleLabel,
 } from './knowledge-meta';
 import type { ImportantDatesListProps } from './knowledge-lists.types';
+import { knowledgeListClassNames, nowrapColumnMeta } from './knowledge-lists.styles';
 
 export function ImportantDatesTable({
   filtered,
@@ -29,7 +30,7 @@ export function ImportantDatesTable({
         accessorFn: (date) => date.title,
         cell: ({ row }) => (
           <span className="grid min-w-0 gap-1">
-            <span className="font-bold [overflow-wrap:anywhere]">{row.original.title}</span>
+            <span className={knowledgeListClassNames.title}>{row.original.title}</span>
             {row.original.notes ? (
               <span className="whitespace-pre-wrap text-xs text-[var(--muted)] [overflow-wrap:anywhere]">
                 {row.original.notes}
@@ -49,19 +50,19 @@ export function ImportantDatesTable({
         header: t('nextDateColumn'),
         accessorFn: (date) => date.nextDate,
         cell: ({ row }) => <ImportantDateNextDate nextDate={row.original.nextDate} />,
-        meta: { headerClassName: 'whitespace-nowrap', cellClassName: 'whitespace-nowrap' },
+        meta: nowrapColumnMeta,
       },
       {
         id: 'reminder',
         header: t('reminderColumn'),
         cell: ({ row }) => <ImportantDateReminder days={row.original.reminderLeadDays} />,
-        meta: { headerClassName: 'whitespace-nowrap', cellClassName: 'whitespace-nowrap' },
+        meta: nowrapColumnMeta,
       },
       {
         id: 'visibility',
         header: t('visibilityColumn'),
         cell: ({ row }) => t(`visibilities.${row.original.visibility}`),
-        meta: { headerClassName: 'whitespace-nowrap', cellClassName: 'whitespace-nowrap' },
+        meta: nowrapColumnMeta,
       },
     ];
     if (!canManage) return infoColumns;

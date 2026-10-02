@@ -3,15 +3,15 @@
 import { useTranslations } from 'next-intl';
 import type { KnowledgeEntryItem } from '@churchflow/shared';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { knowledgeListClassNames } from './knowledge-lists.styles';
 
-/** Title, pin, category and tags: what identifies a note in both the table and the cards. */
 export function KnowledgeNoteSummary({ entry }: { entry: KnowledgeEntryItem }) {
   const t = useTranslations('knowledge');
 
   return (
     <span className="grid min-w-0 gap-1.5">
       <span className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="font-bold [overflow-wrap:anywhere]">{entry.title}</span>
+        <span className={knowledgeListClassNames.title}>{entry.title}</span>
         {entry.pinned ? <StatusBadge status="active" label={t('pinned')} /> : null}
       </span>
       <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">

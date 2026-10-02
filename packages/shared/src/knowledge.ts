@@ -25,6 +25,12 @@ export const IMPORTANT_DATE_NTH_VALUES = [1, 2, 3, 4, -1] as const;
 
 export type ImportantDateNth = (typeof IMPORTANT_DATE_NTH_VALUES)[number];
 
+export const KNOWLEDGE_VIEWS = ['notes', 'dates'] as const;
+
+export const knowledgeViewSchema = z.enum(KNOWLEDGE_VIEWS);
+
+export type KnowledgeView = z.infer<typeof knowledgeViewSchema>;
+
 export const KNOWLEDGE_TITLE_MAX_LENGTH = 160;
 export const KNOWLEDGE_CONTENT_MAX_LENGTH = 20000;
 export const KNOWLEDGE_TAG_MAX_LENGTH = 40;

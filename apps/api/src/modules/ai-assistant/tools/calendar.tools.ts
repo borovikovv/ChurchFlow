@@ -65,7 +65,7 @@ export const CALENDAR_TOOL_META = {
   },
 } satisfies Record<string, AiToolMeta>;
 
-const dateSchema = z
+export const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .describe('A local date, YYYY-MM-DD.');
@@ -512,10 +512,8 @@ const REASON_LABELS: Record<ReasonLabel, { en: string; uk: string }> = {
   description: { en: 'Description', uk: 'Опис' },
 };
 
-function excerpt(value: string): string {
-  return value.length > DESCRIPTION_EXCERPT_LENGTH
-    ? `${value.slice(0, DESCRIPTION_EXCERPT_LENGTH - 1)}…`
-    : value;
+export function excerpt(value: string, length: number): string {
+  return value.length > length ? `${value.slice(0, length - 1)}…` : value;
 }
 
 /**
@@ -585,7 +583,9 @@ export function calendarApprovalReasons(runner: AiToolRunner, names: AiNameResol
         ...(input.reminder ? [line('reminder', input.reminder)] : []),
         ...(assignees.length > 0 ? [line('assignees', assignees.join(', '))] : []),
         ...(await serviceLines(input.service)),
-        ...(input.description ? [line('description', excerpt(input.description))] : []),
+        ...(input.description
+          ? [line('description', excerpt(input.description, DESCRIPTION_EXCERPT_LENGTH))]
+          : []),
       ];
 
       return lines.join('\n');
@@ -611,7 +611,7 @@ export function calendarApprovalReasons(runner: AiToolRunner, names: AiNameResol
         ...(input.allDay !== undefined ? [line('allDay', input.allDay ? yes : no)] : []),
         ...(await serviceLines(input.service)),
         ...(input.description !== undefined
-          ? [line('description', excerpt(input.description))]
+          ? [line('description', excerpt(input.description, DESCRIPTION_EXCERPT_LENGTH))]
           : []),
       ];
 

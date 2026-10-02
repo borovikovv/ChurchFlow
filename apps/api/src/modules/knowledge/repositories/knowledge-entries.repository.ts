@@ -5,9 +5,8 @@ import type {
   KnowledgeVisibility,
   ListKnowledgeEntriesQuery,
 } from '@churchflow/shared';
-import type { OrganizationAccess } from '../../../common/guards/organization-access.guard';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { KNOWLEDGE_AUTHOR_SELECT, resolveKnowledgeViewer } from '../knowledge-access';
+import { KNOWLEDGE_AUTHOR_SELECT } from './knowledge-author';
 
 /** A list is a reference shelf, not a feed: past this many matches the search should narrow. */
 export const KNOWLEDGE_ENTRIES_LIST_LIMIT = 200;
@@ -33,10 +32,6 @@ export interface KnowledgeEntryData {
 @Injectable()
 export class KnowledgeEntriesRepository {
   constructor(private readonly prisma: PrismaService) {}
-
-  findViewer(organizationId: string, userId: string): Promise<OrganizationAccess> {
-    return resolveKnowledgeViewer(this.prisma, organizationId, userId);
-  }
 
   list(input: {
     organizationId: string;

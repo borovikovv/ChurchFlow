@@ -46,7 +46,6 @@ export function KnowledgeNoteFormDialog({
   const internalDialogRef = useRef<HTMLDialogElement>(null);
   const dialogRef = externalDialogRef ?? internalDialogRef;
   const formId = useId();
-  const defaultVisibility = assignableVisibilities[0] ?? 'MEMBERS';
   const {
     control,
     register,
@@ -58,9 +57,9 @@ export function KnowledgeNoteFormDialog({
     resolver: zodResolver(knowledgeNoteFormSchema),
     mode: 'onBlur',
     reValidateMode: 'onChange',
-    defaultValues: knowledgeNoteFormValues(entry, defaultVisibility),
+    defaultValues: knowledgeNoteFormValues(entry, assignableVisibilities),
   });
-  const resetForm = () => reset(knowledgeNoteFormValues(entry, defaultVisibility));
+  const resetForm = () => reset(knowledgeNoteFormValues(entry, assignableVisibilities));
 
   const submit = handleSubmit((values) => {
     onSubmit(values, () => dialogRef.current?.close());

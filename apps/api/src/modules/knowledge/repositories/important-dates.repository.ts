@@ -5,9 +5,8 @@ import type {
   KnowledgeVisibility,
   ListImportantDatesQuery,
 } from '@churchflow/shared';
-import type { OrganizationAccess } from '../../../common/guards/organization-access.guard';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { KNOWLEDGE_AUTHOR_SELECT, resolveKnowledgeViewer } from '../knowledge-access';
+import { KNOWLEDGE_AUTHOR_SELECT } from './knowledge-author';
 
 export const IMPORTANT_DATES_LIST_LIMIT = 200;
 
@@ -35,10 +34,6 @@ export interface ImportantDateData {
 @Injectable()
 export class ImportantDatesRepository {
   constructor(private readonly prisma: PrismaService) {}
-
-  findViewer(organizationId: string, userId: string): Promise<OrganizationAccess> {
-    return resolveKnowledgeViewer(this.prisma, organizationId, userId);
-  }
 
   list(input: {
     organizationId: string;

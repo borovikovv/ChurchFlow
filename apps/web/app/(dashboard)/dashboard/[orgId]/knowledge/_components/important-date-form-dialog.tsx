@@ -3,9 +3,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocale, useTranslations } from 'next-intl';
 import { useId, useMemo, useRef, type RefObject } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm, type Control } from 'react-hook-form';
 import {
   IMPORTANT_DATE_NOTES_MAX_LENGTH,
+  IMPORTANT_DATE_NTH_VALUES,
   IMPORTANT_DATE_REMINDER_MAX_DAYS,
   IMPORTANT_DATE_RULE_KINDS,
   KNOWLEDGE_TITLE_MAX_LENGTH,
@@ -20,18 +21,19 @@ import { FormSelect } from '@/components/forms/form-select';
 import { FormTextarea } from '@/components/forms/form-textarea';
 import { Button } from '@/components/ui/button';
 import { FormDialog } from '@/components/ui/form-dialog';
-import { monthNames, weekdayNames } from '../important-date-format';
+import { monthNames, weekdayNames } from '@/lib/calendar-names';
+import { ORDINAL_KEYS } from '../important-date-format';
 import { importantDateFormValues, optionalNumber, ruleFieldsFor } from '../knowledge-forms';
 
-const NTH_OPTIONS = [
-  { value: 1, key: 'first' },
-  { value: 2, key: 'second' },
-  { value: 3, key: 'third' },
-  { value: 4, key: 'fourth' },
-  { value: -1, key: 'last' },
-] as const;
+const DAY_OPTIONS = Array.from({ length: 31 }, (_, index) => ({
+  label: String(index + 1),
+  value: index + 1,
+}));
 
-const DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
+interface NumberOption {
+  label: string;
+  value: number;
+}
 
 export function ImportantDateFormDialog({
   assignableVisibilities,
@@ -57,10 +59,20 @@ export function ImportantDateFormDialog({
   const internalDialogRef = useRef<HTMLDialogElement>(null);
   const dialogRef = externalDialogRef ?? internalDialogRef;
   const formId = useId();
-  const defaultVisibility = assignableVisibilities[0] ?? 'MEMBERS';
-  const months = useMemo(() => monthNames(locale), [locale]);
-  const weekdays = useMemo(() => weekdayNames(locale), [locale]);
+  const monthOptions = useMemo(
+    () => monthNames(locale).map((label, index) => ({ label, value: index + 1 })),
+    [locale],
+  );
+  const weekdayOptions = useMemo(
+    () => weekdayNames(locale).map((label, value) => ({ label, value })),
+    [locale],
+  );
+  const nthOptions = IMPORTANT_DATE_NTH_VALUES.map((value) => ({
+    label: t(`nthOptions.${ORDINAL_KEYS[value]}`),
+    value,
+  }));
   const {
+    control,
     register,
     handleSubmit,
     reset,
@@ -71,11 +83,10 @@ export function ImportantDateFormDialog({
     resolver: zodResolver(createImportantDateSchema),
     mode: 'onBlur',
     reValidateMode: 'onChange',
-    defaultValues: importantDateFormValues(date, defaultVisibility),
+    defaultValues: importantDateFormValues(date, assignableVisibilities),
   });
   const ruleKind = watch('ruleKind');
-  const resetForm = () => reset(importantDateFormValues(date, defaultVisibility));
-  const numberField = { setValueAs: optionalNumber };
+  const resetForm = () => reset(importantDateFormValues(date, assignableVisibilities));
 
   const submit = handleSubmit((values) => {
     onSubmit(values, () => dialogRef.current?.close());
@@ -137,57 +148,37 @@ export function ImportantDateFormDialog({
         <div className="grid gap-3 md:grid-cols-3">
           {ruleKind === 'NTH_WEEKDAY' ? (
             <>
-              <FormSelect
-                label={t('nthLabel')}
+              <NumberSelectField
+                control={control}
                 error={errors.nth?.message}
-                value={String(watch('nth') ?? '')}
-                {...register('nth', numberField)}
-              >
-                {NTH_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {t(`nthOptions.${option.key}`)}
-                  </option>
-                ))}
-              </FormSelect>
-              <FormSelect
-                label={t('weekdayLabel')}
+                label={t('nthLabel')}
+                name="nth"
+                options={nthOptions}
+              />
+              <NumberSelectField
+                control={control}
                 error={errors.weekday?.message}
-                value={String(watch('weekday') ?? '')}
-                {...register('weekday', numberField)}
-              >
-                {weekdays.map((name, index) => (
-                  <option key={name} value={index}>
-                    {name}
-                  </option>
-                ))}
-              </FormSelect>
+                label={t('weekdayLabel')}
+                name="weekday"
+                options={weekdayOptions}
+              />
             </>
           ) : (
-            <FormSelect
-              label={t('dayLabel')}
+            <NumberSelectField
+              control={control}
               error={errors.day?.message}
-              value={String(watch('day') ?? '')}
-              {...register('day', numberField)}
-            >
-              {DAYS.map((day) => (
-                <option key={day} value={day}>
-                  {day}
-                </option>
-              ))}
-            </FormSelect>
+              label={t('dayLabel')}
+              name="day"
+              options={DAY_OPTIONS}
+            />
           )}
-          <FormSelect
-            label={t('monthLabel')}
+          <NumberSelectField
+            control={control}
             error={errors.month?.message}
-            value={String(watch('month'))}
-            {...register('month', { setValueAs: Number })}
-          >
-            {months.map((name, index) => (
-              <option key={name} value={index + 1}>
-                {name}
-              </option>
-            ))}
-          </FormSelect>
+            label={t('monthLabel')}
+            name="month"
+            options={monthOptions}
+          />
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <FormSelect
@@ -209,7 +200,7 @@ export function ImportantDateFormDialog({
             max={IMPORTANT_DATE_REMINDER_MAX_DAYS}
             min={0}
             type="number"
-            {...register('reminderLeadDays', numberField)}
+            {...register('reminderLeadDays', { setValueAs: optionalNumber })}
           />
         </div>
         <FormTextarea
@@ -221,5 +212,42 @@ export function ImportantDateFormDialog({
         />
       </form>
     </FormDialog>
+  );
+}
+
+function NumberSelectField({
+  control,
+  error,
+  label,
+  name,
+  options,
+}: {
+  control: Control<CreateImportantDateFormInput, unknown, CreateImportantDateInput>;
+  error: string | undefined;
+  label: string;
+  name: 'day' | 'month' | 'nth' | 'weekday';
+  options: NumberOption[];
+}) {
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormSelect
+          label={label}
+          error={error}
+          name={field.name}
+          value={String(field.value ?? '')}
+          onBlur={field.onBlur}
+          onChange={(event) => field.onChange(optionalNumber(event.target.value))}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </FormSelect>
+      )}
+    />
   );
 }

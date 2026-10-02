@@ -6,6 +6,8 @@ import type {
   ListKnowledgeEntriesQuery,
   UpdateKnowledgeEntryInput,
 } from '@churchflow/shared';
+import { assertOrganizationAccess } from '../../common/guards/organization-access.guard';
+import { PrismaService } from '../../prisma/prisma.service';
 import { sanitizeRichText } from '../calendar-events/rich-text/sanitize-rich-text';
 import {
   assertCanWriteKnowledge,
@@ -24,14 +26,20 @@ const ENTRY_NOT_FOUND = 'Knowledge entry was not found';
 
 @Injectable()
 export class KnowledgeEntriesService {
-  constructor(private readonly repository: KnowledgeEntriesRepository) {}
+  constructor(
+    private readonly repository: KnowledgeEntriesRepository,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async list(
     organizationId: string,
     actorUserId: string,
     query: ListKnowledgeEntriesQuery,
   ): Promise<KnowledgeEntriesPayload> {
-    const viewer = await this.repository.findViewer(organizationId, actorUserId);
+    const viewer = await assertOrganizationAccess(this.prisma, {
+      userId: actorUserId,
+      organizationId,
+    });
     const visibilities = visibleKnowledgeLevels(viewer);
     const [entries, tags] = await Promise.all([
       this.repository.list({ organizationId, visibilities, query }),
@@ -51,7 +59,10 @@ export class KnowledgeEntriesService {
     entryId: string,
     actorUserId: string,
   ): Promise<KnowledgeEntryItem> {
-    const viewer = await this.repository.findViewer(organizationId, actorUserId);
+    const viewer = await assertOrganizationAccess(this.prisma, {
+      userId: actorUserId,
+      organizationId,
+    });
     const entry = await this.repository.findVisible({
       organizationId,
       entryId,
@@ -67,7 +78,10 @@ export class KnowledgeEntriesService {
     input: CreateKnowledgeEntryInput,
     actorUserId: string,
   ): Promise<KnowledgeEntryItem> {
-    const viewer = await this.repository.findViewer(organizationId, actorUserId);
+    const viewer = await assertOrganizationAccess(this.prisma, {
+      userId: actorUserId,
+      organizationId,
+    });
     assertCanWriteKnowledge(viewer, input.visibility);
 
     const entry = await this.repository.create({
@@ -85,7 +99,10 @@ export class KnowledgeEntriesService {
     input: UpdateKnowledgeEntryInput,
     actorUserId: string,
   ): Promise<KnowledgeEntryItem> {
-    const viewer = await this.repository.findViewer(organizationId, actorUserId);
+    const viewer = await assertOrganizationAccess(this.prisma, {
+      userId: actorUserId,
+      organizationId,
+    });
     assertCanWriteKnowledge(viewer, input.visibility);
 
     const data: Partial<KnowledgeEntryData> = {};
@@ -113,7 +130,10 @@ export class KnowledgeEntriesService {
     entryId: string,
     actorUserId: string,
   ): Promise<{ id: string }> {
-    const viewer = await this.repository.findViewer(organizationId, actorUserId);
+    const viewer = await assertOrganizationAccess(this.prisma, {
+      userId: actorUserId,
+      organizationId,
+    });
     assertCanWriteKnowledge(viewer, undefined);
 
     const deleted = await this.repository.delete({

@@ -115,13 +115,16 @@ function entriesService(options) {
   const fake = createPrisma(options);
   return {
     ...fake,
-    service: new KnowledgeEntriesService(new KnowledgeEntriesRepository(fake.prisma)),
+    service: new KnowledgeEntriesService(new KnowledgeEntriesRepository(fake.prisma), fake.prisma),
   };
 }
 
 function datesService(options) {
   const fake = createPrisma(options);
-  return { ...fake, service: new ImportantDatesService(new ImportantDatesRepository(fake.prisma)) };
+  return {
+    ...fake,
+    service: new ImportantDatesService(new ImportantDatesRepository(fake.prisma), fake.prisma),
+  };
 }
 
 const VISIBILITY_ROWS = [

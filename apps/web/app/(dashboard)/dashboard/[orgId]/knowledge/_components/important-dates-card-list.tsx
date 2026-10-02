@@ -10,6 +10,7 @@ import {
   ImportantDateRuleLabel,
 } from './knowledge-meta';
 import type { ImportantDatesListProps } from './knowledge-lists.types';
+import { knowledgeListClassNames } from './knowledge-lists.styles';
 
 const getDateKey = (date: ImportantDateItem) => date.id;
 
@@ -30,7 +31,7 @@ export function ImportantDatesCardList({
         <>
           <div className="flex min-w-0 items-start justify-between gap-2">
             <span className="grid min-w-0 gap-1">
-              <span className="font-bold [overflow-wrap:anywhere]">{date.title}</span>
+              <span className={knowledgeListClassNames.title}>{date.title}</span>
               <span className="text-sm text-[var(--muted)]">
                 <ImportantDateRuleLabel date={date} />
               </span>
@@ -49,19 +50,19 @@ export function ImportantDatesCardList({
           ) : null}
           <dl className="m-0 grid grid-cols-2 gap-2 text-sm">
             <div className="grid gap-0.5">
-              <dt className="text-xs text-[var(--muted)]">{t('nextDateColumn')}</dt>
+              <dt className={knowledgeListClassNames.detailLabel}>{t('nextDateColumn')}</dt>
               <dd className="m-0 font-medium">
                 <ImportantDateNextDate nextDate={date.nextDate} />
               </dd>
             </div>
             <div className="grid gap-0.5">
-              <dt className="text-xs text-[var(--muted)]">{t('reminderColumn')}</dt>
+              <dt className={knowledgeListClassNames.detailLabel}>{t('reminderColumn')}</dt>
               <dd className="m-0">
                 <ImportantDateReminder days={date.reminderLeadDays} />
               </dd>
             </div>
             <div className="col-span-2 grid gap-0.5">
-              <dt className="text-xs text-[var(--muted)]">{t('visibilityColumn')}</dt>
+              <dt className={knowledgeListClassNames.detailLabel}>{t('visibilityColumn')}</dt>
               <dd className="m-0">{t(`visibilities.${date.visibility}`)}</dd>
             </div>
           </dl>

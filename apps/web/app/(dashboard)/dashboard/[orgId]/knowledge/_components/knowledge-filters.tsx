@@ -7,7 +7,6 @@ import { QueryFilterSelect } from '@/components/forms/query-filter-select';
 import { QuerySearchInput } from '@/components/forms/query-search-input';
 import { knowledgePreservedParams, type KnowledgePageQuery } from '../knowledge-page-query';
 
-/** Search, plus category, tag and pin filters on the notes view; each one lives in the URL. */
 export function KnowledgeFilters({ query, tags }: { query: KnowledgePageQuery; tags: string[] }) {
   const t = useTranslations('knowledge');
   const preserved = useMemo(() => knowledgePreservedParams(query), [query]);

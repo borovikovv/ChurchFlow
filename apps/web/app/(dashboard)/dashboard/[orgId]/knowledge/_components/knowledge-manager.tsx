@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useRef, useState, useTransition } from 'react';
+import type { KnowledgeView } from '@churchflow/shared';
 import { PlusIcon } from '@/components/icons/action-icons';
 import { ActionMenuButton } from '@/components/ui/action-menu-button';
 import { Tabs } from '@/components/ui/tabs';
@@ -20,7 +21,7 @@ import {
   updateImportantDateAction,
   updateKnowledgeEntryAction,
 } from '../actions';
-import type { KnowledgePageQuery, KnowledgeView } from '../knowledge-page-query';
+import type { KnowledgePageQuery } from '../knowledge-page-query';
 import { ImportantDateFormDialog } from './important-date-form-dialog';
 import { ImportantDatesCardList } from './important-dates-card-list';
 import { ImportantDatesTable } from './important-dates-table';

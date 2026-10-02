@@ -27,7 +27,7 @@ export type KnowledgeNoteFormValues = z.input<typeof knowledgeNoteFormSchema>;
 
 export function knowledgeNoteFormValues(
   entry: KnowledgeEntryItem | undefined,
-  defaultVisibility: KnowledgeVisibility,
+  assignableVisibilities: readonly KnowledgeVisibility[],
 ): KnowledgeNoteFormValues {
   return {
     title: entry?.title ?? '',
@@ -35,13 +35,13 @@ export function knowledgeNoteFormValues(
     category: entry?.category ?? 'OTHER',
     tags: formatTagsText(entry?.tags ?? []),
     pinned: entry?.pinned ?? false,
-    visibility: entry?.visibility ?? defaultVisibility,
+    visibility: entry?.visibility ?? assignableVisibilities[0],
   };
 }
 
 export function importantDateFormValues(
   date: ImportantDateItem | undefined,
-  defaultVisibility: KnowledgeVisibility,
+  assignableVisibilities: readonly KnowledgeVisibility[],
 ): CreateImportantDateFormInput {
   if (!date) {
     return {
@@ -53,7 +53,7 @@ export function importantDateFormValues(
       weekday: null,
       nth: null,
       reminderLeadDays: null,
-      visibility: defaultVisibility,
+      visibility: assignableVisibilities[0],
     };
   }
 

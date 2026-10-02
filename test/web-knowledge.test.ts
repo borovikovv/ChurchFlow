@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import './support/web-module-hooks.ts';
+import { monthNames, weekdayNames } from '../apps/web/src/lib/calendar-names.ts';
 
 const KNOWLEDGE = '../apps/web/app/(dashboard)/dashboard/[orgId]/knowledge';
 const {
@@ -9,7 +10,7 @@ const {
   knowledgePreservedParams,
   parseKnowledgePageQuery,
 } = await import(`${KNOWLEDGE}/knowledge-page-query.ts`);
-const { formatCalendarDay, importantDateRuleParts, monthNames, weekdayNames } = await import(
+const { formatCalendarDay, importantDateRuleParts } = await import(
   `${KNOWLEDGE}/important-date-format.ts`
 );
 const { knowledgeNoteFormSchema, parseTagsText, ruleFieldsFor, optionalNumber } = await import(

@@ -5,7 +5,6 @@ import { useMemo } from 'react';
 import type { ImportantDateItem, KnowledgeAuthor } from '@churchflow/shared';
 import { formatCalendarDay, importantDateRuleParts } from '../important-date-format';
 
-/** Who wrote an entry and who changed it last, each with the date. */
 export function KnowledgeAuthorMeta({
   createdAt,
   createdBy,

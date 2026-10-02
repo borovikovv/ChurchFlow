@@ -175,8 +175,11 @@ function setup(options = {}) {
     },
   );
   const tools = knowledgeTools(runner, {
-    knowledgeEntriesService: new KnowledgeEntriesService(new KnowledgeEntriesRepository(prisma)),
-    importantDatesService: new ImportantDatesService(new ImportantDatesRepository(prisma)),
+    knowledgeEntriesService: new KnowledgeEntriesService(
+      new KnowledgeEntriesRepository(prisma),
+      prisma,
+    ),
+    importantDatesService: new ImportantDatesService(new ImportantDatesRepository(prisma), prisma),
     groupsService: {
       listForOrganization: async (orgId) => {
         calls.organizations.push(orgId);

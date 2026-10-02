@@ -10,6 +10,7 @@ import { KnowledgeAuthorMeta } from './knowledge-meta';
 import { KnowledgeNoteActions } from './knowledge-note-actions';
 import { KnowledgeNoteSummary } from './knowledge-note-summary';
 import type { KnowledgeNotesListProps } from './knowledge-lists.types';
+import { nowrapColumnMeta } from './knowledge-lists.styles';
 
 export function KnowledgeNotesTable({
   disabled,
@@ -43,7 +44,7 @@ export function KnowledgeNotesTable({
         header: t('visibilityColumn'),
         accessorFn: (entry) => entry.visibility,
         cell: ({ row }) => t(`visibilities.${row.original.visibility}`),
-        meta: { headerClassName: 'whitespace-nowrap', cellClassName: 'whitespace-nowrap' },
+        meta: nowrapColumnMeta,
       },
       {
         id: 'updated',

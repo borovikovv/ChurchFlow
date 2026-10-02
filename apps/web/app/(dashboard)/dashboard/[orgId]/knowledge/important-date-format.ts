@@ -1,4 +1,9 @@
-import type { ImportantDateItem } from '@churchflow/shared';
+import {
+  IMPORTANT_DATE_NTH_VALUES,
+  importantDateRuleOf,
+  type ImportantDateItem,
+  type ImportantDateNth,
+} from '@churchflow/shared';
 
 export const WEEKDAY_KEYS = [
   'sunday',
@@ -14,13 +19,19 @@ export type WeekdayKey = (typeof WEEKDAY_KEYS)[number];
 
 export type OrdinalKey = 'first' | 'second' | 'third' | 'fourth' | 'last';
 
-const ORDINAL_KEYS: Record<string, OrdinalKey> = {
-  '1': 'first',
-  '2': 'second',
-  '3': 'third',
-  '4': 'fourth',
-  '-1': 'last',
+export const ORDINAL_KEYS: Record<ImportantDateNth, OrdinalKey> = {
+  1: 'first',
+  2: 'second',
+  3: 'third',
+  4: 'fourth',
+  [-1]: 'last',
 };
+
+function ordinalKeyOf(nth: number): OrdinalKey | undefined {
+  const value = IMPORTANT_DATE_NTH_VALUES.find((allowed) => allowed === nth);
+
+  return value === undefined ? undefined : ORDINAL_KEYS[value];
+}
 
 /** What a rule says, with names left as message keys so each language words them itself. */
 export type ImportantDateRuleParts =
@@ -53,37 +64,21 @@ export function monthAfterDay(locale: string, month: number): string {
   return parts.find((part) => part.type === 'month')?.value ?? String(month);
 }
 
-/** Standalone month names for a picker, January first. */
-export function monthNames(locale: string): string[] {
-  const format = new Intl.DateTimeFormat(locale, { month: 'long', timeZone: 'UTC' });
-
-  return Array.from({ length: 12 }, (_, index) => format.format(referenceDate(index + 1, 1)));
-}
-
-/** Weekday names for a picker, Sunday (0) first, as the API counts them. */
-export function weekdayNames(locale: string): string[] {
-  const format = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' });
-  // 2 January 2000 was a Sunday.
-  return Array.from({ length: 7 }, (_, index) =>
-    format.format(new Date(Date.UTC(REFERENCE_YEAR, 0, 2 + index))),
-  );
-}
-
 export function importantDateRuleParts(
   locale: string,
   item: Pick<ImportantDateItem, 'ruleKind' | 'month' | 'day' | 'weekday' | 'nth'>,
 ): ImportantDateRuleParts {
-  if (item.ruleKind === 'FIXED') {
-    return item.day === null
-      ? null
-      : { kind: 'fixed', dayAndMonth: formatDayAndMonth(locale, item.month, item.day) };
+  const rule = importantDateRuleOf(item);
+  if (!rule) return null;
+  if (rule.ruleKind === 'FIXED') {
+    return { kind: 'fixed', dayAndMonth: formatDayAndMonth(locale, rule.month, rule.day) };
   }
 
-  const weekday = item.weekday === null ? undefined : WEEKDAY_KEYS[item.weekday];
-  const ordinal = item.nth === null ? undefined : ORDINAL_KEYS[String(item.nth)];
+  const weekday = WEEKDAY_KEYS[rule.weekday];
+  const ordinal = ordinalKeyOf(rule.nth);
   if (!weekday || !ordinal) return null;
 
-  return { kind: 'nthWeekday', ordinal, weekday, month: monthAfterDay(locale, item.month) };
+  return { kind: 'nthWeekday', ordinal, weekday, month: monthAfterDay(locale, rule.month) };
 }
 
 /** A YYYY-MM-DD date in the reader's language, read as a calendar day rather than an instant. */

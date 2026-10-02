@@ -1,40 +1,13 @@
 import { ForbiddenException } from '@nestjs/common';
-import type { OrganizationRole } from '@churchflow/db';
 import {
   ORG_PERMISSIONS,
   type KnowledgeAuthor,
   type KnowledgeVisibility,
 } from '@churchflow/shared';
-import {
-  assertOrganizationAccess,
-  type OrganizationAccess,
-} from '../../common/guards/organization-access.guard';
-import type { PrismaService } from '../../prisma/prisma.service';
-
-export interface KnowledgeViewer {
-  platformAdmin: boolean;
-  role: OrganizationRole | null;
-  permissions: string[];
-}
-
-export const KNOWLEDGE_AUTHOR_SELECT = {
-  select: { id: true, displayName: true, email: true },
-} as const;
-
-/**
- * The same boundary the routes enforce, resolved again here because the assistant calls the
- * services directly and visibility depends on the role and permissions it returns.
- */
-export function resolveKnowledgeViewer(
-  prisma: PrismaService,
-  organizationId: string,
-  userId: string,
-): Promise<OrganizationAccess> {
-  return assertOrganizationAccess(prisma, { organizationId, userId });
-}
+import type { OrganizationAccess } from '../../common/guards/organization-access.guard';
 
 /** Mirrors the route guard: owners and admins always write, members only with knowledge.manage. */
-export function canManageKnowledge(viewer: KnowledgeViewer): boolean {
+export function canManageKnowledge(viewer: OrganizationAccess): boolean {
   return (
     viewer.platformAdmin ||
     viewer.role === 'OWNER' ||
@@ -44,7 +17,7 @@ export function canManageKnowledge(viewer: KnowledgeViewer): boolean {
 }
 
 /** Every visibility level the viewer may read, applied in every query that returns knowledge. */
-export function visibleKnowledgeLevels(viewer: KnowledgeViewer): KnowledgeVisibility[] {
+export function visibleKnowledgeLevels(viewer: OrganizationAccess): KnowledgeVisibility[] {
   if (viewer.platformAdmin || viewer.role === 'OWNER') return ['MEMBERS', 'ADMINS', 'OWNER'];
   if (canManageKnowledge(viewer)) return ['MEMBERS', 'ADMINS'];
 
@@ -52,12 +25,12 @@ export function visibleKnowledgeLevels(viewer: KnowledgeViewer): KnowledgeVisibi
 }
 
 /** A writer may only hide an entry from others, never from themselves. */
-export function assignableKnowledgeLevels(viewer: KnowledgeViewer): KnowledgeVisibility[] {
+export function assignableKnowledgeLevels(viewer: OrganizationAccess): KnowledgeVisibility[] {
   return canManageKnowledge(viewer) ? visibleKnowledgeLevels(viewer) : [];
 }
 
 export function assertCanWriteKnowledge(
-  viewer: KnowledgeViewer,
+  viewer: OrganizationAccess,
   visibility: KnowledgeVisibility | undefined,
 ): void {
   if (!canManageKnowledge(viewer)) {

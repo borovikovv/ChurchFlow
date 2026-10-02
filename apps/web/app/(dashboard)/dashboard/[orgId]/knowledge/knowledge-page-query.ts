@@ -1,10 +1,10 @@
 import {
+  knowledgeViewSchema,
   listImportantDatesQuerySchema,
   listKnowledgeEntriesQuerySchema,
   type KnowledgeCategory,
+  type KnowledgeView,
 } from '@churchflow/shared';
-
-export type KnowledgeView = 'notes' | 'dates';
 
 export type KnowledgePinnedFilter = 'true' | 'false' | '';
 
@@ -25,7 +25,7 @@ function firstValue(value: string | string[] | undefined): string {
 
 /** Each parameter is validated on its own, so one bad value drops only itself. */
 export function parseKnowledgePageQuery(params: SearchParams): KnowledgePageQuery {
-  const view = firstValue(params['view']);
+  const view = knowledgeViewSchema.safeParse(firstValue(params['view']));
   const filters = listKnowledgeEntriesQuerySchema.shape;
   const search = filters.q.safeParse(firstValue(params['search']));
   const category = filters.category.safeParse(firstValue(params['category']) || undefined);
@@ -33,7 +33,7 @@ export function parseKnowledgePageQuery(params: SearchParams): KnowledgePageQuer
   const pinned = firstValue(params['pinned']);
 
   return {
-    view: view === 'dates' ? 'dates' : 'notes',
+    view: view.success ? view.data : 'notes',
     search: search.success ? (search.data ?? '') : '',
     category: category.success ? (category.data ?? '') : '',
     tag: tag.success ? (tag.data ?? '') : '',
@@ -41,7 +41,6 @@ export function parseKnowledgePageQuery(params: SearchParams): KnowledgePageQuer
   };
 }
 
-/** The validated query string for GET /knowledge, with only the filters that are set. */
 export function knowledgeEntriesRequestQuery(query: KnowledgePageQuery): URLSearchParams {
   const params = new URLSearchParams();
   const parsed = listKnowledgeEntriesQuerySchema.safeParse({
@@ -70,7 +69,6 @@ export function importantDatesRequestQuery(query: KnowledgePageQuery): URLSearch
   return params;
 }
 
-/** The filters a control keeps when it changes its own one. */
 export function knowledgePreservedParams(
   query: KnowledgePageQuery,
 ): Record<string, string | undefined> {

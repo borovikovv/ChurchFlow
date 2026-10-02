@@ -2,17 +2,22 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import {
   CALENDAR_SERVICE_ROLES,
+  IMPORTANT_DATE_NOTES_MAX_LENGTH,
+  IMPORTANT_DATE_NTH_VALUES,
+  IMPORTANT_DATE_REMINDER_MAX_DAYS,
   IMPORTANT_DATE_RULE_KINDS,
   KNOWLEDGE_CATEGORIES,
   KNOWLEDGE_SEARCH_MAX_LENGTH,
   KNOWLEDGE_TAG_MAX_LENGTH,
   KNOWLEDGE_TAGS_MAX_COUNT,
+  KNOWLEDGE_TITLE_MAX_LENGTH,
   KNOWLEDGE_VISIBILITIES,
   ORG_PERMISSIONS,
   createImportantDateSchema,
   createKnowledgeEntrySchema,
   importantDateOccurrencesBetween,
   importantDateRuleOf,
+  listKnowledgeEntriesQuerySchema,
   nextImportantDateOccurrence,
   refineImportantDateRule,
   resolveImportantDate,
@@ -29,7 +34,6 @@ import {
   type OrganizationGroupIcon,
 } from '@churchflow/shared';
 import type { CalendarEventsService } from '../../calendar-events/calendar-events.service';
-import { zonedDateParts } from '../../calendar-events/recurrence/calendar-recurrence';
 import type { GroupsService } from '../../groups/groups.service';
 import { ImportantDatesController } from '../../knowledge/important-dates.controller';
 import type { ImportantDatesService } from '../../knowledge/important-dates.service';
@@ -39,7 +43,13 @@ import type { MembershipsService } from '../../memberships/memberships.service';
 import { richTextToPlainText } from '../../telegram-bot/rich-text-telegram';
 import { jsonInput, localized, type AiToolMeta } from './ai-tool';
 import type { AiToolRunner } from './ai-tool-runner';
-import { localDateTime, localParts, plainTextToRichText } from './calendar.tools';
+import {
+  dateSchema,
+  excerpt,
+  localDateTime,
+  localParts,
+  plainTextToRichText,
+} from './calendar.tools';
 
 const SEARCH_RESULT_LIMIT = 20;
 const EXCERPT_LENGTH = 200;
@@ -142,10 +152,10 @@ export const KNOWLEDGE_TOOL_META = {
   },
 } satisfies Record<string, AiToolMeta>;
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+const [FIRST_NTH, SECOND_NTH, ...OTHER_NTH] = IMPORTANT_DATE_NTH_VALUES;
 
 export const createKnowledgeInputSchema = z.object({
-  title: z.string().trim().min(2).max(160),
+  title: z.string().trim().min(2).max(KNOWLEDGE_TITLE_MAX_LENGTH),
   content: z.string().trim().min(1).max(CONTENT_MAX_LENGTH).describe('Plain text of the note.'),
   category: z.enum(KNOWLEDGE_CATEGORIES).optional(),
   tags: z
@@ -160,8 +170,8 @@ export const createKnowledgeInputSchema = z.object({
 
 export const createImportantDateInputSchema = z
   .object({
-    title: z.string().trim().min(2).max(160),
-    notes: z.string().trim().max(2000).optional(),
+    title: z.string().trim().min(2).max(KNOWLEDGE_TITLE_MAX_LENGTH),
+    notes: z.string().trim().max(IMPORTANT_DATE_NOTES_MAX_LENGTH).optional(),
     ruleKind: z
       .enum(IMPORTANT_DATE_RULE_KINDS)
       .describe('FIXED: the same month and day every year. NTH_WEEKDAY: e.g. the first Sunday.'),
@@ -169,10 +179,14 @@ export const createImportantDateInputSchema = z
     day: z.number().int().min(1).max(31).optional().describe('FIXED only.'),
     weekday: z.number().int().min(0).max(6).optional().describe('NTH_WEEKDAY only; 0 is Sunday.'),
     nth: z
-      .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(-1)])
+      .union([
+        z.literal(FIRST_NTH),
+        z.literal(SECOND_NTH),
+        ...OTHER_NTH.map((value) => z.literal(value)),
+      ])
       .optional()
       .describe('NTH_WEEKDAY only: 1-4, or -1 for the last one in the month.'),
-    reminderLeadDays: z.number().int().min(0).max(60).optional(),
+    reminderLeadDays: z.number().int().min(0).max(IMPORTANT_DATE_REMINDER_MAX_DAYS).optional(),
     visibility: z.enum(KNOWLEDGE_VISIBILITIES).optional(),
   })
   .superRefine(refineImportantDateRule);
@@ -205,7 +219,7 @@ export function knowledgeTools(
     id: null,
     label: localized(locale, { en: 'Important dates', uk: 'Важливі дати' }),
   };
-  const today = localToday(now, timeZone);
+  const today = localParts(now.toISOString(), timeZone).date;
 
   return {
     searchKnowledge: tool({
@@ -218,12 +232,15 @@ export function knowledgeTools(
       }),
       execute: (input, { toolCallId }) =>
         runner.read(KNOWLEDGE_TOOL_META.searchKnowledge, toolCallId, jsonInput(input), async () => {
-          const payload = await knowledgeEntriesService.list(organizationId, userId, {
-            q: input.query || undefined,
-            category: input.category,
-            tag: input.tag ? input.tag.toLowerCase() : undefined,
-            pinned: undefined,
-          });
+          const payload = await knowledgeEntriesService.list(
+            organizationId,
+            userId,
+            listKnowledgeEntriesQuerySchema.parse({
+              q: input.query,
+              category: input.category,
+              tag: input.tag,
+            }),
+          );
           const entries = payload.items.slice(0, SEARCH_RESULT_LIMIT);
 
           return {
@@ -279,8 +296,8 @@ export function knowledgeTools(
         "The church's yearly important dates (anniversaries, Thanksgiving and other days it keeps), each resolved to a concrete date. Without arguments it gives the next occurrence of each; pass a year, or a from/to range of at most two years.",
       inputSchema: z.object({
         year: z.number().int().min(1900).max(2200).optional(),
-        from: isoDate.optional(),
-        to: isoDate.optional(),
+        from: dateSchema.optional(),
+        to: dateSchema.optional(),
       }),
       execute: (input, { toolCallId }) =>
         runner.read(
@@ -323,8 +340,8 @@ export function knowledgeTools(
       description: `Everything needed to plan who serves in a service role over a period, e.g. "make a preaching schedule for November" or "склади графік проповідників на листопад": the people in the ministry group, the services in the period and who is already assigned, the assignments of the previous 8 weeks for a fair rotation, the important dates in the period and the church's notes on this ministry (its rules, rotations and preferences). Call it before proposing a rota or saying who should serve; the user does not have to mention the knowledge base. role: PREACHER (preachers group), WORSHIP_LEAD (worship group), COMMUNION_LEAD (deacons group), SERVICE_HOST (the host, from the teachers group). Pass groupId from listGroups to take the candidates from another group. Local dates, at most ${String(PLANNING_RANGE_MAX_DAYS)} days. It only reads; changes to services go through updateCalendarEvent.`,
       inputSchema: z.object({
         role: z.enum(CALENDAR_SERVICE_ROLES),
-        from: isoDate,
-        to: isoDate,
+        from: dateSchema,
+        to: dateSchema,
         groupId: z
           .string()
           .uuid()
@@ -492,13 +509,6 @@ export function knowledgeTools(
   };
 }
 
-function localToday(now: Date, timeZone: string): string {
-  const parts = zonedDateParts(now, timeZone);
-  const pad = (part: number) => String(part).padStart(2, '0');
-
-  return `${String(parts.year)}-${pad(parts.month)}-${pad(parts.day)}`;
-}
-
 function occurrencesFor(
   input: { year?: number | undefined; from?: string | undefined; to?: string | undefined },
   today: string,
@@ -583,10 +593,6 @@ function daysBetween(from: string, to: string): number | null {
 
 function shiftDate(date: string, days: number): string {
   return new Date(Date.parse(`${date}T00:00:00.000Z`) + days * DAY_MS).toISOString().slice(0, 10);
-}
-
-function excerpt(value: string, length: number): string {
-  return value.length > length ? `${value.slice(0, length - 1)}…` : value;
 }
 
 const MONTHS: Record<AppLocale, readonly string[]> = {
@@ -699,7 +705,7 @@ export function knowledgeApprovalReasons(runner: AiToolRunner) {
         nth: input.nth ?? null,
       });
       const when = rule
-        ? `${describeImportantDateRule(rule, locale)} (${localized(locale, { en: 'next', uk: 'наступна' })}: ${nextImportantDateOccurrence(rule, localToday(now, timeZone))})`
+        ? `${describeImportantDateRule(rule, locale)} (${localized(locale, { en: 'next', uk: 'наступна' })}: ${nextImportantDateOccurrence(rule, localParts(now.toISOString(), timeZone).date)})`
         : localized(locale, { en: 'incomplete date rule', uk: 'неповне правило дати' });
 
       return localized(locale, {

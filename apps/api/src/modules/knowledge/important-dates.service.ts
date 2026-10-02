@@ -8,6 +8,8 @@ import {
   type ListImportantDatesQuery,
   type UpdateImportantDateInput,
 } from '@churchflow/shared';
+import { assertOrganizationAccess } from '../../common/guards/organization-access.guard';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   assertCanWriteKnowledge,
   assignableKnowledgeLevels,
@@ -25,7 +27,10 @@ const DATE_NOT_FOUND = 'Important date was not found';
 
 @Injectable()
 export class ImportantDatesService {
-  constructor(private readonly repository: ImportantDatesRepository) {}
+  constructor(
+    private readonly repository: ImportantDatesRepository,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /** Soonest first, counted from `today` (YYYY-MM-DD; the current UTC date by default). */
   async list(
@@ -34,7 +39,10 @@ export class ImportantDatesService {
     query: ListImportantDatesQuery,
     today: string = todayUtc(),
   ): Promise<ImportantDatesPayload> {
-    const viewer = await this.repository.findViewer(organizationId, actorUserId);
+    const viewer = await assertOrganizationAccess(this.prisma, {
+      userId: actorUserId,
+      organizationId,
+    });
     const dates = await this.repository.list({
       organizationId,
       visibilities: visibleKnowledgeLevels(viewer),
@@ -60,7 +68,10 @@ export class ImportantDatesService {
     dateId: string,
     actorUserId: string,
   ): Promise<ImportantDateItem> {
-    const viewer = await this.repository.findViewer(organizationId, actorUserId);
+    const viewer = await assertOrganizationAccess(this.prisma, {
+      userId: actorUserId,
+      organizationId,
+    });
     const date = await this.repository.findVisible({
       organizationId,
       dateId,
@@ -76,7 +87,10 @@ export class ImportantDatesService {
     input: CreateImportantDateInput,
     actorUserId: string,
   ): Promise<ImportantDateItem> {
-    const viewer = await this.repository.findViewer(organizationId, actorUserId);
+    const viewer = await assertOrganizationAccess(this.prisma, {
+      userId: actorUserId,
+      organizationId,
+    });
     assertCanWriteKnowledge(viewer, input.visibility);
 
     const date = await this.repository.create({ organizationId, actorUserId, date: input });
@@ -90,7 +104,10 @@ export class ImportantDatesService {
     input: UpdateImportantDateInput,
     actorUserId: string,
   ): Promise<ImportantDateItem> {
-    const viewer = await this.repository.findViewer(organizationId, actorUserId);
+    const viewer = await assertOrganizationAccess(this.prisma, {
+      userId: actorUserId,
+      organizationId,
+    });
     assertCanWriteKnowledge(viewer, input.visibility);
 
     const date = await this.repository.update({
@@ -110,7 +127,10 @@ export class ImportantDatesService {
     dateId: string,
     actorUserId: string,
   ): Promise<{ id: string }> {
-    const viewer = await this.repository.findViewer(organizationId, actorUserId);
+    const viewer = await assertOrganizationAccess(this.prisma, {
+      userId: actorUserId,
+      organizationId,
+    });
     assertCanWriteKnowledge(viewer, undefined);
 
     const deleted = await this.repository.delete({
