@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import type { ReactNode } from 'react';
 import type { KnowledgeEntryItem } from '@churchflow/shared';
 import type { KnowledgePageQuery } from '../knowledge-page-query';
 import { KnowledgeFilters } from './knowledge-filters';
@@ -14,6 +15,7 @@ interface NoteGroup {
 }
 
 export function KnowledgeNoteList({
+  actions,
   className,
   filtered,
   items,
@@ -21,6 +23,7 @@ export function KnowledgeNoteList({
   selectedId,
   onSelect,
 }: {
+  actions?: ((entry: KnowledgeEntryItem) => ReactNode) | undefined;
   className?: string | undefined;
   filtered: boolean;
   items: KnowledgeEntryItem[];
@@ -57,6 +60,7 @@ export function KnowledgeNoteList({
               {group.items.map((entry) => (
                 <li key={entry.id}>
                   <KnowledgeNoteListItem
+                    actions={actions?.(entry)}
                     entry={entry}
                     selected={entry.id === selectedId}
                     onSelect={onSelect}

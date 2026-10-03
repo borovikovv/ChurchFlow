@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { KnowledgeEntryItem } from '@churchflow/shared';
 import { knowledgeListClassNames } from './knowledge-lists.styles';
 import type { KnowledgeNotesBrowserProps } from './knowledge-lists.types';
+import { KnowledgeNoteRowActions } from './knowledge-note-actions';
 import { KnowledgeNoteDetail } from './knowledge-note-detail';
 import { KnowledgeNoteList } from './knowledge-note-list';
 
@@ -30,6 +31,18 @@ export function KnowledgeNotesBrowser({
   return (
     <div className="grid min-w-0 items-start gap-4 md:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
       <KnowledgeNoteList
+        actions={
+          payload.canManage
+            ? (entry) => (
+                <KnowledgeNoteRowActions
+                  assignableVisibilities={payload.assignableVisibilities}
+                  entry={entry}
+                  onDelete={deleteNote}
+                  onUpdate={onUpdate}
+                />
+              )
+            : undefined
+        }
         className={noteOpenOnMobile ? 'max-md:hidden' : undefined}
         filtered={filtered}
         items={payload.items}
