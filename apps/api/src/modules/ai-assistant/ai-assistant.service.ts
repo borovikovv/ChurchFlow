@@ -50,6 +50,8 @@ import { addMonths, BILLING_TIME_ZONE } from '../billing/billing-time';
 import { EntitlementsService } from '../billing/entitlements.service';
 import { CalendarEventsService } from '../calendar-events/calendar-events.service';
 import { GroupsService } from '../groups/groups.service';
+import { ImportantDatesService } from '../knowledge/important-dates.service';
+import { KnowledgeEntriesService } from '../knowledge/knowledge-entries.service';
 import { MembershipsService } from '../memberships/memberships.service';
 import { PrayerRequestsService } from '../prayer-requests/prayer-requests.service';
 import {
@@ -155,6 +157,8 @@ export class AiAssistantService {
     private readonly calendarEventsService: CalendarEventsService,
     private readonly prayerRequestsService: PrayerRequestsService,
     private readonly budgetsService: BudgetsService,
+    private readonly knowledgeEntriesService: KnowledgeEntriesService,
+    private readonly importantDatesService: ImportantDatesService,
   ) {}
 
   async usage(userId: string, organizationId: string): Promise<AiAssistantUsagePayload> {
@@ -394,6 +398,8 @@ export class AiAssistantService {
       calendarEventsService: this.calendarEventsService,
       prayerRequestsService: this.prayerRequestsService,
       budgetsService: this.budgetsService,
+      knowledgeEntriesService: this.knowledgeEntriesService,
+      importantDatesService: this.importantDatesService,
     };
     // Filled once the stored history is loaded; the tools that validate it need the runner first.
     const confirmedApprovals = new Map<string, string>();

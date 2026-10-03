@@ -1,4 +1,5 @@
 import type { Route } from 'next';
+import type { KnowledgeView } from '@churchflow/shared';
 
 export const ORGANIZATION_ROUTE_SEGMENTS = {
   dashboard: 'dashboard',
@@ -7,6 +8,7 @@ export const ORGANIZATION_ROUTE_SEGMENTS = {
   members: 'members',
   groups: 'groups',
   prayerRequests: 'prayer-requests',
+  knowledge: 'knowledge',
   profile: 'profile',
   website: 'website',
   publicOrganization: 'o',
@@ -42,6 +44,16 @@ export function organizationBudgetRoute(organizationId: string): Route {
 
 export function organizationPrayerRequestsRoute(organizationId: string): Route {
   return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.prayerRequests}` as Route;
+}
+
+export function organizationKnowledgeRoute(organizationId: string): Route {
+  return `/${ORGANIZATION_ROUTE_SEGMENTS.dashboard}/${organizationId}/${ORGANIZATION_ROUTE_SEGMENTS.knowledge}` as Route;
+}
+
+export function organizationImportantDatesRoute(organizationId: string): Route {
+  const view: KnowledgeView = 'dates';
+
+  return `${organizationKnowledgeRoute(organizationId)}?view=${view}` as Route;
 }
 
 export function organizationProfileRoute(organizationId: string): Route {

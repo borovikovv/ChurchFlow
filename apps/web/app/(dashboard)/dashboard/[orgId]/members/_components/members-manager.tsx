@@ -29,7 +29,7 @@ import { DEFAULT_MEMBER_PAGE_SIZE, MEMBER_PAGE_SIZE_OPTIONS } from '@churchflow/
 import { GroupBadge } from '@/features/groups/components/group-badge';
 import { organizationGroupRoute, organizationMemberRoute } from '@/features/organizations/routes';
 import { useMembersQuery } from '../_hooks/use-members-query';
-import { MemberSearchInput } from './member-search-input';
+import { QuerySearchInput } from '@/components/forms/query-search-input';
 
 type MemberActionProps = Pick<
   ComponentProps<typeof MemberActions>,
@@ -316,7 +316,7 @@ export function MembersManager({
             />
             <MembersFilters {...filterProps} variant="sheet" />
           </div>
-          <MemberSearchInput
+          <QuerySearchInput
             className="order-first md:order-none"
             label={t('searchByName')}
             placeholder={t('searchByNamePlaceholder')}

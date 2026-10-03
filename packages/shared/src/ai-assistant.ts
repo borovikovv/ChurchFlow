@@ -42,6 +42,7 @@ export const AI_ASSISTANT_MODULES = [
   'calendar',
   'prayerRequests',
   'budget',
+  'knowledge',
   'other',
 ] as const;
 
@@ -66,6 +67,12 @@ export const AI_ASSISTANT_TOOL_NAMES = [
   'listPrayerRequests',
   'createPrayerRequest',
   'budgetSummary',
+  'searchKnowledge',
+  'getKnowledge',
+  'listImportantDates',
+  'getPlanningContext',
+  'createKnowledge',
+  'createImportantDate',
 ] as const;
 
 export type AiAssistantToolName = (typeof AI_ASSISTANT_TOOL_NAMES)[number];
@@ -77,6 +84,8 @@ export const AI_ASSISTANT_ENTITY_KINDS = [
   'calendar',
   'prayerRequests',
   'budget',
+  'knowledge',
+  'importantDates',
 ] as const;
 
 export type AiAssistantEntityKind = (typeof AI_ASSISTANT_ENTITY_KINDS)[number];

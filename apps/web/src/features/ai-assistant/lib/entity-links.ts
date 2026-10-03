@@ -5,6 +5,8 @@ import {
   organizationCalendarRoute,
   organizationGroupRoute,
   organizationGroupsRoute,
+  organizationImportantDatesRoute,
+  organizationKnowledgeRoute,
   organizationMemberRoute,
   organizationMembersRoute,
   organizationPrayerRequestsRoute,
@@ -29,5 +31,9 @@ export function aiAssistantEntityLinkRoute(
       return organizationPrayerRequestsRoute(organizationId);
     case 'budget':
       return organizationBudgetRoute(organizationId);
+    case 'knowledge':
+      return organizationKnowledgeRoute(organizationId);
+    case 'importantDates':
+      return organizationImportantDatesRoute(organizationId);
   }
 }

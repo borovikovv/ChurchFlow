@@ -11,6 +11,7 @@ const {
   resolveAiAssistantAccess,
   billingPeriodContaining,
   calendarMonthPeriod,
+  lateRenewalUsageCarryOver,
 } = require('../dist/modules/ai-assistant/ai-assistant-access.js');
 const {
   buildAssistantInstructions,
@@ -165,6 +166,72 @@ test('the period starts exactly when the previous one ends', () => {
   );
 });
 
+test('a renewal paid late carries the usage counted since the period ended into its month', () => {
+  const carryOver = lateRenewalUsageCarryOver({
+    previousPeriodEndsAt: new Date('2026-10-15T08:00:00.000Z'),
+    nextPeriodEndsAt: new Date('2026-11-16T09:00:00.000Z'),
+    now: new Date('2026-10-16T09:00:00.000Z'),
+  });
+
+  assert.equal(carryOver.from.toISOString(), '2026-10-15T08:00:00.000Z');
+  assert.equal(carryOver.to.toISOString(), '2026-10-16T09:00:00.000Z');
+});
+
+test('a renewal that keeps the counting window carries nothing over', () => {
+  const end = new Date('2026-10-15T08:00:00.000Z');
+
+  // Paid ahead of time: the month is added to the old end, so the window does not move.
+  assert.equal(
+    lateRenewalUsageCarryOver({
+      previousPeriodEndsAt: end,
+      nextPeriodEndsAt: new Date('2026-11-15T08:00:00.000Z'),
+      now: new Date('2026-10-14T08:00:00.000Z'),
+    }),
+    null,
+  );
+  // Paid at the very moment the period ends.
+  assert.equal(
+    lateRenewalUsageCarryOver({
+      previousPeriodEndsAt: end,
+      nextPeriodEndsAt: new Date('2026-11-15T08:00:00.000Z'),
+      now: end,
+    }),
+    null,
+  );
+  // A subscription that never had a paid period counted nothing in one.
+  assert.equal(
+    lateRenewalUsageCarryOver({
+      previousPeriodEndsAt: null,
+      nextPeriodEndsAt: new Date('2026-11-16T09:00:00.000Z'),
+      now: new Date('2026-10-16T09:00:00.000Z'),
+    }),
+    null,
+  );
+});
+
+test('a renewal paid more than a month late carries over only the window that contains now', () => {
+  const carryOver = lateRenewalUsageCarryOver({
+    previousPeriodEndsAt: new Date('2026-08-15T08:00:00.000Z'),
+    nextPeriodEndsAt: new Date('2026-11-16T09:00:00.000Z'),
+    now: new Date('2026-10-16T09:00:00.000Z'),
+  });
+
+  assert.equal(carryOver.from.toISOString(), '2026-10-15T08:00:00.000Z');
+  assert.equal(carryOver.to.toISOString(), '2026-10-16T09:00:00.000Z');
+});
+
+test('a late renewal at the end of a long month carries over into the clamped window', () => {
+  // 31 Jan + 1 month is 28 Feb, and 28 Feb - 1 month is 28 Jan: the new window starts earlier.
+  const carryOver = lateRenewalUsageCarryOver({
+    previousPeriodEndsAt: new Date('2027-01-30T08:00:00.000Z'),
+    nextPeriodEndsAt: new Date('2027-02-28T09:00:00.000Z'),
+    now: new Date('2027-01-31T09:00:00.000Z'),
+  });
+
+  assert.equal(carryOver.from.toISOString(), '2027-01-30T08:00:00.000Z');
+  assert.equal(carryOver.to.toISOString(), '2027-01-28T09:00:00.000Z');
+});
+
 test('complimentary access counts by the calendar month in Kyiv', () => {
   // 23:30 UTC on 31 October is already 1 November in Kyiv (UTC+2 after the clock change).
   const period = calendarMonthPeriod(new Date('2026-10-31T23:30:00.000Z'));
@@ -189,6 +256,89 @@ test('the tools offered first follow the page and the words of the request', () 
   assert.deepEqual(
     initialToolGroups({ module: 'home', text: null, pendingGroups: ['calendar', 'core'] }),
     ['calendar'],
+  );
+});
+
+function groupsFor(text) {
+  return initialToolGroups({ module: 'home', text, pendingGroups: [] }).sort();
+}
+
+test('planning and decision requests load the calendar, the members and the knowledge base', () => {
+  for (const text of [
+    'Who should preach next Sunday?',
+    'Make a schedule of preachers for November',
+    'Plan the worship rota for next month',
+    'Draft a rotation for the sound desk',
+    'Assign someone to lead worship on Sunday',
+    'Склади графік проповідників на листопад',
+    'Хто має проповідувати наступної неділі?',
+    'Хто повинен вести прославлення?',
+    'Розподіли служіння на жовтень',
+    'Яка черга проповідників?',
+    'Яка черговість ведучих служіння?',
+    'Потрібна ротація для медіа-служіння',
+  ]) {
+    assert.deepEqual(groupsFor(text), ['calendar', 'knowledge', 'members'], text);
+  }
+});
+
+test('questions about how the church usually does things load the knowledge base', () => {
+  for (const text of [
+    'How do we usually welcome guests?',
+    'What is our tradition for baptisms?',
+    'What is the procedure for a funeral?',
+    'Is there a preference for a Bible translation?',
+    'Як у нас зазвичай проходить хрещення?',
+    'Як ми зазвичай вітаємо гостей?',
+    'Що у нас прийнято на Різдво?',
+    'Який порядок причастя?',
+    'Яка процедура для вінчання?',
+    'Remember this rule: no events on Monday',
+    'Запамʼятай це правило',
+  ]) {
+    assert.ok(groupsFor(text).includes('knowledge'), text);
+  }
+  assert.deepEqual(groupsFor('How do we usually welcome guests?'), ['knowledge']);
+  assert.deepEqual(groupsFor('Як у нас зазвичай вітають гостей?'), ['knowledge']);
+});
+
+test('important and annual dates load the calendar and the knowledge base', () => {
+  for (const text of [
+    'When is our church anniversary?',
+    'What important dates do we have this year?',
+    'Коли день подяки?',
+    'Які важливі дати щороку?',
+  ]) {
+    assert.deepEqual(groupsFor(text), ['calendar', 'knowledge'], text);
+  }
+});
+
+test('a simple lookup does not load the knowledge base', () => {
+  assert.deepEqual(groupsFor('Who is preaching next Sunday?'), ['calendar']);
+  assert.deepEqual(groupsFor('Хто проповідує в неділю?'), ['calendar']);
+});
+
+test('the instructions tell the assistant to consult church knowledge on its own', () => {
+  const instructions = buildAssistantInstructions({
+    organizationName: 'Grace Church',
+    role: 'MEMBER',
+    locale: 'en',
+    timeZone: 'Europe/Kyiv',
+    now: new Date('2026-10-01T10:00:00.000Z'),
+    module: 'home',
+    currentGroup: null,
+    currentMember: null,
+  });
+
+  assert.match(instructions, /first look up the relevant church knowledge/);
+  assert.match(instructions, /searchKnowledge, listImportantDates, getPlanningContext/);
+  assert.match(instructions, /The user does not have to mention the knowledge base/);
+  assert.match(instructions, /Fetch only what the task needs/);
+  assert.match(instructions, /never invent or assume a church-specific rule/);
+  assert.match(instructions, /call getPlanningContext/);
+  assert.match(
+    instructions,
+    /Never save anything to the knowledge base unless the user explicitly asks/,
   );
 });
 

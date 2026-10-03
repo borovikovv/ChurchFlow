@@ -3,6 +3,7 @@
 import type { Route } from 'next';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ChangeEvent } from 'react';
+import { queryHref } from '@/lib/query-href';
 import { FormSelect } from './form-select';
 
 export interface QueryFilterSelectOption {
@@ -32,19 +33,9 @@ export function QueryFilterSelect({
   const pathname = usePathname();
   const router = useRouter();
   const updateFilter = (event: ChangeEvent<HTMLSelectElement>) => {
-    const params = new URLSearchParams();
-    Object.entries(preserveParams ?? {}).forEach(([paramName, paramValue]) => {
-      if (paramValue) {
-        params.set(paramName, paramValue);
-      }
-    });
-
-    if (event.currentTarget.value) {
-      params.set(name, event.currentTarget.value);
-    }
-
-    const query = params.toString();
-    router.push((query ? `${pathname}?${query}` : pathname) as Route);
+    router.push(
+      queryHref(pathname, preserveParams ?? {}, name, event.currentTarget.value) as Route,
+    );
   };
 
   return (

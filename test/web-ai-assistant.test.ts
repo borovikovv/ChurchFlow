@@ -38,6 +38,7 @@ test('the page context follows the dashboard section', () => {
     module: 'prayerRequests',
   });
   assert.deepEqual(aiAssistantPageContext(`/dashboard/${ORG}/budget`), { module: 'budget' });
+  assert.deepEqual(aiAssistantPageContext(`/dashboard/${ORG}/knowledge`), { module: 'knowledge' });
   assert.deepEqual(aiAssistantPageContext('/profile'), { module: 'other' });
 });
 
@@ -217,6 +218,14 @@ test('entity links open the record when it has an id and the list otherwise', ()
   assert.equal(
     aiAssistantEntityLinkRoute(ORG, { kind: 'budget', id: null, label: 'Budget' }),
     `/dashboard/${ORG}/budget`,
+  );
+  assert.equal(
+    aiAssistantEntityLinkRoute(ORG, { kind: 'knowledge', id: null, label: 'Knowledge' }),
+    `/dashboard/${ORG}/knowledge`,
+  );
+  assert.equal(
+    aiAssistantEntityLinkRoute(ORG, { kind: 'importantDates', id: null, label: 'Dates' }),
+    `/dashboard/${ORG}/knowledge?view=dates`,
   );
 });
 

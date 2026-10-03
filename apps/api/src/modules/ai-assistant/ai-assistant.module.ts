@@ -5,6 +5,7 @@ import { BillingModule } from '../billing/billing.module';
 import { BudgetsModule } from '../budgets/budgets.module';
 import { CalendarEventsModule } from '../calendar-events/calendar-events.module';
 import { GroupsModule } from '../groups/groups.module';
+import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { MembershipsModule } from '../memberships/memberships.module';
 import { PrayerRequestsModule } from '../prayer-requests/prayer-requests.module';
 import { ScheduledJobsModule } from '../scheduled-jobs/scheduled-jobs.module';
@@ -24,6 +25,7 @@ import { AiAssistantRepository } from './repositories/ai-assistant.repository';
     CalendarEventsModule,
     PrayerRequestsModule,
     BudgetsModule,
+    KnowledgeModule,
   ],
   controllers: [AiAssistantController, AiAssistantAdminController],
   providers: [

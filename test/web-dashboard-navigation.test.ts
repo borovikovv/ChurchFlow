@@ -11,6 +11,7 @@ const LABELS = {
   calendar: 'Calendar',
   groups: 'Groups',
   home: 'Home',
+  knowledge: 'Knowledge',
   members: 'Members',
   prayerRequests: 'Prayers',
   profile: 'Profile',
@@ -19,6 +20,7 @@ const LABELS = {
 const DESCRIPTIONS = {
   budget: 'Budget description',
   groups: 'Groups description',
+  knowledge: 'Knowledge description',
   prayerRequests: 'Prayers description',
   profile: 'Profile description',
   website: 'Website description',
@@ -35,7 +37,17 @@ const items = dashboardNavigationItems(ORG, {
 test('the desktop sidebar keeps its order', () => {
   assert.deepEqual(
     items.map((item) => item.label),
-    ['Home', 'Profile', 'Members', 'Groups', 'Calendar', 'Prayers', 'Budget', 'Website'],
+    [
+      'Home',
+      'Profile',
+      'Members',
+      'Groups',
+      'Calendar',
+      'Prayers',
+      'Knowledge',
+      'Budget',
+      'Website',
+    ],
   );
 });
 
@@ -51,7 +63,7 @@ test('Groups moves to the More sheet, directly above Prayers, with a description
 
   assert.deepEqual(
     moreItems.map((item) => item.label),
-    ['Groups', 'Prayers', 'Budget', 'Website'],
+    ['Groups', 'Prayers', 'Knowledge', 'Budget', 'Website'],
   );
   assert.equal(moreItems[0]?.description, 'Groups description');
 });

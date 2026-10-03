@@ -71,6 +71,25 @@ export function billingPeriodContaining(periodEndsAt: Date, now: Date): AiAssist
   return { start, end };
 }
 
+/**
+ * Where the allowance used so far has to move when a renewal is credited. One paid after its
+ * period ran out starts the new month at the payment, not where the old one ended, so the window
+ * counted since then is no longer the one being read - and its actions would be handed out again.
+ */
+export function lateRenewalUsageCarryOver(input: {
+  previousPeriodEndsAt: Date | null;
+  nextPeriodEndsAt: Date;
+  now: Date;
+}): { from: Date; to: Date } | null {
+  const { previousPeriodEndsAt, nextPeriodEndsAt, now } = input;
+  if (!previousPeriodEndsAt || previousPeriodEndsAt.getTime() > now.getTime()) return null;
+
+  const from = billingPeriodContaining(previousPeriodEndsAt, now).start;
+  const to = billingPeriodContaining(nextPeriodEndsAt, now).start;
+
+  return from.getTime() === to.getTime() ? null : { from, to };
+}
+
 export function calendarMonthPeriod(now: Date): AiAssistantUsagePeriod {
   const { year, month } = zonedDateParts(now, BILLING_TIME_ZONE);
   const start = zonedDateTimeToUtc(

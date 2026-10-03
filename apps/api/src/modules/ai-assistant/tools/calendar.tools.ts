@@ -65,7 +65,7 @@ export const CALENDAR_TOOL_META = {
   },
 } satisfies Record<string, AiToolMeta>;
 
-const dateSchema = z
+export const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .describe('A local date, YYYY-MM-DD.');
@@ -131,7 +131,7 @@ interface ServicePersonPayload {
   customName?: string;
 }
 
-function plainTextToRichText(value: string): string {
+export function plainTextToRichText(value: string): string {
   const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   return escaped
@@ -187,14 +187,14 @@ function servicePayload(service: ServiceDetailsInput) {
   return mergeServiceDetails(null, service);
 }
 
-function localDateTime(date: string, time: string, timeZone: string): string {
+export function localDateTime(date: string, time: string, timeZone: string): string {
   const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
   const [hour = 0, minute = 0] = time.split(':').map(Number);
 
   return zonedDateTimeToUtc({ year, month, day, hour, minute, second: 0 }, timeZone).toISOString();
 }
 
-function localParts(value: string, timeZone: string): { date: string; time: string } {
+export function localParts(value: string, timeZone: string): { date: string; time: string } {
   const parts = zonedDateParts(new Date(value), timeZone);
   const pad = (part: number) => String(part).padStart(2, '0');
 
@@ -512,10 +512,8 @@ const REASON_LABELS: Record<ReasonLabel, { en: string; uk: string }> = {
   description: { en: 'Description', uk: 'Опис' },
 };
 
-function excerpt(value: string): string {
-  return value.length > DESCRIPTION_EXCERPT_LENGTH
-    ? `${value.slice(0, DESCRIPTION_EXCERPT_LENGTH - 1)}…`
-    : value;
+export function excerpt(value: string, length: number): string {
+  return value.length > length ? `${value.slice(0, length - 1)}…` : value;
 }
 
 /**
@@ -585,7 +583,9 @@ export function calendarApprovalReasons(runner: AiToolRunner, names: AiNameResol
         ...(input.reminder ? [line('reminder', input.reminder)] : []),
         ...(assignees.length > 0 ? [line('assignees', assignees.join(', '))] : []),
         ...(await serviceLines(input.service)),
-        ...(input.description ? [line('description', excerpt(input.description))] : []),
+        ...(input.description
+          ? [line('description', excerpt(input.description, DESCRIPTION_EXCERPT_LENGTH))]
+          : []),
       ];
 
       return lines.join('\n');
@@ -611,7 +611,7 @@ export function calendarApprovalReasons(runner: AiToolRunner, names: AiNameResol
         ...(input.allDay !== undefined ? [line('allDay', input.allDay ? yes : no)] : []),
         ...(await serviceLines(input.service)),
         ...(input.description !== undefined
-          ? [line('description', excerpt(input.description))]
+          ? [line('description', excerpt(input.description, DESCRIPTION_EXCERPT_LENGTH))]
           : []),
       ];
 

@@ -48,12 +48,18 @@ export function ActionMenuButton({
 
     const triggerRect = trigger.getBoundingClientRect();
     const menuHeight = menuContentRef.current?.offsetHeight ?? 0;
+    const menuWidth = menuContentRef.current?.offsetWidth ?? 0;
     const preferredTop = triggerRect.bottom + 6;
     const maxTop = window.innerHeight - menuHeight - 8;
+    // A trigger near the left edge would push a right-aligned menu off screen, so it aligns left.
+    const right =
+      triggerRect.right - menuWidth < 8
+        ? window.innerWidth - triggerRect.left - menuWidth
+        : window.innerWidth - triggerRect.right;
 
     return {
       top: Math.max(8, Math.min(preferredTop, maxTop)),
-      right: Math.max(8, window.innerWidth - triggerRect.right),
+      right: Math.max(8, right),
     };
   }, []);
 

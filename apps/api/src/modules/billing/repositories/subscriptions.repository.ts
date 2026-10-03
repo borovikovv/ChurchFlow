@@ -365,6 +365,43 @@ export class SubscriptionsRepository {
     return { lastEventAt: latest._max.eventAt, paymentAlreadyFailed: failed !== null };
   }
 
+  /**
+   * Moves the AI actions counted in one billing window into another and returns how many moved.
+   * The counters are locked first, so an action reserved there while this runs waits for the move
+   * and is counted on what is left. One refunded there afterwards finds nothing to take back, and
+   * stays spent.
+   */
+  carryOverAiUsage(input: { organizationId: string; from: Date; to: Date }): Promise<number> {
+    const { organizationId, from, to } = input;
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw<Array<{ used: number }>>`
+        SELECT used
+        FROM ai_usage_counters
+        WHERE organization_id = ${organizationId}::uuid
+        FOR UPDATE
+      `;
+
+      const source = await tx.aiUsageCounter.findUnique({
+        where: { organizationId_periodStart: { organizationId, periodStart: from } },
+        select: { used: true },
+      });
+      if (!source || source.used === 0) return 0;
+
+      await tx.aiUsageCounter.upsert({
+        where: { organizationId_periodStart: { organizationId, periodStart: to } },
+        create: { organizationId, periodStart: to, used: source.used },
+        update: { used: { increment: source.used } },
+      });
+      await tx.aiUsageCounter.update({
+        where: { organizationId_periodStart: { organizationId, periodStart: from } },
+        data: { used: { decrement: source.used } },
+      });
+
+      return source.used;
+    });
+  }
+
   private async hasCallback(input: {
     orderId: string;
     paymentId: string;
