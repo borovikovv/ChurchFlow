@@ -332,6 +332,10 @@ model User {
   aiToolExecutions                AiToolExecution[]               @relation("AiToolExecutionRequester")
   aiModelUsage                    AiModelUsage[]
   decidedAiToolExecutions         AiToolExecution[]               @relation("AiToolExecutionDecider")
+  createdKnowledgeEntries         KnowledgeEntry[]                @relation("KnowledgeEntryCreator")
+  updatedKnowledgeEntries         KnowledgeEntry[]                @relation("KnowledgeEntryUpdater")
+  createdImportantDates           ImportantDate[]                 @relation("ImportantDateCreator")
+  updatedImportantDates           ImportantDate[]                 @relation("ImportantDateUpdater")
   avatarAsset                     MediaAsset?                     @relation(fields: [avatarAssetId], references: [id], onDelete: SetNull)
 
   @@map("users")
@@ -482,6 +486,8 @@ model Organization {
   aiToolExecutions        AiToolExecution[]
   aiUsageCounters         AiUsageCounter[]
   aiModelUsage            AiModelUsage[]
+  knowledgeEntries        KnowledgeEntry[]
+  importantDates          ImportantDate[]
 
   @@index([status])
   @@index([slug])
@@ -1657,4 +1663,80 @@ model AiUsageCounter {
 
   @@id([organizationId, periodStart])
   @@map("ai_usage_counters")
+}
+
+enum KnowledgeCategory {
+  TRADITION
+  INSTRUCTION
+  AGREEMENT
+  MINISTRY
+  THEOLOGY
+  OTHER
+}
+
+// Who can read an entry: every member, the people who run the church, or the owner alone.
+enum KnowledgeVisibility {
+  MEMBERS
+  ADMINS
+  OWNER
+}
+
+enum ImportantDateRuleKind {
+  FIXED
+  NTH_WEEKDAY
+}
+
+// What the church has decided and how it does things, written down for its members and read by
+// the assistant through tools. The content is sanitized rich text HTML.
+model KnowledgeEntry {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  title          String
+  content        String
+  category       KnowledgeCategory   @default(OTHER)
+  tags           String[]            @default([])
+  pinned         Boolean             @default(false)
+  visibility     KnowledgeVisibility @default(MEMBERS)
+  createdById    String?             @map("created_by_id") @db.Uuid
+  updatedById    String?             @map("updated_by_id") @db.Uuid
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("KnowledgeEntryCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy    User?        @relation("KnowledgeEntryUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, pinned, updatedAt])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("knowledge_entries")
+}
+
+// A date the church keeps every year. FIXED uses month and day; NTH_WEEKDAY uses month, weekday
+// (0 = Sunday) and nth (1-4, or -1 for the last one in the month).
+model ImportantDate {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @map("organization_id") @db.Uuid
+  title            String
+  notes            String?
+  ruleKind         ImportantDateRuleKind @map("rule_kind")
+  month            Int
+  day              Int?
+  weekday          Int?
+  nth              Int?
+  reminderLeadDays Int?                  @map("reminder_lead_days")
+  visibility       KnowledgeVisibility   @default(MEMBERS)
+  createdById      String?               @map("created_by_id") @db.Uuid
+  updatedById      String?               @map("updated_by_id") @db.Uuid
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("ImportantDateCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy    User?        @relation("ImportantDateUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, month])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("important_dates")
 }

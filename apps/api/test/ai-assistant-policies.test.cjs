@@ -259,6 +259,89 @@ test('the tools offered first follow the page and the words of the request', () 
   );
 });
 
+function groupsFor(text) {
+  return initialToolGroups({ module: 'home', text, pendingGroups: [] }).sort();
+}
+
+test('planning and decision requests load the calendar, the members and the knowledge base', () => {
+  for (const text of [
+    'Who should preach next Sunday?',
+    'Make a schedule of preachers for November',
+    'Plan the worship rota for next month',
+    'Draft a rotation for the sound desk',
+    'Assign someone to lead worship on Sunday',
+    'Склади графік проповідників на листопад',
+    'Хто має проповідувати наступної неділі?',
+    'Хто повинен вести прославлення?',
+    'Розподіли служіння на жовтень',
+    'Яка черга проповідників?',
+    'Яка черговість ведучих служіння?',
+    'Потрібна ротація для медіа-служіння',
+  ]) {
+    assert.deepEqual(groupsFor(text), ['calendar', 'knowledge', 'members'], text);
+  }
+});
+
+test('questions about how the church usually does things load the knowledge base', () => {
+  for (const text of [
+    'How do we usually welcome guests?',
+    'What is our tradition for baptisms?',
+    'What is the procedure for a funeral?',
+    'Is there a preference for a Bible translation?',
+    'Як у нас зазвичай проходить хрещення?',
+    'Як ми зазвичай вітаємо гостей?',
+    'Що у нас прийнято на Різдво?',
+    'Який порядок причастя?',
+    'Яка процедура для вінчання?',
+    'Remember this rule: no events on Monday',
+    'Запамʼятай це правило',
+  ]) {
+    assert.ok(groupsFor(text).includes('knowledge'), text);
+  }
+  assert.deepEqual(groupsFor('How do we usually welcome guests?'), ['knowledge']);
+  assert.deepEqual(groupsFor('Як у нас зазвичай вітають гостей?'), ['knowledge']);
+});
+
+test('important and annual dates load the calendar and the knowledge base', () => {
+  for (const text of [
+    'When is our church anniversary?',
+    'What important dates do we have this year?',
+    'Коли день подяки?',
+    'Які важливі дати щороку?',
+  ]) {
+    assert.deepEqual(groupsFor(text), ['calendar', 'knowledge'], text);
+  }
+});
+
+test('a simple lookup does not load the knowledge base', () => {
+  assert.deepEqual(groupsFor('Who is preaching next Sunday?'), ['calendar']);
+  assert.deepEqual(groupsFor('Хто проповідує в неділю?'), ['calendar']);
+});
+
+test('the instructions tell the assistant to consult church knowledge on its own', () => {
+  const instructions = buildAssistantInstructions({
+    organizationName: 'Grace Church',
+    role: 'MEMBER',
+    locale: 'en',
+    timeZone: 'Europe/Kyiv',
+    now: new Date('2026-10-01T10:00:00.000Z'),
+    module: 'home',
+    currentGroup: null,
+    currentMember: null,
+  });
+
+  assert.match(instructions, /first look up the relevant church knowledge/);
+  assert.match(instructions, /searchKnowledge, listImportantDates, getPlanningContext/);
+  assert.match(instructions, /The user does not have to mention the knowledge base/);
+  assert.match(instructions, /Fetch only what the task needs/);
+  assert.match(instructions, /never invent or assume a church-specific rule/);
+  assert.match(instructions, /call getPlanningContext/);
+  assert.match(
+    instructions,
+    /Never save anything to the knowledge base unless the user explicitly asks/,
+  );
+});
+
 test('the instructions carry the time zone, the page and the prompt-injection rule', () => {
   const instructions = buildAssistantInstructions({
     organizationName: 'Grace Church',

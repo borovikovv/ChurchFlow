@@ -4,6 +4,7 @@ export * from './budget-totals.js';
 export * from './constants.js';
 export * from './entitlements.js';
 export * from './env.js';
+export * from './knowledge.js';
 export * from './locale.js';
 export * from './member-csv-template.js';
 export * from './passkeys.js';

@@ -10,7 +10,14 @@ import { ZodError } from 'zod';
 import type { OrganizationPermission } from '../../../common/guards/organization-access.guard';
 
 /** Tools are offered to the model in groups, so a request only pays for the schemas it needs. */
-export const AI_TOOL_GROUPS = ['members', 'groups', 'calendar', 'prayers', 'budget'] as const;
+export const AI_TOOL_GROUPS = [
+  'members',
+  'groups',
+  'calendar',
+  'prayers',
+  'budget',
+  'knowledge',
+] as const;
 
 export type AiToolGroup = (typeof AI_TOOL_GROUPS)[number] | 'core';
 

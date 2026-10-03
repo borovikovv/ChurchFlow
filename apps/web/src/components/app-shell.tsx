@@ -77,6 +77,7 @@ export function AppShell({
         descriptions: {
           budget: t('descriptions.budget'),
           groups: t('descriptions.groups'),
+          knowledge: t('descriptions.knowledge'),
           prayerRequests: t('descriptions.prayerRequests'),
           profile: t('descriptions.profile'),
           website: t('descriptions.website'),
@@ -86,6 +87,7 @@ export function AppShell({
           calendar: t('calendar'),
           groups: t('groups'),
           home: t('home'),
+          knowledge: t('knowledge'),
           members: t('members'),
           prayerRequests: t('prayerRequests'),
           profile: t('profile'),

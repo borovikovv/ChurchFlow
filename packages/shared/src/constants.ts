@@ -13,6 +13,7 @@ export const ORG_PERMISSIONS = {
   membersManage: 'members.manage',
   websiteManage: 'website.manage',
   mediaManage: 'media.manage',
+  knowledgeManage: 'knowledge.manage',
 } as const;
 
 export const BUDGET_AUDIT_ENTITY_TYPE = 'Budget';
@@ -158,6 +159,8 @@ export const AUDIT_ENTITY_TYPES = [
   'BirthdayDigest',
   'Budget',
   'CalendarEvent',
+  'ImportantDate',
+  'KnowledgeEntry',
   'MediaAsset',
   'MembershipClaim',
   'Organization',

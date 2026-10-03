@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { FormRepeater, type RepeaterField } from '@/components/forms/form-repeater';
 import { FormSelect, type SelectOption } from '@/components/forms/form-select';
+import { weekdayNames } from '@/lib/calendar-names';
 import { updateSettings } from '../form-actions';
 import type { DashboardWebsite } from '../types';
 import {
@@ -22,8 +23,6 @@ import type { SubmitWebsiteForm } from './website-editor.types';
 
 // Mirrors the limit websiteSettingsSchema puts on the stored list.
 const MAX_SERVICE_TIMES = 10;
-// A Sunday, so the weekday numbers the schema stores (0 = Sunday) map straight onto the offsets.
-const WEEKDAY_ANCHOR = Date.UTC(2026, 8, 13);
 
 export function WebsiteSettingsDialog({
   organizationId,
@@ -293,12 +292,7 @@ export function WebsiteSettingsDialog({
 // The day names come from the platform rather than from the message files, which keeps the select
 // in the editor's language without a second list of weekdays to translate and keep in step.
 function weekdayOptions(locale: string): SelectOption[] {
-  const format = new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long' });
-
-  return Array.from({ length: 7 }, (_, weekday) => ({
-    label: format.format(WEEKDAY_ANCHOR + weekday * 24 * 60 * 60 * 1000),
-    value: String(weekday),
-  }));
+  return weekdayNames(locale).map((label, weekday) => ({ label, value: String(weekday) }));
 }
 
 function Fieldset({ children, title }: { children: React.ReactNode; title: string }) {

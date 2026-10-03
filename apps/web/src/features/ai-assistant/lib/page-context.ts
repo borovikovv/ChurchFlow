@@ -33,6 +33,8 @@ export function aiAssistantPageContext(pathname: string): AiAssistantPageContext
       return { module: 'prayerRequests' };
     case ORGANIZATION_ROUTE_SEGMENTS.budget:
       return { module: 'budget' };
+    case ORGANIZATION_ROUTE_SEGMENTS.knowledge:
+      return { module: 'knowledge' };
     default:
       return { module: 'other' };
   }

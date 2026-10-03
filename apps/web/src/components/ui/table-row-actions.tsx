@@ -11,7 +11,9 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
+import type { VariantProps } from 'class-variance-authority';
 import { useCloseOnOutsideClick } from '@/hooks/use-close-on-outside-click';
+import { tableRowActionsTriggerClassName } from './table-row-actions.styles';
 
 export const tableRowActionClassName =
   'flex min-h-[38px] w-full cursor-pointer items-center justify-start gap-2.5 rounded-md border-0 bg-transparent px-2.5 py-2 text-left font-medium text-[var(--foreground)] shadow-none hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60';
@@ -34,6 +36,7 @@ export function useTableRowActions() {
 }
 
 export function TableRowActions({
+  appearance,
   children,
   className,
   ignoreOutsideClickRefs = [],
@@ -45,7 +48,7 @@ export function TableRowActions({
   ignoreOutsideClickRefs?: Array<RefObject<Element | null>>;
   label: string;
   outsideClickDisabled?: boolean;
-}) {
+} & VariantProps<typeof tableRowActionsTriggerClassName>) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   const menuContentRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -115,10 +118,7 @@ export function TableRowActions({
       }}
       ref={menuRef}
     >
-      <summary
-        aria-label={label}
-        className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-[var(--radius)] border border-transparent text-[var(--foreground)] hover:border-[var(--line)] hover:bg-[var(--surface-subtle)] group-open:border-[var(--accent)] group-open:bg-[var(--surface-subtle)] group-open:ring-2 group-open:ring-[rgba(9,105,218,0.15)] [&::-webkit-details-marker]:hidden"
-      >
+      <summary aria-label={label} className={tableRowActionsTriggerClassName({ appearance })}>
         <svg aria-hidden="true" className="h-5 w-5 fill-current" viewBox="0 0 20 20">
           <circle cx="10" cy="4" r="1.6" />
           <circle cx="10" cy="10" r="1.6" />
