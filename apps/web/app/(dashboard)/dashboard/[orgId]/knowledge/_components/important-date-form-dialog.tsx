@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocale, useTranslations } from 'next-intl';
-import { useId, useMemo, useRef, type RefObject } from 'react';
+import { useId, useMemo, useRef, type ReactNode, type RefObject } from 'react';
 import { Controller, useForm, type Control } from 'react-hook-form';
 import {
   IMPORTANT_DATE_NOTES_MAX_LENGTH,
@@ -19,7 +19,7 @@ import {
 import { FormInput } from '@/components/forms/form-input';
 import { FormSelect } from '@/components/forms/form-select';
 import { FormTextarea } from '@/components/forms/form-textarea';
-import { Button } from '@/components/ui/button';
+import { Button, type ButtonVariant } from '@/components/ui/button';
 import { FormDialog } from '@/components/ui/form-dialog';
 import { monthNames, weekdayNames } from '@/lib/calendar-names';
 import { ORDINAL_KEYS } from '../important-date-format';
@@ -42,6 +42,7 @@ export function ImportantDateFormDialog({
   title,
   triggerClassName,
   triggerLabel,
+  triggerVariant = 'ghost',
   onClose,
   onSubmit,
 }: {
@@ -50,7 +51,8 @@ export function ImportantDateFormDialog({
   dialogRef?: RefObject<HTMLDialogElement | null>;
   title: string;
   triggerClassName?: string;
-  triggerLabel?: string;
+  triggerLabel?: ReactNode;
+  triggerVariant?: ButtonVariant;
   onClose?: () => void;
   onSubmit: (date: CreateImportantDateInput, closeDialog: () => void) => void;
 }) {
@@ -98,7 +100,7 @@ export function ImportantDateFormDialog({
       fullScreenOnMobile
       size="md"
       title={title}
-      triggerVariant="ghost"
+      triggerVariant={triggerVariant}
       onOpen={resetForm}
       onClose={() => {
         resetForm();

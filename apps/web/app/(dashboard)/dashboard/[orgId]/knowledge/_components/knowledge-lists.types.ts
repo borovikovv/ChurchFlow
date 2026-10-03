@@ -28,3 +28,7 @@ export interface ImportantDatesListProps {
   onUpdate: (dateId: string, date: UpdateImportantDateInput, onSuccess?: () => void) => void;
   onDelete: (date: ImportantDateItem) => Promise<void>;
 }
+
+export interface ImportantDatesBrowserProps extends ImportantDatesListProps {
+  query: KnowledgePageQuery;
+}

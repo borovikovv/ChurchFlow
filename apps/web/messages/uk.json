@@ -1208,8 +1208,6 @@
       "OWNER": "Лише власник"
     },
     "visibilityColumn": "Хто бачить",
-    "dateColumn": "Дата",
-    "ruleColumn": "Повторюється",
     "nextDateColumn": "Наступна дата",
     "reminderColumn": "Нагадування",
     "pin": "Закріпити",

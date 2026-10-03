@@ -2,11 +2,6 @@ import { cva } from 'class-variance-authority';
 import type { KnowledgeCategory } from '@churchflow/shared';
 import type { BadgeIntent } from '@/components/ui/badge';
 
-export const nowrapColumnMeta = {
-  headerClassName: 'whitespace-nowrap',
-  cellClassName: 'whitespace-nowrap',
-};
-
 export const knowledgeListClassNames = {
   title: 'font-bold [overflow-wrap:anywhere]',
   detailLabel: 'text-xs text-[var(--muted)]',
@@ -24,7 +19,7 @@ export const KNOWLEDGE_CATEGORY_INTENTS: Record<KnowledgeCategory, BadgeIntent> 
   OTHER: 'neutral',
 };
 
-export const knowledgeNoteListItemClassName = cva(
+export const knowledgeListItemClassName = cva(
   'relative grid w-full min-w-0 gap-1.5 border-l-[3px] px-4 py-3 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-[var(--accent)]',
   {
     variants: {

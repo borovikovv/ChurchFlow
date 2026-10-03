@@ -4,7 +4,7 @@ import type { KnowledgeEntryItem } from '@churchflow/shared';
 import { PinIcon } from '@/components/icons/action-icons';
 import { RichTextContent } from '@/components/ui/rich-text-content';
 import { KnowledgeCategoryBadge, KnowledgeVisibilityBadge } from './knowledge-badges';
-import { knowledgeListClassNames, knowledgeNoteListItemClassName } from './knowledge-lists.styles';
+import { knowledgeListClassNames, knowledgeListItemClassName } from './knowledge-lists.styles';
 import { KnowledgeDate } from './knowledge-meta';
 
 export function KnowledgeNoteListItem({
@@ -17,7 +17,7 @@ export function KnowledgeNoteListItem({
   onSelect: (entryId: string) => void;
 }) {
   return (
-    <div className={knowledgeNoteListItemClassName({ selected })}>
+    <div className={knowledgeListItemClassName({ selected })}>
       <span className="flex min-w-0 items-start justify-between gap-2">
         {/* The title button stretches over the whole row, so the row stays one tab stop. */}
         <button

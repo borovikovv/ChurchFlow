@@ -25,8 +25,8 @@ import {
 } from '../actions';
 import type { KnowledgePageQuery } from '../knowledge-page-query';
 import { ImportantDateFormDialog } from './important-date-form-dialog';
+import { ImportantDatesBrowser } from './important-dates-browser';
 import { ImportantDatesCardList } from './important-dates-card-list';
-import { ImportantDatesTable } from './important-dates-table';
 import { KnowledgeFilters } from './knowledge-filters';
 import type { ImportantDatesListProps, KnowledgeNotesListProps } from './knowledge-lists.types';
 import type { KnowledgeMutationResult, KnowledgeViewData } from './knowledge-manager.types';
@@ -143,7 +143,6 @@ export function KnowledgeManager({
       />
 
       <Tabs
-        intent="accent"
         label={t('viewsLabel')}
         items={[
           {
@@ -167,12 +166,12 @@ export function KnowledgeManager({
         <KnowledgeNotesBrowser query={query} {...notesListProps(data.payload)} />
       ) : (
         <>
-          <KnowledgeFilters query={query} />
-          <div className="md:hidden">
+          <div className="stack md:hidden">
+            <KnowledgeFilters query={query} />
             <ImportantDatesCardList {...datesListProps(data.payload)} />
           </div>
           <div className="hidden md:block">
-            <ImportantDatesTable {...datesListProps(data.payload)} />
+            <ImportantDatesBrowser query={query} {...datesListProps(data.payload)} />
           </div>
         </>
       )}

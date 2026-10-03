@@ -22,7 +22,6 @@ export function KnowledgeFilters({ query }: { query: KnowledgePageQuery }) {
   if (query.view === 'dates') {
     return (
       <QuerySearchInput
-        className="md:max-w-80"
         label={t('searchDatesLabel')}
         placeholder={t('searchDatesPlaceholder')}
         preserveParams={searchPreserved}

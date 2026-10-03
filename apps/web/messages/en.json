@@ -1208,8 +1208,6 @@
       "OWNER": "Owner only"
     },
     "visibilityColumn": "Visible to",
-    "dateColumn": "Date",
-    "ruleColumn": "Repeats",
     "nextDateColumn": "Next date",
     "reminderColumn": "Reminder",
     "pin": "Pin",
