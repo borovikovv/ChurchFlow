@@ -41,23 +41,19 @@ export function KnowledgeNoteList({
       : [{ key: 'all', heading: null, items }];
 
   return (
-    <aside
-      className={[knowledgeListClassNames.panel, 'overflow-hidden', className]
-        .filter(Boolean)
-        .join(' ')}
-    >
-      <div className="border-b border-[var(--line-muted)] p-3">
+    <aside className={[knowledgeListClassNames.listPanel, className].filter(Boolean).join(' ')}>
+      <div className="max-md:pb-4 md:border-b md:border-[var(--line-muted)] md:p-3">
         <KnowledgeFilters query={query} />
       </div>
       {items.length === 0 ? (
-        <p className="m-0 p-4 text-sm">{filtered ? t('emptyNotesFiltered') : t('emptyNotes')}</p>
+        <p className="m-0 text-sm md:p-4">{filtered ? t('emptyNotesFiltered') : t('emptyNotes')}</p>
       ) : (
         groups.map((group) => (
           <section key={group.key}>
             {group.heading ? (
               <h2 className={knowledgeListClassNames.sectionHeading}>{group.heading}</h2>
             ) : null}
-            <ul className="m-0 list-none divide-y divide-[var(--line-muted)] p-0">
+            <ul className="m-0 grid list-none gap-2 p-0 md:gap-0 md:divide-y md:divide-[var(--line-muted)]">
               {group.items.map((entry) => (
                 <li key={entry.id}>
                   <KnowledgeNoteListItem
