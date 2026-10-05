@@ -62,9 +62,10 @@ function groupTransaction(options = {}) {
     organizationGroupMember: {
       findFirst: async ({ where }) => groupMemberRows.find((row) => matches(row, where)) ?? null,
       upsert: write('organizationGroupMember.upsert'),
-      update: write('organizationGroupMember.update'),
-      delete: write('organizationGroupMember.delete'),
+      updateMany: write('organizationGroupMember.updateMany'),
+      deleteMany: write('organizationGroupMember.deleteMany'),
     },
+    organizationGroupBoardNode: { deleteMany: write('organizationGroupBoardNode.deleteMany') },
     auditLog: { create: write('auditLog.create') },
   };
 
@@ -156,4 +157,58 @@ test('a membership row of another organization cannot be updated through this or
 
   assert.equal(result, null);
   assert.deepEqual(writes, []);
+});
+
+test('each group write names the organization in its own filter, not only in the check before it', async () => {
+  // The lookup before each write already scopes it today; the write carries the organization too,
+  // so dropping that lookup in a refactor cannot let a write reach another organization's rows.
+  const { prisma, writes } = groupTransaction();
+  const repository = new GroupsRepository(prisma);
+  const target = { organizationId: ORGANIZATION_ID, groupId: GROUP_ID, actorUserId: ACTOR_USER_ID };
+
+  await repository.update({ ...target, group: { name: 'Choir' } });
+  await repository.updateMember({
+    ...target,
+    membershipId: MEMBERSHIP_ID,
+    member: { role: 'LEADER' },
+  });
+  await repository.removeMember({ ...target, membershipId: MEMBERSHIP_ID });
+  await repository.delete(target);
+
+  const scopedWrites = writes.filter(({ operation }) =>
+    [
+      'organizationGroup.update',
+      'organizationGroup.delete',
+      'organizationGroupMember.updateMany',
+      'organizationGroupMember.deleteMany',
+    ].includes(operation),
+  );
+  assert.equal(scopedWrites.length, 4);
+  for (const { operation, args } of scopedWrites) {
+    const organizationId =
+      args.where.id_organizationId?.organizationId ?? args.where.organizationId;
+    assert.equal(organizationId, ORGANIZATION_ID, operation);
+  }
+});
+
+test('group and membership ids in the path must be UUIDs before any query runs', () => {
+  require('reflect-metadata');
+  const { ParseUUIDPipe } = require('@nestjs/common');
+  const { ROUTE_ARGS_METADATA } = require('@nestjs/common/constants');
+  const { GroupsController } = require('../dist/modules/groups/groups.controller');
+
+  const checked = [];
+  for (const handler of Object.getOwnPropertyNames(GroupsController.prototype)) {
+    const args = Reflect.getMetadata(ROUTE_ARGS_METADATA, GroupsController, handler) ?? {};
+    for (const arg of Object.values(args)) {
+      if (arg.data !== 'groupId' && arg.data !== 'membershipId') continue;
+
+      checked.push(`${handler}.${arg.data}`);
+      assert.ok(
+        arg.pipes.some((pipe) => pipe === ParseUUIDPipe || pipe instanceof ParseUUIDPipe),
+        `${handler}.${arg.data}`,
+      );
+    }
+  }
+  assert.equal(checked.length, 10);
 });

@@ -269,7 +269,7 @@ export class GroupsRepository {
       if (!existing) return null;
 
       const group = await tx.organizationGroup.update({
-        where: { id: input.groupId },
+        where: { id_organizationId: { id: input.groupId, organizationId: input.organizationId } },
         data: {
           ...(input.group.name !== undefined ? { name: input.group.name } : {}),
           ...(input.group.description !== undefined
@@ -308,7 +308,9 @@ export class GroupsRepository {
       });
       if (!group) return false;
 
-      await tx.organizationGroup.delete({ where: { id: group.id } });
+      await tx.organizationGroup.delete({
+        where: { id_organizationId: { id: group.id, organizationId: input.organizationId } },
+      });
       await tx.organizationGroupBoardNode.deleteMany({
         where: { organizationId: input.organizationId, nodeKey: group.id },
       });
@@ -408,9 +410,11 @@ export class GroupsRepository {
       });
       if (!existing) return null;
 
-      await tx.organizationGroupMember.update({
+      await tx.organizationGroupMember.updateMany({
         where: {
-          groupId_membershipId: { groupId: input.groupId, membershipId: input.membershipId },
+          groupId: input.groupId,
+          membershipId: input.membershipId,
+          organizationId: input.organizationId,
         },
         data: {
           ...(input.member.role !== undefined ? { role: input.member.role } : {}),
@@ -548,9 +552,11 @@ export class GroupsRepository {
       });
       if (!existing) return null;
 
-      await tx.organizationGroupMember.delete({
+      await tx.organizationGroupMember.deleteMany({
         where: {
-          groupId_membershipId: { groupId: input.groupId, membershipId: input.membershipId },
+          groupId: input.groupId,
+          membershipId: input.membershipId,
+          organizationId: input.organizationId,
         },
       });
 

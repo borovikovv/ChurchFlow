@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -69,7 +70,7 @@ export class GroupsController {
   @Get(':groupId')
   findById(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.findById(organizationId, groupId, this.actorUserId(request));
@@ -91,7 +92,7 @@ export class GroupsController {
   @RequireEntitlement(ENTITLEMENTS.membersWrite)
   update(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body() body: UpdateOrganizationGroupDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -103,7 +104,7 @@ export class GroupsController {
   @RequireEntitlement(ENTITLEMENTS.membersWrite)
   delete(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.delete(organizationId, groupId, this.actorUserId(request));
@@ -114,7 +115,7 @@ export class GroupsController {
   @RequireEntitlement(ENTITLEMENTS.membersWrite)
   addMembers(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body() body: AddOrganizationGroupMembersDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -126,8 +127,8 @@ export class GroupsController {
   @RequireEntitlement(ENTITLEMENTS.membersWrite)
   updateMember(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
-    @Param('membershipId') membershipId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
     @Body() body: UpdateOrganizationGroupMemberDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -145,8 +146,8 @@ export class GroupsController {
   @RequireEntitlement(ENTITLEMENTS.membersWrite)
   moveMember(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
-    @Param('membershipId') membershipId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
     @Body() body: MoveOrganizationGroupMemberDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -164,8 +165,8 @@ export class GroupsController {
   @RequireEntitlement(ENTITLEMENTS.membersWrite)
   removeMember(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
-    @Param('membershipId') membershipId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.removeMember(
