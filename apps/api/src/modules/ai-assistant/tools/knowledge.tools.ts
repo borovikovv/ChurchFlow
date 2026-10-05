@@ -2,6 +2,7 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import {
   CALENDAR_SERVICE_ROLES,
+  ENTITLEMENTS,
   IMPORTANT_DATE_NOTES_MAX_LENGTH,
   IMPORTANT_DATE_NTH_VALUES,
   IMPORTANT_DATE_REMINDER_MAX_DAYS,
@@ -140,14 +141,14 @@ export const KNOWLEDGE_TOOL_META = {
     name: 'createKnowledge',
     group: 'knowledge',
     risk: 'WRITE',
-    policy: { permission: ORG_PERMISSIONS.knowledgeManage },
+    policy: { permission: ORG_PERMISSIONS.knowledgeManage, entitlement: ENTITLEMENTS.membersWrite },
     route: { controller: KnowledgeEntriesController, handler: 'create' },
   },
   createImportantDate: {
     name: 'createImportantDate',
     group: 'knowledge',
     risk: 'WRITE',
-    policy: { permission: ORG_PERMISSIONS.knowledgeManage },
+    policy: { permission: ORG_PERMISSIONS.knowledgeManage, entitlement: ENTITLEMENTS.membersWrite },
     route: { controller: ImportantDatesController, handler: 'create' },
   },
 } satisfies Record<string, AiToolMeta>;
