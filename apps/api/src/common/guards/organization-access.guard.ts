@@ -75,6 +75,13 @@ export interface OrganizationAccessRequirement {
   organizationId: string;
   ownerRequired?: boolean;
   permission?: OrganizationPermission;
+  /**
+   * Holds platform admins to the role and permissions of their own membership instead of letting
+   * them through. Routes leave it off so the admin area keeps working; the AI assistant sets it,
+   * because it acts as a member of the church and must not hand a support account the owner's
+   * view.
+   */
+  enforceMembershipRole?: boolean;
 }
 
 export interface OrganizationAccess {
@@ -135,11 +142,16 @@ export async function assertOrganizationAccess(
     }
 
     const adminMembership = user.memberships[0];
-    return {
+    const adminAccess: OrganizationAccess = {
       platformAdmin: true,
       role: adminMembership?.role ?? null,
       permissions: adminMembership?.permissions ?? [],
     };
+    if (requirement.enforceMembershipRole) {
+      assertMembershipRequirement(adminAccess, requirement);
+    }
+
+    return adminAccess;
   }
 
   const membership = user.memberships[0];
@@ -153,17 +165,24 @@ export async function assertOrganizationAccess(
     permissions: membership.permissions,
   };
 
-  if (requirement.ownerRequired && membership.role !== 'OWNER') {
+  assertMembershipRequirement(access, requirement);
+
+  return access;
+}
+
+function assertMembershipRequirement(
+  access: OrganizationAccess,
+  requirement: OrganizationAccessRequirement,
+): void {
+  if (requirement.ownerRequired && access.role !== 'OWNER') {
     throw new ForbiddenException('Organization owner role is required');
   }
 
-  if (!requirement.permission || membership.role === 'OWNER' || membership.role === 'ADMIN') {
-    return access;
+  if (!requirement.permission || access.role === 'OWNER' || access.role === 'ADMIN') {
+    return;
   }
 
-  if (!membership.permissions.includes(requirement.permission)) {
+  if (!access.permissions.includes(requirement.permission)) {
     throw new ForbiddenException('Organization permission is required');
   }
-
-  return access;
 }
