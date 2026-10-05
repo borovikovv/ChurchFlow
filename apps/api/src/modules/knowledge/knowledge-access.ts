@@ -9,7 +9,6 @@ import type { OrganizationAccess } from '../../common/guards/organization-access
 /** Mirrors the route guard: owners and admins always write, members only with knowledge.manage. */
 export function canManageKnowledge(viewer: OrganizationAccess): boolean {
   return (
-    viewer.platformAdmin ||
     viewer.role === 'OWNER' ||
     viewer.role === 'ADMIN' ||
     viewer.permissions.includes(ORG_PERMISSIONS.knowledgeManage)
@@ -18,7 +17,7 @@ export function canManageKnowledge(viewer: OrganizationAccess): boolean {
 
 /** Every visibility level the viewer may read, applied in every query that returns knowledge. */
 export function visibleKnowledgeLevels(viewer: OrganizationAccess): KnowledgeVisibility[] {
-  if (viewer.platformAdmin || viewer.role === 'OWNER') return ['MEMBERS', 'ADMINS', 'OWNER'];
+  if (viewer.role === 'OWNER') return ['MEMBERS', 'ADMINS', 'OWNER'];
   if (canManageKnowledge(viewer)) return ['MEMBERS', 'ADMINS'];
 
   return ['MEMBERS'];

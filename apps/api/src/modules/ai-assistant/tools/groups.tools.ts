@@ -1,6 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import {
+  ENTITLEMENTS,
   ORG_PERMISSIONS,
   ORGANIZATION_GROUP_MEMBER_ROLES,
   addOrganizationGroupMembersSchema,
@@ -33,28 +34,28 @@ export const GROUPS_TOOL_META = {
     name: 'addGroupMember',
     group: 'groups',
     risk: 'WRITE',
-    policy: { permission: ORG_PERMISSIONS.membersManage },
+    policy: { permission: ORG_PERMISSIONS.membersManage, entitlement: ENTITLEMENTS.membersWrite },
     route: { controller: GroupsController, handler: 'addMembers' },
   },
   setGroupMemberRole: {
     name: 'setGroupMemberRole',
     group: 'groups',
     risk: 'WRITE',
-    policy: { permission: ORG_PERMISSIONS.membersManage },
+    policy: { permission: ORG_PERMISSIONS.membersManage, entitlement: ENTITLEMENTS.membersWrite },
     route: { controller: GroupsController, handler: 'updateMember' },
   },
   moveGroupMember: {
     name: 'moveGroupMember',
     group: 'groups',
     risk: 'WRITE',
-    policy: { permission: ORG_PERMISSIONS.membersManage },
+    policy: { permission: ORG_PERMISSIONS.membersManage, entitlement: ENTITLEMENTS.membersWrite },
     route: { controller: GroupsController, handler: 'moveMember' },
   },
   removeGroupMember: {
     name: 'removeGroupMember',
     group: 'groups',
     risk: 'DESTRUCTIVE',
-    policy: { permission: ORG_PERMISSIONS.membersManage },
+    policy: { permission: ORG_PERMISSIONS.membersManage, entitlement: ENTITLEMENTS.membersWrite },
     route: { controller: GroupsController, handler: 'removeMember' },
   },
 } satisfies Record<string, AiToolMeta>;

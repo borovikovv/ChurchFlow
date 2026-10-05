@@ -41,6 +41,7 @@ export class AiToolRunner {
     await assertOrganizationAccess(this.dependencies.prisma, {
       userId,
       organizationId,
+      enforceMembershipRole: true,
       ...(meta.policy.ownerRequired ? { ownerRequired: true } : {}),
       ...(meta.policy.permission ? { permission: meta.policy.permission } : {}),
     });

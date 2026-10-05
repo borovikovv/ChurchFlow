@@ -4,17 +4,22 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { ORG_PERMISSIONS } from '@churchflow/shared';
+import { ENTITLEMENTS, ORG_PERMISSIONS } from '@churchflow/shared';
 import {
   SessionAuthGuard,
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
+import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
 import {
   OrganizationAccessGuard,
   RequireOrganizationPermission,
@@ -30,7 +35,7 @@ import {
 import { GroupsService } from './groups.service';
 
 @Controller('organizations/:organizationId/groups')
-@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
 export class GroupsController {
   constructor(private readonly groupsService: GroupsService) {}
 
@@ -53,6 +58,7 @@ export class GroupsController {
 
   @Put('board/layout')
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   saveBoardLayout(
     @Param('organizationId') organizationId: string,
     @Body() body: SaveOrganizationGroupBoardLayoutDto,
@@ -64,7 +70,7 @@ export class GroupsController {
   @Get(':groupId')
   findById(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.findById(organizationId, groupId, this.actorUserId(request));
@@ -72,6 +78,7 @@ export class GroupsController {
 
   @Post()
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   create(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateOrganizationGroupDto,
@@ -82,9 +89,10 @@ export class GroupsController {
 
   @Patch(':groupId')
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   update(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body() body: UpdateOrganizationGroupDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -93,9 +101,10 @@ export class GroupsController {
 
   @Delete(':groupId')
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   delete(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.delete(organizationId, groupId, this.actorUserId(request));
@@ -103,9 +112,10 @@ export class GroupsController {
 
   @Post(':groupId/members')
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   addMembers(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body() body: AddOrganizationGroupMembersDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -114,10 +124,11 @@ export class GroupsController {
 
   @Patch(':groupId/members/:membershipId')
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   updateMember(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
-    @Param('membershipId') membershipId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
     @Body() body: UpdateOrganizationGroupMemberDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -132,10 +143,11 @@ export class GroupsController {
 
   @Post(':groupId/members/:membershipId/move')
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   moveMember(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
-    @Param('membershipId') membershipId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
     @Body() body: MoveOrganizationGroupMemberDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -150,10 +162,11 @@ export class GroupsController {
 
   @Delete(':groupId/members/:membershipId')
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   removeMember(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
-    @Param('membershipId') membershipId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.removeMember(

@@ -152,17 +152,58 @@ test('admins and knowledge.manage holders also read admin entries, but not owner
   ]);
 });
 
-test('the owner and platform admins read everything', async () => {
+test('the owner reads everything', async () => {
   assert.deepEqual(await visibleTitles({ role: 'OWNER' }), [
     'for-admins',
     'for-members',
     'for-owner',
   ]);
-  assert.deepEqual(await visibleTitles({ role: null, platformRole: 'ADMIN' }), [
+});
+
+test('a platform admin reads what their own membership allows, and no more', async () => {
+  // The platform role opens the organization, not its private notes: the assistant answers
+  // through these services, so an owner-only note must not reach a support account.
+  assert.deepEqual(await visibleTitles({ role: null, platformRole: 'SUPER_ADMIN' }), [
+    'for-members',
+  ]);
+  assert.deepEqual(await visibleTitles({ role: 'MEMBER', platformRole: 'ADMIN' }), ['for-members']);
+  assert.deepEqual(await visibleTitles({ role: 'ADMIN', platformRole: 'SUPER_ADMIN' }), [
+    'for-admins',
+    'for-members',
+  ]);
+  assert.deepEqual(await visibleTitles({ role: 'OWNER', platformRole: 'SUPER_ADMIN' }), [
     'for-admins',
     'for-members',
     'for-owner',
   ]);
+});
+
+test('a platform admin without a membership cannot open or write owner-only knowledge', async () => {
+  const admin = { role: null, platformRole: 'SUPER_ADMIN', rows: VISIBILITY_ROWS };
+  const { service: entries, writes } = entriesService(admin);
+
+  await assert.rejects(() => entries.get(ORG, 'for-owner', USER), NotFoundException);
+  await assert.rejects(
+    () => entries.create(ORG, { ...NOTE, visibility: 'OWNER' }, USER),
+    ForbiddenException,
+  );
+  assert.equal((await entries.list(ORG, USER, {})).canManage, false);
+
+  const fixedDate = { ruleKind: 'FIXED', month: 12, day: 25, weekday: null, nth: null };
+  const { service: dates } = datesService({
+    ...admin,
+    rows: [
+      entry('members-day', fixedDate),
+      entry('admins-day', { ...fixedDate, visibility: 'ADMINS' }),
+      entry('owner-day', { ...fixedDate, visibility: 'OWNER' }),
+    ],
+  });
+  const payload = await dates.list(ORG, USER, {}, '2026-10-01');
+  assert.deepEqual(
+    payload.items.map((item) => item.title),
+    ['members-day'],
+  );
+  assert.deepEqual(writes, []);
 });
 
 test('the visibility filter is applied in the query, with the organization from the route', async () => {
@@ -366,4 +407,118 @@ test('the guard lets owners, admins and knowledge.manage holders write, and no o
     () => owner.canActivate(routeContext(KnowledgeEntriesController.prototype.list, OTHER_ORG)),
     ForbiddenException,
   );
+});
+
+const DATE = {
+  title: 'Church anniversary',
+  notes: null,
+  ruleKind: 'FIXED',
+  month: 5,
+  day: 12,
+  weekday: null,
+  nth: null,
+  reminderLeadDays: null,
+  visibility: 'MEMBERS',
+};
+const FIXED_RULE = { ruleKind: 'FIXED', month: 5, day: 12, weekday: null, nth: null };
+const DATE_VISIBILITY_ROWS = [
+  entry('for-members', FIXED_RULE),
+  entry('for-admins', { ...FIXED_RULE, visibility: 'ADMINS' }),
+  entry('for-owner', { ...FIXED_RULE, visibility: 'OWNER' }),
+];
+const KNOWLEDGE_MANAGER = { role: 'MEMBER', permissions: ['knowledge.manage'] };
+
+test('a knowledge.manage holder cannot create an owner-only note or date', async () => {
+  const notes = entriesService(KNOWLEDGE_MANAGER);
+  await assert.rejects(
+    () => notes.service.create(ORG, { ...NOTE, visibility: 'OWNER' }, USER),
+    ForbiddenException,
+  );
+
+  const dates = datesService(KNOWLEDGE_MANAGER);
+  await assert.rejects(
+    () => dates.service.create(ORG, { ...DATE, visibility: 'OWNER' }, USER),
+    ForbiddenException,
+  );
+
+  assert.deepEqual([...notes.writes, ...dates.writes], []);
+});
+
+test('a writer cannot raise a note they can see to owner-only', async () => {
+  for (const writer of [{ role: 'ADMIN' }, KNOWLEDGE_MANAGER]) {
+    const { service, writes } = entriesService({ ...writer, rows: VISIBILITY_ROWS });
+
+    for (const id of ['for-members', 'for-admins']) {
+      await assert.rejects(
+        () => service.update(ORG, id, { visibility: 'OWNER' }, USER),
+        ForbiddenException,
+        `${JSON.stringify(writer)} ${id}`,
+      );
+    }
+    assert.deepEqual(writes, [], JSON.stringify(writer));
+  }
+});
+
+test('a writer cannot raise a date they can see to owner-only', async () => {
+  for (const writer of [{ role: 'ADMIN' }, KNOWLEDGE_MANAGER]) {
+    const { service, writes } = datesService({ ...writer, rows: DATE_VISIBILITY_ROWS });
+
+    for (const id of ['for-members', 'for-admins']) {
+      await assert.rejects(
+        () => service.update(ORG, id, { visibility: 'OWNER' }, USER),
+        ForbiddenException,
+        `${JSON.stringify(writer)} ${id}`,
+      );
+    }
+    assert.deepEqual(writes, [], JSON.stringify(writer));
+  }
+});
+
+test('a plain member cannot raise visibility either, even on a note shared with them', async () => {
+  const { service, writes } = entriesService({ role: 'MEMBER', rows: VISIBILITY_ROWS });
+
+  await assert.rejects(
+    () => service.update(ORG, 'for-members', { visibility: 'ADMINS' }, USER),
+    ForbiddenException,
+  );
+  assert.deepEqual(writes, []);
+});
+
+test('only knowledge writers create and delete important dates', async () => {
+  for (const reader of [{ role: 'MEMBER' }, { role: 'VIEWER' }]) {
+    const { service, writes } = datesService({ ...reader, rows: DATE_VISIBILITY_ROWS });
+
+    await assert.rejects(() => service.create(ORG, DATE, USER), ForbiddenException, reader.role);
+    await assert.rejects(
+      () => service.delete(ORG, 'for-members', USER),
+      ForbiddenException,
+      reader.role,
+    );
+    assert.deepEqual(writes, [], reader.role);
+  }
+
+  for (const writer of [{ role: 'OWNER' }, { role: 'ADMIN' }, KNOWLEDGE_MANAGER]) {
+    const { service, writes } = datesService({ ...writer, rows: DATE_VISIBILITY_ROWS });
+
+    await service.create(ORG, DATE, USER);
+    await service.delete(ORG, 'for-members', USER);
+    assert.deepEqual(
+      writes.filter((write) => write.table === 'importantDate').map((write) => write.operation),
+      ['create', 'delete'],
+      JSON.stringify(writer),
+    );
+  }
+});
+
+test('a date above the writer is neither changed nor deleted, as if it did not exist', async () => {
+  for (const writer of [{ role: 'ADMIN' }, KNOWLEDGE_MANAGER]) {
+    const { service, writes } = datesService({ ...writer, rows: DATE_VISIBILITY_ROWS });
+
+    await assert.rejects(
+      () => service.update(ORG, 'for-owner', { title: 'Renamed' }, USER),
+      NotFoundException,
+    );
+    await assert.rejects(() => service.delete(ORG, 'for-owner', USER), NotFoundException);
+    assert.deepEqual(writes, [], JSON.stringify(writer));
+  }
 });
