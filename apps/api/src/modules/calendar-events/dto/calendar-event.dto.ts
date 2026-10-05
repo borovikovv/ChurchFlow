@@ -1,5 +1,6 @@
 import {
   createCalendarEventSchema,
+  getCalendarEventQuerySchema,
   listCalendarEventsQuerySchema,
   toggleCalendarTaskCompletionSchema,
   updateCalendarEventSchema,
@@ -8,6 +9,7 @@ import {
 import type {
   CalendarEventType,
   CreateCalendarEventInput,
+  GetCalendarEventQuery,
   ListCalendarEventsQuery,
   ToggleCalendarTaskCompletionInput,
   UpdateCalendarEventInput,
@@ -20,6 +22,12 @@ export class ListCalendarEventsQueryDto implements ListCalendarEventsQuery {
   rangeStart!: string;
   rangeEnd!: string;
   types?: CalendarEventType[];
+}
+
+export class GetCalendarEventQueryDto implements GetCalendarEventQuery {
+  static readonly schema = getCalendarEventQuerySchema;
+
+  occurrenceDate?: string;
 }
 
 export class CreateCalendarEventDto implements CreateCalendarEventInput {

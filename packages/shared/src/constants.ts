@@ -365,3 +365,6 @@ export const CALENDAR_EVENT_REPEAT_PERIOD = {
 } as const;
 
 export const DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES = CALENDAR_EVENT_TYPES;
+
+// Repeating events expand in this zone, so an occurrence's calendar day is read in it too.
+export const CALENDAR_TIME_ZONE = 'Europe/Kyiv';

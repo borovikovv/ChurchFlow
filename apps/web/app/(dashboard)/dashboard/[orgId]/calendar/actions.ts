@@ -173,7 +173,7 @@ export async function confirmCalendarEventImageAction(input: {
 
 export async function enrichCalendarImageUrls(
   organizationId: string,
-  payload: CalendarEventsPayload,
+  payload: Pick<CalendarEventsPayload, 'events' | 'members'>,
 ) {
   const photoAssetIds = new Set<string>();
   const eventImageIds = new Set<string>();

@@ -257,6 +257,10 @@ export const listCalendarEventsQuerySchema = z
     message: 'Range end must be after range start',
   });
 
+export const getCalendarEventQuerySchema = z.object({
+  occurrenceDate: z.string().date().optional(),
+});
+
 export const updateCalendarPreferencesSchema = z.object({
   visibleEventTypes: calendarEventTypesSchema,
 });
