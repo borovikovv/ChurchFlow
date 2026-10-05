@@ -152,17 +152,58 @@ test('admins and knowledge.manage holders also read admin entries, but not owner
   ]);
 });
 
-test('the owner and platform admins read everything', async () => {
+test('the owner reads everything', async () => {
   assert.deepEqual(await visibleTitles({ role: 'OWNER' }), [
     'for-admins',
     'for-members',
     'for-owner',
   ]);
-  assert.deepEqual(await visibleTitles({ role: null, platformRole: 'ADMIN' }), [
+});
+
+test('a platform admin reads what their own membership allows, and no more', async () => {
+  // The platform role opens the organization, not its private notes: the assistant answers
+  // through these services, so an owner-only note must not reach a support account.
+  assert.deepEqual(await visibleTitles({ role: null, platformRole: 'SUPER_ADMIN' }), [
+    'for-members',
+  ]);
+  assert.deepEqual(await visibleTitles({ role: 'MEMBER', platformRole: 'ADMIN' }), ['for-members']);
+  assert.deepEqual(await visibleTitles({ role: 'ADMIN', platformRole: 'SUPER_ADMIN' }), [
+    'for-admins',
+    'for-members',
+  ]);
+  assert.deepEqual(await visibleTitles({ role: 'OWNER', platformRole: 'SUPER_ADMIN' }), [
     'for-admins',
     'for-members',
     'for-owner',
   ]);
+});
+
+test('a platform admin without a membership cannot open or write owner-only knowledge', async () => {
+  const admin = { role: null, platformRole: 'SUPER_ADMIN', rows: VISIBILITY_ROWS };
+  const { service: entries, writes } = entriesService(admin);
+
+  await assert.rejects(() => entries.get(ORG, 'for-owner', USER), NotFoundException);
+  await assert.rejects(
+    () => entries.create(ORG, { ...NOTE, visibility: 'OWNER' }, USER),
+    ForbiddenException,
+  );
+  assert.equal((await entries.list(ORG, USER, {})).canManage, false);
+
+  const fixedDate = { ruleKind: 'FIXED', month: 12, day: 25, weekday: null, nth: null };
+  const { service: dates } = datesService({
+    ...admin,
+    rows: [
+      entry('members-day', fixedDate),
+      entry('admins-day', { ...fixedDate, visibility: 'ADMINS' }),
+      entry('owner-day', { ...fixedDate, visibility: 'OWNER' }),
+    ],
+  });
+  const payload = await dates.list(ORG, USER, {}, '2026-10-01');
+  assert.deepEqual(
+    payload.items.map((item) => item.title),
+    ['members-day'],
+  );
+  assert.deepEqual(writes, []);
 });
 
 test('the visibility filter is applied in the query, with the organization from the route', async () => {
