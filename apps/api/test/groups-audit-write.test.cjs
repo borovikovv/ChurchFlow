@@ -29,8 +29,8 @@ function auditingTransaction() {
         upsertedMemberships.push(where.groupId_membershipId);
         return {};
       },
-      update: async () => ({}),
-      delete: async () => ({}),
+      updateMany: async () => ({ count: 1 }),
+      deleteMany: async () => ({ count: 1 }),
     },
     organizationGroupBoardNode: {
       deleteMany: async () => ({ count: 0 }),

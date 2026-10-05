@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -64,7 +65,7 @@ export class GroupsController {
   @Get(':groupId')
   findById(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.findById(organizationId, groupId, this.actorUserId(request));
@@ -84,7 +85,7 @@ export class GroupsController {
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
   update(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body() body: UpdateOrganizationGroupDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -95,7 +96,7 @@ export class GroupsController {
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
   delete(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.delete(organizationId, groupId, this.actorUserId(request));
@@ -105,7 +106,7 @@ export class GroupsController {
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
   addMembers(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
     @Body() body: AddOrganizationGroupMembersDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -116,8 +117,8 @@ export class GroupsController {
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
   updateMember(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
-    @Param('membershipId') membershipId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
     @Body() body: UpdateOrganizationGroupMemberDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -134,8 +135,8 @@ export class GroupsController {
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
   moveMember(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
-    @Param('membershipId') membershipId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
     @Body() body: MoveOrganizationGroupMemberDto,
     @Req() request: AuthenticatedRequest,
   ) {
@@ -152,8 +153,8 @@ export class GroupsController {
   @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
   removeMember(
     @Param('organizationId') organizationId: string,
-    @Param('groupId') groupId: string,
-    @Param('membershipId') membershipId: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.removeMember(
