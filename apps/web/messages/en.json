@@ -669,6 +669,16 @@
     "views": {
       "month": "Month",
       "week": "Week"
+    },
+    "view": {
+      "share": "Share",
+      "linkCopied": "Link copied",
+      "copyFailed": "Could not copy the link.",
+      "notFound": "This event could not be found. It may have been deleted or moved.",
+      "openImage": "Open the image in full size",
+      "status": "Status",
+      "notCompleted": "Not completed",
+      "communionPlanned": "Planned"
     }
   },
   "budget": {

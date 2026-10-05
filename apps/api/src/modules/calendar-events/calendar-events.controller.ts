@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -23,6 +24,7 @@ import {
 import { CalendarEventsService } from './calendar-events.service';
 import {
   CreateCalendarEventDto,
+  GetCalendarEventQueryDto,
   ListCalendarEventsQueryDto,
   ToggleCalendarTaskCompletionDto,
   UpdateCalendarEventDto,
@@ -58,6 +60,15 @@ export class CalendarEventsController {
       this.actorUserId(request),
       body.visibleEventTypes,
     );
+  }
+
+  @Get(':eventId')
+  findOne(
+    @Param('organizationId') organizationId: string,
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Query() query: GetCalendarEventQueryDto,
+  ) {
+    return this.calendarEventsService.findOccurrence(organizationId, eventId, query);
   }
 
   @Post()
