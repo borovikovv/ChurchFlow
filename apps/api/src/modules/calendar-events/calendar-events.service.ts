@@ -13,10 +13,16 @@ import type {
   CalendarServicePerson,
   CalendarEventType,
   CreateCalendarEventInput,
+  GetCalendarEventQuery,
   ListCalendarEventsQuery,
   UpdateCalendarEventInput,
 } from '@churchflow/shared';
-import { CALENDAR_EVENT_TYPE, DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES } from '@churchflow/shared';
+import {
+  CALENDAR_EVENT_REPEAT_PERIOD,
+  CALENDAR_EVENT_TYPE,
+  CALENDAR_TIME_ZONE,
+  DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES,
+} from '@churchflow/shared';
 import {
   CalendarEventsRepository,
   type CalendarEventRecord,
@@ -119,6 +125,26 @@ export class CalendarEventsService {
     if (!event) throw new NotFoundException('Event was not found');
 
     return this.eventItem(event);
+  }
+
+  async findOccurrence(
+    organizationId: string,
+    eventId: string,
+    query: GetCalendarEventQuery,
+  ): Promise<CalendarEventItem> {
+    const event = await this.calendarEventsRepository.findById(organizationId, eventId);
+    if (!event) throw new NotFoundException('Event was not found');
+    if (!query.occurrenceDate || event.repeatPeriod === CALENDAR_EVENT_REPEAT_PERIOD.none) {
+      return this.eventItem(event);
+    }
+
+    const { dayStart, dayEnd } = calendarDayRange(query.occurrenceDate);
+    const occurrence = expandEvent(event, dayStart, dayEnd).find(
+      (item) => new Date(item.startsAt) >= dayStart,
+    );
+    if (!occurrence) throw new NotFoundException('Event was not found');
+
+    return occurrence;
   }
 
   async create(organizationId: string, input: CreateCalendarEventInput, actorUserId: string) {
@@ -950,6 +976,25 @@ function memberSummary(
   };
 }
 
+function calendarDayRange(date: string): { dayStart: Date; dayEnd: Date } {
+  const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  const midnight = { hour: 0, minute: 0, second: 0 };
+
+  return {
+    dayStart: zonedDateTimeToUtc({ year, month, day, ...midnight }, CALENDAR_TIME_ZONE),
+    dayEnd: zonedDateTimeToUtc(
+      {
+        year: nextDay.getUTCFullYear(),
+        month: nextDay.getUTCMonth() + 1,
+        day: nextDay.getUTCDate(),
+        ...midnight,
+      },
+      CALENDAR_TIME_ZONE,
+    ),
+  };
+}
+
 function baseEventToItem(event: CalendarEventRecord): CalendarEventItem {
   return {
     id: event.id,
@@ -1025,7 +1070,7 @@ function expandEvent(
       event,
       rangeStart,
       rangeEnd,
-      timeZone: 'Europe/Kyiv',
+      timeZone: CALENDAR_TIME_ZONE,
     }).map((occurrence) => {
       const item = baseEventToItem(event);
       item.occurrenceId = `${event.id}:${occurrence.startsAt.toISOString()}`;

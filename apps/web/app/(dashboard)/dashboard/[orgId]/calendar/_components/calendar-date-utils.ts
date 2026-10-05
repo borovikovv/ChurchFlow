@@ -117,6 +117,41 @@ export function formatTimeLabel(value: string, locale = 'en-US'): string {
   );
 }
 
+export function formatEventSchedule(
+  event: Pick<CalendarEventItem, 'allDay' | 'endsAt' | 'startsAt'>,
+  locale = 'en-US',
+): { date: string; time: string | null } {
+  const start = new Date(event.startsAt);
+  const end = event.endsAt ? new Date(event.endsAt) : null;
+  const dateFormat = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  const timeFormat = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' });
+
+  if (!end || toDateInputValue(start) === toDateInputValue(end)) {
+    if (event.allDay) return { date: dateFormat.format(start), time: null };
+    return {
+      date: dateFormat.format(start),
+      time: end ? timeFormat.formatRange(start, end) : timeFormat.format(start),
+    };
+  }
+  if (event.allDay) return { date: dateFormat.formatRange(start, end), time: null };
+
+  return {
+    date: new Intl.DateTimeFormat(locale, {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).formatRange(start, end),
+    time: null,
+  };
+}
+
 export function formatMonthLabel(value: string, locale = 'en-US'): string {
   return new Intl.DateTimeFormat(locale, {
     month: 'long',

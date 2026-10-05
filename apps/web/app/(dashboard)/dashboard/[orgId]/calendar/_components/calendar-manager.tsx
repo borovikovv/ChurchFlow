@@ -29,6 +29,7 @@ import {
   type CalendarView,
 } from './calendar-constants';
 import { CalendarDayAgenda } from './calendar-day-agenda';
+import { calendarEventLinkHref } from './calendar-event-link';
 import { CalendarEventsSkeleton } from './calendar-events-skeleton';
 import { eventTypesByDate } from './calendar-day-events';
 import { eventForm, newEventForm, toDateInputValue } from './calendar-date-utils';
@@ -39,6 +40,7 @@ import { formPayload } from './calendar-form-utils';
 import { CalendarPreviewModal } from './calendar-preview-modal';
 import { CalendarSidebar } from './calendar-sidebar';
 import { EventModal } from './event-modal';
+import { EventViewModal } from './event-view-modal';
 import type { CalendarFormState, CalendarManagerActions } from './calendar-types';
 import styles from './calendar-manager.module.css';
 
@@ -61,6 +63,7 @@ export function CalendarManager({
   initialPayload,
   initialRange,
   initialSelectedDate,
+  initialViewEvent,
   loadEvents,
   updatePreferences,
   createEvent,
@@ -74,6 +77,7 @@ export function CalendarManager({
   initialPayload: CalendarEventsPayload;
   initialRange: CalendarRange;
   initialSelectedDate: string;
+  initialViewEvent: CalendarEventItem | null;
 } & CalendarManagerActions) {
   const t = useTranslations('calendar');
   const locale = useLocale();
@@ -85,6 +89,7 @@ export function CalendarManager({
   const [range, setRange] = useState(initialRange);
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
   const [editingEvent, setEditingEvent] = useState<CalendarEventItem | null>(null);
+  const [viewingEvent, setViewingEvent] = useState(initialViewEvent);
   const [form, setForm] = useState<CalendarFormState>(newEventForm(initialSelectedDate));
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -164,6 +169,22 @@ export function CalendarManager({
     setEditingEvent(event);
     setForm(eventForm(event));
     setModalMode('edit');
+  }
+
+  function openView(event: CalendarEventItem) {
+    setSelectedDate(toDateInputValue(new Date(event.startsAt)));
+    setViewingEvent(event);
+    window.history.replaceState(null, '', calendarEventLinkHref(window.location.href, event));
+  }
+
+  function closeView() {
+    setViewingEvent(null);
+    window.history.replaceState(null, '', calendarEventLinkHref(window.location.href, null));
+  }
+
+  function editViewedEvent(event: CalendarEventItem) {
+    closeView();
+    openEdit(event);
   }
 
   async function submitForm(nextForm: CalendarFormState) {
@@ -320,7 +341,7 @@ export function CalendarManager({
   function handleEventClick(arg: EventClickArg) {
     if (isTaskToggleTarget(arg.jsEvent.target)) return;
     const item = arg.event.extendedProps['item'] as CalendarEventItem | undefined;
-    if (item) openEdit(item);
+    if (item) openView(item);
   }
 
   function handleTaskToggle(event: CalendarEventItem, completed: boolean) {
@@ -374,7 +395,7 @@ export function CalendarManager({
           selectedDateEvents={selectedDateEvents}
           selectedDateTasks={selectedDateTasks}
           visibleTypes={visibleTypes}
-          onEventOpen={openEdit}
+          onEventOpen={openView}
           onFilterToggle={(type) => void toggleFilter(type)}
           onTaskToggle={(event, completed) => void toggleTask(event, completed)}
         />
@@ -440,6 +461,7 @@ export function CalendarManager({
             buttonText={{ today: t('today') }}
             dayMaxEvents={4}
             height="auto"
+            initialDate={initialSelectedDate}
             initialView="dayGridMonth"
             {...(fullCalendarLocale ? { locale: fullCalendarLocale } : {})}
             moreLinkClick="popover"
@@ -462,7 +484,7 @@ export function CalendarManager({
             loading={loadingRange}
             selectedDate={selectedDate}
             selectedDateEvents={selectedDateEvents}
-            onEventOpen={openEdit}
+            onEventOpen={openView}
             onTaskToggle={(event, completed) => void toggleTask(event, completed)}
           />
         ) : null}
@@ -480,6 +502,16 @@ export function CalendarManager({
           onDelete={() => void removeEvent()}
           onImageUpload={uploadImage}
           onSubmit={submitForm}
+        />
+      ) : null}
+
+      {viewingEvent ? (
+        <EventViewModal
+          canManage={canManage}
+          event={viewingEvent}
+          key={viewingEvent.occurrenceId}
+          onClose={closeView}
+          onEdit={() => editViewedEvent(viewingEvent)}
         />
       ) : null}
 

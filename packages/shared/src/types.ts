@@ -71,6 +71,7 @@ import type {
   saveOrganizationGroupBoardLayoutSchema,
   memberAccessMethodSchema,
   listCalendarEventsQuerySchema,
+  getCalendarEventQuerySchema,
   createCalendarEventSchema,
   updateCalendarEventSchema,
   updateCalendarPreferencesSchema,
@@ -206,6 +207,7 @@ export type SaveOrganizationGroupBoardLayoutInput = z.infer<
 >;
 export type MemberAccessMethod = z.infer<typeof memberAccessMethodSchema>;
 export type ListCalendarEventsQuery = z.infer<typeof listCalendarEventsQuerySchema>;
+export type GetCalendarEventQuery = z.infer<typeof getCalendarEventQuerySchema>;
 export type CreateCalendarEventInput = z.infer<typeof createCalendarEventSchema>;
 export type UpdateCalendarEventInput = z.infer<typeof updateCalendarEventSchema>;
 export type UpdateCalendarPreferencesInput = z.infer<typeof updateCalendarPreferencesSchema>;
