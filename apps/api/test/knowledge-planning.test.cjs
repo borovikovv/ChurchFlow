@@ -210,8 +210,10 @@ function setup(options = {}) {
 
   const plan = (input) =>
     tools.getPlanningContext.execute(input, { toolCallId: 'call-1', messages: [] });
+  const run = (toolName, input) =>
+    tools[toolName].execute(input, { toolCallId: 'call-1', messages: [] });
 
-  return { plan, calls };
+  return { plan, run, calls };
 }
 
 const NOVEMBER = { from: '2026-11-01', to: '2026-11-30' };
@@ -438,4 +440,64 @@ test('the recorded summary carries counts only', async () => {
     '1 candidates, 1 services, 0 recent assignments, 0 important dates, 1 notes.',
   );
   assert.equal(calls.executions[0].resultSummary.includes('Secret'), false);
+});
+
+const LAYERED_NOTES = [
+  note('For members'),
+  note('For admins', { visibility: 'ADMINS' }),
+  note('For the owner', { visibility: 'OWNER' }),
+];
+const LAYERED_DATES = [
+  importantDate('Members day'),
+  importantDate('Admins day', { visibility: 'ADMINS' }),
+  importantDate('Owner day', { visibility: 'OWNER' }),
+];
+const VISIBLE_BY_ROLE = {
+  MEMBER: { notes: ['For members'], dates: ['Members day'] },
+  ADMIN: { notes: ['For admins', 'For members'], dates: ['Admins day', 'Members day'] },
+};
+
+test('searchKnowledge returns, and counts, only the notes the role may read', async () => {
+  for (const [role, visible] of Object.entries(VISIBLE_BY_ROLE)) {
+    const { run, calls } = setup({ role, notes: LAYERED_NOTES });
+    const result = await run('searchKnowledge', {});
+
+    assert.equal(result.ok, true, role);
+    assert.deepEqual(result.data.entries.map((entry) => entry.title).sort(), visible.notes, role);
+    assert.equal(result.data.total, visible.notes.length, role);
+    assert.equal(result.summary, `${String(visible.notes.length)} knowledge notes found.`, role);
+    assert.equal(JSON.stringify(calls.executions).includes('For the owner'), false, role);
+  }
+});
+
+test('getKnowledge treats a note above the role as missing', async () => {
+  for (const [role, hidden] of [
+    ['MEMBER', 'For admins'],
+    ['MEMBER', 'For the owner'],
+    ['ADMIN', 'For the owner'],
+  ]) {
+    const result = await setup({ role, notes: LAYERED_NOTES }).run('getKnowledge', { id: hidden });
+
+    assert.equal(result.ok, false, `${role} ${hidden}`);
+    assert.equal(JSON.stringify(result).includes(`<p>${hidden}</p>`), false, `${role} ${hidden}`);
+  }
+
+  const shared = await setup({ role: 'MEMBER', notes: LAYERED_NOTES }).run('getKnowledge', {
+    id: 'For members',
+  });
+  assert.equal(shared.ok, true);
+});
+
+test('listImportantDates returns, and counts, only the dates the role may read', async () => {
+  for (const [role, visible] of Object.entries(VISIBLE_BY_ROLE)) {
+    const result = await setup({ role, dates: LAYERED_DATES }).run('listImportantDates', {});
+
+    assert.equal(result.ok, true, role);
+    assert.deepEqual(result.data.dates.map((date) => date.title).sort(), visible.dates, role);
+    assert.match(
+      result.summary,
+      new RegExp(`^${String(visible.dates.length)} important dates`),
+      role,
+    );
+  }
 });
