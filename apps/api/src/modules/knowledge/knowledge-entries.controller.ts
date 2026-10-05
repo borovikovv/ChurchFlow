@@ -11,7 +11,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { ORG_PERMISSIONS } from '@churchflow/shared';
+import { ENTITLEMENTS, ORG_PERMISSIONS } from '@churchflow/shared';
 import {
   OrganizationAccessGuard,
   RequireOrganizationPermission,
@@ -21,6 +21,10 @@ import {
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
 import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
+import {
   CreateKnowledgeEntryDto,
   ListKnowledgeEntriesQueryDto,
   UpdateKnowledgeEntryDto,
@@ -29,7 +33,7 @@ import { KnowledgeEntriesService } from './knowledge-entries.service';
 import { actorUserId } from './knowledge-request';
 
 @Controller('organizations/:organizationId/knowledge')
-@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
 export class KnowledgeEntriesController {
   constructor(private readonly knowledgeEntriesService: KnowledgeEntriesService) {}
 
@@ -53,6 +57,7 @@ export class KnowledgeEntriesController {
 
   @Post()
   @RequireOrganizationPermission(ORG_PERMISSIONS.knowledgeManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   create(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateKnowledgeEntryDto,
@@ -63,6 +68,7 @@ export class KnowledgeEntriesController {
 
   @Patch(':entryId')
   @RequireOrganizationPermission(ORG_PERMISSIONS.knowledgeManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   update(
     @Param('organizationId') organizationId: string,
     @Param('entryId', ParseUUIDPipe) entryId: string,
@@ -74,6 +80,7 @@ export class KnowledgeEntriesController {
 
   @Delete(':entryId')
   @RequireOrganizationPermission(ORG_PERMISSIONS.knowledgeManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   delete(
     @Param('organizationId') organizationId: string,
     @Param('entryId', ParseUUIDPipe) entryId: string,

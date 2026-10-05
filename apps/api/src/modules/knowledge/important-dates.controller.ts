@@ -11,7 +11,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { ORG_PERMISSIONS } from '@churchflow/shared';
+import { ENTITLEMENTS, ORG_PERMISSIONS } from '@churchflow/shared';
 import {
   OrganizationAccessGuard,
   RequireOrganizationPermission,
@@ -21,6 +21,10 @@ import {
   type AuthenticatedRequest,
 } from '../../common/guards/session-auth.guard';
 import {
+  RequireEntitlement,
+  SubscriptionEntitlementGuard,
+} from '../../common/guards/subscription-entitlement.guard';
+import {
   CreateImportantDateDto,
   ListImportantDatesQueryDto,
   UpdateImportantDateDto,
@@ -29,7 +33,7 @@ import { ImportantDatesService } from './important-dates.service';
 import { actorUserId } from './knowledge-request';
 
 @Controller('organizations/:organizationId/important-dates')
-@UseGuards(SessionAuthGuard, OrganizationAccessGuard)
+@UseGuards(SessionAuthGuard, OrganizationAccessGuard, SubscriptionEntitlementGuard)
 export class ImportantDatesController {
   constructor(private readonly importantDatesService: ImportantDatesService) {}
 
@@ -53,6 +57,7 @@ export class ImportantDatesController {
 
   @Post()
   @RequireOrganizationPermission(ORG_PERMISSIONS.knowledgeManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   create(
     @Param('organizationId') organizationId: string,
     @Body() body: CreateImportantDateDto,
@@ -63,6 +68,7 @@ export class ImportantDatesController {
 
   @Patch(':dateId')
   @RequireOrganizationPermission(ORG_PERMISSIONS.knowledgeManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   update(
     @Param('organizationId') organizationId: string,
     @Param('dateId', ParseUUIDPipe) dateId: string,
@@ -74,6 +80,7 @@ export class ImportantDatesController {
 
   @Delete(':dateId')
   @RequireOrganizationPermission(ORG_PERMISSIONS.knowledgeManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
   delete(
     @Param('organizationId') organizationId: string,
     @Param('dateId', ParseUUIDPipe) dateId: string,
