@@ -18,6 +18,7 @@ import {
   safeValidateUIMessages,
   streamText,
   toUIMessageStream,
+  type FinishReason,
   type UIMessage,
   type UIMessageChunk,
 } from 'ai';
@@ -98,6 +99,10 @@ const OUTPUT_CHUNK_TYPES = new Set<string>([
   'tool-call',
 ]);
 const PROVIDER_ERROR_MESSAGE = 'ChurchFlow AI could not answer right now. Please try again.';
+const TIMEOUT_ERROR_CODE = 'TIMEOUT';
+
+/** Why a reply that finished without a provider error still left the user without an answer. */
+type AiUnansweredReason = 'STEP_LIMIT' | 'EMPTY_REPLY';
 
 interface AiChatInput {
   userId: string;
@@ -469,7 +474,7 @@ export class AiAssistantService {
       finished = true;
       await finish();
     };
-    const failStream = async (reason: string, error: unknown) => {
+    const failStream = async (reason: string, error: unknown, errorCode?: string) => {
       this.logger.error({
         event: 'AI assistant request failed',
         requestId: state.requestId,
@@ -477,7 +482,9 @@ export class AiAssistantService {
         message: error instanceof Error ? error.message : null,
       });
       // Once the user has seen part of an answer the action was spent; before that it is refunded.
-      await finishOnce(() => this.failRequest(state, null, { counted: producedOutput, spent }));
+      await finishOnce(() =>
+        this.failRequest(state, null, { counted: producedOutput, spent, errorCode }),
+      );
     };
     const result = streamText({
       model: this.modelProvider.languageModel(),
@@ -529,15 +536,20 @@ export class AiAssistantService {
         spent.toolNames.push(...step.toolCalls.map((call) => call.toolName));
       },
       onError: ({ error }) => failStream('error', error),
-      onAbort: ({ reason }) => failStream('abort', reason),
-      onEnd: () =>
-        finishOnce(() =>
+      // Nothing else aborts the request: the client leaving does not stop it, only the time limit.
+      onAbort: ({ reason }) => failStream('abort', reason, TIMEOUT_ERROR_CODE),
+      onEnd: ({ finalStep }) => {
+        const unanswered = unansweredReason(finalStep);
+        if (unanswered) return failStream('unanswered', null, unanswered);
+
+        return finishOnce(() =>
           this.recordFinish(
             state,
             { status: 'SUCCEEDED', countedAgainstQuota: state.reserved, errorCode: null },
             spent,
           ),
-        ),
+        );
+      },
     });
     const uiStream = toUIMessageStream({
       stream: result.stream,
@@ -580,7 +592,7 @@ export class AiAssistantService {
       });
     });
 
-    return clientStream;
+    return surfaceUnansweredReply(clientStream);
   }
 
   private async saveTurn(
@@ -748,7 +760,7 @@ export class AiAssistantService {
   private async failRequest(
     state: AiRequestState,
     error: HttpException | null,
-    options: { counted?: boolean; spent?: AiRequestSpending } = {},
+    options: { counted?: boolean; spent?: AiRequestSpending; errorCode?: string | undefined } = {},
   ): Promise<void> {
     const counted = options.counted === true && state.reserved;
     if (state.reserved && !counted) {
@@ -760,7 +772,7 @@ export class AiAssistantService {
       {
         status: 'FAILED',
         countedAgainstQuota: counted,
-        errorCode: error ? errorCode(error) : 'PROVIDER_ERROR',
+        errorCode: error ? errorCode(error) : (options.errorCode ?? 'PROVIDER_ERROR'),
       },
       options.spent ?? { calls: [], toolNames: [] },
     );
@@ -862,6 +874,54 @@ function tokenTotals(
     totalTokens: sum.totalTokens ?? 0,
     estimatedCostUsd: usdString(sum.costUsd),
   };
+}
+
+/**
+ * A reply has to end with a sentence or a confirmation card. Without either - the step budget ran
+ * out on a tool call, or the model stopped with nothing to say - the user would see no answer.
+ */
+function unansweredReason(finalStep: {
+  text: string;
+  finishReason: FinishReason;
+  content: readonly { type: string }[];
+}): AiUnansweredReason | null {
+  if (finalStep.text.trim() !== '') return null;
+  if (finalStep.content.some((part) => part.type === 'tool-approval-request')) return null;
+
+  return finalStep.finishReason === 'tool-calls' ? 'STEP_LIMIT' : 'EMPTY_REPLY';
+}
+
+/**
+ * The client learns of a timeout or an unanswered reply as an error it can retry, the way it
+ * learns of a provider failure; an abort or a plain finish would leave an empty reply on screen.
+ */
+function surfaceUnansweredReply(
+  stream: ReadableStream<UIMessageChunk>,
+): ReadableStream<UIMessageChunk> {
+  let answered = false;
+
+  return stream.pipeThrough(
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
+      transform(chunk, controller) {
+        if (chunk.type === 'start-step') answered = false;
+        if (
+          (chunk.type === 'text-delta' && chunk.delta.trim() !== '') ||
+          chunk.type === 'tool-approval-request'
+        ) {
+          answered = true;
+        }
+
+        if (chunk.type === 'abort') {
+          controller.enqueue({ type: 'error', errorText: PROVIDER_ERROR_MESSAGE });
+          return;
+        }
+        if (chunk.type === 'finish' && !answered) {
+          controller.enqueue({ type: 'error', errorText: PROVIDER_ERROR_MESSAGE });
+        }
+        controller.enqueue(chunk);
+      },
+    }),
+  );
 }
 
 async function drainStream(stream: ReadableStream<unknown>): Promise<void> {
