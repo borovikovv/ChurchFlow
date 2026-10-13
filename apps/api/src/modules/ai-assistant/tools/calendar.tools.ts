@@ -18,7 +18,7 @@ import {
   zonedDateTimeToUtc,
 } from '../../calendar-events/recurrence/calendar-recurrence';
 import { richTextToPlainText } from '../../telegram-bot/rich-text-telegram';
-import { jsonInput, localized, type AiToolMeta } from './ai-tool';
+import { jsonInput, localized, toolError, type AiToolMeta } from './ai-tool';
 import type { AiNameResolver } from './ai-name-resolver';
 import type { AiToolRunner } from './ai-tool-runner';
 
@@ -295,22 +295,22 @@ export function calendarTools(runner: AiToolRunner, calendarEventsService: Calen
               new Date(localDateTime(input.to, '00:00', timeZone)).getTime() + DAY_MS,
             );
             if (rangeEnd.getTime() <= rangeStart.getTime()) {
-              return {
-                ok: false,
-                error: localized(locale, {
+              return toolError(
+                'validation',
+                localized(locale, {
                   en: 'The end date must not be before the start date.',
                   uk: 'Кінцева дата не може бути раніше початкової.',
                 }),
-              };
+              );
             }
             if (rangeEnd.getTime() - rangeStart.getTime() > LIST_RANGE_MAX_DAYS * DAY_MS) {
-              return {
-                ok: false,
-                error: localized(locale, {
+              return toolError(
+                'validation',
+                localized(locale, {
                   en: `Ask for at most ${String(LIST_RANGE_MAX_DAYS)} days at a time.`,
                   uk: `Можна переглянути не більше ${String(LIST_RANGE_MAX_DAYS)} днів за раз.`,
                 }),
-              };
+              );
             }
 
             const listed = await listRange(

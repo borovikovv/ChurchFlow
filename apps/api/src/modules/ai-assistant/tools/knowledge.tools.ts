@@ -42,7 +42,7 @@ import { KnowledgeEntriesController } from '../../knowledge/knowledge-entries.co
 import type { KnowledgeEntriesService } from '../../knowledge/knowledge-entries.service';
 import type { MembershipsService } from '../../memberships/memberships.service';
 import { richTextToPlainText } from '../../telegram-bot/rich-text-telegram';
-import { jsonInput, localized, type AiToolMeta } from './ai-tool';
+import { jsonInput, localized, toolError, type AiToolError, type AiToolMeta } from './ai-tool';
 import type { AiToolRunner } from './ai-tool-runner';
 import {
   dateSchema,
@@ -357,13 +357,13 @@ export function knowledgeTools(
           async () => {
             const days = daysBetween(input.from, input.to);
             if (days === null || days < 0 || days >= PLANNING_RANGE_MAX_DAYS) {
-              return {
-                ok: false,
-                error: localized(locale, {
+              return toolError(
+                'validation',
+                localized(locale, {
                   en: `Use real dates where the end is not before the start, at most ${String(PLANNING_RANGE_MAX_DAYS)} days in all.`,
                   uk: `Вкажіть справжні дати: кінець не раніше початку, загалом не більше ${String(PLANNING_RANGE_MAX_DAYS)} днів.`,
                 }),
-              };
+              );
             }
 
             const plan = PLANNING_ROLES[input.role];
@@ -513,7 +513,7 @@ export function knowledgeTools(
 function occurrencesFor(
   input: { year?: number | undefined; from?: string | undefined; to?: string | undefined },
   today: string,
-): { ok: true; resolve: (rule: ImportantDateRule) => string[] } | { ok: false; error: string } {
+): { ok: true; resolve: (rule: ImportantDateRule) => string[] } | AiToolError {
   if (input.year !== undefined) {
     const year = input.year;
     return { ok: true, resolve: (rule) => [resolveImportantDate(rule, year)] };
@@ -523,10 +523,10 @@ function occurrencesFor(
     const from = input.from ?? today;
     const to = input.to ?? from;
     if (to < from || Number(to.slice(0, 4)) - Number(from.slice(0, 4)) > DATE_RANGE_MAX_YEARS) {
-      return {
-        ok: false,
-        error: 'Use a range that ends after it starts and spans at most two years.',
-      };
+      return toolError(
+        'validation',
+        'Use a range that ends after it starts and spans at most two years.',
+      );
     }
 
     return { ok: true, resolve: (rule) => importantDateOccurrencesBetween(rule, from, to) };

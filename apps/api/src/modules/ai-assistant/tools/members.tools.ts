@@ -2,7 +2,7 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import { MembershipsController } from '../../memberships/memberships.controller';
 import type { MembershipsService } from '../../memberships/memberships.service';
-import { dateOnly, jsonInput, localized, type AiToolMeta } from './ai-tool';
+import { dateOnly, jsonInput, localized, toolError, type AiToolMeta } from './ai-tool';
 import type { AiToolRunner } from './ai-tool-runner';
 
 const SEARCH_RESULT_LIMIT = 10;
@@ -89,13 +89,13 @@ export function membersTools(runner: AiToolRunner, membershipsService: Membershi
           );
           const member = result.members.find((candidate) => candidate.id === input.membershipId);
           if (!member) {
-            return {
-              ok: false,
-              error: localized(locale, {
+            return toolError(
+              'validation',
+              localized(locale, {
                 en: 'This person was not found in the organization.',
                 uk: 'Цю людину не знайдено в організації.',
               }),
-            };
+            );
           }
 
           const { profile } = member;

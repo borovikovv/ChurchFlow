@@ -6,7 +6,8 @@ import type { EntitlementsService } from '../../billing/entitlements.service';
 import type { AiAssistantRepository } from '../repositories/ai-assistant.repository';
 import {
   localized,
-  toolErrorMessage,
+  toolError,
+  toolErrorFrom,
   type AiToolContext,
   type AiToolMeta,
   type AiToolOutput,
@@ -62,7 +63,7 @@ export class AiToolRunner {
       await this.authorize(meta);
       output = await run();
     } catch (error) {
-      output = { ok: false, error: toolErrorMessage(error) };
+      output = toolErrorFrom(error);
     }
 
     await this.dependencies.repository.recordToolExecution({
@@ -99,13 +100,13 @@ export class AiToolRunner {
         })
       : null;
     if (!executionId) {
-      return {
-        ok: false,
-        error: localized(locale, {
+      return toolError(
+        'business',
+        localized(locale, {
           en: 'This action was already handled or is no longer awaiting confirmation.',
           uk: 'Цю дію вже оброблено або вона більше не очікує підтвердження.',
         }),
-      };
+      );
     }
 
     let output: AiToolOutput<TData>;
@@ -113,7 +114,9 @@ export class AiToolRunner {
       await this.authorize(meta);
       output = await run();
     } catch (error) {
-      output = { ok: false, error: toolErrorMessage(error) };
+      // Sending a change again needs a new confirmation, and it may have half-happened; the
+      // user decides, not the model.
+      output = { ...toolErrorFrom(error), retryable: false };
     }
 
     await repository.completeToolExecution({
