@@ -6,7 +6,8 @@ const {
 const { OrganizationsService } = require('../dist/modules/organizations/organizations.service');
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
-const PERIOD_ENDS_AT = new Date('2026-10-01T00:00:00Z');
+// Relative to now: a paid period that has already ended - grace included - is cancelled outright.
+const PERIOD_ENDS_AT = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
 function statusTransaction({
   liqpayOrderId = 'live-order',

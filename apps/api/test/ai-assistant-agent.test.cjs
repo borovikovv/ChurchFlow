@@ -2,10 +2,16 @@ require('reflect-metadata');
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { setImmediate: nextTurn, setTimeout: sleep } = require('node:timers/promises');
-const { ForbiddenException } = require('@nestjs/common');
+const {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  ServiceUnavailableException,
+} = require('@nestjs/common');
 const { simulateReadableStream } = require('ai');
 const { MockLanguageModelV4 } = require('ai/test');
 const { AiAssistantService } = require('../dist/modules/ai-assistant/ai-assistant.service.js');
+const { toolErrorFrom } = require('../dist/modules/ai-assistant/tools/ai-tool.js');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const OTHER_ORG = '99999999-9999-4999-8999-999999999999';
@@ -278,7 +284,7 @@ function createHarness(options = {}) {
     ['AI_MODEL', 'deepseek/deepseek-v4.1-flash'],
     ['AI_MONTHLY_ACTION_LIMIT', limit],
     ['AI_MAX_STEPS', 8],
-    ['AI_REQUEST_TIMEOUT_MS', 60_000],
+    ['AI_REQUEST_TIMEOUT_MS', options.timeoutMs ?? 60_000],
   ]);
   const configService = {
     get: (key) => config.get(key),
@@ -375,6 +381,7 @@ function createHarness(options = {}) {
       return { canManage: true, group, memberCandidates: [] };
     },
     addMembers: async (organizationId, groupId, input, actorUserId) => {
+      if (calls.failAddMembers) throw new Error('connection reset');
       calls.addMembers.push({ organizationId, groupId, input, actorUserId });
       return groupDetail(groupId, groups.get(groupId).name, [input.members[0].membershipId]);
     },
@@ -746,6 +753,8 @@ test('a confirmation does not bypass permissions the user lacks', async () => {
   const output = chunks.find((chunk) => chunk.type === 'tool-output-available');
   assert.equal(output.output.ok, false);
   assert.match(output.output.error, /permission/i);
+  assert.equal(output.output.category, 'permission');
+  assert.equal(output.output.retryable, false);
   assert.equal(executionFor(harness, 'call-1').status, 'FAILED');
 });
 
@@ -933,8 +942,129 @@ test('a tool error is reported to the model instead of failing the request', asy
   const chunks = await runChat(harness, messageRequest('Who is in that group?'));
 
   const output = chunks.find((chunk) => chunk.type === 'tool-output-available').output;
-  assert.deepEqual(output, { ok: false, error: 'Group was not found' });
+  assert.deepEqual(output, {
+    ok: false,
+    error: 'Group was not found',
+    category: 'validation',
+    retryable: false,
+  });
   assert.equal(onlyRequest(harness).status, 'SUCCEEDED');
+});
+
+function emptyTurn() {
+  return [
+    {
+      type: 'finish',
+      finishReason: { unified: 'stop', raw: undefined },
+      usage: USAGE,
+      providerMetadata: { openrouter: { usage: { cost: 0.0001 } } },
+    },
+  ];
+}
+
+test('a reply that runs out of steps on a tool call reaches the client as an error', async () => {
+  const harness = createHarness({
+    turns: Array.from({ length: 8 }, (_, index) =>
+      toolCallTurn('searchMembers', { query: 'Maria' }, `call-${String(index)}`),
+    ),
+  });
+
+  const chunks = await runChat(harness, messageRequest('Who is Maria?'));
+
+  assert.equal(harness.calls.modelCalls, 8);
+  const errorIndex = chunks.findIndex((chunk) => chunk.type === 'error');
+  assert.ok(errorIndex !== -1, 'the client is told the reply has no answer');
+  assert.ok(errorIndex < chunks.findIndex((chunk) => chunk.type === 'finish'));
+  const request = onlyRequest(harness);
+  assert.equal(request.status, 'FAILED');
+  assert.equal(request.errorCode, 'STEP_LIMIT');
+  assert.equal(request.countedAgainstQuota, true, 'the user saw the tools run');
+  assert.equal(usageOf(harness, 'request-1').length, 8);
+});
+
+test('a model that stops without saying anything reaches the client as an error', async () => {
+  const harness = createHarness({
+    turns: [toolCallTurn('searchMembers', { query: 'Maria' }), emptyTurn()],
+  });
+
+  const chunks = await runChat(harness, messageRequest('Who is Maria?'));
+
+  assert.ok(chunks.some((chunk) => chunk.type === 'error'));
+  const request = onlyRequest(harness);
+  assert.equal(request.status, 'FAILED');
+  assert.equal(request.errorCode, 'EMPTY_REPLY');
+});
+
+test('a confirmation card is an answer even without a sentence', async () => {
+  const harness = createHarness({
+    turns: [toolCallTurn('addGroupMember', { groupId: YOUTH, membershipId: MARIA })],
+  });
+
+  const chunks = await runChat(harness, messageRequest('Add Maria to Youth'));
+
+  assert.ok(!chunks.some((chunk) => chunk.type === 'error'));
+  assert.equal(onlyRequest(harness).status, 'SUCCEEDED');
+});
+
+test('a reply cut off by the time limit reaches the client as an error, not an abort', async () => {
+  const harness = createHarness({
+    timeoutMs: 20,
+    chunkDelayInMs: 50,
+    turns: [textTurn('This answer takes too long.')],
+  });
+
+  const chunks = await runChat(harness, messageRequest('Hello'));
+  await sleep(50);
+
+  assert.ok(chunks.some((chunk) => chunk.type === 'error'));
+  assert.ok(!chunks.some((chunk) => chunk.type === 'abort'));
+  const request = onlyRequest(harness);
+  assert.equal(request.status, 'FAILED');
+  assert.equal(request.errorCode, 'TIMEOUT');
+});
+
+test('a tool error tells the model whether to resend, fix the call or stop', () => {
+  const cases = [
+    [new NotFoundException('Group was not found'), 'validation', false],
+    [new ForbiddenException('Missing permission'), 'permission', false],
+    [new ConflictException('Already a member'), 'business', false],
+    [new ServiceUnavailableException('Try later'), 'transient', true],
+    [new Error('connection reset'), 'transient', true],
+  ];
+
+  for (const [error, category, retryable] of cases) {
+    const output = toolErrorFrom(error);
+    assert.equal(output.ok, false);
+    assert.equal(output.category, category, error.message);
+    assert.equal(output.retryable, retryable, error.message);
+  }
+  assert.equal(
+    toolErrorFrom(new Error('connection reset to 10.0.0.5')).error,
+    'The action could not be completed. Try again later.',
+    'an unexpected error never reaches the model',
+  );
+});
+
+test('a confirmed change that fails is never marked for resending', async () => {
+  const harness = createHarness({
+    turns: [
+      toolCallTurn('addGroupMember', { groupId: YOUTH, membershipId: MARIA }),
+      textTurn('It was not added.'),
+    ],
+  });
+  await runChat(harness, messageRequest('Add Maria to Youth'));
+  harness.calls.failAddMembers = true;
+
+  const chunks = await runChat(harness, {
+    conversationId: CONVERSATION,
+    approvals: [{ approvalId: pendingApproval(harness).approval.id, approved: true }],
+    uiContext: { module: 'groups' },
+  });
+
+  const output = chunks.find((chunk) => chunk.type === 'tool-output-available').output;
+  assert.equal(output.ok, false);
+  assert.equal(output.category, 'transient');
+  assert.equal(output.retryable, false);
 });
 
 async function confirmPending(harness, module = 'calendar') {

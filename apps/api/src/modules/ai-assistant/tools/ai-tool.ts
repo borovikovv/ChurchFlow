@@ -1,4 +1,4 @@
-import { HttpException, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { AiToolRisk, Prisma } from '@churchflow/db';
 import type {
   AiAssistantEntityLink,
@@ -46,9 +46,24 @@ export interface AiToolMeta {
   route: AiToolRoute | null;
 }
 
+/**
+ * What the model can do about a failed call: wait and send it again (transient), change the
+ * arguments (validation), take another path or explain the rule (business), or tell the user
+ * they are not allowed (permission).
+ */
+export type AiToolErrorCategory = 'transient' | 'validation' | 'business' | 'permission';
+
+/** `retryable` says only whether sending the very same call again can succeed. */
+export interface AiToolError {
+  ok: false;
+  error: string;
+  category: AiToolErrorCategory;
+  retryable: boolean;
+}
+
 export type AiToolOutput<TData = undefined> =
   | { ok: true; summary: string; links: AiAssistantEntityLink[]; data?: TData }
-  | { ok: false; error: string };
+  | AiToolError;
 
 export interface AiToolContext {
   organizationId: string;
@@ -64,13 +79,43 @@ export interface AiToolContext {
 
 const toolErrorLogger = new Logger('AiAssistantTools');
 const UNEXPECTED_TOOL_ERROR = 'The action could not be completed. Try again later.';
+// Typed as plain numbers: `getStatus()` returns a number, and comparing it against an enum member
+// is flagged as unsafe.
+const PERMISSION_STATUSES: ReadonlySet<number> = new Set([
+  HttpStatus.UNAUTHORIZED,
+  HttpStatus.FORBIDDEN,
+]);
+const CONFLICT_STATUS: number = HttpStatus.CONFLICT;
+const TOO_MANY_REQUESTS_STATUS: number = HttpStatus.TOO_MANY_REQUESTS;
+const SERVER_ERROR_STATUS: number = HttpStatus.INTERNAL_SERVER_ERROR;
 
 /**
  * Turns a failure into something the model can explain to the user. Only messages the API
  * already shows its clients pass through; anything unexpected is logged and replaced, so an
  * internal error never reaches the conversation.
  */
-export function toolErrorMessage(error: unknown): string {
+export function toolError(category: AiToolErrorCategory, error: string): AiToolError {
+  return { ok: false, error, category, retryable: category === 'transient' };
+}
+
+export function toolErrorFrom(error: unknown): AiToolError {
+  return toolError(toolErrorCategory(error), toolErrorMessage(error));
+}
+
+function toolErrorCategory(error: unknown): AiToolErrorCategory {
+  if (error instanceof ZodError) return 'validation';
+  // Anything the API did not raise on purpose - a dropped connection, a timeout - may pass.
+  if (!(error instanceof HttpException)) return 'transient';
+
+  const status = error.getStatus();
+  if (PERMISSION_STATUSES.has(status)) return 'permission';
+  if (status === CONFLICT_STATUS) return 'business';
+  if (status === TOO_MANY_REQUESTS_STATUS || status >= SERVER_ERROR_STATUS) return 'transient';
+
+  return 'validation';
+}
+
+function toolErrorMessage(error: unknown): string {
   if (error instanceof HttpException) {
     const response = error.getResponse();
     if (typeof response === 'object' && 'message' in response) {
