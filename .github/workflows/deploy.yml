@@ -30,6 +30,8 @@ env:
   API_IMAGE: ghcr.io/borovikovv/churchflow-api:${{ inputs.environment }}-${{ github.sha }}
   MIGRATOR_IMAGE: ghcr.io/borovikovv/churchflow-api-migrator:${{ inputs.environment }}-${{ github.sha }}
   WEB_IMAGE: ghcr.io/borovikovv/churchflow-web:${{ inputs.environment }}-${{ github.sha }}
+  API_REPOSITORY: ghcr.io/borovikovv/churchflow-api
+  WEB_REPOSITORY: ghcr.io/borovikovv/churchflow-web
   INTERNAL_NETWORK: churchflow-internal
   ALLOW_DESTRUCTIVE_MIGRATIONS: ${{ inputs.allow_destructive_migrations }}
 
@@ -73,12 +75,26 @@ jobs:
           echo "::error::CI did not pass for commit $COMMIT_SHA (conclusion: $latest_conclusion): $latest_url. Fix it or re-run CI until it is green, then deploy again."
           exit 1
 
+  # Each architecture builds on a native runner, so native modules (Prisma engines, sharp,
+  # SWC) are installed for the platform they run on and nothing goes through QEMU. The images
+  # are pushed by digest only; the publish job joins them into one multi-arch tag, so the same
+  # tag runs on the x86 and the ARM hosts.
   build:
-    name: Build and publish images
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.platform }} images
+    runs-on: ${{ matrix.runner }}
     needs: ci-gate
     environment:
       name: ${{ inputs.environment }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
     env:
       TELEGRAM_CLIENT_ID: ${{ vars.TELEGRAM_CLIENT_ID }}
     steps:
@@ -189,30 +205,108 @@ jobs:
           exit "$invalid"
 
       - name: Build and publish API image
+        id: api
         uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/api/Dockerfile
-          push: true
-          tags: |
-            ${{ env.API_IMAGE }}
-            ${{ env.MIGRATOR_IMAGE }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.API_REPOSITORY }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=api-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=api-${{ matrix.arch }}
 
       - name: Build and publish Web image
+        id: web
         uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/web/Dockerfile
-          push: true
-          tags: ${{ env.WEB_IMAGE }}
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.WEB_REPOSITORY }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             NEXT_PUBLIC_WEB_URL=${{ vars.NEXT_PUBLIC_WEB_URL }}
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
             API_INTERNAL_URL=${{ vars.API_INTERNAL_URL }}
-          cache-from: type=gha,scope=web-${{ inputs.environment }}
-          cache-to: type=gha,mode=max,scope=web-${{ inputs.environment }}
+          cache-from: type=gha,scope=web-${{ inputs.environment }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=web-${{ inputs.environment }}-${{ matrix.arch }}
+
+      - name: Export image digests
+        shell: bash
+        env:
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for digest in "$API_DIGEST" "$WEB_DIGEST"; do
+            if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::Build did not report an image digest."
+              exit 1
+            fi
+          done
+          mkdir -p "$RUNNER_TEMP/digests/api" "$RUNNER_TEMP/digests/web"
+          touch "$RUNNER_TEMP/digests/api/${API_DIGEST#sha256:}"
+          touch "$RUNNER_TEMP/digests/web/${WEB_DIGEST#sha256:}"
+
+      - name: Upload image digests
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish multi-arch images
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download image digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          collect_sources() {
+            local repository="$1"
+            local dir="$2"
+            local -n result="$3"
+            result=()
+            for file in "$dir"/*; do
+              if [[ -f "$file" ]]; then
+                result+=("$repository@sha256:$(basename "$file")")
+              fi
+            done
+            if [[ "${#result[@]}" -ne 2 ]]; then
+              echo "::error::Expected 2 platform digests in $dir, found ${#result[@]}."
+              exit 1
+            fi
+          }
+
+          collect_sources "$API_REPOSITORY" "$RUNNER_TEMP/digests/api" api_sources
+          collect_sources "$WEB_REPOSITORY" "$RUNNER_TEMP/digests/web" web_sources
+
+          docker buildx imagetools create -t "$API_IMAGE" -t "$MIGRATOR_IMAGE" "${api_sources[@]}"
+          docker buildx imagetools create -t "$WEB_IMAGE" "${web_sources[@]}"
+
+          for image in "$API_IMAGE" "$MIGRATOR_IMAGE" "$WEB_IMAGE"; do
+            docker buildx imagetools inspect "$image"
+          done
 
       - name: Build summary
         shell: bash
@@ -222,6 +316,7 @@ jobs:
             echo ""
             echo "- Commit SHA: \`${COMMIT_SHA}\`"
             echo "- Image tag: \`${IMAGE_TAG}\`"
+            echo "- Platforms: \`linux/amd64, linux/arm64\`"
             echo "- API image: \`${API_IMAGE}\`"
             echo "- Migrator image: \`${MIGRATOR_IMAGE}\`"
             echo "- Web image: \`${WEB_IMAGE}\`"
@@ -230,7 +325,7 @@ jobs:
   deploy:
     name: Deploy ${{ inputs.environment }} to Hetzner
     runs-on: ubuntu-latest
-    needs: build
+    needs: publish
     environment:
       name: ${{ inputs.environment }}
     env:

@@ -95,13 +95,15 @@ The workflow checks out `github.sha` from the selected `Use workflow from` ref a
 - `ghcr.io/borovikovv/churchflow-api-migrator:<environment>-<github.sha>`
 - `ghcr.io/borovikovv/churchflow-web:<environment>-<github.sha>`
 
+Every tag is a multi-arch manifest for `linux/amd64` and `linux/arm64`, so the same tag runs on x86 and ARM (for example Hetzner CAX) hosts. Each architecture builds on a native GitHub runner (`ubuntu-24.04` and `ubuntu-24.04-arm`), which installs native modules such as the Prisma engines, sharp and SWC for the platform they run on. The images are pushed by digest, and the `Publish multi-arch images` job joins them into the tags above; the server pulls the variant that matches its own architecture.
+
 The Web image embeds `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_API_URL`, and `API_INTERNAL_URL` at `next build` time. Build the Web image separately for each environment. `TELEGRAM_CLIENT_ID` is runtime-only and is rendered into the server env files, not built into an image.
 
 Prod deploys accept only a `github.sha` reachable from `main` or exactly matching a `v*` release tag.
 
 The workflow:
 
-- builds and pushes the API, migrator, and Web images to GHCR with the immutable `<environment>-<github.sha>` tag;
+- builds the API, migrator, and Web images for `linux/amd64` and `linux/arm64` and publishes them to GHCR under the immutable multi-arch `<environment>-<github.sha>` tag;
 - uploads the Compose file and generated env files to `/opt/churchflow/stage` or `/opt/churchflow/production`;
 - logs in to GHCR on the server through stdin;
 - creates `churchflow-internal` if needed;
