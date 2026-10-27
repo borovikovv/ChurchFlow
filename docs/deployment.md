@@ -101,7 +101,7 @@ Prod deploys accept only a `github.sha` reachable from `main` or exactly matchin
 
 The workflow:
 
-- builds and pushes the API, migrator, and Web images to GHCR with the immutable `<environment>-<github.sha>` tag;
+- builds and pushes the API, migrator, and Web images to GHCR with the immutable `<environment>-<github.sha>` tag, as multi-platform images for `linux/amd64` and `linux/arm64` (the arm64 variant is built under QEMU), so the host can be an x86 or an Arm (CAX) server;
 - uploads the Compose file and generated env files to `/opt/churchflow/stage` or `/opt/churchflow/production`;
 - logs in to GHCR on the server through stdin;
 - creates `churchflow-internal` if needed;
