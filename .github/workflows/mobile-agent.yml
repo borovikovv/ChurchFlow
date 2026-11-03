@@ -1,0 +1,179 @@
+name: Mobile agent
+
+# Takes the next ready ticket from the "ChurchFlow Mobile" Todoist project, lets Claude Code
+# implement it, verifies it in the iOS simulator and opens a PR against `stage`.
+# Humans merge. See apps/mobile/README.md for the setup (secrets) and how tickets flow.
+on:
+  workflow_dispatch:
+    inputs:
+      ticket:
+        description: Ticket id such as M-04. Leave empty for the next ready ticket.
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# One agent at a time, so two runs never pick the same ticket.
+concurrency:
+  group: mobile-agent
+  cancel-in-progress: false
+
+env:
+  TODOIST_PROJECT_ID: 6hvqQ423WXc5P28q
+  BASE_BRANCH: stage
+
+jobs:
+  agent:
+    runs-on: macos-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out the base branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.BASE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Pick a ticket
+        id: pick
+        env:
+          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          REQUESTED_TICKET: ${{ inputs.ticket }}
+        run: node scripts/mobile-agent/todoist.mjs pick "$REQUESTED_TICKET"
+
+      - name: Mark the ticket as taken
+        if: steps.pick.outputs.found == 'true'
+        env:
+          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          TASK_ID: ${{ steps.pick.outputs.task_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node scripts/mobile-agent/todoist.mjs label "$TASK_ID" +in-progress -blocked
+          node scripts/mobile-agent/todoist.mjs comment "$TASK_ID" "Mobile agent started: $RUN_URL"
+
+      - name: Prepare the e2e environment
+        if: steps.pick.outputs.found == 'true'
+        uses: ./.github/actions/mobile-e2e-env
+
+      - name: Create the ticket branch
+        if: steps.pick.outputs.found == 'true'
+        env:
+          BRANCH: ${{ steps.pick.outputs.branch }}
+        run: |
+          git config user.name "churchflow-mobile-agent[bot]"
+          git config user.email "mobile-agent@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          {
+            echo 'prompt<<PROMPT_EOF'
+            cat scripts/mobile-agent/PROMPT.md
+            echo
+            echo '## Ticket'
+            echo
+            node -e 'const t=require("./.mobile-agent/ticket.json"); console.log(`# ${t.title}\n\nTodoist: ${t.url}\n\n${t.description}`)'
+            echo 'PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+        id: branch
+
+      - name: Implement the ticket with Claude Code
+        if: steps.pick.outputs.found == 'true'
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.MOBILE_AGENT_GH_TOKEN || github.token }}
+          prompt: ${{ steps.branch.outputs.prompt }}
+          claude_args: >-
+            --max-turns 400
+            --allowedTools "Bash,Read,Edit,MultiEdit,Write,Glob,Grep,LS,WebFetch,TodoWrite"
+
+      # The agent's own report is not trusted: the same checks run again here.
+      - name: Verify
+        if: steps.pick.outputs.found == 'true'
+        id: verify
+        env:
+          NEXT_PUBLIC_WEB_URL: http://localhost:3000
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+          API_INTERNAL_URL: http://localhost:3001
+          DATABASE_URL: postgresql://churchflow:churchflow@127.0.0.1:5432/churchflow?schema=public
+        run: |
+          set -o pipefail
+          test -n "$(git log --oneline "origin/$BASE_BRANCH..HEAD")" || { echo "The agent made no commits"; exit 1; }
+          test -z "$(git status --porcelain --untracked-files=no)" || { echo "Uncommitted changes left behind"; git status; exit 1; }
+          pnpm typecheck
+          pnpm --filter @churchflow/mobile lint
+          pnpm test
+          pnpm e2e:api
+          pnpm e2e:ios
+
+      - name: Push and open the pull request
+        if: steps.pick.outputs.found == 'true' && steps.verify.outcome == 'success'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.MOBILE_AGENT_GH_TOKEN || github.token }}
+          BRANCH: ${{ steps.pick.outputs.branch }}
+        run: |
+          git push --force-with-lease -u origin "$BRANCH"
+          node -e '
+            const fs = require("fs");
+            const t = require("./.mobile-agent/ticket.json");
+            let r = {};
+            try { r = JSON.parse(fs.readFileSync(".mobile-agent/result.json", "utf8")); } catch {}
+            const body = [
+              `Implements **${t.title}** ([Todoist](${t.url})).`,
+              "",
+              r.summary || "",
+              "",
+              "Checks run by the mobile agent workflow: typecheck, lint, unit tests and the Maestro flows in the iOS simulator. Screenshots are in the run artifacts.",
+              "",
+              `Run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+              "",
+              "Generated by the ChurchFlow mobile agent (Claude Code).",
+            ].join("\n");
+            fs.writeFileSync(".mobile-agent/pr-body.md", body);
+            fs.writeFileSync(".mobile-agent/pr-title.txt", t.title.replace(/^(M-\d+)\s+/, "$1: "));
+          '
+          url="$(gh pr view "$BRANCH" --json url -q .url 2>/dev/null || true)"
+          if [ -z "$url" ]; then
+            url="$(gh pr create --base "$BASE_BRANCH" --head "$BRANCH" \
+              --title "$(cat .mobile-agent/pr-title.txt)" --body-file .mobile-agent/pr-body.md)"
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Hand the ticket to review
+        if: steps.pr.outcome == 'success'
+        env:
+          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          TASK_ID: ${{ steps.pick.outputs.task_id }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          node scripts/mobile-agent/todoist.mjs label "$TASK_ID" +review -in-progress
+          node scripts/mobile-agent/todoist.mjs comment "$TASK_ID" "PR ready for review: $PR_URL"
+
+      - name: Mark the ticket as blocked
+        if: failure() && steps.pick.outputs.found == 'true'
+        env:
+          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          TASK_ID: ${{ steps.pick.outputs.task_id }}
+          BRANCH: ${{ steps.pick.outputs.branch }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          reason="$(node -e 'try{const r=require("./.mobile-agent/result.json");console.log(r.reason||r.summary||"")}catch{}')"
+          # Keep the attempt for a human to look at; no PR is opened for a red branch.
+          if [ -n "$(git log --oneline "origin/$BASE_BRANCH..HEAD" 2>/dev/null)" ]; then
+            git push --force-with-lease -u origin "$BRANCH" || true
+          fi
+          node scripts/mobile-agent/todoist.mjs label "$TASK_ID" +blocked -in-progress
+          node scripts/mobile-agent/todoist.mjs comment "$TASK_ID" "Mobile agent could not finish. ${reason:-See the run.} $RUN_URL"
+
+      - name: Upload screenshots and logs
+        if: always() && steps.pick.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-agent-${{ steps.pick.outputs.id }}
+          path: |
+            apps/mobile/e2e/artifacts
+            .mobile-agent
+          if-no-files-found: ignore
+          retention-days: 14

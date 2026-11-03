@@ -1,0 +1,14 @@
+appId: org.mychurchflow.app
+name: Smoke - the app starts and reaches its API
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: app-title
+- extendedWaitUntil:
+    visible:
+      id: api-status-ok
+    timeout: 30000
+- takeScreenshot: smoke-home

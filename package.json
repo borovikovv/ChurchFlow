@@ -12,7 +12,8 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "test": "pnpm build && pnpm test:api && pnpm test:web",
+    "test": "pnpm build && pnpm test:api && pnpm test:web && pnpm test:mobile",
+    "test:mobile": "pnpm --filter @churchflow/mobile test",
     "test:api": "node --test apps/api/test/*.test.cjs",
     "test:web": "node --experimental-strip-types --test test/*.test.ts",
     "format": "prettier --write .",
@@ -20,7 +21,11 @@
     "db:generate": "pnpm --filter @churchflow/db db:generate",
     "db:migrate": "pnpm --filter @churchflow/db db:migrate",
     "db:migrate:deploy": "pnpm --filter @churchflow/db db:migrate:deploy",
-    "db:studio": "pnpm --filter @churchflow/db db:studio"
+    "db:studio": "pnpm --filter @churchflow/db db:studio",
+    "e2e:services": "docker compose up -d postgres mailpit",
+    "e2e:api": "bash scripts/mobile-e2e/start-api.sh",
+    "e2e:api:stop": "bash scripts/mobile-e2e/stop-api.sh",
+    "e2e:ios": "pnpm --filter @churchflow/mobile e2e:ios"
   },
   "devDependencies": {
     "@churchflow/config": "workspace:*",

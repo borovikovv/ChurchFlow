@@ -24,5 +24,6 @@ These instructions apply to the entire repository. More specific `AGENTS.md` fil
 
 - `apps/web`: Next.js frontend. Follow `apps/web/AGENTS.md`.
 - `apps/api`: NestJS API. Follow `apps/api/AGENTS.md`.
+- `apps/mobile`: Expo (React Native) app. Follow `apps/mobile/AGENTS.md`.
 - `packages/shared`: framework-neutral schemas and types shared across applications.
 - `packages/db`: Prisma schema, migrations, and generated database client exports.

@@ -1,0 +1,26 @@
+name: Mobile agent - close ticket
+
+# When a mobile ticket branch (mobile/m-xx-...) is merged, close its Todoist task so the
+# tickets that depend on it become ready for the agent.
+on:
+  pull_request:
+    types: [closed]
+    branches: [stage]
+
+permissions:
+  contents: read
+
+jobs:
+  close:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'mobile/m-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Close the Todoist task
+        env:
+          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          TODOIST_PROJECT_ID: 6hvqQ423WXc5P28q
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: node scripts/mobile-agent/todoist.mjs close-for-branch "$HEAD_REF"
