@@ -299,7 +299,9 @@
       "COMMUNION_LEAD": "Communion",
       "PREACHER": "Preacher",
       "SERVICE_HOST": "Host",
-      "WORSHIP_LEAD": "Worship"
+      "WORSHIP_LEAD": "Worship",
+      "SOUND_ENGINEER": "Sound",
+      "LIVESTREAM_LEAD": "Livestream"
     }
   },
   "members": {
@@ -610,6 +612,8 @@
     "biblePassage": "Bible passage",
     "communion": "Communion",
     "communionLead": "Communion lead",
+    "soundEngineer": "Sound & equipment",
+    "livestreamLead": "Livestream",
     "songs": "Songs",
     "songsPlaceholder": "One song per line",
     "eventImage": "Event image",

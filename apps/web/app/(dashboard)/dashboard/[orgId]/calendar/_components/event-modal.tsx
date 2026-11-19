@@ -26,21 +26,20 @@ import { FormRichTextEditor } from '@/components/forms/form-rich-text-editor';
 import { FormSelect } from '@/components/forms/form-select';
 import { FormTextarea } from '@/components/forms/form-textarea';
 import { CALENDAR_TYPE } from './calendar-constants';
-import type { CalendarFormState } from './calendar-types';
+import type { CalendarFormState, CalendarServiceFormRole } from './calendar-types';
 import { applyFormValues, autofillMemberEvent, validateCalendarForm } from './calendar-form-utils';
 
 const REMINDER_VALUES = ['', 'ONE_HOUR', 'ONE_DAY', 'ONE_WEEK'] as const;
 
 // Groups are named freely, so a service role is matched against the group icon, which stays a
 // fixed set. A group drawn with the preaching icon is who to suggest for the preacher slot.
-const SERVICE_ROLE_PRIORITIES: Record<
-  'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead',
-  OrganizationGroupIcon[]
-> = {
+const SERVICE_ROLE_PRIORITIES: Record<CalendarServiceFormRole, OrganizationGroupIcon[]> = {
   preacher: ['preaching'],
   serviceHost: ['leadership', 'deacons', 'teaching'],
   worshipLead: ['worship'],
   communionLead: ['deacons', 'leadership'],
+  soundEngineer: ['sound', 'media'],
+  livestreamLead: ['media', 'sound'],
 };
 
 export function EventModal({
@@ -425,6 +424,28 @@ export function EventModal({
                 />
               ) : null}
             </div>
+            <ServiceRoleField
+              disabled={readonly}
+              error={errors.serviceDetails?.soundEngineer?.message}
+              label={t('soundEngineer')}
+              members={members}
+              role="soundEngineer"
+              values={values.serviceDetails.soundEngineer}
+              register={register}
+              setValue={setValue}
+              clearErrors={clearErrors}
+            />
+            <ServiceRoleField
+              disabled={readonly}
+              error={errors.serviceDetails?.livestreamLead?.message}
+              label={t('livestreamLead')}
+              members={members}
+              role="livestreamLead"
+              values={values.serviceDetails.livestreamLead}
+              register={register}
+              setValue={setValue}
+              clearErrors={clearErrors}
+            />
             <div className="sm:col-span-2">
               <FormTextarea
                 disabled={readonly}
@@ -482,7 +503,7 @@ function ServiceRoleField({
   error?: string | undefined;
   label: string;
   members: CalendarMemberOption[];
-  role: 'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead';
+  role: CalendarServiceFormRole;
   values: CalendarFormState['serviceDetails']['preacher'];
   register: UseFormRegister<CalendarFormState>;
   setValue: UseFormSetValue<CalendarFormState>;

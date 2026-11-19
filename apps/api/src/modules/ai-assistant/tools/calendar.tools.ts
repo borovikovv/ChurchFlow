@@ -84,6 +84,8 @@ const serviceDetailsSchema = z.object({
   worshipLead: servicePersonSchema.optional(),
   serviceHost: servicePersonSchema.optional(),
   communionLead: servicePersonSchema.optional(),
+  soundEngineer: servicePersonSchema.optional().describe('Sound and equipment operator.'),
+  livestreamLead: servicePersonSchema.optional().describe('Who runs the livestream.'),
   hasCommunion: z.boolean().optional(),
   biblePassage: z.string().trim().max(180).optional(),
   songs: z.array(z.string().trim().min(1).max(180)).max(30).optional(),
@@ -177,6 +179,8 @@ export function mergeServiceDetails(
     worshipLead: pick(change.worshipLead, current?.worshipLead),
     serviceHost: pick(change.serviceHost, current?.serviceHost),
     communionLead: pick(change.communionLead, current?.communionLead),
+    soundEngineer: pick(change.soundEngineer, current?.soundEngineer),
+    livestreamLead: pick(change.livestreamLead, current?.livestreamLead),
     hasCommunion: change.hasCommunion ?? current?.hasCommunion ?? false,
     biblePassage: change.biblePassage ?? current?.biblePassage ?? null,
     songs: change.songs ?? current?.songs ?? [],
@@ -226,6 +230,8 @@ function eventForModel(event: CalendarEventItem, timeZone: string) {
           worshipLead: personName(event.serviceDetails.worshipLead),
           serviceHost: personName(event.serviceDetails.serviceHost),
           communionLead: personName(event.serviceDetails.communionLead),
+          soundEngineer: personName(event.serviceDetails.soundEngineer),
+          livestreamLead: personName(event.serviceDetails.livestreamLead),
           hasCommunion: event.serviceDetails.hasCommunion,
           biblePassage: event.serviceDetails.biblePassage,
           songs: event.serviceDetails.songs,
@@ -487,6 +493,8 @@ type ReasonLabel =
   | 'worshipLead'
   | 'serviceHost'
   | 'communionLead'
+  | 'soundEngineer'
+  | 'livestreamLead'
   | 'communion'
   | 'biblePassage'
   | 'songs'
@@ -505,6 +513,8 @@ const REASON_LABELS: Record<ReasonLabel, { en: string; uk: string }> = {
   worshipLead: { en: 'Worship lead', uk: 'Прославлення' },
   serviceHost: { en: 'Host', uk: 'Ведучий' },
   communionLead: { en: 'Communion lead', uk: 'Причастя веде' },
+  soundEngineer: { en: 'Sound', uk: 'Звукооператор' },
+  livestreamLead: { en: 'Livestream', uk: 'Трансляція' },
   communion: { en: 'Communion', uk: 'Причастя' },
   biblePassage: { en: 'Bible passage', uk: 'Уривок' },
   songs: { en: 'Songs', uk: 'Пісні' },
@@ -544,6 +554,8 @@ export function calendarApprovalReasons(runner: AiToolRunner, names: AiNameResol
       ['worshipLead', service.worshipLead],
       ['serviceHost', service.serviceHost],
       ['communionLead', service.communionLead],
+      ['soundEngineer', service.soundEngineer],
+      ['livestreamLead', service.livestreamLead],
     ];
     const lines = await Promise.all(
       roles.map(async ([label, person]) =>

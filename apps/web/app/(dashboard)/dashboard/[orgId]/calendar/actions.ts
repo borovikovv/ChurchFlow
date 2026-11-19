@@ -191,6 +191,8 @@ export async function enrichCalendarImageUrls(
       event.serviceDetails?.serviceHost,
       event.serviceDetails?.worshipLead,
       event.serviceDetails?.communionLead,
+      event.serviceDetails?.soundEngineer,
+      event.serviceDetails?.livestreamLead,
     ].forEach((person) => {
       if (person?.photoAssetId) photoAssetIds.add(person.photoAssetId);
     });
@@ -226,6 +228,8 @@ export async function enrichCalendarImageUrls(
       event.serviceDetails?.serviceHost,
       event.serviceDetails?.worshipLead,
       event.serviceDetails?.communionLead,
+      event.serviceDetails?.soundEngineer,
+      event.serviceDetails?.livestreamLead,
     ].forEach((person) => {
       if (person?.photoAssetId && urls.has(person.photoAssetId)) {
         person.photoUrl = urls.get(person.photoAssetId) ?? null;

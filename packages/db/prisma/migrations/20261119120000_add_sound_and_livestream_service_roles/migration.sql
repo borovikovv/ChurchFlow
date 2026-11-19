@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "CalendarServiceRole" ADD VALUE 'SOUND_ENGINEER';
+ALTER TYPE "CalendarServiceRole" ADD VALUE 'LIVESTREAM_LEAD';

@@ -74,7 +74,12 @@ const PLANNING_ROLES: Record<
   {
     detailsKey: keyof Pick<
       CalendarServiceDetails,
-      'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead'
+      | 'preacher'
+      | 'serviceHost'
+      | 'worshipLead'
+      | 'communionLead'
+      | 'soundEngineer'
+      | 'livestreamLead'
     >;
     groupIcon: OrganizationGroupIcon;
     noteTag: string;
@@ -105,6 +110,18 @@ const PLANNING_ROLES: Record<
     groupIcon: 'teaching',
     noteTag: 'host',
     noteTerms: ['host', 'ведуч'],
+  },
+  SOUND_ENGINEER: {
+    detailsKey: 'soundEngineer',
+    groupIcon: 'sound',
+    noteTag: 'sound',
+    noteTerms: ['sound', 'звук', 'апарат'],
+  },
+  LIVESTREAM_LEAD: {
+    detailsKey: 'livestreamLead',
+    groupIcon: 'media',
+    noteTag: 'livestream',
+    noteTerms: ['livestream', 'stream', 'трансляц'],
   },
 };
 
@@ -338,7 +355,7 @@ export function knowledgeTools(
         ),
     }),
     getPlanningContext: tool({
-      description: `Everything needed to plan who serves in a service role over a period, e.g. "make a preaching schedule for November" or "склади графік проповідників на листопад": the people in the ministry group, the services in the period and who is already assigned, the assignments of the previous 8 weeks for a fair rotation, the important dates in the period and the church's notes on this ministry (its rules, rotations and preferences). Call it before proposing a rota or saying who should serve; the user does not have to mention the knowledge base. role: PREACHER (preachers group), WORSHIP_LEAD (worship group), COMMUNION_LEAD (deacons group), SERVICE_HOST (the host, from the teachers group). Pass groupId from listGroups to take the candidates from another group. Local dates, at most ${String(PLANNING_RANGE_MAX_DAYS)} days. It only reads; changes to services go through updateCalendarEvent.`,
+      description: `Everything needed to plan who serves in a service role over a period, e.g. "make a preaching schedule for November" or "склади графік проповідників на листопад": the people in the ministry group, the services in the period and who is already assigned, the assignments of the previous 8 weeks for a fair rotation, the important dates in the period and the church's notes on this ministry (its rules, rotations and preferences). Call it before proposing a rota or saying who should serve; the user does not have to mention the knowledge base. role: PREACHER (preachers group), WORSHIP_LEAD (worship group), COMMUNION_LEAD (deacons group), SERVICE_HOST (the host, from the teachers group), SOUND_ENGINEER (sound and equipment, sound group), LIVESTREAM_LEAD (livestream, media group). Pass groupId from listGroups to take the candidates from another group. Local dates, at most ${String(PLANNING_RANGE_MAX_DAYS)} days. It only reads; changes to services go through updateCalendarEvent.`,
       inputSchema: z.object({
         role: z.enum(CALENDAR_SERVICE_ROLES),
         from: dateSchema,
