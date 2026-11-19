@@ -49,6 +49,8 @@ export function eventForm(event: CalendarEventItem): CalendarFormState {
       worshipLead: servicePersonForm(event.serviceDetails?.worshipLead ?? null),
       hasCommunion: event.serviceDetails?.hasCommunion ?? false,
       communionLead: servicePersonForm(event.serviceDetails?.communionLead ?? null),
+      soundEngineer: servicePersonForm(event.serviceDetails?.soundEngineer ?? null),
+      livestreamLead: servicePersonForm(event.serviceDetails?.livestreamLead ?? null),
       biblePassage: event.serviceDetails?.biblePassage ?? '',
       songs: event.serviceDetails?.songs.join('\n') ?? '',
     },
@@ -62,6 +64,8 @@ export function emptyServiceDetails(): CalendarFormState['serviceDetails'] {
     worshipLead: emptyServicePerson(),
     hasCommunion: false,
     communionLead: emptyServicePerson(),
+    soundEngineer: emptyServicePerson(),
+    livestreamLead: emptyServicePerson(),
     biblePassage: '',
     songs: '',
   };

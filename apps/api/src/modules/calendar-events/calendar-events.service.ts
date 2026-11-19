@@ -1056,6 +1056,8 @@ function serviceDetailsSummary(
     serviceHost: participants.get('SERVICE_HOST') ?? null,
     worshipLead: participants.get('WORSHIP_LEAD') ?? null,
     communionLead: participants.get('COMMUNION_LEAD') ?? null,
+    soundEngineer: participants.get('SOUND_ENGINEER') ?? null,
+    livestreamLead: participants.get('LIVESTREAM_LEAD') ?? null,
     songs: details.songs.map((song) => song.title),
   };
 }

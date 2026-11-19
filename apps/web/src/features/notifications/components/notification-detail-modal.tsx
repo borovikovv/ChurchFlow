@@ -106,6 +106,8 @@ function CalendarEventNotificationDetail({
     PREACHER: t('serviceRoles.PREACHER'),
     SERVICE_HOST: t('serviceRoles.SERVICE_HOST'),
     WORSHIP_LEAD: t('serviceRoles.WORSHIP_LEAD'),
+    SOUND_ENGINEER: t('serviceRoles.SOUND_ENGINEER'),
+    LIVESTREAM_LEAD: t('serviceRoles.LIVESTREAM_LEAD'),
   };
 
   return (

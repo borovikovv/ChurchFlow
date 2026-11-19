@@ -61,6 +61,8 @@ export function EventViewModal({
         { label: t('preacher'), person: service.preacher },
         { label: t('serviceHost'), person: service.serviceHost },
         { label: t('worshipLead'), person: service.worshipLead },
+        { label: t('soundEngineer'), person: service.soundEngineer },
+        { label: t('livestreamLead'), person: service.livestreamLead },
       ]
     : [];
   const hasServiceDetails =

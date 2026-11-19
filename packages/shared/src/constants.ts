@@ -82,6 +82,8 @@ export const CALENDAR_SERVICE_ROLES = [
   'SERVICE_HOST',
   'WORSHIP_LEAD',
   'COMMUNION_LEAD',
+  'SOUND_ENGINEER',
+  'LIVESTREAM_LEAD',
 ] as const;
 
 export const CALENDAR_SERVICE_ROLE = {
@@ -89,6 +91,8 @@ export const CALENDAR_SERVICE_ROLE = {
   serviceHost: 'SERVICE_HOST',
   worshipLead: 'WORSHIP_LEAD',
   communionLead: 'COMMUNION_LEAD',
+  soundEngineer: 'SOUND_ENGINEER',
+  livestreamLead: 'LIVESTREAM_LEAD',
 } as const;
 
 export const CALENDAR_SERVICE_ROLE_LABELS = {
@@ -96,6 +100,8 @@ export const CALENDAR_SERVICE_ROLE_LABELS = {
   SERVICE_HOST: 'Host',
   WORSHIP_LEAD: 'Worship',
   COMMUNION_LEAD: 'Communion',
+  SOUND_ENGINEER: 'Sound',
+  LIVESTREAM_LEAD: 'Livestream',
 } as const satisfies Record<(typeof CALENDAR_SERVICE_ROLES)[number], string>;
 
 export const CALENDAR_SERVICE_ROLE_LABELS_BY_LOCALE = {
@@ -105,6 +111,8 @@ export const CALENDAR_SERVICE_ROLE_LABELS_BY_LOCALE = {
     SERVICE_HOST: 'Ведучий',
     WORSHIP_LEAD: 'Прославлення',
     COMMUNION_LEAD: 'Причастя',
+    SOUND_ENGINEER: 'Звукооператор',
+    LIVESTREAM_LEAD: 'Трансляція',
   },
 } as const satisfies Record<
   (typeof APP_LOCALES)[number],

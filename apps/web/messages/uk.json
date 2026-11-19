@@ -299,7 +299,9 @@
       "COMMUNION_LEAD": "Причастя",
       "PREACHER": "Проповідник",
       "SERVICE_HOST": "Ведучий",
-      "WORSHIP_LEAD": "Прославлення"
+      "WORSHIP_LEAD": "Прославлення",
+      "SOUND_ENGINEER": "Звукооператор",
+      "LIVESTREAM_LEAD": "Трансляція"
     }
   },
   "members": {
@@ -610,6 +612,8 @@
     "biblePassage": "Біблійний уривок",
     "communion": "Причастя",
     "communionLead": "Ведучий причастя",
+    "soundEngineer": "Звукооператор (звук і апаратура)",
+    "livestreamLead": "Відповідальний за трансляцію",
     "songs": "Пісні",
     "songsPlaceholder": "Одна пісня на рядок",
     "eventImage": "Зображення події",

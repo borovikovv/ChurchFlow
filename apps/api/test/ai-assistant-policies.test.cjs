@@ -369,6 +369,8 @@ test('changing one service role keeps the others', () => {
     serviceHost: null,
     worshipLead: { membershipId: null, customName: 'Guest band', displayName: 'Guest band' },
     communionLead: { membershipId: 'lead-1', customName: null, displayName: 'Petro' },
+    soundEngineer: { membershipId: 'sound-1', customName: null, displayName: 'Oleh' },
+    livestreamLead: null,
     songs: ['Song A'],
   };
 
@@ -377,6 +379,8 @@ test('changing one service role keeps the others', () => {
     worshipLead: { customName: 'Guest band' },
     serviceHost: undefined,
     communionLead: { membershipId: 'lead-1' },
+    soundEngineer: { membershipId: 'sound-1' },
+    livestreamLead: undefined,
     hasCommunion: true,
     biblePassage: 'John 3',
     songs: ['Song A'],
