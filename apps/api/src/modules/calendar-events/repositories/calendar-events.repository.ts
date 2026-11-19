@@ -85,6 +85,15 @@ export class CalendarEventsRepository {
     });
   }
 
+  /** Link rows in display order; see serviceRoleGroupsFromLinks. */
+  listServiceRoleGroupLinks(organizationId: string) {
+    return this.prisma.organizationServiceRoleGroup.findMany({
+      where: { organizationId },
+      select: { role: true, groupId: true },
+      orderBy: [{ role: 'asc' }, { position: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
   async listForRange(
     organizationId: string,
     rangeStart: Date,

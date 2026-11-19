@@ -28,6 +28,7 @@ import {
   ORGANIZATION_GROUP_RESPONSIBILITY_MAX_LENGTH,
   ORGANIZATION_GROUPS_VIEWS,
   PHOTO_UPLOAD_MAX_BYTES,
+  SERVICE_ROLE_GROUPS_MAX_PER_ROLE,
   PHOTO_UPLOAD_MIME_TYPES,
   LOGO_UPLOAD_MIME_TYPES,
   MEMBER_ACCESS_METHODS,
@@ -643,11 +644,20 @@ export const organizationGroupBadgeSchema = z.object({
   color: z.string(),
 });
 
+/** The service roles one group is linked to, as the group form edits them. */
+const organizationGroupServiceRolesSchema = z
+  .array(calendarServiceRoleSchema)
+  .max(CALENDAR_SERVICE_ROLES.length)
+  .refine((roles) => new Set(roles).size === roles.length, {
+    message: 'Each service role may appear only once',
+  });
+
 export const createOrganizationGroupSchema = z.object({
   name: z.string().trim().min(2).max(ORGANIZATION_GROUP_NAME_MAX_LENGTH),
   description: nullableTrimmedString(ORGANIZATION_GROUP_DESCRIPTION_MAX_LENGTH),
   icon: organizationGroupIconSchema,
   color: organizationGroupColorSchema,
+  serviceRoles: organizationGroupServiceRolesSchema.optional(),
 });
 
 export const updateOrganizationGroupSchema = z
@@ -656,10 +666,31 @@ export const updateOrganizationGroupSchema = z
     description: nullableTrimmedString(ORGANIZATION_GROUP_DESCRIPTION_MAX_LENGTH),
     icon: organizationGroupIconSchema.optional(),
     color: organizationGroupColorSchema.optional(),
+    serviceRoles: organizationGroupServiceRolesSchema.optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: 'At least one group field is required',
   });
+
+/** Ordered group ids of one role: the service form shows their members in this order. */
+const serviceRoleGroupIdsSchema = z
+  .array(uuidSchema)
+  .max(SERVICE_ROLE_GROUPS_MAX_PER_ROLE)
+  .refine((groupIds) => new Set(groupIds).size === groupIds.length, {
+    message: 'Each group may appear only once per role',
+  });
+
+/** Replaces every role's groups at once, so the request always carries all six roles. */
+export const updateServiceRoleGroupsSchema = z.object({
+  roles: z.object({
+    PREACHER: serviceRoleGroupIdsSchema,
+    SERVICE_HOST: serviceRoleGroupIdsSchema,
+    WORSHIP_LEAD: serviceRoleGroupIdsSchema,
+    COMMUNION_LEAD: serviceRoleGroupIdsSchema,
+    SOUND_ENGINEER: serviceRoleGroupIdsSchema,
+    LIVESTREAM_LEAD: serviceRoleGroupIdsSchema,
+  }) satisfies z.ZodType<Record<(typeof CALENDAR_SERVICE_ROLES)[number], string[]>>,
+});
 
 const organizationGroupMemberInputSchema = z.object({
   membershipId: uuidSchema,

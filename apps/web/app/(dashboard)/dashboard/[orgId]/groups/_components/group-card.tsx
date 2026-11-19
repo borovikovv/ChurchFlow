@@ -2,10 +2,11 @@
 
 import type { Route } from 'next';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import type { OrganizationGroupListItem } from '@churchflow/shared';
 import { GroupBadge } from '@/features/groups/components/group-badge';
+import { ServiceRoleTags } from '@/features/groups/components/service-role-tags';
 
 export function GroupCard({
   actions,
@@ -17,6 +18,7 @@ export function GroupCard({
   viewHref: Route;
 }) {
   const t = useTranslations('groups');
+  const locale = useLocale();
 
   return (
     <>
@@ -43,6 +45,7 @@ export function GroupCard({
           </dd>
         </div>
       </dl>
+      <ServiceRoleTags locale={locale} roles={group.serviceRoles} />
     </>
   );
 }

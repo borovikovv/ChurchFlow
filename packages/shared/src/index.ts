@@ -9,5 +9,6 @@ export * from './locale.js';
 export * from './member-csv-template.js';
 export * from './passkeys.js';
 export * from './schemas.js';
+export * from './service-role-groups.js';
 export * from './types.js';
 export * from './website-templates.js';

@@ -7,9 +7,10 @@ import {
 import { Prisma } from '@churchflow/db';
 import { organizationMediaContentUrl } from '../media/private-media-url';
 import { userAvatarUrl } from '../media/user-avatar-url';
-import { ORG_PERMISSIONS } from '@churchflow/shared';
+import { CALENDAR_SERVICE_ROLES, ORG_PERMISSIONS } from '@churchflow/shared';
 import type {
   AddOrganizationGroupMembersInput,
+  CalendarServiceRole,
   CreateOrganizationGroupInput,
   MoveOrganizationGroupMemberInput,
   MoveOrganizationGroupMemberResult,
@@ -20,13 +21,16 @@ import type {
   OrganizationGroupListItem,
   OrganizationGroupsPayload,
   SaveOrganizationGroupBoardLayoutInput,
+  ServiceRoleGroupsPayload,
   UpdateOrganizationGroupInput,
   UpdateOrganizationGroupMemberInput,
+  UpdateServiceRoleGroupsInput,
 } from '@churchflow/shared';
 import {
   GroupsRepository,
   UnknownGroupBoardNodesError,
   UnknownGroupMembershipsError,
+  UnknownServiceRoleGroupsError,
   type OrganizationGroupActor,
   type OrganizationGroupBoardPersonRecord,
   type OrganizationGroupDetailRecord,
@@ -192,6 +196,40 @@ export class GroupsService {
     return { deletedGroupId: groupId };
   }
 
+  async listServiceRoleGroups(
+    organizationId: string,
+    actorUserId: string,
+  ): Promise<ServiceRoleGroupsPayload> {
+    const [roles, actor] = await Promise.all([
+      this.groupsRepository.listServiceRoleGroups(organizationId),
+      this.groupsRepository.findActiveMembership(organizationId, actorUserId),
+    ]);
+
+    return { canManage: canManageGroups(actor), roles };
+  }
+
+  async replaceServiceRoleGroups(
+    organizationId: string,
+    input: UpdateServiceRoleGroupsInput,
+    actorUserId: string,
+  ): Promise<ServiceRoleGroupsPayload> {
+    try {
+      const roles = await this.groupsRepository.replaceServiceRoleGroups({
+        organizationId,
+        actorUserId,
+        roles: input.roles,
+      });
+
+      return { canManage: true, roles };
+    } catch (error) {
+      if (error instanceof UnknownServiceRoleGroupsError) {
+        throw new BadRequestException('Some groups do not belong to this organization');
+      }
+
+      throw error;
+    }
+  }
+
   async addMembers(
     organizationId: string,
     groupId: string,
@@ -285,6 +323,7 @@ function groupToListItem(group: OrganizationGroupListRecord): OrganizationGroupL
       membershipId: member.membershipId,
       displayName: membershipDisplayName(member.membership),
     })),
+    serviceRoles: orderedServiceRoles(group.serviceRoles),
   };
 }
 
@@ -302,7 +341,13 @@ function groupToDetail(group: OrganizationGroupDetailRecord): OrganizationGroupD
       role: member.role,
       responsibility: member.responsibility,
     })),
+    serviceRoles: orderedServiceRoles(group.serviceRoles),
   };
+}
+
+function orderedServiceRoles(rows: ReadonlyArray<{ role: CalendarServiceRole }>) {
+  const roles = new Set(rows.map(({ role }) => role));
+  return CALENDAR_SERVICE_ROLES.filter((role) => roles.has(role));
 }
 
 function leadersFirst(group: OrganizationGroupDetail): OrganizationGroupDetail {

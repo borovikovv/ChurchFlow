@@ -21,6 +21,14 @@ export interface SelectOption {
   value: string;
 }
 
+/** A labelled block of options, written as `<optgroup label>` around `<option>` children. */
+export interface SelectOptionGroup {
+  label: string;
+  options: SelectOption[];
+}
+
+type SelectEntry = SelectOption | SelectOptionGroup;
+
 export type SelectSize = 'default' | 'medium';
 
 type FormSelectProps = {
@@ -40,6 +48,11 @@ type FormSelectProps = {
   value?: string | number | readonly string[] | undefined;
   clearable?: boolean | undefined;
   allowMobileKeyboard?: boolean | undefined;
+};
+
+type OptionGroupElementProps = {
+  children?: ReactNode;
+  label?: string;
 };
 
 type OptionElementProps = {
@@ -137,6 +150,22 @@ export function createSelectStyles<IsMulti extends boolean = false>(
     menuList: (base) => ({
       ...base,
       paddingBlock: 4,
+    }),
+    group: (base) => ({
+      ...base,
+      paddingBlock: 4,
+      '& + &': {
+        borderTop: '1px solid var(--line)',
+      },
+    }),
+    groupHeading: (base) => ({
+      ...base,
+      color: 'var(--muted)',
+      fontSize: 11,
+      fontWeight: 600,
+      letterSpacing: '0.04em',
+      marginBottom: 2,
+      paddingInline: medium ? 8 : 12,
     }),
     option: (base, state) => ({
       ...base,
@@ -248,12 +277,14 @@ export function FormSelect({
   size = 'default',
   value,
 }: FormSelectProps) {
-  const options = extractOptions(children);
+  const entries = extractEntries(children);
+  const options = entries.flatMap((entry) => (isOptionGroup(entry) ? entry.options : [entry]));
   const initialValue = stringValue(value ?? defaultValue ?? options[0]?.value ?? '');
   const [internalValue, setInternalValue] = useState(initialValue);
   const selectedValue = value === undefined ? internalValue : stringValue(value);
   const selectedOption = options.find((option) => option.value === selectedValue) ?? null;
-  const maxMenuHeight = Math.min(240, Math.max(42, options.length * 40 + 8));
+  const groupCount = entries.filter(isOptionGroup).length;
+  const maxMenuHeight = Math.min(240, Math.max(42, (options.length + groupCount) * 40 + 8));
   const isMobile = useIsMobile();
   const isSearchable = allowMobileKeyboard || !isMobile;
   // Touch devices get the OS picker: the floating menu is unreliable inside modals and sheets.
@@ -293,11 +324,15 @@ export function FormSelect({
               {clearable && !options.some((option) => option.value === '') ? (
                 <option value="" />
               ) : null}
-              {options.map((option) => (
-                <option disabled={option.isDisabled} key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+              {entries.map((entry) =>
+                isOptionGroup(entry) ? (
+                  <optgroup key={`group:${entry.label}`} label={entry.label}>
+                    {entry.options.map(renderNativeOption)}
+                  </optgroup>
+                ) : (
+                  renderNativeOption(entry)
+                ),
+              )}
             </select>
           </>
         ) : (
@@ -315,7 +350,7 @@ export function FormSelect({
               maxMenuHeight={maxMenuHeight}
               menuPosition="fixed"
               menuShouldScrollIntoView={false}
-              options={options}
+              options={entries}
               required={Boolean(required)}
               styles={size === 'medium' ? createSelectStyles('medium') : selectStyles}
               value={selectedOption}
@@ -346,6 +381,45 @@ function nativeSelectClassName(size: SelectSize, selectClassName: string | undef
   return ['cursor-pointer', size === 'medium' ? 'min-h-8 px-2 py-1' : '', selectClassName ?? '']
     .filter(Boolean)
     .join(' ');
+}
+
+function renderNativeOption(option: SelectOption) {
+  return (
+    <option disabled={option.isDisabled} key={option.value} value={option.value}>
+      {option.label}
+    </option>
+  );
+}
+
+function isOptionGroup(entry: SelectEntry): entry is SelectOptionGroup {
+  return 'options' in entry;
+}
+
+function extractEntries(children: ReactNode): SelectEntry[] {
+  const entries: SelectEntry[] = [];
+
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) return;
+
+    if (child.type === Fragment) {
+      const fragmentProps = child.props as { children?: ReactNode };
+      entries.push(...extractEntries(fragmentProps.children));
+      return;
+    }
+
+    if (child.type === 'optgroup') {
+      const groupProps = child.props as OptionGroupElementProps;
+      const groupOptions = extractOptions(groupProps.children);
+      if (groupOptions.length > 0) {
+        entries.push({ label: groupProps.label ?? '', options: groupOptions });
+      }
+      return;
+    }
+
+    entries.push(...extractOptions(child));
+  });
+
+  return entries;
 }
 
 function extractOptions(children: ReactNode): SelectOption[] {

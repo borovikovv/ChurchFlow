@@ -12,6 +12,8 @@ import type {
   OrganizationGroupDetailPayload,
   OrganizationGroupsPayload,
   SaveOrganizationGroupBoardLayoutInput,
+  ServiceRoleGroups,
+  ServiceRoleGroupsPayload,
   UpdateOrganizationGroupInput,
   UpdateOrganizationGroupMemberInput,
 } from '@churchflow/shared';
@@ -211,4 +213,35 @@ export async function moveGroupMemberAction(input: {
 
   revalidateGroup(input.organizationId, input.groupId);
   return { ok: true as const, result: result.data };
+}
+
+export async function loadServiceRoleGroupsAction(input: { organizationId: string }) {
+  const result = await apiFetch<ServiceRoleGroupsPayload>(
+    `/organizations/${input.organizationId}/groups/service-roles`,
+  );
+
+  return result.ok
+    ? { ok: true as const, payload: result.data }
+    : { ok: false as const, error: result.error.message };
+}
+
+export async function saveServiceRoleGroupsAction(input: {
+  organizationId: string;
+  roles: ServiceRoleGroups;
+}) {
+  const result = await apiFetch<ServiceRoleGroupsPayload>(
+    `/organizations/${input.organizationId}/groups/service-roles`,
+    {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ roles: input.roles }),
+    },
+  );
+  revalidateGroup(input.organizationId);
+  // The calendar reads the links to order its service role selects.
+  revalidatePath(`/dashboard/${input.organizationId}/calendar`);
+
+  return result.ok
+    ? { ok: true as const, payload: result.data }
+    : { ok: false as const, error: result.error.message };
 }
