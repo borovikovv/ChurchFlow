@@ -179,6 +179,7 @@ export const AUDIT_ENTITY_TYPES = [
   'OrganizationRequest',
   'OrganizationWebsite',
   'PrayerRequest',
+  'ServiceRoleGroups',
   'Subscription',
   'User',
   'WebsitePage',
@@ -302,6 +303,42 @@ export const ORGANIZATION_GROUP_ICONS = [
   'finance',
   'transport',
 ] as const;
+
+/**
+ * Roles a group with this icon is linked to by default: the group form ticks them when a group is
+ * created, and the migration that introduced service role groups seeded existing groups from this
+ * map. The host role has no default icon, so a church picks its group itself.
+ */
+export const ORGANIZATION_GROUP_ICON_SERVICE_ROLES: Partial<
+  Record<
+    (typeof ORGANIZATION_GROUP_ICONS)[number],
+    ReadonlyArray<(typeof CALENDAR_SERVICE_ROLES)[number]>
+  >
+> = {
+  preaching: ['PREACHER'],
+  worship: ['WORSHIP_LEAD'],
+  deacons: ['COMMUNION_LEAD'],
+  sound: ['SOUND_ENGINEER'],
+  media: ['LIVESTREAM_LEAD'],
+};
+
+/**
+ * Used only while a role has no linked group: people from groups with these icons are suggested
+ * first, in this order.
+ */
+export const CALENDAR_SERVICE_ROLE_FALLBACK_GROUP_ICONS: Record<
+  (typeof CALENDAR_SERVICE_ROLES)[number],
+  ReadonlyArray<(typeof ORGANIZATION_GROUP_ICONS)[number]>
+> = {
+  PREACHER: ['preaching'],
+  SERVICE_HOST: ['leadership', 'deacons', 'teaching'],
+  WORSHIP_LEAD: ['worship'],
+  COMMUNION_LEAD: ['deacons', 'leadership'],
+  SOUND_ENGINEER: ['sound', 'media'],
+  LIVESTREAM_LEAD: ['media', 'sound'],
+};
+
+export const SERVICE_ROLE_GROUPS_MAX_PER_ROLE = 10;
 
 export const DEFAULT_ORGANIZATION_GROUP_ICON = 'smallGroup';
 

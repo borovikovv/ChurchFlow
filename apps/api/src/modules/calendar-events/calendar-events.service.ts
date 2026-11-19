@@ -22,6 +22,7 @@ import {
   CALENDAR_EVENT_TYPE,
   CALENDAR_TIME_ZONE,
   DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES,
+  serviceRoleGroupsFromLinks,
 } from '@churchflow/shared';
 import {
   CalendarEventsRepository,
@@ -71,10 +72,11 @@ export class CalendarEventsService {
     actorUserId: string,
     query: ListCalendarEventsQuery,
   ) {
-    const [actorMembership, preferences, members] = await Promise.all([
+    const [actorMembership, preferences, members, serviceRoleGroupLinks] = await Promise.all([
       this.calendarEventsRepository.findActiveMembership(organizationId, actorUserId),
       this.calendarEventsRepository.getPreferences(organizationId, actorUserId),
       this.calendarEventsRepository.listMembers(organizationId),
+      this.calendarEventsRepository.listServiceRoleGroupLinks(organizationId),
     ]);
     const visibleEventTypes = preferences?.visibleEventTypes ?? [
       ...DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES,
@@ -100,8 +102,9 @@ export class CalendarEventsService {
         anniversary: formatDateOnly(member.profile?.anniversary ?? null),
         photoAssetId: member.profile?.profilePhotoAssetId ?? null,
         photoUrl: userAvatarUrl(member.user, organizationId),
-        groups: member.groups.map(({ group }) => group),
+        groups: member.groups.map(({ group, role }) => ({ ...group, role })),
       })),
+      serviceRoleGroups: serviceRoleGroupsFromLinks(serviceRoleGroupLinks),
       events: events.flatMap((event) => expandEvent(event, rangeStart, rangeEnd)),
     };
   }

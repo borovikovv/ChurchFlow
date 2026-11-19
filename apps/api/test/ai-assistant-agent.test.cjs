@@ -370,6 +370,7 @@ function createHarness(options = {}) {
         ...group,
         memberCount: group.members.length,
         leaders: [],
+        serviceRoles: [],
       })),
     }),
     findById: async (organizationId, groupId) => {

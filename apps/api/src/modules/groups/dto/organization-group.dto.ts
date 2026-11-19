@@ -5,15 +5,18 @@ import {
   saveOrganizationGroupBoardLayoutSchema,
   updateOrganizationGroupMemberSchema,
   updateOrganizationGroupSchema,
+  updateServiceRoleGroupsSchema,
 } from '@churchflow/shared';
 import type {
   AddOrganizationGroupMembersInput,
+  CalendarServiceRole,
   CreateOrganizationGroupInput,
   MoveOrganizationGroupMemberInput,
   OrganizationGroupIcon,
   SaveOrganizationGroupBoardLayoutInput,
   UpdateOrganizationGroupInput,
   UpdateOrganizationGroupMemberInput,
+  UpdateServiceRoleGroupsInput,
 } from '@churchflow/shared';
 
 export class CreateOrganizationGroupDto implements CreateOrganizationGroupInput {
@@ -23,6 +26,7 @@ export class CreateOrganizationGroupDto implements CreateOrganizationGroupInput 
   description?: string | null;
   icon!: OrganizationGroupIcon;
   color!: string;
+  serviceRoles?: CalendarServiceRole[];
 }
 
 export class UpdateOrganizationGroupDto implements UpdateOrganizationGroupInput {
@@ -32,6 +36,13 @@ export class UpdateOrganizationGroupDto implements UpdateOrganizationGroupInput 
   description?: string | null;
   icon?: OrganizationGroupIcon;
   color?: string;
+  serviceRoles?: CalendarServiceRole[];
+}
+
+export class UpdateServiceRoleGroupsDto implements UpdateServiceRoleGroupsInput {
+  static readonly schema = updateServiceRoleGroupsSchema;
+
+  roles!: UpdateServiceRoleGroupsInput['roles'];
 }
 
 export class AddOrganizationGroupMembersDto implements AddOrganizationGroupMembersInput {

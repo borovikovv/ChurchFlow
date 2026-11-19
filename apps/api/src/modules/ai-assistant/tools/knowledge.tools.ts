@@ -22,6 +22,7 @@ import {
   nextImportantDateOccurrence,
   refineImportantDateRule,
   resolveImportantDate,
+  serviceRoleCandidateGroupIds,
   type AppLocale,
   type CalendarEventItem,
   type CalendarServiceDetails,
@@ -32,7 +33,6 @@ import {
   type KnowledgeEntryItem,
   type KnowledgeVisibility,
   type ListKnowledgeEntriesQuery,
-  type OrganizationGroupIcon,
 } from '@churchflow/shared';
 import type { CalendarEventsService } from '../../calendar-events/calendar-events.service';
 import type { GroupsService } from '../../groups/groups.service';
@@ -66,8 +66,8 @@ const PLANNING_NOTES_LIMIT = 10;
 const PLANNING_EXCERPT_LENGTH = 160;
 
 /**
- * How a service role is planned. Ministries are organization groups now, so a role finds its
- * people through the groups carrying the icon the ministry migration gave them.
+ * How a service role is planned. A role finds its people through the groups the church linked to
+ * it (Groups → Service roles), or while none is linked, through the role's fallback group icons.
  */
 const PLANNING_ROLES: Record<
   CalendarServiceRole,
@@ -81,45 +81,38 @@ const PLANNING_ROLES: Record<
       | 'soundEngineer'
       | 'livestreamLead'
     >;
-    groupIcon: OrganizationGroupIcon;
     noteTag: string;
     noteTerms: readonly string[];
   }
 > = {
   PREACHER: {
     detailsKey: 'preacher',
-    groupIcon: 'preaching',
     noteTag: 'preaching',
     noteTerms: ['preach', 'пропові'],
   },
   WORSHIP_LEAD: {
     detailsKey: 'worshipLead',
-    groupIcon: 'worship',
     noteTag: 'worship',
     noteTerms: ['worship', 'прославл'],
   },
   COMMUNION_LEAD: {
     detailsKey: 'communionLead',
-    groupIcon: 'deacons',
     noteTag: 'communion',
     noteTerms: ['communion', 'причаст'],
   },
   // Services are hosted by the church's teachers.
   SERVICE_HOST: {
     detailsKey: 'serviceHost',
-    groupIcon: 'teaching',
     noteTag: 'host',
     noteTerms: ['host', 'ведуч'],
   },
   SOUND_ENGINEER: {
     detailsKey: 'soundEngineer',
-    groupIcon: 'sound',
     noteTag: 'sound',
     noteTerms: ['sound', 'звук', 'апарат'],
   },
   LIVESTREAM_LEAD: {
     detailsKey: 'livestreamLead',
-    groupIcon: 'media',
     noteTag: 'livestream',
     noteTerms: ['livestream', 'stream', 'трансляц'],
   },
@@ -355,7 +348,7 @@ export function knowledgeTools(
         ),
     }),
     getPlanningContext: tool({
-      description: `Everything needed to plan who serves in a service role over a period, e.g. "make a preaching schedule for November" or "склади графік проповідників на листопад": the people in the ministry group, the services in the period and who is already assigned, the assignments of the previous 8 weeks for a fair rotation, the important dates in the period and the church's notes on this ministry (its rules, rotations and preferences). Call it before proposing a rota or saying who should serve; the user does not have to mention the knowledge base. role: PREACHER (preachers group), WORSHIP_LEAD (worship group), COMMUNION_LEAD (deacons group), SERVICE_HOST (the host, from the teachers group), SOUND_ENGINEER (sound and equipment, sound group), LIVESTREAM_LEAD (livestream, media group). Pass groupId from listGroups to take the candidates from another group. Local dates, at most ${String(PLANNING_RANGE_MAX_DAYS)} days. It only reads; changes to services go through updateCalendarEvent.`,
+      description: `Everything needed to plan who serves in a service role over a period, e.g. "make a preaching schedule for November" or "склади графік проповідників на листопад": the people in the ministry group, the services in the period and who is already assigned, the assignments of the previous 8 weeks for a fair rotation, the important dates in the period and the church's notes on this ministry (its rules, rotations and preferences). Call it before proposing a rota or saying who should serve; the user does not have to mention the knowledge base. role: PREACHER, WORSHIP_LEAD, COMMUNION_LEAD, SERVICE_HOST (the host), SOUND_ENGINEER (sound and equipment), LIVESTREAM_LEAD (livestream); the candidates come from the groups the church linked to the role. Pass groupId from listGroups to take the candidates from another group. Local dates, at most ${String(PLANNING_RANGE_MAX_DAYS)} days. It only reads; changes to services go through updateCalendarEvent.`,
       inputSchema: z.object({
         role: z.enum(CALENDAR_SERVICE_ROLES),
         from: dateSchema,
@@ -385,9 +378,12 @@ export function knowledgeTools(
 
             const plan = PLANNING_ROLES[input.role];
             const groupsPayload = await groupsService.listForOrganization(organizationId, userId);
-            const groups = groupsPayload.groups.filter((group) =>
-              input.groupId ? group.id === input.groupId : group.icon === plan.groupIcon,
+            const candidateGroupIds = new Set(
+              input.groupId
+                ? [input.groupId]
+                : serviceRoleCandidateGroupIds(input.role, groupsPayload.groups),
             );
+            const groups = groupsPayload.groups.filter((group) => candidateGroupIds.has(group.id));
             const lookbackFrom = shiftDate(input.from, -PLANNING_LOOKBACK_DAYS);
             const [members, calendar, dates, notes] = await Promise.all([
               groups.length > 0

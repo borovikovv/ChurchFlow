@@ -471,6 +471,7 @@ model Organization {
   memberMinistries        OrganizationMemberMinistry[]
   groups                  OrganizationGroup[]
   groupBoardNodes         OrganizationGroupBoardNode[]
+  serviceRoleGroups       OrganizationServiceRoleGroup[]
   preacherQueue           PreacherQueueEntry[]
   calendarServices        CalendarServiceDetails[]
   serviceParticipants     CalendarServiceParticipant[]
@@ -614,9 +615,10 @@ model OrganizationGroup {
   createdAt       DateTime              @default(now()) @map("created_at")
   updatedAt       DateTime              @updatedAt @map("updated_at")
 
-  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy    User?                     @relation("OrganizationGroupCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  organization Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?                          @relation("OrganizationGroupCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   members      OrganizationGroupMember[]
+  serviceRoles OrganizationServiceRoleGroup[]
 
   @@unique([organizationId, name])
   @@unique([id, organizationId])
@@ -641,6 +643,25 @@ model OrganizationGroupMember {
   @@index([organizationId, membershipId], map: "organization_group_members_organization_id_membership_id_idx")
   @@index([membershipId])
   @@map("organization_group_members")
+}
+
+/// Which groups a service role draws its people from: the service form lists the members of
+/// these groups first, in `position` order. The row points at (group, organization), so deleting
+/// a group drops its links and a role can never reference another organization's group.
+model OrganizationServiceRoleGroup {
+  organizationId String              @map("organization_id") @db.Uuid
+  role           CalendarServiceRole
+  groupId        String              @map("group_id") @db.Uuid
+  position       Int                 @default(0)
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  group        OrganizationGroup @relation(fields: [groupId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@id([organizationId, role, groupId])
+  @@index([organizationId, groupId])
+  @@index([groupId])
+  @@map("organization_service_role_groups")
 }
 
 /// Shared, organization-wide position of one node on the groups board. The key is a group id or

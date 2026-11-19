@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 import { useFormStatus } from 'react-dom';
 import { Button, type ButtonVariant } from '@/components/ui/button';
 
@@ -8,6 +8,7 @@ export function ConfirmSubmitButton({
   triggerLabel,
   title,
   description,
+  notice,
   confirmLabel,
   cancelLabel = 'Cancel',
   pendingLabel = 'Working…',
@@ -20,6 +21,8 @@ export function ConfirmSubmitButton({
   triggerLabel: string;
   title: string;
   description: string;
+  /** A warning shown under the description, e.g. what else the action affects. */
+  notice?: ReactNode | undefined;
   confirmLabel: string;
   cancelLabel?: string;
   pendingLabel?: string;
@@ -67,6 +70,11 @@ export function ConfirmSubmitButton({
             <h2 id={titleId}>{title}</h2>
             <p id={descriptionId}>{description}</p>
           </div>
+          {notice ? (
+            <div className="rounded-[var(--radius)] border border-[rgba(154,103,0,0.3)] bg-[var(--warning-subtle)] p-3 text-sm">
+              {notice}
+            </div>
+          ) : null}
           <div className="flex flex-col-reverse items-stretch justify-end gap-2 md:flex-row md:items-center">
             <Button
               disabled={pending}

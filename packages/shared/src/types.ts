@@ -61,6 +61,7 @@ import type {
   organizationGroupBadgeSchema,
   createOrganizationGroupSchema,
   updateOrganizationGroupSchema,
+  updateServiceRoleGroupsSchema,
   addOrganizationGroupMembersSchema,
   updateOrganizationGroupMemberSchema,
   moveOrganizationGroupMemberSchema,
@@ -189,6 +190,9 @@ export type OrganizationGroupMemberRole = z.infer<typeof organizationGroupMember
 export type OrganizationGroupBadge = z.infer<typeof organizationGroupBadgeSchema>;
 export type CreateOrganizationGroupInput = z.infer<typeof createOrganizationGroupSchema>;
 export type UpdateOrganizationGroupInput = z.infer<typeof updateOrganizationGroupSchema>;
+export type UpdateServiceRoleGroupsInput = z.infer<typeof updateServiceRoleGroupsSchema>;
+/** For each service role, the ids of the groups it draws people from, in display order. */
+export type ServiceRoleGroups = Record<CalendarServiceRole, string[]>;
 export type AddOrganizationGroupMembersInput = z.infer<typeof addOrganizationGroupMembersSchema>;
 export type UpdateOrganizationGroupMemberInput = z.infer<
   typeof updateOrganizationGroupMemberSchema
@@ -302,7 +306,12 @@ export interface CalendarMemberOption {
   anniversary: string | null;
   photoAssetId: string | null;
   photoUrl: string | null;
-  groups: OrganizationGroupBadge[];
+  groups: CalendarMemberGroup[];
+}
+
+/** A group a person belongs to, with their role in it so leaders can be suggested first. */
+export interface CalendarMemberGroup extends OrganizationGroupBadge {
+  role: OrganizationGroupMemberRole;
 }
 
 export interface CalendarPreferences {
@@ -315,6 +324,7 @@ export interface CalendarEventsPayload {
   events: CalendarEventItem[];
   preferences: CalendarPreferences;
   members: CalendarMemberOption[];
+  serviceRoleGroups: ServiceRoleGroups;
 }
 
 export interface OrganizationGroupMemberItem {
@@ -329,11 +339,19 @@ export interface OrganizationGroupListItem extends OrganizationGroupBadge {
   description: string | null;
   memberCount: number;
   leaders: Array<{ membershipId: string; displayName: string }>;
+  /** Service roles that suggest this group's members, in role order. */
+  serviceRoles: CalendarServiceRole[];
 }
 
 export interface OrganizationGroupDetail extends OrganizationGroupBadge {
   description: string | null;
   members: OrganizationGroupMemberItem[];
+  serviceRoles: CalendarServiceRole[];
+}
+
+export interface ServiceRoleGroupsPayload {
+  canManage: boolean;
+  roles: ServiceRoleGroups;
 }
 
 export interface OrganizationGroupsPayload {

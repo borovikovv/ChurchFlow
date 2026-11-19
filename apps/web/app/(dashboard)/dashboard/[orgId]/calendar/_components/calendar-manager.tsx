@@ -45,7 +45,7 @@ import type { CalendarFormState, CalendarManagerActions } from './calendar-types
 import styles from './calendar-manager.module.css';
 
 type CalendarRange = { rangeStart: string; rangeEnd: string };
-type LoadedCalendarEvents = Pick<CalendarEventsPayload, 'events' | 'members'>;
+type LoadedCalendarEvents = Pick<CalendarEventsPayload, 'events' | 'members' | 'serviceRoleGroups'>;
 
 function rangeKey(range: CalendarRange, types: readonly string[]) {
   return `${range.rangeStart}:${range.rangeEnd}:${types.join(',')}`;
@@ -85,6 +85,7 @@ export function CalendarManager({
   const fullCalendarLocale = locale === 'uk' ? ukLocale : undefined;
   const [events, setEvents] = useState(initialPayload.events);
   const [members, setMembers] = useState(initialPayload.members);
+  const [serviceRoleGroups, setServiceRoleGroups] = useState(initialPayload.serviceRoleGroups);
   const [visibleTypes, setVisibleTypes] = useState(initialPayload.preferences.visibleEventTypes);
   const [range, setRange] = useState(initialRange);
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
@@ -145,12 +146,14 @@ export function CalendarManager({
     rangeCache.current.set(rangeKey(nextRange, nextTypes), {
       events: result.payload.events,
       members: result.payload.members,
+      serviceRoleGroups: result.payload.serviceRoleGroups,
     });
     loadedRange.current = nextRange;
     startTransition(() => {
       setError(null);
       setEvents(result.payload.events);
       setMembers(result.payload.members);
+      setServiceRoleGroups(result.payload.serviceRoleGroups);
     });
 
     return true;
@@ -309,6 +312,7 @@ export function CalendarManager({
     if (cached) {
       setEvents(cached.events);
       setMembers(cached.members);
+      setServiceRoleGroups(cached.serviceRoleGroups);
       setLoadingRange(false);
     } else if (!isInitialRange && !coversRange(loadedRange.current, nextRange)) {
       setLoadingRange(true);
@@ -497,6 +501,7 @@ export function CalendarManager({
           form={form}
           members={members}
           mode={modalMode}
+          serviceRoleGroups={serviceRoleGroups}
           pending={isPending}
           onClose={() => setModalMode(null)}
           onDelete={() => void removeEvent()}

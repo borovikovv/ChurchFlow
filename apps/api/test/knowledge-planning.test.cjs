@@ -102,8 +102,17 @@ function createPrisma({ role, notes, dates }) {
   };
 }
 
-function group(id, name, icon) {
-  return { id, name, icon, color: '#000000', description: null, memberCount: 0, leaders: [] };
+function group(id, name, icon, serviceRoles = []) {
+  return {
+    id,
+    name,
+    icon,
+    color: '#000000',
+    description: null,
+    memberCount: 0,
+    leaders: [],
+    serviceRoles,
+  };
 }
 
 function person(membershipId, displayName) {
@@ -241,7 +250,8 @@ test('each service role maps to its ministry group and its own assignment', asyn
   const expectations = [
     ['PREACHER', PREACHERS, 'Anna'],
     ['WORSHIP_LEAD', WORSHIP, 'Vera'],
-    ['SERVICE_HOST', TEACHERS, 'Taras'],
+    // No group is linked to the host, so the fallback icons pick the teachers and the deacons.
+    ['SERVICE_HOST', [TEACHERS, DEACONS], 'Taras'],
     ['COMMUNION_LEAD', DEACONS, 'Denys'],
   ];
 
@@ -249,9 +259,21 @@ test('each service role maps to its ministry group and its own assignment', asyn
     const { plan, calls } = setup({ events });
     const result = await plan({ role, ...NOVEMBER });
 
-    assert.deepEqual(calls.memberGroups, [[groupId]], role);
+    assert.deepEqual(calls.memberGroups, [[groupId].flat()], role);
     assert.equal(result.data.services[0].assignee.name, assignee, role);
   }
+});
+
+test('groups linked to the role replace the icon guess', async () => {
+  const { plan, calls } = setup({
+    groups: [
+      group(PREACHERS, 'Preachers', 'preaching'),
+      group(YOUTH, 'Youth', 'youth', ['PREACHER']),
+    ],
+  });
+  await plan({ role: 'PREACHER', ...NOVEMBER });
+
+  assert.deepEqual(calls.memberGroups, [[YOUTH]]);
 });
 
 test('an explicit groupId replaces the default group', async () => {

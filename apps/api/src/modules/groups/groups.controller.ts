@@ -31,6 +31,7 @@ import {
   SaveOrganizationGroupBoardLayoutDto,
   UpdateOrganizationGroupDto,
   UpdateOrganizationGroupMemberDto,
+  UpdateServiceRoleGroupsDto,
 } from './dto/organization-group.dto';
 import { GroupsService } from './groups.service';
 
@@ -65,6 +66,30 @@ export class GroupsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.groupsService.saveBoardLayout(organizationId, body, this.actorUserId(request));
+  }
+
+  /** Declared before the :groupId route so the literal segment wins. */
+  @Get('service-roles')
+  serviceRoleGroups(
+    @Param('organizationId') organizationId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.groupsService.listServiceRoleGroups(organizationId, this.actorUserId(request));
+  }
+
+  @Put('service-roles')
+  @RequireOrganizationPermission(ORG_PERMISSIONS.membersManage)
+  @RequireEntitlement(ENTITLEMENTS.membersWrite)
+  replaceServiceRoleGroups(
+    @Param('organizationId') organizationId: string,
+    @Body() body: UpdateServiceRoleGroupsDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.groupsService.replaceServiceRoleGroups(
+      organizationId,
+      body,
+      this.actorUserId(request),
+    );
   }
 
   @Get(':groupId')

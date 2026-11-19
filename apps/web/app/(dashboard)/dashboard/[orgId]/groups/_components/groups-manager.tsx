@@ -1,26 +1,26 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useState } from 'react';
 import type {
   CreateOrganizationGroupInput,
   OrganizationGroupListItem,
   OrganizationGroupsPayload,
+  ServiceRoleGroups,
 } from '@churchflow/shared';
+import { CALENDAR_SERVICE_ROLES } from '@churchflow/shared';
 import { CardList } from '@/components/ui/card-list';
 import { DataTable } from '@/components/ui/data-table';
 import { GroupBadge } from '@/features/groups/components/group-badge';
+import { ServiceRoleTags } from '@/features/groups/components/service-role-tags';
 import { organizationGroupRoute } from '@/features/organizations/routes';
-import {
-  createGroupAction,
-  deleteGroupAction,
-  updateGroupAction,
-} from '../actions';
+import { createGroupAction, deleteGroupAction, updateGroupAction } from '../actions';
 import { GroupCard } from './group-card';
 import { GroupFormDialog } from './group-form-dialog';
 import { GroupRowActions } from './group-row-actions';
 import { GroupsCsvExport } from './groups-csv-export';
+import { ServiceRolesDialog } from './service-roles-dialog';
 
 export function GroupsManager({
   initialPayload,
@@ -31,6 +31,7 @@ export function GroupsManager({
 }) {
   const t = useTranslations('groups');
   const commonT = useTranslations('common');
+  const locale = useLocale();
   const [groups, setGroups] = useState(initialPayload.groups);
   const [error, setError] = useState<string | null>(null);
   const canManage = initialPayload.canManage;
@@ -54,6 +55,7 @@ export function GroupsManager({
           color: result.group.color,
           memberCount: result.group.members.length,
           leaders: [],
+          serviceRoles: result.group.serviceRoles,
         },
       ]),
     );
@@ -77,10 +79,20 @@ export function GroupsManager({
                 description: result.group.description,
                 icon: result.group.icon,
                 color: result.group.color,
+                serviceRoles: result.group.serviceRoles,
               }
             : item,
         ),
       ),
+    );
+  };
+
+  const applyServiceRoles = (roles: ServiceRoleGroups) => {
+    setGroups((current) =>
+      current.map((group) => ({
+        ...group,
+        serviceRoles: CALENDAR_SERVICE_ROLES.filter((role) => roles[role].includes(group.id)),
+      })),
     );
   };
 
@@ -132,6 +144,11 @@ export function GroupsManager({
       ),
     },
     {
+      id: 'serviceRoles',
+      header: t('serviceRoles'),
+      cell: ({ row }) => <ServiceRoleTags locale={locale} roles={row.original.serviceRoles} />,
+    },
+    {
       accessorKey: 'memberCount',
       header: t('members'),
       meta: { headerClassName: 'w-24', cellClassName: 'w-24' },
@@ -150,6 +167,13 @@ export function GroupsManager({
         <h2 className="m-0">{t('organizationGroups')}</h2>
         <div className="flex items-center gap-2">
           <GroupsCsvExport groups={groups} organizationId={organizationId} />
+          {canManage ? (
+            <ServiceRolesDialog
+              groups={groups}
+              organizationId={organizationId}
+              onSaved={applyServiceRoles}
+            />
+          ) : null}
           {canManage ? (
             <GroupFormDialog
               title={t('createTitle')}
