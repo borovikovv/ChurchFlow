@@ -149,6 +149,70 @@ test('/next reports when nothing is scheduled', async () => {
   assert.equal(message.text, 'No upcoming services were found.');
 });
 
+test('/next keeps showing a service without an end time while it is still running', async () => {
+  const running = serviceRecord({
+    id: 'event-running',
+    title: 'Running service',
+    startsAt: new Date('2026-09-17T10:30:00.000Z'),
+  });
+  const upcoming = serviceRecord({ id: 'event-upcoming', title: 'Upcoming service' });
+
+  const [message] = await sentMessages(service({ services: [upcoming, running] }), '/next');
+
+  assert.match(message.text, /^⛪ <b>Зараз триває служіння<\/b>/);
+  assert.match(message.text, /Running service/);
+  assert.doesNotMatch(message.text, /Upcoming service/);
+});
+
+test('/next keeps showing a running service until its end time', async () => {
+  const running = serviceRecord({
+    id: 'event-running',
+    title: 'Long service',
+    startsAt: new Date('2026-09-17T07:00:00.000Z'),
+    endsAt: new Date('2026-09-17T13:00:00.000Z'),
+  });
+  const upcoming = serviceRecord({ id: 'event-upcoming', title: 'Upcoming service' });
+
+  const [message] = await sentMessages(
+    service({ locale: 'en', services: [upcoming, running] }),
+    '/next',
+  );
+
+  assert.match(message.text, /^⛪ <b>Service in progress<\/b>/);
+  assert.match(message.text, /Long service/);
+});
+
+test('/next moves on once the current service has ended', async () => {
+  const ended = serviceRecord({
+    id: 'event-ended',
+    title: 'Ended service',
+    startsAt: new Date('2026-09-17T10:00:00.000Z'),
+    endsAt: new Date('2026-09-17T11:30:00.000Z'),
+  });
+  const stale = serviceRecord({
+    id: 'event-stale',
+    title: 'Stale service',
+    startsAt: new Date('2026-09-17T08:00:00.000Z'),
+  });
+  const zeroLength = serviceRecord({
+    id: 'event-zero',
+    title: 'Zero length service',
+    startsAt: new Date('2026-09-17T11:00:00.000Z'),
+    endsAt: new Date('2026-09-17T11:00:00.000Z'),
+  });
+  const upcoming = serviceRecord({ id: 'event-upcoming', title: 'Upcoming service' });
+
+  const [message] = await sentMessages(service({ services: [ended, stale, upcoming] }), '/next');
+
+  assert.match(message.text, /^⛪ <b>Наступне служіння<\/b>/);
+  assert.match(message.text, /Upcoming service/);
+
+  // An end time equal to the start is treated as missing, so the default length applies.
+  const [zero] = await sentMessages(service({ services: [zeroLength, upcoming] }), '/next');
+  assert.match(zero.text, /^⛪ <b>Зараз триває служіння<\/b>/);
+  assert.match(zero.text, /Zero length service/);
+});
+
 test('/myevents merges services and events for the user in date order with separators', async () => {
   const bot = service({
     locale: 'en',
