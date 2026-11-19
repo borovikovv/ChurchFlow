@@ -590,6 +590,8 @@ export class CalendarEventsRepository {
       { role: 'SERVICE_HOST' as const, person: serviceDetails.serviceHost },
       { role: 'WORSHIP_LEAD' as const, person: serviceDetails.worshipLead },
       { role: 'COMMUNION_LEAD' as const, person: serviceDetails.communionLead },
+      { role: 'SOUND_ENGINEER' as const, person: serviceDetails.soundEngineer },
+      { role: 'LIVESTREAM_LEAD' as const, person: serviceDetails.livestreamLead },
     ].filter(({ person }) => person);
     const membershipIds = roleInputs
       .map(({ person }) => person?.membershipId)
@@ -642,6 +644,8 @@ function serviceDetailMembershipIds(
     serviceDetails.serviceHost?.membershipId,
     serviceDetails.worshipLead?.membershipId,
     serviceDetails.communionLead?.membershipId,
+    serviceDetails.soundEngineer?.membershipId,
+    serviceDetails.livestreamLead?.membershipId,
   ].filter((id): id is string => Boolean(id));
 }
 

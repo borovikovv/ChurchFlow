@@ -1,7 +1,7 @@
 import type { CalendarMemberOption } from '@churchflow/shared';
 import type { UseFormSetError, UseFormSetValue } from 'react-hook-form';
 import type { CreateCalendarEventInput } from '@churchflow/shared';
-import type { CalendarFormState } from './calendar-types';
+import type { CalendarFormState, CalendarServiceFormRole } from './calendar-types';
 import { CALENDAR_REPEAT, CALENDAR_TYPE } from './calendar-constants';
 import { combineLocalDateTime } from './calendar-date-utils';
 
@@ -96,6 +96,20 @@ export function validateCalendarForm(
       );
       valid = valid && communionLeadValid;
     }
+    valid =
+      validateOptionalServicePerson(
+        form.serviceDetails.soundEngineer,
+        'serviceDetails.soundEngineer',
+        setError,
+        messages,
+      ) && valid;
+    valid =
+      validateOptionalServicePerson(
+        form.serviceDetails.livestreamLead,
+        'serviceDetails.livestreamLead',
+        setError,
+        messages,
+      ) && valid;
   }
 
   return valid;
@@ -141,6 +155,8 @@ function serviceDetailsPayload(
     communionLead: serviceDetails.hasCommunion
       ? servicePersonPayload(serviceDetails.communionLead)
       : undefined,
+    soundEngineer: servicePersonPayload(serviceDetails.soundEngineer),
+    livestreamLead: servicePersonPayload(serviceDetails.livestreamLead),
     biblePassage: serviceDetails.biblePassage || null,
     songs: serviceDetails.songs
       .split('\n')
@@ -158,7 +174,7 @@ function servicePersonPayload(person: CalendarFormState['serviceDetails']['preac
 
 function validateServicePerson(
   person: CalendarFormState['serviceDetails']['preacher'],
-  path: `serviceDetails.${'preacher' | 'serviceHost' | 'worshipLead' | 'communionLead'}`,
+  path: `serviceDetails.${CalendarServiceFormRole}`,
   setError: UseFormSetError<CalendarFormState>,
   messages: CalendarValidationMessages,
 ): boolean {
@@ -173,7 +189,7 @@ function validateServicePerson(
 
 function validateOptionalServicePerson(
   person: CalendarFormState['serviceDetails']['preacher'],
-  path: `serviceDetails.${'serviceHost'}`,
+  path: `serviceDetails.${'serviceHost' | 'soundEngineer' | 'livestreamLead'}`,
   setError: UseFormSetError<CalendarFormState>,
   messages: CalendarValidationMessages,
 ): boolean {

@@ -188,6 +188,8 @@ enum CalendarServiceRole {
   SERVICE_HOST
   WORSHIP_LEAD
   COMMUNION_LEAD
+  SOUND_ENGINEER
+  LIVESTREAM_LEAD
 }
 
 enum NotificationType {

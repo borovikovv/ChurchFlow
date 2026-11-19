@@ -271,6 +271,8 @@ export interface CalendarServiceDetails {
   serviceHost: CalendarServicePerson | null;
   worshipLead: CalendarServicePerson | null;
   communionLead: CalendarServicePerson | null;
+  soundEngineer: CalendarServicePerson | null;
+  livestreamLead: CalendarServicePerson | null;
   songs: string[];
 }
 

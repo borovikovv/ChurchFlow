@@ -34,12 +34,22 @@ export interface CalendarServiceFormPerson {
   customName: string;
 }
 
+export type CalendarServiceFormRole =
+  | 'preacher'
+  | 'serviceHost'
+  | 'worshipLead'
+  | 'communionLead'
+  | 'soundEngineer'
+  | 'livestreamLead';
+
 export interface CalendarServiceFormDetails {
   preacher: CalendarServiceFormPerson;
   serviceHost: CalendarServiceFormPerson;
   worshipLead: CalendarServiceFormPerson;
   hasCommunion: boolean;
   communionLead: CalendarServiceFormPerson;
+  soundEngineer: CalendarServiceFormPerson;
+  livestreamLead: CalendarServiceFormPerson;
   biblePassage: string;
   songs: string;
 }

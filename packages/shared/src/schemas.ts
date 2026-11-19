@@ -467,6 +467,8 @@ const calendarServiceDetailsInputSchema = z
     worshipLead: calendarServicePersonInputSchema.optional(),
     hasCommunion: z.boolean().default(false),
     communionLead: calendarServicePersonInputSchema.optional(),
+    soundEngineer: optionalCalendarServicePersonInputSchema.optional(),
+    livestreamLead: optionalCalendarServicePersonInputSchema.optional(),
     biblePassage: nullableTrimmedString(180),
     songs: z.array(z.string().trim().min(1).max(180)).default([]),
   })
