@@ -99,6 +99,7 @@ test('the board lists leaders before members in every group', async () => {
             color: '#2563EB',
             description: null,
             members: [member('a', 'MEMBER'), member('b', 'LEADER'), member('c', 'MEMBER')],
+            serviceRoles: [],
           },
         ],
       }),
@@ -238,7 +239,7 @@ test('deleting a group removes its board position with it', async () => {
   const deletedNodes = [];
   const tx = {
     organizationGroup: {
-      findFirst: async () => ({ id: GROUP_ID, name: 'Worship' }),
+      findFirst: async () => ({ id: GROUP_ID, name: 'Worship', serviceRoles: [] }),
       delete: async () => ({}),
     },
     organizationGroupBoardNode: {

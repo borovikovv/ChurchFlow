@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import type { OrganizationRole, Prisma } from '@churchflow/db';
-import { ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEYS } from '@churchflow/shared';
+import {
+  CALENDAR_SERVICE_ROLES,
+  ORGANIZATION_GROUP_BOARD_COMPUTED_NODE_KEYS,
+  serviceRoleGroupsFromLinks,
+} from '@churchflow/shared';
 import type {
   AddOrganizationGroupMembersInput,
+  CalendarServiceRole,
   CreateOrganizationGroupInput,
   OrganizationGroupBoardNodePosition,
   OrganizationGroupMemberRole,
+  ServiceRoleGroups,
   UpdateOrganizationGroupInput,
   UpdateOrganizationGroupMemberInput,
 } from '@churchflow/shared';
@@ -37,7 +43,12 @@ const groupMemberInclude = {
 // removed members out; counts included, or a group keeps reporting people who left.
 const presentMember = { membership: { removedAt: null } } as const;
 
+const groupServiceRolesInclude = {
+  serviceRoles: { select: { role: true } },
+} as const;
+
 const groupListInclude = {
+  ...groupServiceRolesInclude,
   members: {
     where: { role: 'LEADER' as const, ...presentMember },
     include: groupMemberInclude,
@@ -47,6 +58,7 @@ const groupListInclude = {
 } as const;
 
 const groupDetailInclude = {
+  ...groupServiceRolesInclude,
   members: {
     where: presentMember,
     include: groupMemberInclude,
@@ -80,6 +92,12 @@ export interface OrganizationGroupActor {
 export class UnknownGroupMembershipsError extends Error {
   constructor(readonly membershipIds: string[]) {
     super('UNKNOWN_GROUP_MEMBERSHIPS');
+  }
+}
+
+export class UnknownServiceRoleGroupsError extends Error {
+  constructor(readonly groupIds: string[]) {
+    super('UNKNOWN_SERVICE_ROLE_GROUPS');
   }
 }
 
@@ -239,6 +257,8 @@ export class GroupsRepository {
         },
         include: groupDetailInclude,
       });
+      const serviceRoles = input.group.serviceRoles ?? [];
+      await linkGroupToServiceRoles(tx, input.organizationId, group.id, serviceRoles);
 
       await tx.auditLog.create({
         data: {
@@ -247,11 +267,21 @@ export class GroupsRepository {
           action: 'CREATE',
           entityType: 'OrganizationGroup',
           entityId: group.id,
-          metadata: { name: group.name, icon: group.icon, color: group.color },
+          metadata: {
+            name: group.name,
+            icon: group.icon,
+            color: group.color,
+            ...(serviceRoles.length > 0 ? { serviceRoles } : {}),
+          },
         },
       });
 
-      return group;
+      return serviceRoles.length > 0
+        ? tx.organizationGroup.findFirstOrThrow({
+            where: { id: group.id, organizationId: input.organizationId },
+            include: groupDetailInclude,
+          })
+        : group;
     });
   }
 
@@ -280,6 +310,14 @@ export class GroupsRepository {
         },
         include: groupDetailInclude,
       });
+      if (input.group.serviceRoles !== undefined) {
+        await replaceGroupServiceRoles(
+          tx,
+          input.organizationId,
+          input.groupId,
+          input.group.serviceRoles,
+        );
+      }
 
       await tx.auditLog.create({
         data: {
@@ -292,7 +330,12 @@ export class GroupsRepository {
         },
       });
 
-      return group;
+      return input.group.serviceRoles !== undefined
+        ? tx.organizationGroup.findFirstOrThrow({
+            where: { id: input.groupId, organizationId: input.organizationId },
+            include: groupDetailInclude,
+          })
+        : group;
     });
   }
 
@@ -304,7 +347,7 @@ export class GroupsRepository {
     return this.prisma.$transaction(async (tx) => {
       const group = await tx.organizationGroup.findFirst({
         where: { id: input.groupId, organizationId: input.organizationId },
-        select: { id: true, name: true },
+        select: { id: true, name: true, serviceRoles: { select: { role: true } } },
       });
       if (!group) return false;
 
@@ -321,11 +364,72 @@ export class GroupsRepository {
           action: 'DELETE',
           entityType: 'OrganizationGroup',
           entityId: group.id,
-          metadata: { name: group.name },
+          metadata: {
+            name: group.name,
+            ...(group.serviceRoles.length > 0
+              ? { serviceRoles: group.serviceRoles.map(({ role }) => role) }
+              : {}),
+          },
         },
       });
 
       return true;
+    });
+  }
+
+  async listServiceRoleGroups(organizationId: string): Promise<ServiceRoleGroups> {
+    const rows = await this.prisma.organizationServiceRoleGroup.findMany({
+      where: { organizationId },
+      select: { role: true, groupId: true },
+      orderBy: [{ role: 'asc' }, { position: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return serviceRoleGroupsFromLinks(rows);
+  }
+
+  /** Replaces the groups of every role at once; a group of another organization is refused. */
+  async replaceServiceRoleGroups(input: {
+    organizationId: string;
+    actorUserId: string;
+    roles: ServiceRoleGroups;
+  }): Promise<ServiceRoleGroups> {
+    return this.prisma.$transaction(async (tx) => {
+      const groupIds = [...new Set(Object.values(input.roles).flat())];
+      const known = groupIds.length
+        ? await tx.organizationGroup.findMany({
+            where: { id: { in: groupIds }, organizationId: input.organizationId },
+            select: { id: true },
+          })
+        : [];
+      const knownIds = new Set(known.map((group) => group.id));
+      const unknownIds = groupIds.filter((groupId) => !knownIds.has(groupId));
+      if (unknownIds.length > 0) throw new UnknownServiceRoleGroupsError(unknownIds);
+
+      await tx.organizationServiceRoleGroup.deleteMany({
+        where: { organizationId: input.organizationId },
+      });
+      const rows = CALENDAR_SERVICE_ROLES.flatMap((role) =>
+        input.roles[role].map((groupId, position) => ({
+          organizationId: input.organizationId,
+          role,
+          groupId,
+          position,
+        })),
+      );
+      if (rows.length > 0) await tx.organizationServiceRoleGroup.createMany({ data: rows });
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: 'UPDATE',
+          entityType: 'ServiceRoleGroups',
+          entityId: input.organizationId,
+          metadata: { roles: input.roles },
+        },
+      });
+
+      return serviceRoleGroupsFromLinks(rows);
     });
   }
 
@@ -577,6 +681,52 @@ export class GroupsRepository {
       });
     });
   }
+}
+
+type ServiceRoleTransaction = Pick<Prisma.TransactionClient, 'organizationServiceRoleGroup'>;
+
+/** Appends the group to the end of each role's list, so groups linked earlier keep their order. */
+async function linkGroupToServiceRoles(
+  tx: ServiceRoleTransaction,
+  organizationId: string,
+  groupId: string,
+  roles: readonly CalendarServiceRole[],
+): Promise<void> {
+  for (const role of roles) {
+    const last = await tx.organizationServiceRoleGroup.findFirst({
+      where: { organizationId, role },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+    await tx.organizationServiceRoleGroup.create({
+      data: { organizationId, role, groupId, position: (last?.position ?? -1) + 1 },
+    });
+  }
+}
+
+async function replaceGroupServiceRoles(
+  tx: ServiceRoleTransaction,
+  organizationId: string,
+  groupId: string,
+  roles: readonly CalendarServiceRole[],
+): Promise<void> {
+  const current = await tx.organizationServiceRoleGroup.findMany({
+    where: { organizationId, groupId },
+    select: { role: true },
+  });
+  const currentRoles = new Set(current.map(({ role }) => role));
+  const removed = [...currentRoles].filter((role) => !roles.includes(role));
+  if (removed.length > 0) {
+    await tx.organizationServiceRoleGroup.deleteMany({
+      where: { organizationId, groupId, role: { in: removed } },
+    });
+  }
+  await linkGroupToServiceRoles(
+    tx,
+    organizationId,
+    groupId,
+    roles.filter((role) => !currentRoles.has(role)),
+  );
 }
 
 function changedGroupFields(group: UpdateOrganizationGroupInput): Prisma.InputJsonObject {

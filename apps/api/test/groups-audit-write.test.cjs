@@ -10,7 +10,13 @@ const MEMBERSHIP_ID = 'membership';
 function auditingTransaction() {
   const auditRows = [];
   const upsertedMemberships = [];
-  const group = { id: GROUP_ID, organizationId: ORGANIZATION_ID, name: 'Worship', members: [] };
+  const group = {
+    id: GROUP_ID,
+    organizationId: ORGANIZATION_ID,
+    name: 'Worship',
+    members: [],
+    serviceRoles: [],
+  };
 
   const tx = {
     organizationGroup: {

@@ -38,7 +38,9 @@ function groupTransaction(options = {}) {
     return { id: GROUP_ID, count: Array.isArray(args.data) ? args.data.length : 1 };
   };
 
-  const groupRows = [{ id: GROUP_ID, organizationId: groupOrganizationId, name: 'Worship' }];
+  const groupRows = [
+    { id: GROUP_ID, organizationId: groupOrganizationId, name: 'Worship', serviceRoles: [] },
+  ];
   const memberRows = [
     {
       id: MEMBERSHIP_ID,

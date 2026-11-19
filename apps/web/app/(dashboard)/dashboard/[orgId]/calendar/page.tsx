@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/auth/session';
 import { getMessages } from '@/i18n/messages';
 import {
   DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES,
+  emptyServiceRoleGroups,
   type CalendarEventItem,
   type CalendarEventsPayload,
 } from '@churchflow/shared';
@@ -87,6 +88,7 @@ export default async function CalendarDashboardPage({
         events: [],
         preferences: { visibleEventTypes: [...DEFAULT_CALENDAR_VISIBLE_EVENT_TYPES] },
         members: [],
+        serviceRoleGroups: emptyServiceRoleGroups(),
       };
   if (result.ok) {
     await enrichCalendarImageUrls(orgId, payload);

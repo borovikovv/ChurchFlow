@@ -562,7 +562,19 @@
     "selectMembers": "Select members",
     "selectionLimit": "You can add up to {max} members at once.",
     "subtitle": "Ministries, teams and small groups of the church.",
-    "title": "Groups"
+    "title": "Groups",
+    "serviceRoles": "Service roles",
+    "serviceRolesLabel": "Suggest in services for roles",
+    "serviceRolesHint": "People in this group come first when choosing the ticked roles in the service form.",
+    "serviceRolesFromIcon": "Filled in from the icon. People in this group come first when choosing the ticked roles in the service form.",
+    "serviceRolesDescription": "Choose which groups the service form suggests people from for each role. The group order is the order of the sections in the list: to change it, remove a group and add it again.",
+    "serviceRolesUnlinked": "{count} without a group",
+    "serviceRoleAddGroup": "Add a group",
+    "serviceRoleNoGroups": "No groups found",
+    "serviceRoleFallback": "No group chosen. For now people from groups with these icons come first: {icons}.",
+    "serviceRoleFallbackNone": "No group chosen. People are listed by name.",
+    "serviceRolesSaveError": "Could not save the service roles.",
+    "deleteServiceRolesNotice": "This group is linked to service roles: {roles}. Deleting it removes it from those roles. To only rename the group, edit it instead: its links stay."
   },
   "calendar": {
     "title": "Calendar",
@@ -683,7 +695,8 @@
       "status": "Status",
       "notCompleted": "Not completed",
       "communionPlanned": "Planned"
-    }
+    },
+    "otherMembers": "Other members"
   },
   "budget": {
     "title": "Budget",
@@ -1477,6 +1490,7 @@
       "WebsitePage": "Website pages",
       "WebsiteSection": "Website sections",
       "PrayerRequest": "Prayer requests",
+      "ServiceRoleGroups": "Service roles",
       "Subscription": "Subscription",
       "User": "Users"
     }

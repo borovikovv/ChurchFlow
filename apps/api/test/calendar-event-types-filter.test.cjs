@@ -18,6 +18,7 @@ function createService(visibleEventTypes, calls) {
       findActiveMembership: async () => ({ role: 'MEMBER' }),
       getPreferences: async () => ({ visibleEventTypes }),
       listMembers: async () => [],
+      listServiceRoleGroupLinks: async () => [],
       listForRange: async (_organizationId, _rangeStart, _rangeEnd, types) => {
         calls.push(types);
         return [];

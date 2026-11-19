@@ -13,10 +13,14 @@ import type {
   CalendarEventItem,
   CalendarEventType,
   CalendarMemberOption,
-  OrganizationGroupBadge,
-  OrganizationGroupIcon,
+  ServiceRoleGroups,
 } from '@churchflow/shared';
-import { CALENDAR_EVENT_REPEAT_PERIODS, CALENDAR_EVENT_TYPES } from '@churchflow/shared';
+import {
+  CALENDAR_EVENT_REPEAT_PERIODS,
+  CALENDAR_EVENT_TYPES,
+  CALENDAR_SERVICE_ROLE,
+  serviceRoleCandidateSections,
+} from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FormDialog } from '@/components/ui/form-dialog';
@@ -31,17 +35,6 @@ import { applyFormValues, autofillMemberEvent, validateCalendarForm } from './ca
 
 const REMINDER_VALUES = ['', 'ONE_HOUR', 'ONE_DAY', 'ONE_WEEK'] as const;
 
-// Groups are named freely, so a service role is matched against the group icon, which stays a
-// fixed set. A group drawn with the preaching icon is who to suggest for the preacher slot.
-const SERVICE_ROLE_PRIORITIES: Record<CalendarServiceFormRole, OrganizationGroupIcon[]> = {
-  preacher: ['preaching'],
-  serviceHost: ['leadership', 'deacons', 'teaching'],
-  worshipLead: ['worship'],
-  communionLead: ['deacons', 'leadership'],
-  soundEngineer: ['sound', 'media'],
-  livestreamLead: ['media', 'sound'],
-};
-
 export function EventModal({
   canManage,
   editingEvent,
@@ -49,6 +42,7 @@ export function EventModal({
   members,
   mode,
   pending,
+  serviceRoleGroups,
   onClose,
   onDelete,
   onImageUpload,
@@ -60,6 +54,7 @@ export function EventModal({
   members: CalendarMemberOption[];
   mode: 'create' | 'edit';
   pending: boolean;
+  serviceRoleGroups: ServiceRoleGroups;
   onClose: () => void;
   onDelete: () => void;
   onImageUpload: (file: File) => Promise<{ assetId: string; imageUrl: string } | null>;
@@ -365,6 +360,7 @@ export function EventModal({
               error={errors.serviceDetails?.preacher?.message}
               label={t('preacher')}
               members={members}
+              serviceRoleGroups={serviceRoleGroups}
               role="preacher"
               values={values.serviceDetails.preacher}
               register={register}
@@ -376,6 +372,7 @@ export function EventModal({
               error={errors.serviceDetails?.serviceHost?.message}
               label={t('serviceHost')}
               members={members}
+              serviceRoleGroups={serviceRoleGroups}
               role="serviceHost"
               values={values.serviceDetails.serviceHost}
               register={register}
@@ -387,6 +384,7 @@ export function EventModal({
               error={errors.serviceDetails?.worshipLead?.message}
               label={t('worshipLead')}
               members={members}
+              serviceRoleGroups={serviceRoleGroups}
               role="worshipLead"
               values={values.serviceDetails.worshipLead}
               register={register}
@@ -416,6 +414,7 @@ export function EventModal({
                   error={errors.serviceDetails?.communionLead?.message}
                   label={t('communionLead')}
                   members={members}
+                  serviceRoleGroups={serviceRoleGroups}
                   role="communionLead"
                   values={values.serviceDetails.communionLead}
                   register={register}
@@ -429,6 +428,7 @@ export function EventModal({
               error={errors.serviceDetails?.soundEngineer?.message}
               label={t('soundEngineer')}
               members={members}
+              serviceRoleGroups={serviceRoleGroups}
               role="soundEngineer"
               values={values.serviceDetails.soundEngineer}
               register={register}
@@ -440,6 +440,7 @@ export function EventModal({
               error={errors.serviceDetails?.livestreamLead?.message}
               label={t('livestreamLead')}
               members={members}
+              serviceRoleGroups={serviceRoleGroups}
               role="livestreamLead"
               values={values.serviceDetails.livestreamLead}
               register={register}
@@ -494,6 +495,7 @@ function ServiceRoleField({
   label,
   members,
   role,
+  serviceRoleGroups,
   values,
   register,
   setValue,
@@ -504,13 +506,21 @@ function ServiceRoleField({
   label: string;
   members: CalendarMemberOption[];
   role: CalendarServiceFormRole;
+  serviceRoleGroups: ServiceRoleGroups;
   values: CalendarFormState['serviceDetails']['preacher'];
   register: UseFormRegister<CalendarFormState>;
   setValue: UseFormSetValue<CalendarFormState>;
   clearErrors: UseFormClearErrors<CalendarFormState>;
 }) {
   const t = useTranslations('calendar');
-  const sortedMembers = sortMembersByGroupIcon(members, SERVICE_ROLE_PRIORITIES[role]);
+  // People from the groups linked to the role come first, one block per group; with no linked
+  // group the list keeps a single block ordered by the role's fallback group icons.
+  const sections = serviceRoleCandidateSections(
+    members,
+    CALENDAR_SERVICE_ROLE[role],
+    serviceRoleGroups,
+  );
+  const grouped = sections.some((section) => section.group !== null);
   const baseName = `serviceDetails.${role}` as const;
 
   return (
@@ -535,11 +545,24 @@ function ServiceRoleField({
         }}
       >
         <option value="">{t('noMemberSelected')}</option>
-        {sortedMembers.map((member) => (
-          <option key={member.id} value={member.id}>
-            {member.displayName}
-          </option>
-        ))}
+        {grouped
+          ? sections.map((section) => (
+              <optgroup
+                key={section.group?.id ?? 'others'}
+                label={section.group?.name ?? t('otherMembers')}
+              >
+                {section.members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.displayName}
+                  </option>
+                ))}
+              </optgroup>
+            ))
+          : sections[0]?.members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.displayName}
+              </option>
+            ))}
       </FormSelect>
       <FormInput
         disabled={disabled || Boolean(values.membershipId)}
@@ -559,21 +582,4 @@ function ServiceRoleField({
       />
     </div>
   );
-}
-
-function sortMembersByGroupIcon(
-  members: CalendarMemberOption[],
-  priorities: OrganizationGroupIcon[],
-) {
-  return [...members].sort((left, right) => {
-    const leftRank = groupIconRank(left.groups, priorities);
-    const rightRank = groupIconRank(right.groups, priorities);
-    if (leftRank !== rightRank) return leftRank - rightRank;
-    return left.displayName.localeCompare(right.displayName);
-  });
-}
-
-function groupIconRank(groups: OrganizationGroupBadge[], priorities: OrganizationGroupIcon[]) {
-  const rank = priorities.findIndex((icon) => groups.some((group) => group.icon === icon));
-  return rank === -1 ? Number.MAX_SAFE_INTEGER : rank;
 }
