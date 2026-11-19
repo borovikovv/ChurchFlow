@@ -44,6 +44,9 @@ const PRAYER_REQUEST_DESCRIPTION_LIMIT = 1800;
 const EVENT_DESCRIPTION_LIMIT = 2500;
 const DESCRIPTION_BLOCK_LIMIT = 3500;
 const NEXT_SERVICE_LOOKAHEAD_MS = 180 * 24 * 60 * 60 * 1000;
+// Services usually have no end time. Until this long after its start, a service still counts as
+// in progress, so /next keeps showing it during the service instead of jumping to the next one.
+const DEFAULT_SERVICE_DURATION_MS = 3 * 60 * 60 * 1000;
 
 const ORGANIZATION_ACTIONS = ['services', 'prayerRequests', 'nextService', 'myEvents'] as const;
 
@@ -144,6 +147,10 @@ interface TelegramCommonMessages {
   unknownCommand: string;
 }
 
+interface NextServiceMessages extends ListMessages {
+  ongoingHeading: string;
+}
+
 interface PrayerRequestsMessages {
   authorLabel: string;
   empty: string;
@@ -158,7 +165,7 @@ interface TelegramLocaleConfig {
   intlLocale: string;
   menu: TelegramMenuMessages;
   myEvents: ListMessages;
-  nextService: ListMessages;
+  nextService: NextServiceMessages;
   prayerRequests: PrayerRequestsMessages;
   serviceDateOrder: 'day-month' | 'month-day';
   serviceSchedule: ServiceScheduleMessages;
@@ -216,6 +223,7 @@ const TELEGRAM_LOCALE_CONFIG = {
     nextService: {
       empty: 'No upcoming services were found.',
       heading: 'Next service',
+      ongoingHeading: 'Service in progress',
     },
     prayerRequests: {
       authorLabel: 'Requested by',
@@ -275,6 +283,7 @@ const TELEGRAM_LOCALE_CONFIG = {
     nextService: {
       empty: 'Найближчих служінь не знайдено.',
       heading: 'Наступне служіння',
+      ongoingHeading: 'Зараз триває служіння',
     },
     prayerRequests: {
       authorLabel: 'Просить',
@@ -625,17 +634,21 @@ export class TelegramBotService {
     const query = {
       userId,
       organizationId,
-      rangeStart: now,
+      // Look back far enough to still catch a service that started earlier and is running now.
+      rangeStart: new Date(now.getTime() - DEFAULT_SERVICE_DURATION_MS),
       rangeEnd: new Date(now.getTime() + NEXT_SERVICE_LOOKAHEAD_MS),
     };
     const services = await this.telegramBotRepository.listUpcomingServicesForOrganization(query);
-    const [nextService] = expandUpcomingEvents(services, query, this.logger);
+    const nextService = expandUpcomingEvents(services, query, this.logger).find(
+      (service) => serviceEffectiveEnd(service).getTime() > now.getTime(),
+    );
     if (!nextService) {
       await this.sendMenuMessages(chatId, [nextServiceMessages(locale).empty], locale, {});
       return;
     }
 
-    await this.sendMenuMessages(chatId, formatNextService(nextService, locale), locale, {
+    const ongoing = nextService.startsAt.getTime() <= now.getTime();
+    await this.sendMenuMessages(chatId, formatNextService(nextService, locale, ongoing), locale, {
       parseMode: 'HTML',
     });
   }
@@ -896,9 +909,27 @@ function formatMonthlyEventList(input: {
   return chunkTelegramHtmlBlocks(header, blocks, SERVICE_SCHEDULE_MESSAGE_LIMIT);
 }
 
-function formatNextService(service: UpcomingEventOccurrenceRecord, locale: AppLocale): string[] {
+/**
+ * When a service is over. Uses its end time when it has a real one; a missing end time, or one
+ * that is not after the start (an end date picked without an end time), falls back to a default
+ * service length.
+ */
+function serviceEffectiveEnd(service: UpcomingEventOccurrenceRecord): Date {
+  if (service.endsAt && service.endsAt.getTime() > service.startsAt.getTime()) {
+    return service.endsAt;
+  }
+
+  return new Date(service.startsAt.getTime() + DEFAULT_SERVICE_DURATION_MS);
+}
+
+function formatNextService(
+  service: UpcomingEventOccurrenceRecord,
+  locale: AppLocale,
+  ongoing: boolean,
+): string[] {
+  const messages = nextServiceMessages(locale);
   const header = [
-    `⛪ <b>${escapeTelegramHtml(nextServiceMessages(locale).heading)}</b>`,
+    `⛪ <b>${escapeTelegramHtml(ongoing ? messages.ongoingHeading : messages.heading)}</b>`,
     escapeTelegramHtml(service.organization.name),
   ].join('\n');
   const sections = [
@@ -1246,7 +1277,7 @@ function prayerRequestsMessages(locale: AppLocale): PrayerRequestsMessages {
   return telegramLocaleConfig(locale).prayerRequests;
 }
 
-function nextServiceMessages(locale: AppLocale): ListMessages {
+function nextServiceMessages(locale: AppLocale): NextServiceMessages {
   return telegramLocaleConfig(locale).nextService;
 }
 
