@@ -999,6 +999,41 @@
     color: var(--warning);
   }
 
+  /* Keeps a scrolled-to section clear of the sticky site header. */
+  #billing {
+    scroll-margin-top: 88px;
+  }
+
+  .section-highlight {
+    border-radius: 10px;
+    animation: section-highlight 2.4s ease-out;
+  }
+
+  @keyframes section-highlight {
+    0%,
+    40% {
+      outline: 3px solid var(--success);
+      outline-offset: 12px;
+    }
+
+    20% {
+      outline: 3px solid var(--success);
+      outline-offset: 6px;
+    }
+
+    100% {
+      outline: 3px solid transparent;
+      outline-offset: 12px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .section-highlight {
+      animation-duration: 3s;
+      animation-timing-function: steps(1, end);
+    }
+  }
+
   .status-pending,
   .status-past-due,
   .status-suspended {

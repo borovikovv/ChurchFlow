@@ -1,12 +1,13 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'react-toastify';
 import type { BillingCheckout, SubscriptionSummary } from '@churchflow/shared';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { cancelSubscriptionAction, startBillingCheckoutAction } from '../actions';
+import { BILLING_SECTION_ID, highlightBillingSection } from './billing-highlight';
 
 interface BillingSectionProps {
   organizationId: string;
@@ -45,6 +46,24 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
   const locale = useLocale();
   const [pending, startTransition] = useTransition();
   const [current, setCurrent] = useState(subscription);
+
+  // Arriving from the read-only banner on another page: highlight once, then drop the hash so a
+  // refresh does not replay it.
+  useEffect(() => {
+    if (window.location.hash !== `#${BILLING_SECTION_ID}`) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (highlightBillingSection()) {
+        window.history.replaceState(
+          window.history.state,
+          '',
+          window.location.pathname + window.location.search,
+        );
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const formatDate = (value: string | null): string | null =>
     value ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value)) : null;
@@ -85,7 +104,7 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
 
   if (loadError) {
     return (
-      <section className="grid gap-4">
+      <section className="grid gap-4" id={BILLING_SECTION_ID}>
         <h2 className="m-0 text-xl">{t('billing.title')}</h2>
         <p className="form-error m-0">{loadError}</p>
       </section>
@@ -107,7 +126,7 @@ export function BillingSection({ organizationId, subscription, loadError }: Bill
   const accessEnded = current.status === 'CANCELED';
 
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-4" id={BILLING_SECTION_ID}>
       <div className="grid gap-1">
         <h2 className="m-0 text-xl">{t('billing.title')}</h2>
         <p className="m-0 text-[var(--muted)]">
