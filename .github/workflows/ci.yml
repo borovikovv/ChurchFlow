@@ -53,5 +53,8 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Lint the mobile app
+        run: pnpm --filter @churchflow/mobile lint
+
       - name: Test
         run: pnpm test

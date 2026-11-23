@@ -1,0 +1,48 @@
+name: Mobile e2e
+
+# Builds the app for the iOS simulator and runs the Maestro flows against a seeded local API.
+# macOS runners are free for this public repository.
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'apps/api/**'
+      - 'packages/**'
+      - 'scripts/mobile-e2e/**'
+      - 'pnpm-lock.yaml'
+      - '.github/actions/mobile-e2e-env/**'
+      - '.github/workflows/mobile-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    name: iOS simulator (Maestro)
+    runs-on: macos-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Prepare the e2e environment
+        uses: ./.github/actions/mobile-e2e-env
+
+      - name: Build and run the flows
+        run: pnpm e2e:ios
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-e2e-ios
+          path: apps/mobile/e2e/artifacts
+          if-no-files-found: ignore
+          retention-days: 14

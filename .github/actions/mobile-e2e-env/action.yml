@@ -1,0 +1,62 @@
+name: Mobile e2e environment
+description: >
+  Prepares a macOS runner for the mobile end-to-end tests: Node + pnpm, workspace install,
+  Xcode, Postgres and Mailpit from Homebrew (macOS runners have no Docker), Maestro, and the
+  seeded e2e API running on :4000.
+inputs:
+  start-api:
+    description: Start the seeded e2e API after the services are up.
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Select Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+
+    - name: Enable pnpm
+      shell: bash
+      run: |
+        corepack enable
+        corepack prepare pnpm@9.15.0 --activate
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+
+    - name: Set up Java for Maestro
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Start Postgres and Mailpit
+      shell: bash
+      run: |
+        brew install postgresql@16 mailpit
+        PG_BIN="$(brew --prefix postgresql@16)/bin"
+        echo "$PG_BIN" >> "$GITHUB_PATH"
+        brew services start postgresql@16
+        for _ in $(seq 1 30); do "$PG_BIN/pg_isready" -h 127.0.0.1 -q && break; sleep 1; done
+        "$PG_BIN/psql" -h 127.0.0.1 -d postgres -c "CREATE ROLE churchflow LOGIN SUPERUSER PASSWORD 'churchflow'"
+        "$PG_BIN/createdb" -h 127.0.0.1 -O churchflow churchflow
+        nohup mailpit > "$RUNNER_TEMP/mailpit.log" 2>&1 &
+        for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:8025/api/v1/info >/dev/null && break; sleep 1; done
+
+    - name: Install Maestro
+      shell: bash
+      run: |
+        curl -fsSL "https://get.maestro.mobile.dev" | bash
+        echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+    - name: Start the e2e API
+      if: inputs.start-api == 'true'
+      shell: bash
+      run: pnpm e2e:api

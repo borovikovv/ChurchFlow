@@ -11,3 +11,6 @@ coverage
 generated
 .pnpm-store
 *.tsbuildinfo
+
+# Mobile agent workflow scratch files
+.mobile-agent/
